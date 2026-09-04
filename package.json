@@ -1,8 +1,8 @@
 {
   "name": "omp-reviewer-kit",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "OMP review agent and Git pre-commit hook for reality-first code review.",
+  "description": "Multi-stage OMP review system and Git pre-commit hook for evidence-first code review.",
   "type": "module",
   "license": "MIT",
   "homepage": "https://github.com/stgmt/omp-reviewer-kit",
@@ -30,13 +30,14 @@
   ],
   "omp": {
     "name": "omp-reviewer-kit",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "extensions": [
       "./src/extension.mjs"
     ]
   },
   "scripts": {
     "test": "node --test tests/*.test.mjs",
+    "test:mutation": "node scripts/run-mutation-tests.mjs",
     "check": "node scripts/check-layout.mjs"
   }
 }

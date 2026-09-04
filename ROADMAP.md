@@ -4,7 +4,7 @@ This roadmap defines the engineering direction and release milestones for `omp-r
 
 ---
 
-## Phase 1: Fail-Closed Staged Review Gate (Completed)
+## Phase 1: Fail-Closed Staged Review Gate (Completed - v0.1.0)
 
 Deliver an automated, fail-closed pre-commit gate that prevents unreviewed or violating code from entering Git history.
 
@@ -23,17 +23,32 @@ Deliver an automated, fail-closed pre-commit gate that prevents unreviewed or vi
 
 ---
 
-## Phase 2: Autonomous Agent Correction Loop (Feedback Loop)
+## Phase 2: Multi-Stage Orchestrated Review & Adversarial Verification (Completed - v0.2.0)
 
-Close the loop between code generation and review rejection. When a commit is blocked, the triggering AI agent should autonomously read the audit report and fix the defect.
+Replace the single-pass reviewer with a repository-native 4-stage hierarchy to achieve high precision and suppress review noise.
 
-- [ ] **Machine-Readable Failure Envelope**: Emit a structured JSON-compatible rejection payload alongside the human-readable report.
-- [ ] **Agent Context Re-injection**: Provide a standardized protocol for OMP agents to parse rejected commit findings and locate the exact file lines requiring correction.
-- [ ] **Automatic Retry Policy**: Enable bounded auto-remediation (e.g., up to 3 automated fix attempts) before escalating to the developer.
+- [x] **Multi-Stage Orchestration (`reviewer-kit`)**: Non-mutating orchestrator coordinating context discovery, parallel risk hunting, adversarial verification, and local verdict synthesis.
+- [x] **Context Scout Specialist (`review-context-scout`)**: Read-only specialist mapping blast radius, touched files, callers/consumers via LSP/grep, invariants, and test coverage.
+- [x] **Parallel Risk Hunters (`review-risk-hunter`)**: Parameterized specialist running concurrent correctness and security evaluations with strict anti-noise prohibitions (no comments, formatting, or ungrounded advice).
+- [x] **Adversarial Verifier (`review-finding-verifier`)**: Defense lawyer agent challenging candidate defects against upstream caller defenses, concrete trigger reachability, and mitigations.
+- [x] **Protocol Skill (`multi-stage-review`)**: Codified stage sequencing, candidate finding schemas, anti-noise rules, and report synthesis contracts.
+- [x] **Fail-Closed Execution & Timeout**: Extended default timeout to 10 minutes (`600_000ms`); missing, failed, or timed-out stages fail closed with `REVIEW_RESULT=BLOCK`.
+- [x] **Dependency-Free Mutation Testing**: Automated mutation test gate (`scripts/run-mutation-tests.mjs`) requiring 100% killed safety mutants across modular and distributable runners.
+- [x] **Verified Distribution & Marketplace Packaging**: Official OMP plugin installation from GitHub (`omp plugin install github:stgmt/omp-reviewer-kit#v0.2.0`) and OMP marketplace catalog compliance without npm dependencies.
 
 ---
 
-## Phase 3: Review Replay & Model Benchmarking
+## Phase 3: Autonomous Agent Correction Loop (Feedback Loop)
+
+Close the loop between code generation and review rejection. When a commit is blocked, the triggering AI agent autonomously reads the audit report and repairs the defect.
+
+- [ ] **Machine-Readable Failure Envelope**: Emit a structured JSON rejection payload in audit reports for direct subagent consumption.
+- [ ] **Agent Context Re-injection**: Standardized prompt injection allowing OMP agents to parse rejected findings and locate exact file lines requiring correction.
+- [ ] **Bounded Auto-Remediation**: Configurable automated fix attempts (e.g. up to 3 cycles) before escalating to the developer.
+
+---
+
+## Phase 4: Review Replay & Model Benchmarking
 
 Enable empirical evaluation and historical auditing of code review quality.
 
@@ -43,20 +58,11 @@ Enable empirical evaluation and historical auditing of code review quality.
 
 ---
 
-## Phase 4: Native OMP Extensibility
+## Phase 5: Ecosystem & Interactive Tooling
 
-Deepen integration with the Oh My Pi harness beyond Git hooks.
+Deepen integration with the Oh My Pi harness and developer workflows.
 
+- [x] **Cross-Platform CI**: Automated GitHub Actions matrix testing Node.js on Ubuntu and Windows plus mutation testing.
 - [ ] **Pre-Tool-Use Hook Interceptor**: Intercept `bash` or `git commit` commands within active OMP sessions to reject violating changes before subprocess invocation.
 - [ ] **Interactive `/review-staged` Command**: Provide an on-demand OMP command for interactive reviews before deciding to commit.
 - [ ] **Status Bar Integration**: Visual indicator in OMP UI showing review status of the currently staged diff.
-
----
-
-## Phase 5: CI/CD & Ecosystem Release
-
-Scale verification across platforms and establish verified distribution.
-
-- [x] **Cross-Platform CI**: Automated GitHub Actions matrix testing Node.js on Ubuntu and Windows.
-- [ ] **Automated Release Packaging**: Semantic release automation with GitHub Release asset digests and provenance.
-- [ ] **Marketplace Registry Verification**: Automated validation against Claude Code and OMP marketplace schemas.

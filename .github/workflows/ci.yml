@@ -33,3 +33,19 @@ jobs:
 
       - name: Run test suite
         run: npm test
+
+  mutation:
+    name: Safety Mutation Gate (Node 22 on Ubuntu)
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+
+      - name: Run mutation test gate
+        run: npm run test:mutation

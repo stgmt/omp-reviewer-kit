@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { ReviewerPort } from '../application/ports.mjs';
 
 /**
@@ -10,52 +10,85 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
 
   /**
    * @param {{
-   *   runner?: (prompt: string, cwd: string, timeoutMs?: number) => { status: number, stdout?: string, stderr?: string },
+   *   runner?: (prompt: string, cwd: string, timeoutMs?: number) => Promise<{ status: number, stdout?: string, stderr?: string }>|{ status: number, stdout?: string, stderr?: string },
    *   defaultTimeoutMs?: number
    * }} [options]
    */
-  constructor({ runner, defaultTimeoutMs = 180_000 } = {}) {
+  constructor({
+    runner,
+    defaultTimeoutMs = process.env.OMP_REVIEW_KIT_TIMEOUT_MS
+      ? parseInt(process.env.OMP_REVIEW_KIT_TIMEOUT_MS, 10)
+      : 600_000,
+  } = {}) {
     super();
     this.#runner = runner ?? OmpCliReviewerAdapter.defaultRunner;
     this.#defaultTimeoutMs = defaultTimeoutMs;
   }
 
   /**
-   * Standard OMP CLI runner.
+   * Standard OMP CLI runner using async spawn to avoid pipe buffer deadlocks.
    *
    * @param {string} prompt
    * @param {string} cwd
    * @param {number} [timeout]
-   * @returns {{ status: number, stdout: string, stderr: string }}
+   * @returns {Promise<{ status: number, stdout: string, stderr: string }>}
    */
   static defaultRunner(prompt, cwd, timeout) {
-    const command = process.env.OMP_REVIEW_KIT_OMP ?? 'omp';
-    const commandArgs = ['-p', '--model', '@slow', '--no-session'];
-    const isWindowsWrapper = /\.(cmd|bat)$/i.test(command);
-    const executable = isWindowsWrapper ? (process.env.ComSpec ?? 'cmd.exe') : command;
-    const args = isWindowsWrapper
-      ? ['/d', '/c', 'call', command, ...commandArgs]
-      : commandArgs;
+    return new Promise((resolve) => {
+      const command = process.env.OMP_REVIEW_KIT_OMP ?? 'omp';
+      const commandArgs = ['-p', '--model', '@slow', '--no-session'];
+      const isWindowsWrapper = /\.(cmd|bat)$/i.test(command);
+      const executable = isWindowsWrapper ? (process.env.ComSpec ?? 'cmd.exe') : command;
+      const args = isWindowsWrapper
+        ? ['/d', '/c', 'call', command, ...commandArgs]
+        : commandArgs;
 
-    const result = spawnSync(executable, args, {
-      cwd,
-      encoding: 'utf8',
-      windowsHide: true,
-      input: prompt,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      timeout: timeout && timeout > 0 ? timeout : undefined,
+      const proc = spawn(executable, args, {
+        cwd,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        windowsHide: true,
+      });
+
+      let stdout = '';
+      let stderr = '';
+      let timedOut = false;
+      let timer;
+
+      if (timeout && timeout > 0) {
+        timer = setTimeout(() => {
+          timedOut = true;
+          proc.kill('SIGTERM');
+        }, timeout);
+      }
+
+      proc.stdout.on('data', (chunk) => {
+        stdout += chunk.toString('utf8');
+      });
+      proc.stderr.on('data', (chunk) => {
+        stderr += chunk.toString('utf8');
+      });
+
+      proc.on('close', (code) => {
+        clearTimeout(timer);
+        resolve({
+          status: timedOut ? 1 : (code ?? 1),
+          stdout,
+          stderr: timedOut ? `Review timed out after ${timeout}ms\n${stderr}` : stderr,
+        });
+      });
+
+      proc.on('error', (err) => {
+        clearTimeout(timer);
+        resolve({
+          status: 1,
+          stdout,
+          stderr: `${err.message || err}\n${stderr}`,
+        });
+      });
+
+      proc.stdin.write(prompt);
+      proc.stdin.end();
     });
-
-    const hasTimedOut = result.error && result.error.code === 'ETIMEDOUT';
-    const stderr = result.error
-      ? `${result.error.message || result.error}\n${result.stderr ?? ''}`
-      : (result.stderr ?? '');
-
-    return {
-      status: result.error ? 1 : (result.status ?? 1),
-      stdout: result.stdout ?? '',
-      stderr: hasTimedOut ? `Review timed out after ${timeout}ms\n${stderr}` : stderr,
-    };
   }
 
   /**
@@ -69,7 +102,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
   async executeReview({ prompt, cwd, timeoutMs }) {
     const promptText = typeof prompt === 'string' ? prompt : prompt.toString();
     const timeout = timeoutMs ?? this.#defaultTimeoutMs;
-    const result = this.#runner(promptText, cwd, timeout);
+    const result = await this.#runner(promptText, cwd, timeout);
 
     const stdout = result.stdout ?? '';
     const stderr = result.stderr ?? '';

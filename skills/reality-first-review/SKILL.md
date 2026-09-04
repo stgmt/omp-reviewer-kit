@@ -10,6 +10,7 @@ Use this method for every staged change.
 ## Review contract
 
 Review the current staged change, not an imagined implementation and not unrelated old work.
+Execution of review stages follows the `multi-stage-review` protocol: context discovery, parallel correctness and security risk hunting, adversarial verification, and orchestrator synthesis.
 
 1. Establish the actual input: repository, staged paths, staged diff, and relevant consumers.
 2. Find the owner of each changed rule or fact.
@@ -73,7 +74,7 @@ Do not report guesses as defects. If evidence is missing, say `not proven` and k
 
 ## Final result
 
-The `reviewer-kit` agent must finish with exactly one machine-readable line:
+The `reviewer-kit` orchestrator synthesizes the verified findings from the multi-stage pipeline and finishes with exactly one machine-readable line:
 
 ```text
 REVIEW_RESULT=PASS

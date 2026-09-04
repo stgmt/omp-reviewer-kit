@@ -50,6 +50,7 @@ export function createReviewWorkflowService({ git, omp, clock, logger } = {}) {
  *   git?: (args: string[], cwd: string) => Buffer,
  *   omp?: (prompt: string, cwd: string, timeoutMs?: number) => { status: number, stdout?: string, stderr?: string },
  *   now?: Date,
+ *   logger?: { log: (msg: string) => void, error: (msg: string) => void },
  * }} [options]
  * @returns {Promise<{ exitCode: number, skipped: boolean, verdict?: 'PASS'|'BLOCK', reportPath?: string }>}
  */
@@ -58,11 +59,13 @@ export async function runReview({
   git,
   omp,
   now = new Date(),
+  logger,
 } = {}) {
   const service = createReviewWorkflowService({
     git,
     omp,
     clock: () => now,
+    logger,
   });
 
   const result = await service.execute({ cwd });

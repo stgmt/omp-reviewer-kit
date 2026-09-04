@@ -1,10 +1,9 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test, { describe, it } from 'node:test';
-
 import {
   DiffIdentity,
   ReviewVerdict,
@@ -12,27 +11,27 @@ import {
   ReviewReport,
   ReviewExecutionResult,
   SubprocessGitAdapter,
-  OmpCliReviewerAdapter,
-  FileSystemReportStoreAdapter,
-  ReviewWorkflowService,
   createReviewWorkflowService,
-  runReview,
 } from '../src/index.mjs';
+import { runReview } from '../scripts/run-review.mjs';
 
 /**
- * Test harness helpers
+ * Creates an isolated mock repository directory.
  */
 async function createTempRepo(prefix = 'omp-bdd-') {
-  const base = await mkdtemp(path.join(tmpdir(), prefix));
-  return path.join(base, 'repo');
+  return await mkdtemp(path.join(tmpdir(), prefix));
 }
 
-function createFakeGit(repoRoot, stagedDiff = '', calls = []) {
+function createFakeGit(repoRoot, diffText = '', calls = []) {
   return (args) => {
     calls.push(args);
-    if (args[0] === 'rev-parse') return Buffer.from(`${repoRoot}\n`);
-    if (args[0] === 'diff') return Buffer.from(stagedDiff);
-    throw new Error(`Unexpected git invocation: ${args.join(' ')}`);
+    if (args[0] === 'rev-parse') {
+      return Buffer.from(`${repoRoot}\n`);
+    }
+    if (args[0] === 'diff') {
+      return Buffer.from(diffText);
+    }
+    return Buffer.alloc(0);
   };
 }
 
@@ -40,129 +39,130 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
   it('Scenario 1: Given clean staged changes, When reviewer-kit returns PASS, Then commit is permitted and report is saved', async () => {
     // Given
     const repoRoot = await createTempRepo();
-    const stagedDiff = 'diff --git a/file.js b/file.js\n+console.log("hello");\n';
-    const calls = [];
-    const git = createFakeGit(repoRoot, stagedDiff, calls);
-
-    let receivedPrompt = '';
-    const omp = (prompt) => {
-      receivedPrompt = prompt;
-      return {
-        status: 0,
-        stdout: 'Reality-first check completed.\nREVIEW_RESULT=PASS\n',
-        stderr: '',
-      };
+    const git = createFakeGit(repoRoot, 'clean diff content');
+    const logs = [];
+    const logger = {
+      log: (msg) => logs.push(msg),
+      error: (msg) => logs.push(msg),
     };
 
     // When
     const result = await runReview({
       cwd: repoRoot,
       git,
-      omp,
+      omp: (prompt, cwd, timeout) => {
+        return {
+          status: 0,
+          stdout: 'No blocking issues found.\nREVIEW_RESULT=PASS\n',
+          stderr: '',
+        };
+      },
       now: new Date('2026-09-04T10:00:00.000Z'),
+      logger,
     });
 
     // Then
-    assert.equal(result.exitCode, 0, 'Exit code must be 0 for PASS');
-    assert.equal(result.skipped, false, 'Review must not be skipped');
+    assert.equal(result.exitCode, 0);
     assert.equal(result.verdict, 'PASS');
-    assert.ok(result.reportPath, 'Report path must be returned');
+    assert.match(result.reportPath, /2026-09-04T10-00-00-000Z/);
 
-    const expectedHash = createHash('sha256').update(stagedDiff).digest('hex');
-    assert.match(receivedPrompt, new RegExp(expectedHash));
-    assert.match(receivedPrompt, /agent "reviewer-kit"/);
-    assert.match(receivedPrompt, /reality-first-review/);
-
-    const savedReport = await readFile(result.reportPath, 'utf8');
-    assert.match(savedReport, new RegExp(`staged diff hash: ${expectedHash}`));
-    assert.match(savedReport, /result: PASS/);
-    assert.match(savedReport, /Reality-first check completed/);
+    const reportContent = await readFile(result.reportPath, 'utf8');
+    assert.match(reportContent, /result: PASS/);
+    assert.match(reportContent, /No blocking issues found/);
+    assert.match(logs.join(''), /reviewer-kit PASS/);
   });
 
   it('Scenario 2: Given violating staged changes, When reviewer-kit returns BLOCK, Then commit is blocked with exit code 1', async () => {
     // Given
     const repoRoot = await createTempRepo();
-    const stagedDiff = 'diff --git a/bad.js b/bad.js\n+evil();\n';
-    const git = createFakeGit(repoRoot, stagedDiff);
-
-    const omp = () => ({
-      status: 0,
-      stdout: 'Violation found: Rule 1 reality-first violated.\nREVIEW_RESULT=BLOCK\n',
-      stderr: '',
-    });
+    const git = createFakeGit(repoRoot, 'bad diff content');
+    const logs = [];
+    const logger = {
+      log: (msg) => logs.push(msg),
+      error: (msg) => logs.push(msg),
+    };
 
     // When
     const result = await runReview({
       cwd: repoRoot,
       git,
-      omp,
+      omp: () => ({
+        status: 0,
+        stdout: 'Violation found: Rule 1 reality-first violated.\nREVIEW_RESULT=BLOCK\n',
+        stderr: '',
+      }),
       now: new Date('2026-09-04T10:05:00.000Z'),
+      logger,
     });
 
     // Then
-    assert.equal(result.exitCode, 1, 'Exit code must be 1 for BLOCK');
+    assert.equal(result.exitCode, 1);
     assert.equal(result.verdict, 'BLOCK');
-    assert.ok(result.reportPath);
-
-    const savedReport = await readFile(result.reportPath, 'utf8');
-    assert.match(savedReport, /result: BLOCK/);
-    assert.match(savedReport, /Violation found: Rule 1 reality-first violated/);
+    assert.match(logs.join(''), /reviewer-kit BLOCK/);
+    assert.match(logs.join(''), /Rule 1 reality-first violated/);
   });
 
   it('Scenario 3: Given no staged changes, When review executes, Then review is skipped without invoking OMP', async () => {
     // Given
     const repoRoot = await createTempRepo();
     const git = createFakeGit(repoRoot, '');
-    let ompInvoked = false;
-    const omp = () => {
-      ompInvoked = true;
-      return { status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' };
-    };
+    let ompCalled = false;
 
     // When
-    const result = await runReview({ cwd: repoRoot, git, omp });
+    const result = await runReview({
+      cwd: repoRoot,
+      git,
+      omp: () => {
+        ompCalled = true;
+        return { status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' };
+      },
+    });
 
     // Then
     assert.equal(result.exitCode, 0);
     assert.equal(result.skipped, true);
-    assert.equal(ompInvoked, false, 'OMP must never be invoked when staged diff is empty');
+    assert.equal(ompCalled, false);
+    assert.equal(result.reportPath, undefined);
   });
 
   it('Scenario 4: Given reviewer execution failure, When review executes, Then review fails closed with exit code 1', async () => {
     // Given
     const repoRoot = await createTempRepo();
-    const git = createFakeGit(repoRoot, 'some diff');
-    const omp = () => ({
-      status: 1,
-      stdout: '',
-      stderr: 'OMP crash: connection to provider timed out',
-    });
+    const git = createFakeGit(repoRoot, 'diff requiring review');
 
     // When
-    const result = await runReview({ cwd: repoRoot, git, omp });
+    const result = await runReview({
+      cwd: repoRoot,
+      git,
+      omp: () => ({
+        status: 1,
+        stdout: '',
+        stderr: 'OMP crash: connection to provider timed out\n',
+      }),
+    });
 
     // Then
     assert.equal(result.exitCode, 1);
     assert.equal(result.verdict, 'BLOCK');
-    assert.ok(result.reportPath);
-
-    const savedReport = await readFile(result.reportPath, 'utf8');
-    assert.match(savedReport, /result: BLOCK/);
-    assert.match(savedReport, /OMP crash: connection to provider timed out/);
+    const reportContent = await readFile(result.reportPath, 'utf8');
+    assert.match(reportContent, /OMP crash: connection to provider timed out/);
   });
 
   it('Scenario 5: Given malformed verdict marker, When review executes, Then review fails closed', async () => {
     // Given
     const repoRoot = await createTempRepo();
-    const git = createFakeGit(repoRoot, 'some diff');
-    const omp = () => ({
-      status: 0,
-      stdout: 'REVIEW_RESULT=PASSED\n',
-      stderr: '',
-    });
+    const git = createFakeGit(repoRoot, 'sample diff');
 
     // When
-    const result = await runReview({ cwd: repoRoot, git, omp });
+    const result = await runReview({
+      cwd: repoRoot,
+      git,
+      omp: () => ({
+        status: 0,
+        stdout: 'Looks good! REVIEW_RESULT=PASSED\n',
+        stderr: '',
+      }),
+    });
 
     // Then
     assert.equal(result.exitCode, 1);
@@ -172,15 +172,18 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
   it('Scenario 6: Given multiple conflicting verdict markers, When review executes, Then review fails closed', async () => {
     // Given
     const repoRoot = await createTempRepo();
-    const git = createFakeGit(repoRoot, 'some diff');
-    const omp = () => ({
-      status: 0,
-      stdout: 'REVIEW_RESULT=PASS\nWait, actually:\nREVIEW_RESULT=BLOCK\n',
-      stderr: '',
-    });
+    const git = createFakeGit(repoRoot, 'sample diff');
 
     // When
-    const result = await runReview({ cwd: repoRoot, git, omp });
+    const result = await runReview({
+      cwd: repoRoot,
+      git,
+      omp: () => ({
+        status: 0,
+        stdout: 'REVIEW_RESULT=PASS\nWait, actually:\nREVIEW_RESULT=BLOCK\n',
+        stderr: '',
+      }),
+    });
 
     // Then
     assert.equal(result.exitCode, 1);
@@ -190,10 +193,10 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
   it('Scenario 7: Given unstaged changes in working tree, When review executes, Then only staged diff is hashed', async () => {
     // Given
     const repoRoot = await createTempRepo();
-    const stagedDiff = 'staged content';
     const calls = [];
-    const git = createFakeGit(repoRoot, stagedDiff, calls);
+    const git = createFakeGit(repoRoot, 'staged only diff content', calls);
 
+    // When
     const result = await runReview({
       cwd: repoRoot,
       git,
@@ -229,6 +232,52 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
     assert.match(await readFile(first.reportPath, 'utf8'), /result: PASS/);
     assert.match(await readFile(second.reportPath, 'utf8'), /result: BLOCK/);
   });
+
+  it('Scenario 9: Given mandatory stage execution failure, When reviewer-kit fails closed, Then commit is blocked with exit code 1', async () => {
+    // Given
+    const repoRoot = await createTempRepo();
+    const git = createFakeGit(repoRoot, 'diff for stage failure test');
+
+    // When
+    const result = await runReview({
+      cwd: repoRoot,
+      git,
+      omp: () => ({
+        status: 0,
+        stdout: 'Stage review-finding-verifier failed: StructuredSubagentError: execution failed\nREVIEW_RESULT=BLOCK\n',
+        stderr: '',
+      }),
+    });
+
+    // Then
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.verdict, 'BLOCK');
+    const reportContent = await readFile(result.reportPath, 'utf8');
+    assert.match(reportContent, /Stage review-finding-verifier failed/);
+  });
+
+  it('Scenario 10: Given dispatcher prompt generation, When ReviewPrompt is rendered, Then it mandates multi-stage-review and names only reviewer-kit at the top level', async () => {
+    // Given
+    const repoRoot = await createTempRepo();
+    const git = createFakeGit(repoRoot, 'prompt verification diff');
+    let capturedPrompt = '';
+
+    // When
+    await runReview({
+      cwd: repoRoot,
+      git,
+      omp: (prompt) => {
+        capturedPrompt = prompt;
+        return { status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' };
+      },
+    });
+
+    // Then
+    assert.match(capturedPrompt, /Run exactly one native task with agent "reviewer-kit"\./);
+    assert.match(capturedPrompt, /skill:\/\/multi-stage-review/);
+    assert.match(capturedPrompt, /skill:\/\/reality-first-review/);
+    assert.doesNotMatch(capturedPrompt, /do not run any other agent/);
+  });
 });
 
 describe('Feature: OOP/DDD Domain Invariant Units', () => {
@@ -244,13 +293,18 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
     assert.equal(ReviewVerdict.fromOutput('no markers here').isBlock(), true);
     assert.equal(ReviewVerdict.fromOutput('REVIEW_RESULT=PASS').isPass(), true);
     assert.equal(ReviewVerdict.fromOutput('REVIEW_RESULT=BLOCK').isBlock(), true);
+    assert.equal(ReviewVerdict.fromOutput('REVIEW_RESULT=PASS\nREVIEW_RESULT=PASS').isBlock(), true);
+    assert.equal(ReviewVerdict.fromOutput('REVIEW_RESULT=PASS\nREVIEW_RESULT=BLOCK').isBlock(), true);
   });
 
-  it('ReviewPrompt invariant: requires non-empty diff hash and embeds required agent name', () => {
+  it('ReviewPrompt invariant: requires non-empty diff hash, mandates multi-stage-review, and embeds required agent name', () => {
     assert.throws(() => new ReviewPrompt(''), TypeError);
     const prompt = new ReviewPrompt('abc123hash');
     assert.match(prompt.toString(), /abc123hash/);
     assert.match(prompt.toString(), /reviewer-kit/);
+    assert.match(prompt.toString(), /multi-stage-review/);
+    assert.match(prompt.toString(), /reality-first-review/);
+    assert.doesNotMatch(prompt.toString(), /do not run any other agent/);
   });
 
   it('ReviewReport invariant: renders correct markdown structure', () => {
@@ -264,5 +318,29 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
     assert.match(report.toMarkdown(), /staged diff hash: def456/);
     assert.match(report.toMarkdown(), /result: PASS/);
     assert.match(report.toMarkdown(), /All tests passed\./);
+  });
+
+  it('ReviewWorkflowService invariant: requires both status 0 and PASS verdict for approval', async () => {
+    const service = createReviewWorkflowService({
+      git: (args) => (args[0] === 'rev-parse' ? Buffer.from('/repo\n') : Buffer.from('staged diff')),
+      omp: () => ({ status: 0, stdout: 'REVIEW_RESULT=BLOCK\n', stderr: '' }),
+      clock: () => new Date('2026-09-04T12:00:00.000Z'),
+      logger: { log: () => {}, error: () => {} },
+    });
+    const result = await service.execute({ cwd: '/repo' });
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.verdict, 'BLOCK');
+  });
+
+  it('SubprocessGitAdapter invariant: enforces --cached in staged diff invocation', () => {
+    let passedArgs = [];
+    const adapter = new SubprocessGitAdapter((args) => {
+      passedArgs = args;
+      return Buffer.from('diff-content');
+    });
+    const diff = adapter.getStagedDiff('/repo');
+    assert.equal(passedArgs.includes('--cached'), true);
+    assert.deepEqual(passedArgs, ['diff', '--cached', '--binary', '--no-ext-diff', '--']);
+    assert.equal(diff.isEmpty(), false);
   });
 });

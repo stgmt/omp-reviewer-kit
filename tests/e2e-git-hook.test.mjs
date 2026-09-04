@@ -100,10 +100,9 @@ describe('Feature: Real Git Pre-commit Hook E2E Integration', () => {
     assert.equal(logRes.status, 0);
     assert.match(logRes.stdout, /Add approved file/);
 
-    // Verify audit report was created
+    // Verify working tree state
     const statusRes = git(['status', '--porcelain']);
     assert.equal(statusRes.status, 0);
-    // Working tree is clean except untracked mock script and untracked audit report if not staged
     assert.doesNotMatch(statusRes.stdout, /M  approved.txt/);
   });
 
@@ -152,6 +151,124 @@ describe('Feature: Real Git Pre-commit Hook E2E Integration', () => {
     // Verify staged file is STILL staged
     const statusRes = git(['status', '--porcelain']);
     assert.match(statusRes.stdout, /A  blocked.txt/);
+  });
+
+  it('strictly blocks commit on mandatory-stage failure and preserves staged index', async () => {
+    const { repoDir, git } = fixture;
+
+    const mockStageFailScript = path.join(repoDir, isWindows ? 'mock-stage-fail.cmd' : 'mock-stage-fail.sh');
+    if (isWindows) {
+      await writeFile(
+        mockStageFailScript,
+        '@echo off\r\necho Stage review-finding-verifier failed: StructuredSubagentError\r\necho REVIEW_RESULT=BLOCK\r\nexit /b 0\r\n',
+        'utf8'
+      );
+    } else {
+      await writeFile(
+        mockStageFailScript,
+        '#!/bin/sh\necho "Stage review-finding-verifier failed: StructuredSubagentError"\necho "REVIEW_RESULT=BLOCK"\nexit 0\n',
+        'utf8'
+      );
+      await chmod(mockStageFailScript, 0o755);
+    }
+
+    await writeFile(path.join(repoDir, 'stage-fail.txt'), 'content\n', 'utf8');
+    let res = git(['add', 'stage-fail.txt']);
+    assert.equal(res.status, 0);
+
+    res = git(['commit', '-m', 'Commit with stage failure'], {
+      env: {
+        ...process.env,
+        OMP_REVIEW_KIT_OMP: mockStageFailScript,
+      },
+    });
+
+    assert.notEqual(res.status, 0);
+    assert.match(res.stdout + res.stderr, /reviewer-kit BLOCK/);
+    assert.match(res.stdout + res.stderr, /Stage review-finding-verifier failed/);
+
+    const logRes = git(['log', '-1', '--oneline']);
+    assert.doesNotMatch(logRes.stdout, /Commit with stage failure/);
+    const statusRes = git(['status', '--porcelain']);
+    assert.match(statusRes.stdout, /A  stage-fail.txt/);
+  });
+
+  it('strictly blocks commit on duplicate marker output (fail-closed) and preserves staged index', async () => {
+    const { repoDir, git } = fixture;
+
+    const mockDupMarkerScript = path.join(repoDir, isWindows ? 'mock-dup-marker.cmd' : 'mock-dup-marker.sh');
+    if (isWindows) {
+      await writeFile(
+        mockDupMarkerScript,
+        '@echo off\r\necho REVIEW_RESULT=PASS\r\necho REVIEW_RESULT=BLOCK\r\nexit /b 0\r\n',
+        'utf8'
+      );
+    } else {
+      await writeFile(
+        mockDupMarkerScript,
+        '#!/bin/sh\necho "REVIEW_RESULT=PASS"\necho "REVIEW_RESULT=BLOCK"\nexit 0\n',
+        'utf8'
+      );
+      await chmod(mockDupMarkerScript, 0o755);
+    }
+
+    await writeFile(path.join(repoDir, 'dup-marker.txt'), 'content\n', 'utf8');
+    let res = git(['add', 'dup-marker.txt']);
+    assert.equal(res.status, 0);
+
+    res = git(['commit', '-m', 'Commit with duplicate markers'], {
+      env: {
+        ...process.env,
+        OMP_REVIEW_KIT_OMP: mockDupMarkerScript,
+      },
+    });
+
+    assert.notEqual(res.status, 0);
+    assert.match(res.stdout + res.stderr, /reviewer-kit BLOCK/);
+
+    const logRes = git(['log', '-1', '--oneline']);
+    assert.doesNotMatch(logRes.stdout, /Commit with duplicate markers/);
+    const statusRes = git(['status', '--porcelain']);
+    assert.match(statusRes.stdout, /A  dup-marker.txt/);
+  });
+
+  it('strictly blocks commit on reviewer process timeout or non-zero exit and preserves staged index', async () => {
+    const { repoDir, git } = fixture;
+
+    const mockTimeoutScript = path.join(repoDir, isWindows ? 'mock-timeout.cmd' : 'mock-timeout.sh');
+    if (isWindows) {
+      await writeFile(
+        mockTimeoutScript,
+        '@echo off\r\necho Review timed out after 600000ms 1>&2\r\nexit /b 1\r\n',
+        'utf8'
+      );
+    } else {
+      await writeFile(
+        mockTimeoutScript,
+        '#!/bin/sh\necho "Review timed out after 600000ms" >&2\nexit 1\n',
+        'utf8'
+      );
+      await chmod(mockTimeoutScript, 0o755);
+    }
+
+    await writeFile(path.join(repoDir, 'timeout-test.txt'), 'content\n', 'utf8');
+    let res = git(['add', 'timeout-test.txt']);
+    assert.equal(res.status, 0);
+
+    res = git(['commit', '-m', 'Commit with timeout'], {
+      env: {
+        ...process.env,
+        OMP_REVIEW_KIT_OMP: mockTimeoutScript,
+      },
+    });
+
+    assert.notEqual(res.status, 0);
+    assert.match(res.stdout + res.stderr, /reviewer-kit BLOCK/);
+
+    const logRes = git(['log', '-1', '--oneline']);
+    assert.doesNotMatch(logRes.stdout, /Commit with timeout/);
+    const statusRes = git(['status', '--porcelain']);
+    assert.match(statusRes.stdout, /A  timeout-test.txt/);
   });
 
   it('permits commit when --no-verify flag is passed explicitly by user', async () => {

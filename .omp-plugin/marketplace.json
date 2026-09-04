@@ -7,11 +7,11 @@
   "plugins": [
     {
       "name": "omp-reviewer-kit",
-      "description": "Evidence-first OMP review agent and Git pre-commit hook.",
+      "description": "Evidence-first multi-stage OMP review system and Git pre-commit hook.",
       "source": "./",
       "category": "development",
       "homepage": "https://github.com/stgmt/omp-reviewer-kit",
-      "version": "0.1.0"
+      "version": "0.2.0"
     }
   ]
 }

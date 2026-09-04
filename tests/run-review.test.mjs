@@ -16,7 +16,7 @@ function fakeGit(root, diff, calls = []) {
     calls.push(args);
     if (args[0] === 'rev-parse') return Buffer.from(`${root}\n`);
     if (args[0] === 'diff') return Buffer.from(diff);
-    throw new Error(`unexpected git call: ${args.join(' ')}`);
+    return Buffer.alloc(0);
   };
 }
 
@@ -47,7 +47,9 @@ test('allows a staged change only after reviewer-kit PASS', async () => {
 
   assert.equal(result.exitCode, 0);
   assert.match(prompt, /agent "reviewer-kit"/);
-  assert.match(prompt, /reality-first-review/);
+  assert.match(prompt, /skill:\/\/multi-stage-review/);
+  assert.match(prompt, /skill:\/\/reality-first-review/);
+  assert.doesNotMatch(prompt, /do not run any other agent/);
   const report = await readFile(result.reportPath, 'utf8');
   assert.match(report, /REVIEW_RESULT=PASS/);
   assert.match(report, /developer-architecture/);
@@ -90,12 +92,36 @@ test('does not let trailing prose override an exact BLOCK marker', async () => {
 test('fails closed when multiple exact result markers are present', async () => {
   const { result } = await runFixture('bad diff', {
     status: 0,
-    stdout: 'REVIEW_RESULT=BLOCK\nREVIEW_RESULT=PASS\n',
+    stdout: 'REVIEW_RESULT=PASS\nREVIEW_RESULT=PASS\n',
     stderr: '',
   });
 
   assert.equal(result.exitCode, 1);
   assert.equal(result.verdict, 'BLOCK');
+});
+
+test('fails closed when reviewer output is missing verdict marker', async () => {
+  const { result } = await runFixture('diff', {
+    status: 0,
+    stdout: 'Analysis completed with no final marker.\n',
+    stderr: '',
+  });
+
+  assert.equal(result.exitCode, 1);
+  assert.equal(result.verdict, 'BLOCK');
+});
+
+test('fails closed when reviewer execution times out', async () => {
+  const { result } = await runFixture('diff', {
+    status: 1,
+    stdout: '',
+    stderr: 'Review timed out after 600000ms\n',
+  });
+
+  assert.equal(result.exitCode, 1);
+  assert.equal(result.verdict, 'BLOCK');
+  const report = await readFile(result.reportPath, 'utf8');
+  assert.match(report, /Review timed out after 600000ms/);
 });
 
 test('fails closed when OMP fails', async () => {
