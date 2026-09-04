@@ -321,15 +321,17 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
   });
 
   it('ReviewWorkflowService invariant: requires both status 0 and PASS verdict for approval', async () => {
+    const repoRoot = await createTempRepo('omp-service-');
     const service = createReviewWorkflowService({
-      git: (args) => (args[0] === 'rev-parse' ? Buffer.from('/repo\n') : Buffer.from('staged diff')),
+      git: (args) => (args[0] === 'rev-parse' ? Buffer.from(`${repoRoot}\n`) : Buffer.from('staged diff')),
       omp: () => ({ status: 0, stdout: 'REVIEW_RESULT=BLOCK\n', stderr: '' }),
       clock: () => new Date('2026-09-04T12:00:00.000Z'),
       logger: { log: () => {}, error: () => {} },
     });
-    const result = await service.execute({ cwd: '/repo' });
+    const result = await service.execute({ cwd: repoRoot });
     assert.equal(result.exitCode, 1);
     assert.equal(result.verdict, 'BLOCK');
+    await rm(repoRoot, { recursive: true, force: true }).catch(() => {});
   });
 
   it('SubprocessGitAdapter invariant: enforces --cached in staged diff invocation', () => {
