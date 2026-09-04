@@ -1,0 +1,16 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "omp-reviewer-kit",
+  "owner": {
+    "name": "stgmt"
+  },
+  "plugins": [
+    {
+      "name": "omp-reviewer-kit",
+      "description": "Evidence-first OMP review agent and Git pre-commit hook.",
+      "source": "./",
+      "category": "development",
+      "homepage": "https://github.com/stgmt/omp-reviewer-kit"
+    }
+  ]
+}
