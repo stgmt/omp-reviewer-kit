@@ -10,6 +10,23 @@
     "type": "git",
     "url": "https://github.com/stgmt/omp-reviewer-kit.git"
   },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "exports": {
+    ".": "./src/index.mjs",
+    "./runner": "./scripts/run-review.mjs"
+  },
+  "files": [
+    "scripts",
+    "templates",
+    "agents",
+    "skills",
+    "src",
+    ".omp-plugin",
+    "ROADMAP.md",
+    "CHANGELOG.md"
+  ],
   "omp": {
     "name": "omp-reviewer-kit",
     "version": "0.1.0"

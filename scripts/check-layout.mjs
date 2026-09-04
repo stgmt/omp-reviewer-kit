@@ -1,4 +1,4 @@
-import { access } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 
 const required = [
   'package.json',
@@ -9,7 +9,23 @@ const required = [
   'scripts/run-review.mjs',
   'scripts/install-hook.ps1',
   'scripts/install-hook.sh',
+  'src/index.mjs',
+  'AGENTS.md',
+  'ROADMAP.md',
+  'CHANGELOG.md',
+  '.github/workflows/ci.yml',
 ];
 
-for (const file of required) await access(file);
-console.log(`layout ok: ${required.length} files`);
+for (const file of required) {
+  await access(file);
+}
+
+// Assert runner synchronization between source and self-hosted copy
+const distRunner = await readFile('scripts/run-review.mjs', 'utf8');
+const localRunner = await readFile('.omp/review-kit/run-review.mjs', 'utf8');
+
+if (distRunner !== localRunner) {
+  throw new Error('Drift detected: scripts/run-review.mjs and .omp/review-kit/run-review.mjs must be identical.');
+}
+
+console.log(`layout ok: ${required.length} files verified and runner copies synchronized`);

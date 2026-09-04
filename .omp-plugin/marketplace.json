@@ -10,7 +10,8 @@
       "description": "Evidence-first OMP review agent and Git pre-commit hook.",
       "source": "./",
       "category": "development",
-      "homepage": "https://github.com/stgmt/omp-reviewer-kit"
+      "homepage": "https://github.com/stgmt/omp-reviewer-kit",
+      "version": "0.1.0"
     }
   ]
 }
