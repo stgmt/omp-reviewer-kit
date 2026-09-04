@@ -9,6 +9,21 @@ import { ReviewPrompt } from '../src/index.mjs';
 
 const isLiveE2E = process.env.OMP_REVIEW_KIT_LIVE_E2E === '1';
 
+const hasOmp = (() => {
+  try {
+    const ompCommand = process.env.OMP_REVIEW_KIT_OMP ?? 'omp';
+    const isWindowsWrapper = /\.(cmd|bat)$/i.test(ompCommand);
+    const executable = isWindowsWrapper ? (process.env.ComSpec ?? 'cmd.exe') : ompCommand;
+    const args = isWindowsWrapper
+      ? ['/d', '/c', 'call', ompCommand, '--version']
+      : ['--version'];
+    const res = spawnSync(executable, args, { encoding: 'utf8', windowsHide: true });
+    return res.status === 0;
+  } catch {
+    return false;
+  }
+})();
+
 /**
  * Runs a real OMP command with piped stdin and closed EOF.
  */
@@ -58,14 +73,19 @@ function runLiveOmp(prompt, cwd, timeoutMs = 600_000) {
       reject(err);
     });
 
-    // Write prompt and immediately close stdin (EOF)
-    proc.stdin.write(prompt);
-    proc.stdin.end();
+    // Guard against EPIPE if process terminates before reading stdin
+    proc.stdin.on('error', () => {});
+    try {
+      proc.stdin.write(prompt);
+      proc.stdin.end();
+    } catch {
+      // Ignore write errors on closed streams
+    }
   });
 }
 
 describe('Feature: Real Live OMP & Plugin Discovery E2E (No Mocks)', () => {
-  it('Live Check 1: OMP plugin doctor confirms omp-reviewer-kit is linked and healthy', () => {
+  it('Live Check 1: OMP plugin doctor confirms omp-reviewer-kit is linked and healthy', { skip: !hasOmp }, () => {
     const ompCommand = process.env.OMP_REVIEW_KIT_OMP ?? 'omp';
     const isWindowsWrapper = /\.(cmd|bat)$/i.test(ompCommand);
     const executable = isWindowsWrapper ? (process.env.ComSpec ?? 'cmd.exe') : ompCommand;

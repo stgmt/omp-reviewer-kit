@@ -515,8 +515,14 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
         });
       });
 
-      proc.stdin.write(prompt);
-      proc.stdin.end();
+      // Guard against EPIPE if process terminates before reading stdin
+      proc.stdin.on('error', () => {});
+      try {
+        proc.stdin.write(prompt);
+        proc.stdin.end();
+      } catch {
+        // Ignore write failures on closed streams
+      }
     });
   }
 
