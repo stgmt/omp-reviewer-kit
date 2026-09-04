@@ -6,6 +6,7 @@ export { ReviewExecutionResult } from './domain/review-execution-result.mjs';
 
 export { GitPort, ReviewerPort, ReportStorePort } from './application/ports.mjs';
 export { ReviewWorkflowService } from './application/review-workflow-service.mjs';
+export { PluginInstallerService } from './application/installer-service.mjs';
 
 export { SubprocessGitAdapter } from './infra/subprocess-git-adapter.mjs';
 export { OmpCliReviewerAdapter } from './infra/omp-cli-reviewer-adapter.mjs';

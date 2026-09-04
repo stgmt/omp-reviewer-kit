@@ -15,7 +15,8 @@
   },
   "exports": {
     ".": "./src/index.mjs",
-    "./runner": "./scripts/run-review.mjs"
+    "./runner": "./scripts/run-review.mjs",
+    "./extension": "./src/extension.mjs"
   },
   "files": [
     "scripts",
@@ -29,7 +30,10 @@
   ],
   "omp": {
     "name": "omp-reviewer-kit",
-    "version": "0.1.0"
+    "version": "0.1.0",
+    "extensions": [
+      "./src/extension.mjs"
+    ]
   },
   "scripts": {
     "test": "node --test tests/*.test.mjs",

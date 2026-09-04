@@ -1,62 +1,86 @@
 # omp-reviewer-kit
 
-OMP plugin with one review agent and a Git `pre-commit` hook.
+Native Oh My Pi plugin for evidence-first code review of staged Git changes.
 
 ## Names
 
 - GitHub and plugin: `omp-reviewer-kit`
 - OMP agent: `reviewer-kit`
 - Review method: `reality-first-review`
+- OMP extension: `src/extension.mjs`
 
 ## What it does
 
-The hook runs OMP before a commit. OMP is asked to run the native task agent `reviewer-kit`. The agent reviews only staged changes, reads `reality-first-review`, and then reads only relevant project review skills discovered by OMP.
+The hook runs OMP headlessly before each Git commit. OMP invokes native task agent `reviewer-kit`, which reviews only staged changes (`git diff --cached`), loads `reality-first-review`, and dynamically selects relevant project review skills discovered by OMP.
 
-The commit continues only when the output contains:
+The commit proceeds only when the output contains exactly:
 
 ```text
 REVIEW_RESULT=PASS
 ```
 
-Any other result blocks the commit.
+Any other result, model error, or timeout strictly blocks the commit (fail-closed).
 
-## Install the hook in a project
+## Standard Installation (Recommended)
 
-Run the installer from this repository:
+Install the plugin using the official Oh My Pi plugin manager:
+
+### Option A: From GitHub directly
+
+```bash
+omp plugin install github:stgmt/omp-reviewer-kit
+```
+
+### Option B: Via OMP Marketplace
+
+```bash
+# Add the marketplace
+omp plugin marketplace add stgmt/omp-reviewer-kit
+
+# Install in project scope
+omp plugin install omp-reviewer-kit@omp-reviewer-kit --scope project
+
+# Or install globally in user scope
+omp plugin install omp-reviewer-kit@omp-reviewer-kit --scope user
+```
+
+## Configuring the Hook via OMP Slash Commands
+
+Once installed, manage the review hook directly inside your OMP session without leaving the terminal:
+
+- `/reviewer-kit:setup` — Automatically configures the pre-commit review hook in the active Git repository (`core.hooksPath .githooks`).
+- `/reviewer-kit:status` — Displays current hook configuration, runner integrity, and the latest review verdict.
+- `/reviewer-kit:doctor` — Runs environment and toolchain health checks (Node.js, Git, OMP CLI, hook permissions).
+
+The plugin also observes `session_start` and updates the OMP status bar indicator (`reviewer-kit: active` or `reviewer-kit: unconfigured`).
+
+## Standalone / CI Installation (Fallback)
+
+For CI environments or machines without an interactive OMP shell, standalone scripts remain available:
 
 ```powershell
 pwsh ./scripts/install-hook.ps1 -Repository E:/repos/your-project
 ```
 
-Or on a POSIX shell:
+Or on POSIX systems:
 
 ```sh
-./scripts/install-hook.sh E:/repos/your-project
+./scripts/install-hook.sh /path/to/your-project
 ```
-
-The installer copies the small runner into the target project, creates `.githooks/pre-commit`, and sets the target repository's local `core.hooksPath` to `.githooks`.
-
-The installer does not change global Git configuration or other projects.
-
-## Global OMP installation
-
-Install the `omp-reviewer-kit` plugin in the OMP user scope to make the skill and `reviewer-kit` agent available in projects. When the hook starts OMP inside a target project, OMP discovers that project's `.omp/skills` and user skills through its normal discovery rules.
-
-The plugin does not copy or maintain a second project-skill registry.
 
 ## Reports
 
-A target project receives reports at:
+Every review generates an immutable audit record in the target repository at:
 
 ```text
 audit-reports/commit-reviews/<timestamp>-<diff-hash>.md
 ```
 
-Reports include the staged paths, result, findings, and skills reported as used by the agent.
+Reports contain the staged diff hash, verdict, model output, and project skills utilized.
 
-## Development
+## Development & Testing
 
 ```sh
-node --test tests/*.test.mjs
-node scripts/check-layout.mjs
+npm test         # runs native node:test suites (unit, BDD, E2E)
+npm run check    # asserts repository layout integrity and zero runner drift
 ```

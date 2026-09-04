@@ -10,6 +10,8 @@ const required = [
   'scripts/install-hook.ps1',
   'scripts/install-hook.sh',
   'src/index.mjs',
+  'src/extension.mjs',
+  'src/application/installer-service.mjs',
   'AGENTS.md',
   'ROADMAP.md',
   'CHANGELOG.md',
