@@ -370,7 +370,7 @@ test('POSIX catalog timeout escalates termination for a SIGTERM-resistant proces
   const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-posix-kill-e2e-'));
   const commandPath = path.join(baseDir, 'fake-omp.sh');
   const pidPath = path.join(baseDir, 'pid.txt');
-  const command = '#!/bin/sh\ntrap "" TERM\nprintf "%s" "$" > "$OMP_REVIEW_TEST_PID"\nwhile :; do sleep 1; done\n';
+  const command = '#!/bin/sh\ntrap "" TERM\nprintf "%s" "$$" > "$OMP_REVIEW_TEST_PID"\nwhile :; do sleep 1; done\n';
   const previousCommand = process.env.OMP_REVIEW_KIT_OMP;
   const previousPidPath = process.env.OMP_REVIEW_TEST_PID;
   process.env.OMP_REVIEW_KIT_OMP = commandPath;

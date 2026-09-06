@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Existing-release reruns require the exact three-asset set and compare persisted commit, package-tree, and archive identity.
 - Large staged diffs no longer fail the hook with ENOBUFS: the Git runner streams `git diff` via async `spawn` instead of buffer-capped `spawnSync`.
 - Hook infrastructure failures now report `reviewer-kit INFRA_ERROR` instead of masquerading as a verdict `BLOCK`, while remaining fail-closed.
+- POSIX escalation test records the fake reviewer PID with `$$` (a lone `$` followed by a double-quote expands to a literal dollar in POSIX sh, yielding NaN).
 
 ## [0.3.0] - 2026-09-06
 
