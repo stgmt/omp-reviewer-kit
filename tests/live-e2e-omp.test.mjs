@@ -122,7 +122,7 @@ describe('Feature: Real Live OMP & Plugin Discovery E2E (No Mocks)', () => {
     assert.match(res.stdout, /plugin:omp-reviewer-kit/);
   });
 
-  it('Live Check 2: OMP native task discovery detects reviewer-kit and all specialist agents', async () => {
+  it('Live Check 2: OMP native task discovery detects reviewer-kit and all specialist agents', { skip: !hasOmp }, async () => {
     const defaultDiscoveryPath = path.join(path.dirname(resolveAgentDir()), 'plugins', 'node_modules', '@oh-my-pi', 'pi-coding-agent', 'src', 'task', 'discovery.ts');
     let discoverAgents;
     try {
