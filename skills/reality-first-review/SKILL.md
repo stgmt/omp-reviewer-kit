@@ -42,6 +42,23 @@ Execution of review stages follows the `multi-stage-review` protocol: context di
 - Prefer the simplest correct design over historical shape.
 - Verify the complete path: input, values, validation, side effect, result.
 
+## Anti-parasitic architecture contract
+
+Treat self-referential control infrastructure as a correctness defect, not as a style preference. The five owned defect forms are:
+
+- micro-CLIs that replace direct calls to an existing domain service;
+- local PKI or trust stores where no separate trust boundary exists;
+- file inboxes or process exit codes that replace a framework's native pause and persistence mechanism;
+- process receipts that replace tests of observable product behavior;
+- indiscriminate command capture that duplicates existing logging without a domain requirement.
+
+Confirm such a candidate as `P2` correctness only when both facts are proven from repository or declared-framework evidence:
+
+1. an existing repository or framework mechanism directly solves the same responsibility;
+2. the staged layer adds no product capability and serves only its own control process.
+
+Ownership cost, process boundaries, storage growth, and token usage describe impact; they are not a third confirmation condition. If either fact is absent, record the candidate as `rejected` or `not_proven`. Do not apply this rule to a Port/Adapter or Template Method that adds a real capability, a public CLI that is a product boundary, or cryptography that protects a genuinely remote untrusted payload.
+
 ## Project review skills
 
 OMP supplies the available skills. Do not scan `.omp/skills` manually and do not create a second registry.
@@ -74,7 +91,7 @@ Do not report guesses as defects. If evidence is missing, say `not proven` and k
 
 ## Final result
 
-The `reviewer-kit` orchestrator synthesizes the verified findings from the multi-stage pipeline and finishes with exactly one machine-readable line:
+The `reviewer-kit` orchestrator synthesizes the verified findings from the multi-stage pipeline. A BLOCK must carry exactly one `review-rejection-envelope@1` between standalone `REVIEW_REJECTION_ENVELOPE_BEGIN` and `REVIEW_REJECTION_ENVELOPE_END` lines immediately before the verdict. Confirmed findings use only `correctness` or `security`; a stage failure uses the `execution_failure` code and a non-empty diagnostic message. PASS carries no envelope. The response finishes with exactly one machine-readable line:
 
 ```text
 REVIEW_RESULT=PASS

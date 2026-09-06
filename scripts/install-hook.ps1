@@ -5,20 +5,16 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$kitRoot = Split-Path -Parent $PSScriptRoot
-$target = (Resolve-Path -LiteralPath $Repository).Path
-$gitHooks = Join-Path $target '.githooks'
-$runnerDir = Join-Path $target '.omp/review-kit'
-
-New-Item -ItemType Directory -Force -Path $gitHooks | Out-Null
-New-Item -ItemType Directory -Force -Path $runnerDir | Out-Null
-
-Copy-Item -Force (Join-Path $kitRoot 'templates/githooks/pre-commit') (Join-Path $gitHooks 'pre-commit')
-Copy-Item -Force (Join-Path $kitRoot 'scripts/run-review.mjs') (Join-Path $runnerDir 'run-review.mjs')
-
-git -C $target config core.hooksPath .githooks
-if ($LASTEXITCODE -ne 0) {
-  throw "Unable to configure core.hooksPath in $target"
+$nodeCmd = Get-Command node -ErrorAction SilentlyContinue
+if (-not $nodeCmd) {
+  throw "Node.js is required but was not found on PATH."
 }
 
-Write-Output "Installed omp-reviewer-kit hook in $target"
+$kitRoot = Split-Path -Parent $PSScriptRoot
+$target = (Resolve-Path -LiteralPath $Repository).Path
+$setupScript = Join-Path $kitRoot 'scripts/setup-hook.mjs'
+
+& node $setupScript $target
+if ($LASTEXITCODE -ne 0) {
+  exit $LASTEXITCODE
+}

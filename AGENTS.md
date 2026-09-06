@@ -19,7 +19,7 @@
    - `.githooks/pre-commit` resolves repository root and executes `.omp/review-kit/run-review.mjs` with Node.js.
    - The runner queries `GitPort` (`SubprocessGitAdapter`) for `git diff --cached --binary --no-ext-diff --`. Empty staged changes exit with code 0 immediately without invoking OMP.
    - `DiffIdentity` computes deterministic SHA-256 hash of the binary diff.
-   - `ReviewPrompt` carrying the diff hash invokes `ReviewerPort` (`OmpCliReviewerAdapter`) headlessly via `omp -p --model @slow --no-session` (overridable via `OMP_REVIEW_KIT_OMP` with 600,000ms default timeout protection).
+   - `ReviewPrompt` carrying the diff hash invokes `ReviewerPort` (`OmpCliReviewerAdapter`) headlessly via `omp -p --model @slow --no-session` (overridable via `OMP_REVIEW_KIT_OMP` with no timeout; full review processes are never cancelled by this plugin). Provider quota, rate-limit, authentication, and model-capacity failures trigger up to three fallback attempts selected from `OMP_REVIEW_KIT_FALLBACK_MODELS` or the installed `omp models --json` catalog; catalog discovery and each candidate availability probe are bounded at 60 seconds by default, and successful candidates receive the same model through `--model`, `--slow`, and `--smol`; fallback attempts use the same 600,000ms timeout by default and never retry a real verdict or timeout. If every probe fails, the staged change remains BLOCKed.
    - OMP launches `reviewer-kit` (orchestrator), which executes the 4-stage protocol strictly in sequence:
      1. **Stage 1 (Scout)**: Spawns `review-context-scout` (model `@task`) to map diff scope, touched paths, callers via LSP/grep, invariants, and tests.
      2. **Stage 2 (Parallel Risk Hunters)**: Spawns batch `task` with two `review-risk-hunter` (model `@slow`) agents in parallel (`lane: "correctness"` and `lane: "security"`), generating candidate defects under strict anti-noise rules.
@@ -57,6 +57,8 @@ Opt-in live OMP verification (requires local OMP executable):
 ```sh
 OMP_REVIEW_KIT_LIVE_E2E=1 node --test tests/live-e2e-omp.test.mjs
 ```
+
+Fallback configuration (optional): `OMP_REVIEW_KIT_MODEL` selects the primary model, `OMP_REVIEW_KIT_FALLBACK_MODELS` supplies a comma-separated fallback list, `OMP_REVIEW_KIT_MAX_FALLBACKS` caps retries, and `OMP_REVIEW_KIT_PROBE_TIMEOUT_MS` sets the availability-probe timeout (60,000ms by default). Full reviews are never automatically cancelled by this plugin.
 
 Installation via standard OMP commands:
 

@@ -1,5 +1,6 @@
 import { DiffIdentity } from './diff-identity.mjs';
 import { ReviewVerdict } from './review-verdict.mjs';
+import { ReviewRejectionEnvelope } from './review-rejection-envelope.mjs';
 
 /**
  * Domain Entity representing an audit report artifact.
@@ -8,6 +9,8 @@ export class ReviewReport {
   #diffHash;
   #verdict;
   #rawOutput;
+  #modelsTried;
+  #envelope;
   #timestamp;
 
   /**
@@ -15,13 +18,20 @@ export class ReviewReport {
    *   diffIdentity: DiffIdentity|string,
    *   verdict: ReviewVerdict|string,
    *   rawOutput: string,
+   *   modelsTried?: string[],
+   *   envelope?: ReviewRejectionEnvelope|null,
    *   timestamp?: Date
    * }} params
    */
-  constructor({ diffIdentity, verdict, rawOutput = '', timestamp = new Date() }) {
+  constructor({ diffIdentity, verdict, rawOutput = '', modelsTried, envelope = null, timestamp = new Date() }) {
     this.#diffHash = diffIdentity instanceof DiffIdentity ? diffIdentity.hash : String(diffIdentity);
     this.#verdict = verdict instanceof ReviewVerdict ? verdict.value : String(verdict);
     this.#rawOutput = rawOutput;
+    this.#modelsTried = Array.isArray(modelsTried) ? modelsTried.filter((m) => typeof m === 'string') : undefined;
+    if (envelope !== null && !(envelope instanceof ReviewRejectionEnvelope)) {
+      throw new TypeError('envelope must be a ReviewRejectionEnvelope or null');
+    }
+    this.#envelope = envelope;
     this.#timestamp = timestamp instanceof Date ? timestamp : new Date(timestamp);
   }
 
@@ -51,15 +61,20 @@ export class ReviewReport {
    * @returns {string}
    */
   toMarkdown() {
-    return [
+    const lines = [
       '# OMP Review Kit commit review',
       '',
       `- staged diff hash: ${this.#diffHash}`,
       `- result: ${this.#verdict}`,
-      '',
-      this.#rawOutput.trim(),
-      '',
-    ].join('\n');
+    ];
+    if (this.#modelsTried && this.#modelsTried.length > 0) {
+      lines.push(`- reviewer models tried: ${this.#modelsTried.join(', ')}`);
+    }
+    if (this.#envelope) {
+      lines.push('', '## Normalized rejection envelope', '', '```json', this.#envelope.toString(), '```');
+    }
+    lines.push('', this.#rawOutput.trim(), '');
+    return lines.join('\n');
   }
 
   get diffHash() {
@@ -72,6 +87,14 @@ export class ReviewReport {
 
   get rawOutput() {
     return this.#rawOutput;
+  }
+
+  get modelsTried() {
+    return this.#modelsTried;
+  }
+
+  get envelope() {
+    return this.#envelope;
   }
 
   get timestamp() {

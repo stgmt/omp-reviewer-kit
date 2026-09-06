@@ -21,7 +21,7 @@ Staged Diff (git diff --cached --binary --no-ext-diff --)
                     │
                     ▼
 [Stage 2: Parallel Risk Hunting] (review-risk-hunter x 2 batch)
-  - Lane 1: Correctness (boundary conditions, null/default states, resource leaks).
+  - Lane 1: Correctness (boundary conditions, null/default states, resource leaks, anti-parasitic correctness defects).
   - Lane 2: Security (attacker input source, dangerous sink, missing controls).
   - Produces candidate findings under strict anti-noise rules.
                     │
@@ -33,7 +33,7 @@ Staged Diff (git diff --cached --binary --no-ext-diff --)
                     ▼
 [Stage 4: Orchestrator Synthesis] (reviewer-kit)
   - Synthesizes coverage, validated findings, and unproven summaries.
-  - Emits solitary machine-readable verdict marker.
+  - Emits a strict `review-rejection-envelope@1` before BLOCK and a solitary machine-readable verdict marker; PASS has no envelope.
 ```
 
 ## 2. Stage Contracts & Schemas
@@ -53,17 +53,22 @@ Staged Diff (git diff --cached --binary --no-ext-diff --)
 
 ### Stage 2: Parallel Risk Hunters (`review-risk-hunter`)
 - **Role**: Generates focused defect candidates in two parallel lanes using the scout context:
-  - `lane: "correctness"`: Boundary conditions, absence/default/failure values, side effects, determinism, resource/handle leaks, behavior-test gaps.
+  - `lane: "correctness"`: Boundary conditions, absence/default/failure values, side effects, determinism, resource/handle leaks, behavior-test gaps, and control infrastructure that duplicates an existing mechanism without adding product capability.
   - `lane: "security"`: Attacker-controlled input source, dangerous sink, missing/bypassed controls, credential leakage, permission bypass.
 - **Tools**: `read`, `grep`, `glob`, `lsp`, `bash` (read-only git commands only). No `task`, no mutating tools.
 - **Anti-Noise Prohibitions**:
   - Never report formatting, whitespace, indentation, or line length.
   - Never suggest adding or modifying comments, docstrings, or type annotations.
   - Never suggest renaming variables, functions, or files unless demonstrably misleading.
-  - Never suggest architectural or design pattern refactorings if current code is correct.
+  - Never suggest architectural or design pattern refactorings if current code is correct; this does not suppress a proven anti-parasitic correctness defect.
   - Never report pre-existing defects unrelated to the lines touched by the staged diff.
   - Never speculate on potential breakage without citing a concrete, reachable callsite.
   - Never report advice without a concrete failing trigger scenario.
+- **Anti-Parasitic Correctness Gate**:
+  - Evaluate only five forms: micro-CLIs replacing domain calls; local PKI without a trust boundary; file inbox/exit-code protocols replacing native pause and persistence; process receipts replacing product behavior tests; indiscriminate command capture duplicating existing logging.
+  - Confirm only when both repository or declared-framework evidence proves an existing mechanism for the same responsibility and the staged layer adds no product capability.
+  - Treat ownership cost as impact, not a third condition. Missing either proof means no candidate, `rejected`, or `not_proven`.
+  - Protect capability-adding Port/Adapter and Template Method designs, public user-facing CLIs, and cryptography for remote untrusted payloads from false positives.
 - **Candidate Schema**:
   - `candidate_id`: `<lane>-<ordinal>` (e.g. `correctness-1`, `security-1`).
   - `lane`: `"correctness"` | `"security"`.
@@ -102,6 +107,10 @@ Staged Diff (git diff --cached --binary --no-ext-diff --)
   - `### Review coverage`: Summary of inspected diff, changed files, active skills, and stages executed.
   - `### Confirmed findings`: Detailed list of confirmed findings (priority, path, range, trigger, impact, evidence).
   - `### Unproven/rejected summary`: Terse summary of rejected or unproven candidates with rationale.
+- **Rejection Envelope Rule**:
+  - A confirmed-finding BLOCK emits one strict `review-rejection-envelope@1` with the current diff hash and only normalized `correctness` or `security` findings.
+  - A mandatory-stage failure emits a `review_failure` envelope with `execution_failure` and a non-empty diagnostic message.
+  - The envelope occurs between standalone begin/end lines before the solitary BLOCK marker. PASS emits no envelope.
 - **Verdict Rule**:
   - Exactly zero confirmed findings -> emit `REVIEW_RESULT=PASS`.
   - At least one confirmed `P1` or `P2` finding -> emit `REVIEW_RESULT=BLOCK`.

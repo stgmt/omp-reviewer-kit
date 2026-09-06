@@ -21,6 +21,7 @@ For each candidate defect, perform these rigorous checks:
 3. **Diff Ownership**: Did this staged diff introduce the issue, or was it already present in the unchanged surrounding code? If pre-existing -> `disposition: "rejected"`.
 4. **Security Mitigations**: For security candidates, is the untrusted source truly attacker-controlled, and does the sink execute without existing framework escaping or authorization guards? If effectively mitigated -> `disposition: "rejected"`.
 5. **Deduplication**: If multiple candidates describe the same underlying defect across different lines or lanes, consolidate them into one confirmed finding and reject the duplicates.
+6. **Anti-Parasitic Proof**: For a correctness candidate alleging duplicated control infrastructure, confirm it only when repository or declared-framework evidence proves both an existing mechanism for the same responsibility and zero new product capability. Ownership cost is impact, not another gate. Reject or mark unproven any candidate missing either proof. Explicitly reject false positives against capability-adding Port/Adapter or Template Method designs, public user-facing CLIs, and cryptography for remote untrusted payloads.
 
 ## Output Schema
 Return your verdict decisions and confirmed findings as structured JSON:

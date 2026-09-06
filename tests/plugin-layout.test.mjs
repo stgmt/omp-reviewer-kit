@@ -37,14 +37,21 @@ const hunterAgent = await readFile('agents/review-risk-hunter.md', 'utf8');
 const verifierAgent = await readFile('agents/review-finding-verifier.md', 'utf8');
 const realitySkill = await readFile('skills/reality-first-review/SKILL.md', 'utf8');
 const multiStageSkill = await readFile('skills/multi-stage-review/SKILL.md', 'utf8');
+const hookTemplate = await readFile('templates/githooks/pre-commit', 'utf8');
 const manifest = JSON.parse(await readFile('package.json', 'utf8'));
 
 describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
   it('manifest and skills declare fixed reviewer identities', () => {
     assert.equal(manifest.name, 'omp-reviewer-kit');
-    assert.equal(manifest.version, '0.2.0');
+    assert.equal(manifest.version, '0.4.0');
     assert.match(realitySkill, /name: reality-first-review/);
     assert.match(multiStageSkill, /name: multi-stage-review/);
+  });
+
+  it('pre-commit hook derives the repository from its own trusted path without invoking Git', () => {
+    assert.match(hookTemplate, /hook_dir=\$\(CDPATH= cd/);
+    assert.match(hookTemplate, /root=\$\(CDPATH= cd/);
+    assert.doesNotMatch(hookTemplate, /(^|\s)git(?:\s|$)/m);
   });
 
   it('reviewer-kit is configured as a blocking orchestrator with exact specialist spawns', () => {
@@ -81,6 +88,12 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
 
     assert.match(reviewerKitAgent, /REVIEW_RESULT=PASS/);
     assert.match(reviewerKitAgent, /REVIEW_RESULT=BLOCK/);
+    assert.match(reviewerKitAgent, /review-rejection-envelope@1/);
+    assert.equal((reviewerKitAgent.match(/Stage [1-4]:/g) ?? []).length, 4);
+    assert.equal((reviewerKitAgent.match(/agent `review-risk-hunter`/g) ?? []).length, 1);
+    assert.match(reviewerKitAgent, /CLI invocation pins the active, slow, and smol model roles/);
+    assert.match(reviewerKitAgent, /omit `model`, `outputSchema`, `schemaMode`, and `isolated`/);
+    assert.doesNotMatch(reviewerKitAgent, /Pass that exact `model` selector/);
   });
 
   it('all review subagents strictly exclude mutation tools and task spawning', () => {
@@ -112,6 +125,9 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(scoutAgent, /"unknowns"/);
     assert.match(scoutAgent, /"reviewed_paths"/);
     assert.match(scoutAgent, /do not emit verdict markers/i);
+    assert.match(scoutAgent, /existing `invariants` and `relevant_consumers`/);
+    assert.match(scoutAgent, /`unknowns`/);
+    assert.doesNotMatch(scoutAgent, /platform_primitives/);
   });
 
   it('review-risk-hunter uses one shared candidate schema for both correctness and security lanes', () => {
@@ -130,6 +146,12 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(hunterAgent, /"evidence"/);
     assert.match(hunterAgent, /Anti-Noise Prohibitions/);
     assert.match(hunterAgent, /Do not emit verdict markers/i);
+    assert.match(hunterAgent, /Anti-Parasitic Correctness Gate/);
+    assert.match(hunterAgent, /evidence proves both conditions/);
+    assert.match(hunterAgent, /adds no product capability/);
+    assert.match(hunterAgent, /Do not flag a Port\/Adapter or Template Method that adds a real capability/);
+    assert.doesNotMatch(hunterAgent, /lane: \"architecture\"/);
+    assert.doesNotMatch(hunterAgent, /defect_class: \"parasitic_architecture\"/);
   });
 
   it('review-finding-verifier enforces mandatory disposition values and forbids verdict markers', () => {
@@ -140,6 +162,10 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(verifierAgent, /Adversarial Verification Checks/);
     assert.match(verifierAgent, /Upstream Defenses/);
     assert.match(verifierAgent, /must NOT suggest replacement patches or emit verdict markers/i);
+    assert.match(verifierAgent, /proves both an existing mechanism/);
+    assert.match(verifierAgent, /zero new product capability/);
+    assert.match(verifierAgent, /public user-facing CLIs/);
+    assert.match(verifierAgent, /remote untrusted payloads/);
   });
 
   it('multi-stage-review skill codifies the ordered protocol and schemas', () => {
@@ -150,5 +176,10 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(multiStageSkill, /Anti-Noise Prohibitions/);
     assert.match(multiStageSkill, /REVIEW_RESULT=PASS/);
     assert.match(multiStageSkill, /REVIEW_RESULT=BLOCK/);
+    assert.match(multiStageSkill, /Anti-Parasitic Correctness Gate/);
+    assert.match(multiStageSkill, /both repository or declared-framework evidence/);
+    assert.match(multiStageSkill, /review-rejection-envelope@1/);
+    assert.doesNotMatch(multiStageSkill, /lane: \"architecture\"/);
+    assert.doesNotMatch(multiStageSkill, /platform_primitives/);
   });
 });

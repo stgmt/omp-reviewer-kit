@@ -43,7 +43,6 @@ export class ReviewerPort {
    * @param {{
    *   prompt: ReviewPrompt|string,
    *   cwd: string,
-   *   timeoutMs?: number
    * }} params
    * @returns {Promise<{ status: number, stdout: string, stderr: string, combined: string }>|{ status: number, stdout: string, stderr: string, combined: string }}
    */

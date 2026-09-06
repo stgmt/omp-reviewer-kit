@@ -1,5 +1,4 @@
-import { DiffIdentity } from '../domain/diff-identity.mjs';
-import { ReviewVerdict } from '../domain/review-verdict.mjs';
+import { ReviewRejectionEnvelope } from '../domain/review-rejection-envelope.mjs';
 import { ReviewPrompt } from '../domain/review-prompt.mjs';
 import { ReviewReport } from '../domain/review-report.mjs';
 import { ReviewExecutionResult } from '../domain/review-execution-result.mjs';
@@ -48,10 +47,10 @@ export class ReviewWorkflowService {
   /**
    * Executes the complete review lifecycle.
    *
-   * @param {{ cwd?: string, timeoutMs?: number }} [options]
+   * @param {{ cwd?: string }} [options]
    * @returns {Promise<ReviewExecutionResult>}
    */
-  async execute({ cwd = process.cwd(), timeoutMs } = {}) {
+  async execute({ cwd = process.cwd() } = {}) {
     const repoRoot = (await this.#gitPort.getRepoRoot(cwd)).trim();
     const diff = await this.#gitPort.getStagedDiff(repoRoot);
 
@@ -63,34 +62,37 @@ export class ReviewWorkflowService {
     const execResult = await this.#reviewerPort.executeReview({
       prompt,
       cwd: repoRoot,
-      timeoutMs,
     });
 
     const combinedOutput = execResult.combined ?? `${execResult.stdout ?? ''}\n${execResult.stderr ?? ''}`;
+    const modelsTried = execResult.modelsTried;
 
-    const verdict = execResult.status === 0
-      ? ReviewVerdict.fromOutput(combinedOutput)
-      : ReviewVerdict.blockDueToFailure(execResult.stderr || 'reviewer process exited with non-zero status');
+    const { verdict, envelope } = ReviewRejectionEnvelope.evaluate({
+      output: combinedOutput,
+      diffIdentity: diff,
+      processStatus: execResult.status,
+      processError: execResult.stderr,
+    });
 
     const report = new ReviewReport({
       diffIdentity: diff,
       verdict,
       rawOutput: combinedOutput,
+      modelsTried,
+      envelope,
       timestamp: this.#clock(),
     });
 
     const reportPath = await this.#reportStorePort.saveReport(repoRoot, report);
 
-    if (execResult.status === 0 && verdict.isPass()) {
+    if (verdict.isPass()) {
       this.#logger.log(`reviewer-kit PASS: ${reportPath}\n`);
-      return ReviewExecutionResult.pass(reportPath, verdict.value);
+      return ReviewExecutionResult.pass(reportPath, verdict.value, modelsTried);
     }
 
     this.#logger.error(`reviewer-kit BLOCK: ${reportPath}\n`);
-    if (combinedOutput.trim()) {
-      this.#logger.error(`${combinedOutput.trim()}\n`);
-    }
+    this.#logger.error(`REVIEW_REJECTION_REPORT=${reportPath}\n`);
 
-    return ReviewExecutionResult.block(reportPath, combinedOutput.trim());
+    return ReviewExecutionResult.block(reportPath, combinedOutput.trim(), modelsTried, envelope);
   }
 }

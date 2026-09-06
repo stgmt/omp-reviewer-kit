@@ -7,6 +7,7 @@ import test, { describe, it } from 'node:test';
 import {
   DiffIdentity,
   ReviewVerdict,
+  ReviewRejectionEnvelope,
   ReviewPrompt,
   ReviewReport,
   ReviewExecutionResult,
@@ -33,6 +34,46 @@ function createFakeGit(repoRoot, diffText = '', calls = []) {
     }
     return Buffer.alloc(0);
   };
+}
+
+function rejectionOutput(diffText, { kind = 'confirmed_findings', envelope = {}, finding = {}, failure } = {}) {
+  const diffHash = createHash('sha256').update(diffText).digest('hex');
+  const defaultFinding = {
+    finding_id: 'correctness-1',
+    priority: 'P2',
+    defect_class: 'correctness',
+    file_path: 'src/example.mjs',
+    line_start: 1,
+    line_end: 1,
+    verifier_argument: 'The repository already provides the same responsibility.',
+    counterexample: 'The staged wrapper only calls the existing mechanism.',
+  };
+  const value = kind === 'review_failure'
+    ? {
+        schema: 'review-rejection-envelope@1',
+        kind,
+        diff_hash: diffHash,
+        findings: [],
+        failure: failure ?? {
+          code: 'execution_failure',
+          message: 'The reviewer process did not complete successfully.',
+        },
+        ...envelope,
+      }
+    : {
+        schema: 'review-rejection-envelope@1',
+        kind,
+        diff_hash: diffHash,
+        findings: [{ ...defaultFinding, ...finding }],
+        ...envelope,
+      };
+  return [
+    'REVIEW_REJECTION_ENVELOPE_BEGIN',
+    JSON.stringify(value),
+    'REVIEW_REJECTION_ENVELOPE_END',
+    'REVIEW_RESULT=BLOCK',
+    '',
+  ].join('\n');
 }
 
 describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
@@ -88,7 +129,7 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
       git,
       omp: () => ({
         status: 0,
-        stdout: 'Violation found: Rule 1 reality-first violated.\nREVIEW_RESULT=BLOCK\n',
+        stdout: rejectionOutput('bad diff content'),
         stderr: '',
       }),
       now: new Date('2026-09-04T10:05:00.000Z'),
@@ -98,8 +139,10 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
     // Then
     assert.equal(result.exitCode, 1);
     assert.equal(result.verdict, 'BLOCK');
-    assert.match(logs.join(''), /reviewer-kit BLOCK/);
-    assert.match(logs.join(''), /Rule 1 reality-first violated/);
+    assert.equal(logs.length, 2);
+    assert.match(logs[0], /^reviewer-kit BLOCK: .+\n$/);
+    assert.match(logs[1], /^REVIEW_REJECTION_REPORT=.+\n$/);
+    assert.equal(result.envelope.kind, 'confirmed_findings');
   });
 
   it('Scenario 3: Given no staged changes, When review executes, Then review is skipped without invoking OMP', async () => {
@@ -223,7 +266,7 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
     const second = await runReview({
       cwd: repoRoot,
       git,
-      omp: () => ({ status: 0, stdout: 'REVIEW_RESULT=BLOCK\n', stderr: '' }),
+      omp: () => ({ status: 0, stdout: rejectionOutput('same diff content'), stderr: '' }),
       now: new Date('2026-09-04T12:00:01.000Z'),
     });
 
@@ -244,7 +287,7 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
       git,
       omp: () => ({
         status: 0,
-        stdout: 'Stage review-finding-verifier failed: StructuredSubagentError: execution failed\nREVIEW_RESULT=BLOCK\n',
+        stdout: rejectionOutput('diff for stage failure test', { kind: 'review_failure' }),
         stderr: '',
       }),
     });
@@ -253,7 +296,8 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
     assert.equal(result.exitCode, 1);
     assert.equal(result.verdict, 'BLOCK');
     const reportContent = await readFile(result.reportPath, 'utf8');
-    assert.match(reportContent, /Stage review-finding-verifier failed/);
+    assert.match(reportContent, /## Normalized rejection envelope/);
+    assert.match(reportContent, /\"code\": \"execution_failure\"/);
   });
 
   it('Scenario 10: Given dispatcher prompt generation, When ReviewPrompt is rendered, Then it mandates multi-stage-review and names only reviewer-kit at the top level', async () => {
@@ -274,8 +318,15 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
 
     // Then
     assert.match(capturedPrompt, /Run exactly one native task with agent "reviewer-kit"\./);
+    assert.match(capturedPrompt, /Your next tool call must be the native task tool directly/);
     assert.match(capturedPrompt, /skill:\/\/multi-stage-review/);
     assert.match(capturedPrompt, /skill:\/\/reality-first-review/);
+    assert.match(capturedPrompt, /relevant project or user review skills discovered by OMP/);
+    assert.match(capturedPrompt, /supported name, agent, and task fields/);
+    assert.match(capturedPrompt, /omit model, outputSchema, schemaMode, and isolated/);
+    assert.match(capturedPrompt, /reproduce its complete report verbatim/);
+    assert.match(capturedPrompt, /read that URI first/);
+    assert.match(capturedPrompt, /never summarize or omit a rejection envelope/);
     assert.doesNotMatch(capturedPrompt, /do not run any other agent/);
   });
 });
@@ -297,6 +348,66 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
     assert.equal(ReviewVerdict.fromOutput('REVIEW_RESULT=PASS\nREVIEW_RESULT=BLOCK').isBlock(), true);
   });
 
+
+  it('ReviewRejectionEnvelope invariant: accepts only the strict caller-owned schema', () => {
+    const diff = DiffIdentity.fromString('envelope diff');
+    const validOutput = rejectionOutput('envelope diff');
+    const valid = ReviewRejectionEnvelope.evaluate({ output: validOutput, diffIdentity: diff, processStatus: 0 });
+    assert.equal(valid.verdict.reason, 'explicit_block');
+    assert.equal(valid.envelope.kind, 'confirmed_findings');
+    assert.equal(valid.envelope.findings[0].defect_class, 'correctness');
+
+    const processFailure = ReviewRejectionEnvelope.evaluate({
+      output: 'provider leaked raw details',
+      diffIdentity: diff,
+      processStatus: 1,
+      processError: 'secret provider response',
+    });
+    assert.equal(processFailure.envelope.failure.code, 'execution_failure');
+    assert.doesNotMatch(processFailure.envelope.failure.message, /secret|provider leaked/);
+
+    const customFailure = ReviewRejectionEnvelope.evaluate({
+      output: rejectionOutput('envelope diff', {
+        kind: 'review_failure',
+        failure: {
+          code: 'execution_failure',
+          message: 'stage 3 verifier returned an unavailable diagnostic',
+        },
+      }),
+      diffIdentity: diff,
+      processStatus: 0,
+    });
+    assert.equal(customFailure.envelope.failure.message, 'stage 3 verifier returned an unavailable diagnostic');
+
+    const malformedCases = [
+          ['missing_rejection_envelope', 'REVIEW_RESULT=BLOCK'],
+          ['multiple_verdict_markers', 'REVIEW_RESULT=BLOCK\nREVIEW_RESULT=BLOCK'],
+          ['malformed_rejection_envelope', 'REVIEW_REJECTION_ENVELOPE_BEGIN\n{bad json}\nREVIEW_REJECTION_ENVELOPE_END\nREVIEW_RESULT=BLOCK'],
+          ['malformed_rejection_envelope', validOutput.replace('REVIEW_REJECTION_ENVELOPE_END\nREVIEW_RESULT=BLOCK', 'REVIEW_REJECTION_ENVELOPE_END\nunexpected output\nREVIEW_RESULT=BLOCK')],
+          ['contradictory_rejection_envelope', validOutput.replace('REVIEW_RESULT=BLOCK', 'REVIEW_RESULT=PASS')],
+          ['malformed_rejection_envelope', rejectionOutput('envelope diff', { envelope: { diff_hash: 'b'.repeat(64) } })],
+          ['malformed_rejection_envelope', rejectionOutput('envelope diff', { envelope: { unexpected: true } })],
+          ['malformed_rejection_envelope', rejectionOutput('envelope diff', { finding: { defect_class: 'maintainability' } })],
+          ['malformed_rejection_envelope', rejectionOutput('envelope diff', { finding: { file_path: '../escape.mjs' } })],
+          ['malformed_rejection_envelope', rejectionOutput('envelope diff', { finding: { line_start: 2, line_end: 1 } })],
+          ['malformed_rejection_envelope', 'REVIEW_REJECTION_ENVELOPE_BEGIN\n{"schema":"review-rejection-envelope@1","schema":"review-rejection-envelope@1"}\nREVIEW_REJECTION_ENVELOPE_END\nREVIEW_RESULT=BLOCK'],
+          ['malformed_rejection_envelope', validOutput.replace('"schema":', '"__proto__":{"unexpected":true},"schema":')],
+          ['malformed_rejection_envelope', validOutput.replace('"finding_id":', '"__proto__":{"unexpected":true},"finding_id":')],
+          ['malformed_rejection_envelope', rejectionOutput('envelope diff', {
+            kind: 'review_failure',
+            failure: {
+              code: 'execution_failure',
+              message: 'stage 3 verifier returned an unavailable diagnostic',
+            },
+          }).replace('"code":', '"__proto__":{"unexpected":true},"code":')],
+        ];
+    for (const [expectedCode, output] of malformedCases) {
+      const evaluated = ReviewRejectionEnvelope.evaluate({ output, diffIdentity: diff, processStatus: 0 });
+      assert.equal(evaluated.verdict.value, 'BLOCK');
+      assert.equal(evaluated.envelope.failure.code, expectedCode);
+    }
+  });
+
   it('ReviewPrompt invariant: requires non-empty diff hash, mandates multi-stage-review, and embeds required agent name', () => {
     assert.throws(() => new ReviewPrompt(''), TypeError);
     const prompt = new ReviewPrompt('abc123hash');
@@ -304,7 +415,11 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
     assert.match(prompt.toString(), /reviewer-kit/);
     assert.match(prompt.toString(), /multi-stage-review/);
     assert.match(prompt.toString(), /reality-first-review/);
-    assert.doesNotMatch(prompt.toString(), /do not run any other agent/);
+    assert.match(prompt.toString(), /relevant project or user review skills discovered by OMP/);
+    assert.match(prompt.toString(), /reproduce its complete report verbatim/);
+        assert.match(prompt.toString(), /read that URI first/);
+        assert.match(prompt.toString(), /never summarize or omit a rejection envelope/);
+        assert.doesNotMatch(prompt.toString(), /do not run any other agent/);
   });
 
   it('ReviewReport invariant: renders correct markdown structure', () => {
@@ -324,7 +439,7 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
     const repoRoot = await createTempRepo('omp-service-');
     const service = createReviewWorkflowService({
       git: (args) => (args[0] === 'rev-parse' ? Buffer.from(`${repoRoot}\n`) : Buffer.from('staged diff')),
-      omp: () => ({ status: 0, stdout: 'REVIEW_RESULT=BLOCK\n', stderr: '' }),
+      omp: () => ({ status: 0, stdout: rejectionOutput('staged diff'), stderr: '' }),
       clock: () => new Date('2026-09-04T12:00:00.000Z'),
       logger: { log: () => {}, error: () => {} },
     });
@@ -334,15 +449,22 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
     await rm(repoRoot, { recursive: true, force: true }).catch(() => {});
   });
 
-  it('SubprocessGitAdapter invariant: enforces --cached in staged diff invocation', () => {
+  it('SubprocessGitAdapter invariant: enforces --cached in staged diff invocation', async () => {
     let passedArgs = [];
     const adapter = new SubprocessGitAdapter((args) => {
       passedArgs = args;
       return Buffer.from('diff-content');
     });
-    const diff = adapter.getStagedDiff('/repo');
+    const diff = await adapter.getStagedDiff('/repo');
     assert.equal(passedArgs.includes('--cached'), true);
     assert.deepEqual(passedArgs, ['diff', '--cached', '--binary', '--no-ext-diff', '--']);
     assert.equal(diff.isEmpty(), false);
   });
+  it('ReviewExecutionResult invariant: rejects a non-array model trace', () => {
+    assert.throws(
+      () => new ReviewExecutionResult({ exitCode: 1, skipped: false, verdict: 'BLOCK', modelsTried: 'not-an-array' }),
+      /modelsTried must be an array of strings/,
+    );
+  });
+
 });

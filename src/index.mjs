@@ -1,5 +1,6 @@
 export { DiffIdentity } from './domain/diff-identity.mjs';
 export { ReviewVerdict } from './domain/review-verdict.mjs';
+export { ReviewRejectionEnvelope } from './domain/review-rejection-envelope.mjs';
 export { ReviewPrompt } from './domain/review-prompt.mjs';
 export { ReviewReport } from './domain/review-report.mjs';
 export { ReviewExecutionResult } from './domain/review-execution-result.mjs';
@@ -24,13 +25,14 @@ import { ReviewWorkflowService } from './application/review-workflow-service.mjs
  *   git?: (args: string[], cwd: string) => Buffer,
  *   omp?: (prompt: string, cwd: string, timeoutMs?: number) => { status: number, stdout?: string, stderr?: string },
  *   clock?: () => Date,
- *   logger?: { log: (msg: string) => void, error: (msg: string) => void }
+ *   logger?: { log: (msg: string) => void, error: (msg: string) => void },
+ *   progress?: (event: { state: string, message: string, model?: string, elapsedMs?: number }) => void
  * }} [options]
  * @returns {ReviewWorkflowService}
  */
-export function createReviewWorkflowService({ git, omp, clock, logger } = {}) {
+export function createReviewWorkflowService({ git, omp, clock, logger, progress } = {}) {
   const gitPort = new SubprocessGitAdapter(git);
-  const reviewerPort = new OmpCliReviewerAdapter({ runner: omp });
+  const reviewerPort = new OmpCliReviewerAdapter({ runner: omp, progress });
   const reportStorePort = new FileSystemReportStoreAdapter();
 
   return new ReviewWorkflowService({

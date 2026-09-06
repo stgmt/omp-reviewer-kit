@@ -14,6 +14,8 @@ Review strictly targets `git diff --cached --binary --no-ext-diff --`. You may r
 
 Inspect the staged diff, read the full content of modified and added files, trace relevant callers and definitions using LSP or grep, and identify existing tests that exercise the touched code.
 
+When the staged change introduces a new process boundary, transport, state store, trust mechanism, proof format, or command wrapper, identify any existing repository or declared-framework mechanism for the same responsibility. Record proven mechanisms in the existing `invariants` and `relevant_consumers` fields. Record unresolved framework or capability claims in `unknowns`. Do not broaden the scan beyond evidence relevant to the staged change and do not add schema fields.
+
 Return your analysis as a structured report with these exact fields:
 
 ```json

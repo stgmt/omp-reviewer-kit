@@ -1,0 +1,177 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing annotated release tag
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    name: Verify and publish immutable release
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout tagged repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+
+      - name: Verify tag and synchronized versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git cat-file -t "${TAG}")" = tag
+          test "$(git rev-parse "${TAG}^{commit}")" = "$(git rev-parse HEAD)"
+          VERSION="${TAG#v}"
+          test "${TAG}" = "v${VERSION}"
+          node --input-type=module - "${VERSION}" <<'NODE'
+          import { readFile } from 'node:fs/promises';
+          const expected = process.argv[2];
+          const pkg = JSON.parse(await readFile('package.json', 'utf8'));
+          const marketplace = JSON.parse(await readFile('.omp-plugin/marketplace.json', 'utf8'));
+          const versions = [pkg.version, pkg.omp?.version, marketplace.plugins?.[0]?.version];
+          if (versions.some((version) => version !== expected)) {
+            throw new Error(`Version mismatch: expected ${expected}, received ${versions.join(', ')}`);
+          }
+          NODE
+
+      - name: Verify repository layout
+        run: npm run check
+
+      - name: Run test suite
+        run: npm test
+
+      - name: Run mutation gate
+        run: npm run test:mutation
+
+      - name: Build immutable tag archive
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          ASSET="omp-reviewer-kit-${TAG}.zip"
+          PREFIX="omp-reviewer-kit-${VERSION}/"
+          git archive --format=zip --prefix="${PREFIX}" --output="${ASSET}" "${TAG}" -- . \
+            ':(exclude)audit-reports/commit-reviews' \
+            ':(exclude).audit' \
+            ':(exclude)node_modules'
+          python - "${ASSET}" <<'PY'
+          import pathlib
+          import sys
+          import zipfile
+
+          archive = pathlib.Path(sys.argv[1])
+          forbidden_parts = {'.git', 'node_modules', '.audit', 'commit-reviews'}
+          forbidden_names = {'.env', 'agent.db', 'models.yml', 'config.yml', 'credentials.json'}
+          forbidden_suffixes = {'.key', '.pem', '.p12', '.pfx'}
+          with zipfile.ZipFile(archive) as package:
+              unsafe = []
+              for name in package.namelist():
+                  path = pathlib.PurePosixPath(name)
+                  lower_parts = {part.lower() for part in path.parts}
+                  basename = path.name.lower()
+                  if lower_parts & forbidden_parts or basename in forbidden_names or path.suffix.lower() in forbidden_suffixes:
+                      unsafe.append(name)
+              if unsafe:
+                  raise SystemExit('Forbidden archive entries: ' + ', '.join(unsafe))
+          PY
+          ARCHIVE_SHA="$(sha256sum "${ASSET}" | cut -d' ' -f1)"
+          PACKAGE_TREE_SHA="$(git ls-tree -r "${TAG}" | sha256sum | cut -d' ' -f1)"
+          printf '%s  %s\n' "${ARCHIVE_SHA}" "${ASSET}" > SHA256SUMS.txt
+          COMMIT_SHA="$(git rev-parse "${TAG}^{commit}")"
+          node --input-type=module - "${TAG}" "${COMMIT_SHA}" "${PACKAGE_TREE_SHA}" "${ARCHIVE_SHA}" "${ASSET}" <<'NODE'
+          import { writeFile } from 'node:fs/promises';
+          const [tag, commitSha, packageTreeSha, archiveSha, asset] = process.argv.slice(2);
+          await writeFile('RELEASE-IDENTITY.json', JSON.stringify({
+            tag,
+            commit_sha: commitSha,
+            package_tree_sha: packageTreeSha,
+            archive_sha: archiveSha,
+            asset,
+          }, null, 2) + '\n');
+          NODE
+          {
+            echo "asset=${ASSET}"
+            echo "archive_sha=${ARCHIVE_SHA}"
+            echo "package_tree_sha=${PACKAGE_TREE_SHA}"
+            echo "commit_sha=${COMMIT_SHA}"
+          } >> "${GITHUB_OUTPUT}"
+          {
+            echo "### Release identity"
+            echo "- tag commit: $(git rev-parse "${TAG}^{commit}")"
+            echo "- package tree SHA-256: ${PACKAGE_TREE_SHA}"
+            echo "- archive SHA-256: ${ARCHIVE_SHA}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Attest archive provenance
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: ${{ steps.package.outputs.asset }}
+
+      - name: Attest release identity provenance
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: RELEASE-IDENTITY.json
+
+      - name: Verify provenance before publication
+        shell: bash
+        run: |
+          gh attestation verify "${{ steps.package.outputs.asset }}" --repo "${GITHUB_REPOSITORY}"
+          gh attestation verify RELEASE-IDENTITY.json --repo "${GITHUB_REPOSITORY}"
+
+      - name: Prepare release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          awk -v heading="## [${VERSION}]" '
+            index($0, heading) == 1 { capture = 1; next }
+            capture && /^## \[/ { exit }
+            capture { print }
+          ' CHANGELOG.md > release-notes.txt
+          test -s release-notes.txt
+
+      - name: Publish or verify immutable GitHub Release
+        shell: bash
+        run: |
+          set -euo pipefail
+          ASSET="${{ steps.package.outputs.asset }}"
+          EXPECTED_SHA="${{ steps.package.outputs.archive_sha }}"
+          if gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            EXPECTED_ASSETS="$(printf '%s\n' "${ASSET}" RELEASE-IDENTITY.json SHA256SUMS.txt | LC_ALL=C sort)"
+            ACTUAL_ASSETS="$(gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" --json assets --jq '.assets[].name' | LC_ALL=C sort)"
+            test "${ACTUAL_ASSETS}" = "${EXPECTED_ASSETS}"
+            mkdir existing-release
+            gh release download "${TAG}" --repo "${GITHUB_REPOSITORY}" --dir existing-release --pattern "${ASSET}" --pattern SHA256SUMS.txt --pattern RELEASE-IDENTITY.json
+            DOWNLOADED_SHA="$(sha256sum "existing-release/${ASSET}" | cut -d' ' -f1)"
+            test "${DOWNLOADED_SHA}" = "${EXPECTED_SHA}"
+            test "$(cat existing-release/SHA256SUMS.txt)" = "$(cat SHA256SUMS.txt)"
+            cmp --silent existing-release/RELEASE-IDENTITY.json RELEASE-IDENTITY.json
+            gh attestation verify "existing-release/${ASSET}" --repo "${GITHUB_REPOSITORY}"
+            gh attestation verify existing-release/RELEASE-IDENTITY.json --repo "${GITHUB_REPOSITORY}"
+            echo "Existing release has the same tag commit, package tree, and artifact bytes; no assets were overwritten."
+          else
+            gh release create "${TAG}" "${ASSET}" SHA256SUMS.txt RELEASE-IDENTITY.json \
+              --repo "${GITHUB_REPOSITORY}" \
+              --verify-tag \
+              --title "omp-reviewer-kit ${TAG}" \
+              --notes-file release-notes.txt
+          fi
