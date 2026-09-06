@@ -22,19 +22,19 @@ const MUTANTS = [
   },
   {
     id: 'modular-workflow-process-status',
-    file: 'src/application/review-workflow-service.mjs',
+    file: 'src/domain/review-rejection-envelope.mjs',
     testFile: 'tests/bdd-scenarios.test.mjs',
-    original: 'if (execResult.status === 0 && verdict.isPass()) {',
-    replacement: 'if (execResult.status === 0 || verdict.isPass()) {',
-    description: 'Reviewer process exit status no longer required for PASS',
+    original: 'if (processStatus !== 0) {',
+    replacement: 'if (false) {',
+    description: 'Reviewer process failure no longer forces a normalized BLOCK',
   },
   {
     id: 'runner-workflow-process-status',
     file: 'scripts/run-review.mjs',
     testFile: 'tests/run-review.test.mjs',
-    original: 'if (execResult.status === 0 && verdict.isPass()) {',
-    replacement: 'if (execResult.status === 0 || verdict.isPass()) {',
-    description: 'Distributable runner does not require process exit status 0 for PASS',
+    original: 'if (processStatus !== 0) {',
+    replacement: 'if (false) {',
+    description: 'Distributable runner ignores reviewer process failure',
   },
   {
     id: 'modular-staged-isolation',
@@ -73,7 +73,7 @@ const MUTANTS = [
     file: 'src/domain/review-prompt.mjs',
     testFile: 'tests/bdd-scenarios.test.mjs',
     original:
-      "'The task must execute the multi-stage review protocol from skill://multi-stage-review and skill://reality-first-review, reading only relevant project review skills discovered by OMP.',",
+      "'The task must execute the multi-stage review protocol from skill://multi-stage-review and skill://reality-first-review, reading only relevant project or user review skills discovered by OMP.',",
     replacement:
       "'The task must read skill://reality-first-review and then only relevant project review skills discovered by OMP.',",
     description: 'Removes multi-stage-review protocol requirement from dispatcher prompt',
@@ -83,10 +83,26 @@ const MUTANTS = [
     file: 'scripts/run-review.mjs',
     testFile: 'tests/run-review.test.mjs',
     original:
-      "'The task must execute the multi-stage review protocol from skill://multi-stage-review and skill://reality-first-review, reading only relevant project review skills discovered by OMP.',",
+      "'The task must execute the multi-stage review protocol from skill://multi-stage-review and skill://reality-first-review, reading only relevant project or user review skills discovered by OMP.',",
     replacement:
       "'The task must read skill://reality-first-review and then only relevant project review skills discovered by OMP.',",
     description: 'Distributable runner prompt omits mandatory multi-stage-review protocol clause',
+  },
+  {
+    id: 'envelope-unsupported-class-modular',
+    file: 'src/domain/review-rejection-envelope.mjs',
+    testFile: 'tests/bdd-scenarios.test.mjs',
+    original: "finding.defect_class !== 'correctness' && finding.defect_class !== 'security'",
+    replacement: "finding.defect_class !== 'correctness' && finding.defect_class !== 'security' && finding.defect_class !== 'maintainability'",
+    description: 'Allows an unsupported defect class outside the stable schema',
+  },
+  {
+    id: 'envelope-unsupported-class-runner',
+    file: 'scripts/run-review.mjs',
+    testFile: 'tests/run-review.test.mjs',
+    original: "finding.defect_class !== 'correctness' && finding.defect_class !== 'security'",
+    replacement: "finding.defect_class !== 'correctness' && finding.defect_class !== 'security' && finding.defect_class !== 'maintainability'",
+    description: 'Distributable runner accepts an unsupported defect class',
   },
 ];
 

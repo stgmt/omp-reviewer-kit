@@ -38,17 +38,32 @@ Replace the single-pass reviewer with a repository-native 4-stage hierarchy to a
 
 ---
 
-## Phase 3: Autonomous Agent Correction Loop (Feedback Loop)
+## Phase 3: Caller-Owned Review Rejection Feedback (v0.3.0)
 
-Close the loop between code generation and review rejection. When a commit is blocked, the triggering AI agent autonomously reads the audit report and repairs the defect.
+Give the triggering AI agent a strict, machine-readable rejection signal while keeping the full reviewer evidence in the immutable audit report. The plugin reports the rejection; it never fixes the code itself.
 
-- [ ] **Machine-Readable Failure Envelope**: Emit a structured JSON rejection payload in audit reports for direct subagent consumption.
-- [ ] **Agent Context Re-injection**: Standardized prompt injection allowing OMP agents to parse rejected findings and locate exact file lines requiring correction.
-- [ ] **Bounded Auto-Remediation**: Configurable automated fix attempts (e.g. up to 3 cycles) before escalating to the developer.
+- [ ] **Rejection Envelope (`review-rejection-envelope@1`)**: Emit exactly one JSON envelope between standalone `REVIEW_REJECTION_ENVELOPE_BEGIN` and `REVIEW_REJECTION_ENVELOPE_END` lines before exactly one solitary `REVIEW_RESULT=BLOCK`. Require the exact schema, reject duplicate or unknown fields, validate a 64-character lowercase SHA-256 `diff_hash`, and keep malformed, missing, mismatched, or contradictory cases BLOCKed with `kind: review_failure`.
+- [ ] **Confirmed Finding Contract**: For `kind: confirmed_findings`, require at least one unique finding with P1/P2 priority, correctness/security defect class, repository-relative slash path without `../`, positive inclusive line range, nonempty verifier argument, and concrete counterexample.
+- [ ] **Review-Failure Contract**: For `kind: review_failure`, require `findings: []` and `failure: { code, message }` with a non-empty diagnostic message; allow only execution_failure, missing_verdict_marker, multiple_verdict_markers, missing_rejection_envelope, malformed_rejection_envelope, and contradictory_rejection_envelope.
+- [ ] **Two-Line Caller Signal**: After the report is saved, BLOCK stderr carries only `reviewer-kit BLOCK: <absolute-report-path>` and `REVIEW_REJECTION_REPORT=<absolute-report-path>`; full reviewer output, envelope, and parser diagnostics stay in the audit report, and the Git hook keeps exit code 1. PASS keeps its current success signal and emits no rejection pointer.
+- [ ] **Caller-Owned Repair (no auto-remediation)**: No new agent turn, `pi.sendMessage`, fixer agent, recursive `omp -p`, retry counter, provider retry after a real verdict, file edit, `git add`, reset, checkout, commit, automatic re-commit, `session_stop`, or second review process; the calling agent reads the report, fixes the defect, stages its files, and re-commits itself.
+- [ ] **Synchronized Delivery and Proof**: Update the modular workflow and both self-contained runners together; add contract tests for valid envelopes, every failure code, malformed/duplicate/unknown fields, path traversal, invalid ranges, hash mismatch, marker ordering, and exactly-two-line BLOCK stderr; prove runner synchronization with `npm run check`.
 
 ---
 
-## Phase 4: Review Replay & Model Benchmarking
+## Phase 4: Holistic Project Audit & Agent Usability ([Issue #1](https://github.com/stgmt/omp-reviewer-kit/issues/1))
+
+Define and implement a context-neutral deep-audit capability that evaluates a system as a product, implementation, operational surface, and tool for human and AI-agent users.
+
+- [ ] **Universal Multi-Layer Review Philosophy**: Define reusable analysis dimensions, evidence rules, unknown-area handling, deduplication, and prioritization.
+- [ ] **Project Audit Orchestration**: Run product, usage, behavior, security, failure, maintainability, lifecycle, and evidence analyses without changing the commit-gate contract.
+- [ ] **Agent Usability Analysis**: Evaluate discoverability, action order, state clarity, safe writes, error recovery, and result verification.
+- [ ] **Advisory Audit Report**: Produce a separate report with confirmed problems, risks, unknowns, coverage, and prioritized actions.
+- [ ] **Audit Result Isolation**: Ensure deep-audit output cannot be interpreted as `REVIEW_RESULT=PASS|BLOCK`.
+
+---
+
+## Phase 5: Review Replay & Model Benchmarking
 
 Enable empirical evaluation and historical auditing of code review quality.
 
@@ -58,7 +73,7 @@ Enable empirical evaluation and historical auditing of code review quality.
 
 ---
 
-## Phase 5: Ecosystem & Interactive Tooling
+## Phase 6: Ecosystem & Interactive Tooling
 
 Deepen integration with the Oh My Pi harness and developer workflows.
 

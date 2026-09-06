@@ -1,6 +1,6 @@
 {
   "name": "omp-reviewer-kit",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Multi-stage OMP review system and Git pre-commit hook for evidence-first code review.",
   "type": "module",
@@ -30,7 +30,7 @@
   ],
   "omp": {
     "name": "omp-reviewer-kit",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "extensions": [
       "./src/extension.mjs"
     ]

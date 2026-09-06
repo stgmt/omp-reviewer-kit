@@ -74,7 +74,7 @@ Do not report guesses as defects. If evidence is missing, say `not proven` and k
 
 ## Final result
 
-The `reviewer-kit` orchestrator synthesizes the verified findings from the multi-stage pipeline and finishes with exactly one machine-readable line:
+The `reviewer-kit` orchestrator synthesizes the verified findings from the multi-stage pipeline. A BLOCK must carry exactly one `review-rejection-envelope@1` between standalone `REVIEW_REJECTION_ENVELOPE_BEGIN` and `REVIEW_REJECTION_ENVELOPE_END` lines immediately before the verdict. Confirmed findings use only `correctness` or `security`; a stage failure uses the `execution_failure` code and a non-empty diagnostic message. PASS carries no envelope. The response finishes with exactly one machine-readable line:
 
 ```text
 REVIEW_RESULT=PASS

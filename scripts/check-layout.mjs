@@ -11,15 +11,18 @@ const required = [
   'agents/review-finding-verifier.md',
   'templates/githooks/pre-commit',
   'scripts/run-review.mjs',
+  'scripts/setup-hook.mjs',
   'scripts/install-hook.ps1',
   'scripts/install-hook.sh',
   'src/index.mjs',
+  'src/domain/review-rejection-envelope.mjs',
   'src/extension.mjs',
   'src/application/installer-service.mjs',
   'AGENTS.md',
   'ROADMAP.md',
   'CHANGELOG.md',
   '.github/workflows/ci.yml',
+  '.github/workflows/release.yml',
 ];
 
 for (const file of required) {
