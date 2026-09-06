@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.3.0] - 2026-09-06
+
+### Added
+- **Caller-Owned Rejection Envelope**: BLOCK reports now carry a strict `review-rejection-envelope@1` with validated diff identity, P1/P2 findings, fixed failure codes, and one report pointer.
+- **Automatic Hook Setup**: Session startup configures the repository hook in the background while retaining the manual setup command as a fallback.
+- **Provider Model Fallback**: Review execution now retries quota, rate-limit, authentication, and model-capacity failures with models that pass a short no-tools availability probe from explicit configuration or the installed OMP catalog, while preserving fail-closed behavior for real verdicts, timeouts, and an exhausted model list.
+- **Fallback Evidence**: Audit reports and execution results record the reviewer models attempted.
+- **Live Commit Review Progress**: The Git hook emits observable progress and model-response states in the OMP status bar and streamed command output without starting another agent turn.
+
+### Changed
+- **Review Time Budgets**: Full reviews have no timeout and are never cancelled by this plugin. Availability probes remain bounded at 60 seconds by default.
+- **BLOCK Output Boundary**: After progress lines, rejected commits end with only the report path and `REVIEW_REJECTION_REPORT` pointer; raw model output remains in the audit report.
+
 ## [0.2.0] - 2026-09-04
 
 ### Added

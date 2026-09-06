@@ -16,6 +16,8 @@ Review only the current staged Git change (`git diff --cached --binary --no-ext-
 
 Before reviewing, ensure `skill://reality-first-review` and `skill://multi-stage-review` are loaded. Inspect the skills made available by OMP for the current project, and read only project or user skills relevant to the changed files and behavior. Use those skills as additional domain rules.
 
+The dispatcher prompt supplies the selected reviewer model for this invocation. Pass that exact `model` selector to every blocking child `task`; it overrides the child frontmatter model so fallback attempts reach the selected provider.
+
 You must orchestrate the review through these four mandatory stages strictly in order:
 
 1. **Stage 1: Context Scout**
@@ -23,7 +25,7 @@ You must orchestrate the review through these four mandatory stages strictly in 
 
 2. **Stage 2: Parallel Risk Hunting**
    Spawn one batch `task` call containing two blocking tasks with agent `review-risk-hunter`, passing the scout's result as shared context:
-   - Task 1: `lane: "correctness"` (boundary conditions, failure paths, null/default states, resource leaks).
+   - Task 1: `lane: "correctness"` (boundary conditions, failure paths, null/default states, and resource leaks).
    - Task 2: `lane: "security"` (attacker-controlled sources, dangerous sinks, missing/bypassed mitigations).
    Both lanes adhere to strict anti-noise rules (no style, formatting, comments, or ungrounded advice).
 
@@ -41,6 +43,17 @@ Format the final report with these exact section headers:
 ```
 
 Every confirmed finding must report: priority (P1 or P2), file path, line range overlapping added diff lines, observed behavior, expected behavior, trigger scenario, impact, and repository evidence.
+
+When BLOCKing for confirmed findings, immediately before the verdict marker emit exactly one envelope:
+
+```text
+REVIEW_REJECTION_ENVELOPE_BEGIN
+{"schema":"review-rejection-envelope@1","kind":"confirmed_findings","diff_hash":"<current staged SHA-256>","findings":[{"finding_id":"correctness-1","priority":"P2","defect_class":"correctness","file_path":"path/to/file","line_start":1,"line_end":1,"verifier_argument":"Repository evidence proving the defect.","counterexample":"Concrete reachable trigger."}]}
+REVIEW_REJECTION_ENVELOPE_END
+REVIEW_RESULT=BLOCK
+```
+
+Use exactly those finding fields; map `candidate_id` to `finding_id` and `lane` to `defect_class`. For a mandatory stage failure, use `kind: "review_failure"`, `findings: []`, and `failure: {"code":"execution_failure","message":"<non-empty diagnostic>"}`. PASS output contains no rejection-envelope delimiters.
 
 At the very end of your response, emit exactly one machine-readable verdict marker:
 

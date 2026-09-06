@@ -6,15 +6,12 @@ if [ "$#" -ne 1 ]; then
   exit 2
 fi
 
+if ! command -v node >/dev/null 2>&1; then
+  printf 'Error: Node.js is required but was not found on PATH.\n' >&2
+  exit 1
+fi
+
 kit_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 target=$(CDPATH= cd -- "$1" && pwd)
 
-git_hooks="$target/.githooks"
-runner_dir="$target/.omp/review-kit"
-
-mkdir -p "$git_hooks" "$runner_dir"
-cp "$kit_root/templates/githooks/pre-commit" "$git_hooks/pre-commit"
-cp "$kit_root/scripts/run-review.mjs" "$runner_dir/run-review.mjs"
-chmod +x "$git_hooks/pre-commit"
-git -C "$target" config core.hooksPath .githooks
-printf 'Installed omp-reviewer-kit hook in %s\n' "$target"
+exec node "$kit_root/scripts/setup-hook.mjs" "$target"

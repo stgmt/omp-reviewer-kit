@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -27,9 +27,9 @@ const hasOmp = (() => {
 /**
  * Runs a real OMP command with piped stdin and closed EOF.
  */
-function runLiveOmp(prompt, cwd, timeoutMs = 600_000) {
+function runLiveOmp(prompt, cwd, timeoutMs = 600_000, extraEnv = {}) {
   const ompCommand = process.env.OMP_REVIEW_KIT_OMP ?? 'omp';
-  const commandArgs = ['-p', '--model', '@slow', '--no-session'];
+  const commandArgs = ['-p', '--model', process.env.OMP_REVIEW_KIT_MODEL ?? '@slow', '--no-session'];
   const isWindowsWrapper = /\.(cmd|bat)$/i.test(ompCommand);
   const executable = isWindowsWrapper ? (process.env.ComSpec ?? 'cmd.exe') : ompCommand;
   const args = isWindowsWrapper
@@ -40,16 +40,20 @@ function runLiveOmp(prompt, cwd, timeoutMs = 600_000) {
     const proc = spawn(executable, args, {
       cwd,
       stdio: ['pipe', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        ...extraEnv,
+      },
       windowsHide: true,
     });
 
     let stdout = '';
     let stderr = '';
 
-    proc.stdout.on('data', chunk => {
+    proc.stdout.on('data', (chunk) => {
       stdout += chunk.toString('utf8');
     });
-    proc.stderr.on('data', chunk => {
+    proc.stderr.on('data', (chunk) => {
       stderr += chunk.toString('utf8');
     });
 
@@ -58,7 +62,7 @@ function runLiveOmp(prompt, cwd, timeoutMs = 600_000) {
       reject(new Error(`Live OMP process timed out after ${timeoutMs}ms`));
     }, timeoutMs);
 
-    proc.on('close', code => {
+    proc.on('close', (code) => {
       clearTimeout(timer);
       resolve({
         status: code,
@@ -68,12 +72,11 @@ function runLiveOmp(prompt, cwd, timeoutMs = 600_000) {
       });
     });
 
-    proc.on('error', err => {
+    proc.on('error', (err) => {
       clearTimeout(timer);
       reject(err);
     });
 
-    // Guard against EPIPE if process terminates before reading stdin
     proc.stdin.on('error', () => {});
     try {
       proc.stdin.write(prompt);
@@ -83,6 +86,27 @@ function runLiveOmp(prompt, cwd, timeoutMs = 600_000) {
     }
   });
 }
+
+
+function resolveAgentDir(profile) {
+  const args = [...(profile ? ['--profile', profile] : []), 'config', 'path'];
+  const result = spawnSync(process.env.OMP_REVIEW_KIT_OMP ?? 'omp', args, {
+    shell: true,
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  assert.equal(result.status, 0, `Failed to resolve OMP config path: ${result.stderr}`);
+  return result.stdout.trim();
+}
+
+async function copyDefaultProfileConfig(targetAgentDir) {
+  const defaultAgentDir = resolveAgentDir();
+  await mkdir(targetAgentDir, { recursive: true });
+  for (const filename of ['models.yml', 'config.yml', 'agent.db']) {
+    await copyFile(path.join(defaultAgentDir, filename), path.join(targetAgentDir, filename));
+  }
+}
+
 
 describe('Feature: Real Live OMP & Plugin Discovery E2E (No Mocks)', () => {
   it('Live Check 1: OMP plugin doctor confirms omp-reviewer-kit is linked and healthy', { skip: !hasOmp }, () => {
@@ -99,7 +123,7 @@ describe('Feature: Real Live OMP & Plugin Discovery E2E (No Mocks)', () => {
   });
 
   it('Live Check 2: OMP native task discovery detects reviewer-kit and all specialist agents', async () => {
-    const defaultDiscoveryPath = 'C:/Users/stigm/.omp/plugins/node_modules/@oh-my-pi/pi-coding-agent/src/task/discovery.ts';
+    const defaultDiscoveryPath = path.join(path.dirname(resolveAgentDir()), 'plugins', 'node_modules', '@oh-my-pi', 'pi-coding-agent', 'src', 'task', 'discovery.ts');
     let discoverAgents;
     try {
       const discoveryModulePath = pathToFileURL(defaultDiscoveryPath).href;
@@ -113,7 +137,7 @@ describe('Feature: Real Live OMP & Plugin Discovery E2E (No Mocks)', () => {
       const res = await discoverAgents(path.resolve('.'));
 
       // 1. Orchestrator: reviewer-kit
-      const reviewerKit = res.agents.find(a => a.name === 'reviewer-kit');
+      const reviewerKit = res.agents.find((a) => a.name === 'reviewer-kit');
       assert.ok(reviewerKit, 'reviewer-kit must be discovered in OMP task agents list');
       assert.equal(reviewerKit.name, 'reviewer-kit');
       assert.deepEqual(reviewerKit.model, ['@slow']);
@@ -124,7 +148,7 @@ describe('Feature: Real Live OMP & Plugin Discovery E2E (No Mocks)', () => {
       assert.ok(!reviewerKit.tools.includes('write'), 'reviewer-kit must not have write');
 
       // 2. Context Scout
-      const scout = res.agents.find(a => a.name === 'review-context-scout');
+      const scout = res.agents.find((a) => a.name === 'review-context-scout');
       assert.ok(scout, 'review-context-scout must be discovered');
       assert.equal(scout.blocking, true);
       assert.deepEqual(scout.model, ['@task']);
@@ -132,7 +156,7 @@ describe('Feature: Real Live OMP & Plugin Discovery E2E (No Mocks)', () => {
       assert.ok(!scout.tools.includes('edit') && !scout.tools.includes('write'));
 
       // 3. Risk Hunter
-      const hunter = res.agents.find(a => a.name === 'review-risk-hunter');
+      const hunter = res.agents.find((a) => a.name === 'review-risk-hunter');
       assert.ok(hunter, 'review-risk-hunter must be discovered');
       assert.equal(hunter.blocking, true);
       assert.deepEqual(hunter.model, ['@slow']);
@@ -140,7 +164,7 @@ describe('Feature: Real Live OMP & Plugin Discovery E2E (No Mocks)', () => {
       assert.ok(!hunter.tools.includes('edit') && !hunter.tools.includes('write'));
 
       // 4. Finding Verifier
-      const verifier = res.agents.find(a => a.name === 'review-finding-verifier');
+      const verifier = res.agents.find((a) => a.name === 'review-finding-verifier');
       assert.ok(verifier, 'review-finding-verifier must be discovered');
       assert.equal(verifier.blocking, true);
       assert.deepEqual(verifier.model, ['@slow']);
@@ -155,7 +179,8 @@ describe('Feature: Real Live OMP & Plugin Discovery E2E (No Mocks)', () => {
     await mkdir(repoDir, { recursive: true });
 
     try {
-      const git = (args) => spawnSync('git', args, { cwd: repoDir, encoding: 'utf8', windowsHide: true });
+      const git = (args, options = {}) =>
+        spawnSync('git', args, { cwd: repoDir, encoding: 'utf8', windowsHide: true, ...options });
       git(['init']);
       git(['config', 'user.name', 'Live Pass Test']);
       git(['config', 'user.email', 'live-pass@test.local']);
@@ -169,7 +194,7 @@ describe('Feature: Real Live OMP & Plugin Discovery E2E (No Mocks)', () => {
       assert.notEqual(diffRes.stdout.length, 0);
 
       const prompt = ReviewPrompt.forDiff(diffRes.stdout).toString();
-      const result = await runLiveOmp(prompt, repoDir, 300_000);
+      const result = await runLiveOmp(prompt, repoDir, 600_000);
 
       assert.equal(result.status, 0, `OMP execution failed with status ${result.status}: ${result.stderr}`);
       assert.match(result.stdout, /REVIEW_RESULT=PASS/);
@@ -185,7 +210,8 @@ describe('Feature: Real Live OMP & Plugin Discovery E2E (No Mocks)', () => {
     await mkdir(repoDir, { recursive: true });
 
     try {
-      const git = (args) => spawnSync('git', args, { cwd: repoDir, encoding: 'utf8', windowsHide: true });
+      const git = (args, options = {}) =>
+        spawnSync('git', args, { cwd: repoDir, encoding: 'utf8', windowsHide: true, ...options });
       git(['init']);
       git(['config', 'user.name', 'Live Block Test']);
       git(['config', 'user.email', 'live-block@test.local']);
@@ -215,7 +241,7 @@ describe('Feature: Real Live OMP & Plugin Discovery E2E (No Mocks)', () => {
       assert.notEqual(diffRes.stdout.length, 0);
 
       const prompt = ReviewPrompt.forDiff(diffRes.stdout).toString();
-      const result = await runLiveOmp(prompt, repoDir, 300_000);
+      const result = await runLiveOmp(prompt, repoDir, 600_000);
 
       assert.equal(result.status, 0, `OMP execution failed with status ${result.status}: ${result.stderr}`);
       assert.match(result.stdout, /REVIEW_RESULT=BLOCK/);
@@ -224,4 +250,153 @@ describe('Feature: Real Live OMP & Plugin Discovery E2E (No Mocks)', () => {
       await rm(baseDir, { recursive: true, force: true }).catch(() => {});
     }
   });
+
+  it('Live Check 5: Isolated named profile with automatic hook setup and dynamic user skill evolution', { skip: !isLiveE2E }, async () => {
+    const profName = `omp-rev-live-${Date.now()}`;
+    const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-live-profile-'));
+    const repoDir = path.join(baseDir, 'repo');
+    await mkdir(repoDir, { recursive: true });
+
+    let profileDir;
+    try {
+      const git = (args, options = {}) =>
+        spawnSync('git', args, { cwd: repoDir, encoding: 'utf8', windowsHide: true, ...options });
+      git(['init']);
+      git(['config', 'user.name', 'Profile E2E Test']);
+      git(['config', 'user.email', 'profile-e2e@test.local']);
+
+      // 1. Resolve profile directory
+      const pathRes = spawnSync('omp', ['--profile', profName, 'config', 'path'], {
+        shell: true,
+        encoding: 'utf8',
+        windowsHide: true,
+      });
+      assert.equal(pathRes.status, 0, `Failed to resolve profile path: ${pathRes.stderr}`);
+      const agentDir = pathRes.stdout.trim();
+      profileDir = path.dirname(agentDir);
+      await mkdir(agentDir, { recursive: true });
+
+      // Copy auth and model configuration from the dynamically resolved default profile.
+      await copyDefaultProfileConfig(agentDir);
+
+      // 2. Install current plugin into the isolated profile
+      const pluginInstallRes = spawnSync('omp', ['--profile', profName, 'plugin', 'install', path.resolve(process.env.OMP_REVIEW_KIT_LIVE_PACKAGE_ROOT ?? '.')], {
+        shell: true,
+        encoding: 'utf8',
+        windowsHide: true,
+      });
+      assert.equal(pluginInstallRes.status, 0, `Plugin install failed: ${pluginInstallRes.stderr}`);
+
+      // 3. Launch OMP in repoDir to trigger session_start auto-setup without running /reviewer-kit:setup
+      const probeProc = spawn('omp', ['--profile', profName, '-p', '--no-session', 'echo auto-setup'], {
+        cwd: repoDir,
+        shell: true,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        windowsHide: true,
+      });
+      probeProc.stdin.write('test\n');
+      probeProc.stdin.end();
+      await new Promise((resolve) => {
+        probeProc.on('close', resolve);
+        setTimeout(() => {
+          probeProc.kill();
+          resolve();
+        }, 30_000);
+      });
+
+      // Verify that session_start installed the hook and runner
+      const hookStat = await stat(path.join(repoDir, '.githooks', 'pre-commit'));
+      assert.equal(hookStat.isFile(), true, 'Pre-commit hook must be created automatically');
+
+      const runnerStat = await stat(path.join(repoDir, '.omp', 'review-kit', 'run-review.mjs'));
+      assert.equal(runnerStat.isFile(), true, 'Runner script must be created automatically');
+
+      const coreHooksRes = git(['config', '--get', 'core.hooksPath']);
+      assert.equal(coreHooksRes.stdout.trim(), '.githooks', 'core.hooksPath must be set to .githooks');
+
+      // 4. Create user skill forbidding REVIEW_SENTINEL_V1
+      const userSkillDir = path.join(agentDir, 'skills', 'dynamic-review-e2e');
+      await mkdir(userSkillDir, { recursive: true });
+      const userSkillFile = path.join(userSkillDir, 'SKILL.md');
+
+      await writeFile(
+        userSkillFile,
+        [
+          '---',
+          'name: dynamic-review-e2e',
+          'description: Enforces rejection of sentinel tokens in commit reviews.',
+          '---',
+          '# Sentinel Rejection Rule',
+          'Any file containing token REVIEW_SENTINEL_V1 is strictly prohibited and must be blocked with P1 finding.',
+        ].join('\n'),
+        'utf8'
+      );
+
+      // Stage file containing REVIEW_SENTINEL_V1
+      const v1File = path.join(repoDir, 'token.txt');
+      await writeFile(v1File, 'const token = "REVIEW_SENTINEL_V1";\n', 'utf8');
+      git(['add', 'token.txt']);
+
+      // Attempt real git commit with OMP_PROFILE
+      const commitRes1 = git(['commit', '-m', 'Commit with V1 token'], {
+        env: {
+          ...process.env,
+          OMP_PROFILE: profName,
+        },
+      });
+
+      // Must be BLOCKED and cite the rule or sentinel
+      assert.notEqual(
+        commitRes1.status,
+        0,
+        `Commit with REVIEW_SENTINEL_V1 must be blocked.\nstdout: ${commitRes1.stdout}\nstderr: ${commitRes1.stderr}`
+      );
+      assert.match(commitRes1.stdout + commitRes1.stderr, /reviewer-kit BLOCK/);
+
+      // 5. Update the same skill in-place: permit V1, forbid REVIEW_SENTINEL_V2
+      await writeFile(
+        userSkillFile,
+        [
+          '---',
+          'name: dynamic-review-e2e',
+          'description: Enforces rejection of sentinel tokens in commit reviews.',
+          '---',
+          '# Sentinel Rejection Rule',
+          'REVIEW_SENTINEL_V1 is permitted. Any file containing token REVIEW_SENTINEL_V2 is strictly prohibited and must be blocked with P1 finding.',
+        ].join('\n'),
+        'utf8'
+      );
+
+      // Stage file containing REVIEW_SENTINEL_V2
+      await writeFile(v1File, 'const token = "REVIEW_SENTINEL_V2";\n', 'utf8');
+      git(['add', 'token.txt']);
+
+      // Attempt real git commit with OMP_PROFILE
+      const commitRes2 = git(['commit', '-m', 'Commit with V2 token'], {
+        env: {
+          ...process.env,
+          OMP_PROFILE: profName,
+        },
+      });
+
+      // Must be BLOCKED and reflect the newly updated skill requirement
+      assert.notEqual(
+        commitRes2.status,
+        0,
+        `Commit with REVIEW_SENTINEL_V2 must be blocked.\nstdout: ${commitRes2.stdout}\nstderr: ${commitRes2.stderr}`
+      );
+      assert.match(commitRes2.stdout + commitRes2.stderr, /reviewer-kit BLOCK/);
+
+      // Verify commit reports were written to audit-reports/commit-reviews/
+      const reportsDir = path.join(repoDir, 'audit-reports', 'commit-reviews');
+      const reportFiles = await readdir(reportsDir);
+      assert.ok(reportFiles.length >= 2, 'Audit reports must be created for both blocked commits');
+    } finally {
+      await rm(baseDir, { recursive: true, force: true }).catch(() => {});
+      if (profileDir) {
+        await rm(profileDir, { recursive: true, force: true }).catch(() => {});
+      }
+    }
+  });
+
 });

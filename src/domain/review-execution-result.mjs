@@ -1,3 +1,5 @@
+import { ReviewRejectionEnvelope } from './review-rejection-envelope.mjs';
+
 /**
  * Value Object representing the final outcome of the review workflow execution.
  */
@@ -7,6 +9,8 @@ export class ReviewExecutionResult {
   #verdict;
   #reportPath;
   #details;
+  #modelsTried;
+  #envelope;
 
   /**
    * @param {{
@@ -14,15 +18,25 @@ export class ReviewExecutionResult {
    *   skipped: boolean,
    *   verdict?: 'PASS'|'BLOCK',
    *   reportPath?: string,
-   *   details?: string
+   *   details?: string,
+   *   modelsTried?: string[],
+   *   envelope?: ReviewRejectionEnvelope|null
    * }} params
    */
-  constructor({ exitCode, skipped, verdict, reportPath, details }) {
+  constructor({ exitCode, skipped, verdict, reportPath, details, modelsTried, envelope = null }) {
     this.#exitCode = exitCode;
     this.#skipped = skipped;
     this.#verdict = verdict;
     this.#reportPath = reportPath;
     this.#details = details;
+    if (modelsTried !== undefined && (!Array.isArray(modelsTried) || modelsTried.some((model) => typeof model !== 'string'))) {
+      throw new TypeError('modelsTried must be an array of strings');
+    }
+    this.#modelsTried = modelsTried;
+    if (envelope !== null && !(envelope instanceof ReviewRejectionEnvelope)) {
+      throw new TypeError('envelope must be a ReviewRejectionEnvelope or null');
+    }
+    this.#envelope = envelope;
   }
 
   /**
@@ -42,14 +56,16 @@ export class ReviewExecutionResult {
    *
    * @param {string} reportPath
    * @param {'PASS'} [verdict='PASS']
+   * @param {string[]} [modelsTried]
    * @returns {ReviewExecutionResult}
    */
-  static pass(reportPath, verdict = 'PASS') {
+  static pass(reportPath, verdict = 'PASS', modelsTried) {
     return new ReviewExecutionResult({
       exitCode: 0,
       skipped: false,
       verdict,
       reportPath,
+      modelsTried,
     });
   }
 
@@ -58,15 +74,19 @@ export class ReviewExecutionResult {
    *
    * @param {string} [reportPath]
    * @param {string} [details]
+   * @param {string[]} [modelsTried]
+   * @param {ReviewRejectionEnvelope} envelope
    * @returns {ReviewExecutionResult}
    */
-  static block(reportPath, details = '') {
+  static block(reportPath, details = '', modelsTried, envelope) {
     return new ReviewExecutionResult({
       exitCode: 1,
       skipped: false,
       verdict: 'BLOCK',
       reportPath,
       details,
+      modelsTried,
+      envelope,
     });
   }
 
@@ -90,6 +110,14 @@ export class ReviewExecutionResult {
     return this.#details;
   }
 
+  get modelsTried() {
+    return this.#modelsTried;
+  }
+
+  get envelope() {
+    return this.#envelope;
+  }
+
   /**
    * Plain object representation for backward-compatible consumption.
    *
@@ -97,7 +125,9 @@ export class ReviewExecutionResult {
    *   exitCode: number,
    *   skipped: boolean,
    *   verdict?: 'PASS'|'BLOCK',
-   *   reportPath?: string
+   *   reportPath?: string,
+   *   modelsTried?: string[],
+   *   envelope?: object
    * }}
    */
   toJSON() {
@@ -107,6 +137,10 @@ export class ReviewExecutionResult {
     };
     if (this.#verdict !== undefined) obj.verdict = this.#verdict;
     if (this.#reportPath !== undefined) obj.reportPath = this.#reportPath;
+    if (this.#modelsTried !== undefined && this.#modelsTried.length > 0) {
+      obj.modelsTried = this.#modelsTried;
+    }
+    if (this.#envelope) obj.envelope = this.#envelope.toJSON();
     return obj;
   }
 }
