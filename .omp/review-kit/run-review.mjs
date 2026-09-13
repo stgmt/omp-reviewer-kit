@@ -1790,7 +1790,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       primaryModel: this.#primaryModel,
       maxFallbacks: this.#maxFallbacks,
       probeTimeoutMs: this.#probeTimeoutMs,
-      effortOverride: process.env.OMP_REVIEW_KIT_EFFORT ?? null,
+      effortOverride: process.env.OMP_REVIEW_KIT_EFFORT ?? 'low',
     });
     const promptText = typeof prompt === 'string' ? prompt : prompt.toString();
     const primaryModel = this.#primaryModel;

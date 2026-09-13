@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-09-13
+
+### Fixed
+- **Telemetry `effortOverride` honesty**: `review_chain.effortOverride` now records the effective default (`"low"`) when `OMP_REVIEW_KIT_EFFORT` is unset, instead of `null`. Previously the chain-level field reported "no override" even though `applyEffortOverride` applied `low` and the attempt-level resolved model carried `:low` — the field lied about the actual effort used. Verified end-to-end: a seeded-defect run (3 known bugs in a 473-byte diff) found all 3 confirmed findings in 1.8 min on `gemini-3.8-flash:low`, with `effortOverride: "low"` in telemetry.
+
 ## [0.7.0] - 2026-09-13
 
 ### Changed
