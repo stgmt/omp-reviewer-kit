@@ -10,6 +10,7 @@ export class ReviewReport {
   #verdict;
   #rawOutput;
   #modelsTried;
+  #verifiedOk;
   #envelope;
   #timestamp;
 
@@ -19,15 +20,28 @@ export class ReviewReport {
    *   verdict: ReviewVerdict|string,
    *   rawOutput: string,
    *   modelsTried?: string[],
+   *   verifiedOk?: string[],
    *   envelope?: ReviewRejectionEnvelope|null,
    *   timestamp?: Date
    * }} params
    */
-  constructor({ diffIdentity, verdict, rawOutput = '', modelsTried, envelope = null, timestamp = new Date() }) {
+  constructor({
+    diffIdentity,
+    verdict,
+    rawOutput = '',
+    modelsTried,
+    verifiedOk = [],
+    envelope = null,
+    timestamp = new Date(),
+  }) {
     this.#diffHash = diffIdentity instanceof DiffIdentity ? diffIdentity.hash : String(diffIdentity);
     this.#verdict = verdict instanceof ReviewVerdict ? verdict.value : String(verdict);
     this.#rawOutput = rawOutput;
     this.#modelsTried = Array.isArray(modelsTried) ? modelsTried.filter((m) => typeof m === 'string') : undefined;
+    if (!Array.isArray(verifiedOk) || verifiedOk.some((item) => typeof item !== 'string' || item.trim().length === 0)) {
+      throw new TypeError('verifiedOk must be an array of non-empty strings');
+    }
+    this.#verifiedOk = Object.freeze(verifiedOk.map((item) => item.trim()));
     if (envelope !== null && !(envelope instanceof ReviewRejectionEnvelope)) {
       throw new TypeError('envelope must be a ReviewRejectionEnvelope or null');
     }
@@ -73,7 +87,12 @@ export class ReviewReport {
     if (this.#envelope) {
       lines.push('', '## Normalized rejection envelope', '', '```json', this.#envelope.toString(), '```');
     }
-    lines.push('', this.#rawOutput.trim(), '');
+
+    const rawOutput = this.#rawOutput.trim();
+    if (this.#verifiedOk.length > 0 && !/^### Verified-OK\s*$/m.test(rawOutput)) {
+      lines.push('', '### Verified-OK', ...this.#verifiedOk.map((item) => `- ${item}`));
+    }
+    lines.push('', rawOutput, '');
     return lines.join('\n');
   }
 
@@ -91,6 +110,10 @@ export class ReviewReport {
 
   get modelsTried() {
     return this.#modelsTried;
+  }
+
+  get verifiedOk() {
+    return this.#verifiedOk;
   }
 
   get envelope() {

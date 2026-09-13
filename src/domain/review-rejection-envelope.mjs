@@ -285,29 +285,31 @@ export class ReviewRejectionEnvelope {
     if (beginIndexes.length === 0 && endIndexes.length === 0) {
       return blockWithFailure(rawOutput, diffHash, 'missing_rejection_envelope', verdict);
     }
-    if (beginIndexes.length !== 1 || endIndexes.length !== 1) {
-      return blockWithFailure(rawOutput, diffHash, 'malformed_rejection_envelope');
-    }
 
-    const beginIndex = beginIndexes[0];
-    const endIndex = endIndexes[0];
-    const blockIndex = lines.indexOf('REVIEW_RESULT=BLOCK');
-    if (beginIndex >= endIndex || endIndex >= blockIndex) {
-      return blockWithFailure(rawOutput, diffHash, 'contradictory_rejection_envelope');
-    }
-    if (blockIndex !== endIndex + 1) {
-      return blockWithFailure(rawOutput, diffHash, 'malformed_rejection_envelope');
-    }
-
-    try {
-      const parsed = parseStrictJson(lines.slice(beginIndex + 1, endIndex).join('\n'));
-      if (!validateEnvelope(parsed, diffHash)) {
-        return blockWithFailure(rawOutput, diffHash, 'malformed_rejection_envelope');
+    const pairs = [];
+    let openBegin = -1;
+    for (const index of [...beginIndexes, ...endIndexes].sort((a, b) => a - b)) {
+      if (beginIndexes.includes(index)) {
+        openBegin = index;
+      } else if (openBegin >= 0) {
+        pairs.push([openBegin, index]);
+        openBegin = -1;
       }
-      return { verdict, envelope: new ReviewRejectionEnvelope(parsed) };
-    } catch {
-      return blockWithFailure(rawOutput, diffHash, 'malformed_rejection_envelope');
     }
+
+    const blockIndex = lines.indexOf('REVIEW_RESULT=BLOCK');
+    for (const [beginIndex, endIndex] of pairs) {
+      if (endIndex >= blockIndex || blockIndex !== endIndex + 1) continue;
+      try {
+        const parsed = parseStrictJson(lines.slice(beginIndex + 1, endIndex).join('\n'));
+        if (validateEnvelope(parsed, diffHash)) {
+          return { verdict, envelope: new ReviewRejectionEnvelope(parsed) };
+        }
+      } catch {
+        // try the next envelope pair
+      }
+    }
+    return blockWithFailure(rawOutput, diffHash, 'malformed_rejection_envelope');
   }
 
   get schema() {

@@ -6,6 +6,9 @@ import path from 'node:path';
 import test from 'node:test';
 import { runReview } from '../scripts/run-review.mjs';
 
+const TEST_ROLES = { smol: 'acme/smol-flash:high', task: 'acme/task-fast:high', slow: 'acme/slow-max:max' };
+const testRoleResolver = () => TEST_ROLES;
+
 async function makeRoot(prefix = 'omp-review-kit-') {
   const reportRoot = await mkdtemp(path.join(tmpdir(), prefix));
   return path.join(reportRoot, 'project');
@@ -16,6 +19,7 @@ function fakeGit(root, diff, calls = []) {
     calls.push(args);
     if (args[0] === 'rev-parse') return Buffer.from(`${root}\n`);
     if (args[0] === 'diff') return Buffer.from(diff);
+    if (args[0] === 'ls-files') return Buffer.alloc(0);
     return Buffer.alloc(0);
   };
 }
@@ -69,6 +73,7 @@ async function runAt(root, diff, ompResult, now = new Date('2026-09-04T12:00:00.
       prompt = value;
       return ompResult;
     },
+    ompOptions: { roleResolver: testRoleResolver },
     now,
   });
   return { result, prompt, root };
@@ -200,7 +205,7 @@ test('fails closed when OMP fails', async () => {
 
 test('skips a commit with no staged change', async () => {
   let called = false;
-  const root = 'C:/fixture/project';
+  const root = await makeRoot();
   const result = await runReview({
     cwd: root,
     git: (args) => args[0] === 'rev-parse' ? Buffer.from(`${root}\n`) : Buffer.alloc(0),
@@ -224,6 +229,7 @@ test('excludes unstaged working-tree changes from the reviewed hash', async () =
       prompt = value;
       return { status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' };
     },
+    ompOptions: { roleResolver: testRoleResolver },
   });
   const expectedHash = createHash('sha256').update(stagedDiff).digest('hex');
 

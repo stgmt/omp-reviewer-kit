@@ -15,6 +15,13 @@ const prompt = 'review this staged change';
 const cwd = process.cwd();
 const isWindows = process.platform === 'win32';
 
+const TEST_ROLES = {
+  slow: 'acme/slow-max:max',
+  smol: 'acme/smol-flash:high',
+  task: 'acme/task-fast:high',
+};
+const testRoleResolver = () => TEST_ROLES;
+
 function result(status, stdout = '', stderr = '') {
   return { status, stdout, stderr };
 }
@@ -26,6 +33,7 @@ test('uses the default model selector when no model is configured', async () => 
   try {
     let selectedModel;
     const adapter = new OmpCliReviewerAdapter({
+      roleResolver: testRoleResolver,
       runner: async (text, root, timeoutMs, model) => {
         selectedModel = model;
         return result(0, 'REVIEW_RESULT=PASS\n');
@@ -35,7 +43,7 @@ test('uses the default model selector when no model is configured', async () => 
     const review = await adapter.executeReview({ prompt, cwd });
 
     assert.equal(review.status, 0);
-    assert.equal(selectedModel, '@slow');
+    assert.equal(selectedModel, 'acme/smol-flash:high');
   } finally {
     if (previous === undefined) delete process.env.OMP_REVIEW_KIT_MODEL;
     else process.env.OMP_REVIEW_KIT_MODEL = previous;
@@ -46,6 +54,7 @@ test('uses the default model selector when no model is configured', async () => 
 test('normalizes a non-positive probe timeout', async () => {
   let observedTimeout;
   const adapter = new OmpCliReviewerAdapter({
+    roleResolver: testRoleResolver,
     primaryModel: '@slow',
     maxFallbacks: 1,
     probeTimeoutMs: 0,
@@ -65,6 +74,7 @@ test('normalizes a non-positive probe timeout', async () => {
 test('never passes a timeout to full review attempts', async () => {
   const calls = [];
   const adapter = new OmpCliReviewerAdapter({
+      roleResolver: testRoleResolver,
       primaryModel: '@slow',
       modelProbe: async (root, timeoutMs) => {
         calls.push({ kind: 'probe', timeoutMs });
@@ -85,6 +95,7 @@ test('never passes a timeout to full review attempts', async () => {
 test('reports live review progress without affecting the verdict', async () => {
   const progress = [];
   const adapter = new OmpCliReviewerAdapter({
+    roleResolver: testRoleResolver,
     primaryModel: '@slow',
     progress: (event) => progress.push(event),
     runner: async (text, root, timeoutMs, model, options) => {
@@ -108,6 +119,7 @@ test('reports live review progress without affecting the verdict', async () => {
 test('falls back after a provider quota failure and records every model tried', async () => {
   const calls = [];
   const adapter = new OmpCliReviewerAdapter({
+    roleResolver: testRoleResolver,
     primaryModel: '@slow',
     maxFallbacks: 2,
     modelsProvider: async () => ['@slow', 'free/provider-model'],
@@ -125,19 +137,20 @@ test('falls back after a provider quota failure and records every model tried', 
   assert.equal(review.status, 0);
   assert.equal(review.stdout, 'REVIEW_RESULT=PASS\n');
   assert.deepEqual(review.modelsTried, ['@slow', 'free/provider-model']);
-  assert.deepEqual(calls.map(({ model }) => model), ['@slow', 'free/provider-model']);
+  assert.deepEqual(calls.map(({ model }) => model), ['acme/slow-max:max', 'free/provider-model']);
   assert.deepEqual(calls.map(({ timeoutMs }) => timeoutMs), [undefined, undefined]);
 });
 
 test('ignores timeout options for all full review attempts', async () => {
   const timeouts = [];
   const adapter = new OmpCliReviewerAdapter({
+    roleResolver: testRoleResolver,
     primaryModel: '@slow',
     modelsProvider: async () => ['fallback/working'],
     modelProbe: async () => result(0, 'READY'),
     runner: async (text, root, timeoutMs, model) => {
       timeouts.push(timeoutMs);
-      return model === '@slow'
+      return model === 'acme/slow-max:max'
         ? result(1, '', '429 quota exceeded')
         : result(0, 'REVIEW_RESULT=PASS\n');
     },
@@ -152,6 +165,7 @@ test('ignores timeout options for all full review attempts', async () => {
 test('does not retry a real BLOCK verdict', async () => {
   let calls = 0;
   const adapter = new OmpCliReviewerAdapter({
+    roleResolver: testRoleResolver,
     primaryModel: '@slow',
     modelsProvider: async () => ['free/provider-model'],
     runner: async () => {
@@ -171,6 +185,7 @@ test('does not retry a review timeout', async () => {
   let providerCalls = 0;
   let runnerCalls = 0;
   const adapter = new OmpCliReviewerAdapter({
+    roleResolver: testRoleResolver,
     primaryModel: '@slow',
     modelsProvider: async () => {
       providerCalls += 1;
@@ -192,6 +207,7 @@ test('does not retry a review timeout', async () => {
 test('deduplicates fallback candidates and honors the retry cap', async () => {
   const calls = [];
   const adapter = new OmpCliReviewerAdapter({
+    roleResolver: testRoleResolver,
     primaryModel: '@slow',
     maxFallbacks: 2,
     modelsProvider: async () => ['@slow', 'fallback/one', 'fallback/one', 'fallback/two', 'fallback/three'],
@@ -213,6 +229,7 @@ test('skips unavailable fallback candidates before spending a review attempt', a
   const probes = [];
   const reviews = [];
   const adapter = new OmpCliReviewerAdapter({
+    roleResolver: testRoleResolver,
     primaryModel: '@slow',
     maxFallbacks: 2,
     modelsProvider: async () => ['fallback/unavailable', 'fallback/working'],
@@ -224,7 +241,7 @@ test('skips unavailable fallback candidates before spending a review attempt', a
     },
     runner: async (text, root, timeoutMs, model) => {
       reviews.push(model);
-      return model === '@slow'
+      return model === 'acme/slow-max:max'
         ? result(1, '', '429 quota exceeded')
         : result(0, 'REVIEW_RESULT=PASS\n');
     },
@@ -234,13 +251,14 @@ test('skips unavailable fallback candidates before spending a review attempt', a
 
   assert.equal(review.status, 0);
   assert.deepEqual(probes, ['fallback/unavailable', 'fallback/working']);
-  assert.deepEqual(reviews, ['@slow', 'fallback/working']);
+  assert.deepEqual(reviews, ['acme/slow-max:max', 'fallback/working']);
   assert.deepEqual(review.modelsTried, ['@slow', 'fallback/unavailable', 'fallback/working']);
 });
 
 test('continues probing after unavailable candidates until the fallback review cap', async () => {
   const probes = [];
   const adapter = new OmpCliReviewerAdapter({
+    roleResolver: testRoleResolver,
     primaryModel: '@slow',
     maxFallbacks: 2,
     modelsProvider: async () => ['fallback/unavailable-1', 'fallback/unavailable-2', 'fallback/working'],
@@ -262,6 +280,7 @@ test('continues probing after unavailable candidates until the fallback review c
 test('keeps the review blocked when every fallback probe fails', async () => {
   const reviews = [];
   const adapter = new OmpCliReviewerAdapter({
+    roleResolver: testRoleResolver,
     primaryModel: '@slow',
     maxFallbacks: 2,
     modelsProvider: async () => ['fallback/one', 'fallback/two'],
@@ -275,7 +294,7 @@ test('keeps the review blocked when every fallback probe fails', async () => {
   const review = await adapter.executeReview({ prompt, cwd });
 
   assert.equal(review.status, 1);
-  assert.deepEqual(reviews, ['@slow']);
+  assert.deepEqual(reviews, ['acme/slow-max:max']);
   assert.deepEqual(review.modelsTried, ['@slow', 'fallback/one', 'fallback/two']);
 });
 
@@ -306,6 +325,7 @@ test('does not classify incidental HTTP status text as provider failure', () => 
 test('does not retry a BLOCK verdict emitted on stderr', async () => {
   let calls = 0;
   const adapter = new OmpCliReviewerAdapter({
+    roleResolver: testRoleResolver,
     primaryModel: '@slow',
     maxFallbacks: 1,
     modelsProvider: async () => ['fallback/model'],
@@ -337,36 +357,251 @@ test('explicit fallback model configuration is parsed deterministically', async 
   }
 });
 
-test('bounds fallback model catalog discovery', async () => {
-  const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-model-catalog-timeout-'));
-  const commandPath = path.join(baseDir, isWindows ? 'fake-omp.cmd' : 'fake-omp.sh');
-  const command = isWindows
-    ? '@echo off\nping -n 4 127.0.0.1 >nul\n'
-    : '#!/bin/sh\nsleep 1\n';
-  const previousCommand = process.env.OMP_REVIEW_KIT_OMP;
-  const previousFallbacks = process.env.OMP_REVIEW_KIT_FALLBACK_MODELS;
-  process.env.OMP_REVIEW_KIT_OMP = commandPath;
+test('default fallback chain is the @task role and never probes the model catalog', async () => {
+  const previous = process.env.OMP_REVIEW_KIT_FALLBACK_MODELS;
   delete process.env.OMP_REVIEW_KIT_FALLBACK_MODELS;
   try {
-    await writeFile(commandPath, command, 'utf8');
-    if (!isWindows) await chmod(commandPath, 0o755);
-
-    const startedAt = Date.now();
-    const models = await OmpCliReviewerAdapter.defaultModelsProvider(50);
-
-    assert.deepEqual(models, []);
-    assert.ok(Date.now() - startedAt < 2000, 'catalog discovery exceeded its bound');
+    assert.deepEqual(await OmpCliReviewerAdapter.defaultModelsProvider(), ['@task']);
   } finally {
-    if (previousCommand === undefined) delete process.env.OMP_REVIEW_KIT_OMP;
-    else process.env.OMP_REVIEW_KIT_OMP = previousCommand;
-    if (previousFallbacks === undefined) delete process.env.OMP_REVIEW_KIT_FALLBACK_MODELS;
-    else process.env.OMP_REVIEW_KIT_FALLBACK_MODELS = previousFallbacks;
-    await rm(baseDir, { recursive: true, force: true });
+    if (previous === undefined) delete process.env.OMP_REVIEW_KIT_FALLBACK_MODELS;
+    else process.env.OMP_REVIEW_KIT_FALLBACK_MODELS = previous;
   }
 });
 
+test('falls back from @smol to @task on provider failure', async () => {
+  const reviews = [];
+  const adapter = new OmpCliReviewerAdapter({
+    roleResolver: testRoleResolver,
+    primaryModel: '@smol',
+    maxFallbacks: 1,
+    modelsProvider: OmpCliReviewerAdapter.defaultModelsProvider,
+    modelProbe: async () => result(0, 'READY'),
+    runner: async (text, root, timeoutMs, model) => {
+      reviews.push(model);
+      return model === 'acme/smol-flash:high'
+        ? result(1, '', 'Cloud Code Assist API error (429): quota reached')
+        : result(0, 'REVIEW_RESULT=PASS\n');
+    },
+  });
 
-test('POSIX catalog timeout escalates termination for a SIGTERM-resistant process group', { skip: isWindows }, async () => {
+  const review = await adapter.executeReview({ prompt, cwd });
+
+  assert.equal(review.status, 0);
+  assert.deepEqual(reviews, ['acme/smol-flash:high', 'acme/task-fast:high']);
+  assert.deepEqual(review.modelsTried, ['@smol', '@task']);
+});
+
+test('blocks with actionable UX when every model in the chain is unavailable', async () => {
+  const adapter = new OmpCliReviewerAdapter({
+    roleResolver: testRoleResolver,
+    primaryModel: '@smol',
+    maxFallbacks: 1,
+    modelsProvider: OmpCliReviewerAdapter.defaultModelsProvider,
+    modelProbe: async () => result(1, '', 'provider unavailable'),
+    runner: async () => result(1, '', '429 quota exceeded'),
+  });
+
+  const review = await adapter.executeReview({ prompt, cwd });
+
+  assert.equal(review.status, 1);
+  assert.doesNotMatch(review.stderr, /REVIEW_RESULT=/);
+  assert.match(review.stderr, /infrastructure failure/);
+  assert.match(review.stderr, /not a code verdict/);
+  assert.match(review.stderr, /@smol -> @task/);
+  assert.match(review.stderr, /modelRoles\.smol/);
+  assert.match(review.stderr, /OMP_REVIEW_KIT_FALLBACK_MODELS/);
+  assert.match(review.stderr, /audit-reports\/commit-reviews/);
+});
+
+test('resolves @role selectors to concrete models before spawning', async () => {
+  const resolved = [];
+  const adapter = new OmpCliReviewerAdapter({
+    roleResolver: testRoleResolver,
+    primaryModel: '@smol',
+    runner: async (text, root, timeoutMs, model) => {
+      resolved.push(model);
+      return result(0, 'REVIEW_RESULT=PASS\n');
+    },
+  });
+
+  const review = await adapter.executeReview({ prompt, cwd });
+
+  assert.equal(review.status, 0);
+  assert.deepEqual(resolved, ['acme/smol-flash:high']);
+  assert.equal(review.attempts[0].model, '@smol');
+  assert.equal(review.attempts[0].resolvedModel, 'acme/smol-flash:high');
+});
+
+test('does not call the role resolver for concrete model selectors', async () => {
+  let resolverCalls = 0;
+  const adapter = new OmpCliReviewerAdapter({
+    roleResolver: () => {
+      resolverCalls += 1;
+      return TEST_ROLES;
+    },
+    primaryModel: 'acme/explicit-1',
+    runner: async () => result(0, 'REVIEW_RESULT=PASS\n'),
+  });
+
+  const review = await adapter.executeReview({ prompt, cwd });
+
+  assert.equal(review.status, 0);
+  assert.equal(resolverCalls, 0);
+});
+
+test('an unresolvable role is a provider failure that triggers the fallback chain', async () => {
+  const reviews = [];
+  const adapter = new OmpCliReviewerAdapter({
+    roleResolver: () => ({ task: 'acme/task-fast:high' }),
+    primaryModel: '@smol',
+    maxFallbacks: 1,
+    modelsProvider: async () => ['@task'],
+    modelProbe: async () => result(0, 'READY'),
+    runner: async (text, root, timeoutMs, model) => {
+      reviews.push(model);
+      return result(0, 'REVIEW_RESULT=PASS\n');
+    },
+  });
+
+  const review = await adapter.executeReview({ prompt, cwd });
+
+  assert.equal(review.status, 0);
+  assert.deepEqual(reviews, ['acme/task-fast:high']);
+  assert.equal(review.attempts[0].model, '@smol');
+  assert.equal(review.attempts[0].providerFailure, true);
+  assert.equal(review.attempts[0].resolvedModel, undefined);
+});
+
+test('emits roles_resolved once even across multiple attempts', async () => {
+  const events = [];
+  const telemetry = {
+    record: async (type, payload) => events.push({ type, payload }),
+    updateLastRun: async () => {},
+  };
+  const adapter = new OmpCliReviewerAdapter({
+    roleResolver: testRoleResolver,
+    primaryModel: '@smol',
+    maxFallbacks: 1,
+    modelsProvider: async () => ['@task'],
+    modelProbe: async () => result(0, 'READY'),
+    runner: async (text, root, timeoutMs, model, options) => {
+      options?.onSpawn?.(101);
+      return model === 'acme/smol-flash:high'
+        ? result(1, '', '429 quota exceeded')
+        : result(0, 'REVIEW_RESULT=PASS\n');
+    },
+  });
+
+  const review = await adapter.executeReview({ prompt, cwd, telemetry });
+
+  assert.equal(review.status, 0);
+  const rolesEvents = events.filter((event) => event.type === 'roles_resolved');
+  assert.equal(rolesEvents.length, 1);
+  assert.equal(rolesEvents[0].payload.roles.smol, 'acme/smol-flash:high');
+  const started = events.find((event) => event.type === 'review_attempt_started');
+  assert.equal(started.payload.resolvedModel, 'acme/smol-flash:high');
+});
+
+test('captures child pid and per-attempt telemetry records', async () => {
+  const events = [];
+  const telemetry = {
+    record: async (type, payload) => events.push({ type, payload }),
+    updateLastRun: async () => {},
+  };
+  const adapter = new OmpCliReviewerAdapter({
+    roleResolver: testRoleResolver,
+    primaryModel: '@smol',
+    runner: async (text, root, timeoutMs, model, options) => {
+      options.onSpawn?.(424242);
+      options.onOutput('Working...\n', 'stderr');
+      return result(0, 'REVIEW_RESULT=PASS\n');
+    },
+  });
+
+  const review = await adapter.executeReview({ prompt, cwd, telemetry });
+
+  assert.equal(review.status, 0);
+  assert.equal(review.attempts.length, 1);
+  assert.equal(review.attempts[0].pid, 424242);
+  assert.equal(review.attempts[0].model, '@smol');
+  assert.equal(review.attempts[0].status, 0);
+  assert.equal(review.attempts[0].providerFailure, false);
+  assert.ok(Number.isFinite(review.attempts[0].durationMs));
+  const types = events.map((event) => event.type);
+  assert.ok(types.includes('review_attempt_started'));
+  assert.ok(types.includes('review_attempt_working'));
+  assert.ok(types.includes('review_attempt_finished'));
+  assert.equal(events.find((e) => e.type === 'review_attempt_started').payload.pid, 424242);
+});
+
+test('records probe telemetry when falling back', async () => {
+  const events = [];
+  const telemetry = {
+    record: async (type, payload) => events.push({ type, payload }),
+    updateLastRun: async () => {},
+  };
+  const adapter = new OmpCliReviewerAdapter({
+    roleResolver: testRoleResolver,
+    primaryModel: '@smol',
+    maxFallbacks: 1,
+    modelsProvider: async () => ['@task'],
+    modelProbe: async () => result(0, 'READY'),
+    runner: async (text, root, timeoutMs, model) => (model === 'acme/smol-flash:high'
+      ? result(1, '', '429 quota exceeded')
+      : result(0, 'REVIEW_RESULT=PASS\n')),
+  });
+
+  const review = await adapter.executeReview({ prompt, cwd, telemetry });
+
+  assert.equal(review.status, 0);
+  assert.equal(review.probes.length, 1);
+  assert.equal(review.probes[0].model, '@task');
+  assert.equal(review.probes[0].resolvedModel, 'acme/task-fast:high');
+  assert.equal(review.probes[0].status, 0);
+  const types = events.map((event) => event.type);
+  assert.ok(types.includes('probe_started'));
+  assert.ok(types.includes('probe_finished'));
+});
+
+test('a throwing telemetry sink never changes the verdict', async () => {
+  const telemetry = {
+    record: async () => { throw new Error('telemetry exploded'); },
+    updateLastRun: async () => { throw new Error('telemetry exploded'); },
+  };
+  const adapter = new OmpCliReviewerAdapter({
+    roleResolver: testRoleResolver,
+    primaryModel: '@smol',
+    runner: async (text, root, timeoutMs, model, options) => {
+      options.onSpawn?.(1);
+      return result(0, 'REVIEW_RESULT=PASS\n');
+    },
+  });
+
+  const review = await adapter.executeReview({ prompt, cwd, telemetry });
+
+  assert.equal(review.status, 0);
+  assert.match(review.stdout, /REVIEW_RESULT=PASS/);
+});
+
+test('a missing telemetry sink still returns attempt records', async () => {
+  const adapter = new OmpCliReviewerAdapter({
+    roleResolver: testRoleResolver,
+    primaryModel: '@smol',
+    runner: async (text, root, timeoutMs, model, options) => {
+      options.onSpawn?.(7);
+      return result(0, 'REVIEW_RESULT=PASS\n');
+    },
+  });
+
+  const review = await adapter.executeReview({ prompt, cwd });
+
+  assert.equal(review.status, 0);
+  assert.equal(review.attempts.length, 1);
+  assert.equal(review.attempts[0].pid, 7);
+  assert.deepEqual(review.probes, []);
+});
+
+test('POSIX review timeout escalates termination for a SIGTERM-resistant process group', { skip: isWindows }, async () => {
   const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-posix-kill-e2e-'));
   const commandPath = path.join(baseDir, 'fake-omp.sh');
   const pidPath = path.join(baseDir, 'pid.txt');
@@ -379,16 +614,43 @@ test('POSIX catalog timeout escalates termination for a SIGTERM-resistant proces
     await writeFile(commandPath, command, 'utf8');
     await chmod(commandPath, 0o755);
 
-    const models = await OmpCliReviewerAdapter.defaultModelsProvider(50);
+    const review = await OmpCliReviewerAdapter.defaultRunner('probe', cwd, 50, '@smol');
     const pid = Number.parseInt(await readFile(pidPath, 'utf8'), 10);
 
-    assert.deepEqual(models, []);
+    assert.match(review.stderr, /Review timed out/);
     assert.throws(() => process.kill(pid, 0), /ESRCH/);
   } finally {
     if (previousCommand === undefined) delete process.env.OMP_REVIEW_KIT_OMP;
     else process.env.OMP_REVIEW_KIT_OMP = previousCommand;
     if (previousPidPath === undefined) delete process.env.OMP_REVIEW_TEST_PID;
     else process.env.OMP_REVIEW_TEST_PID = previousPidPath;
+    await rm(baseDir, { recursive: true, force: true });
+  }
+});
+
+test('default subprocess runner reports the spawned child pid', async () => {
+  const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-pid-e2e-'));
+  const commandPath = path.join(baseDir, isWindows ? 'fake-omp.cmd' : 'fake-omp.sh');
+  const command = isWindows
+    ? '@echo off\necho REVIEW_RESULT=PASS\nexit /b 0\n'
+    : '#!/bin/sh\nprintf "REVIEW_RESULT=PASS\\n"\n';
+  const previousCommand = process.env.OMP_REVIEW_KIT_OMP;
+  process.env.OMP_REVIEW_KIT_OMP = commandPath;
+  try {
+    await writeFile(commandPath, command, 'utf8');
+    if (!isWindows) await chmod(commandPath, 0o755);
+
+    let spawnedPid;
+    const review = await OmpCliReviewerAdapter.defaultRunner('probe', cwd, 0, '@smol', {
+      onSpawn: (pid) => { spawnedPid = pid; },
+    });
+
+    assert.equal(review.status, 0, review.stderr);
+    assert.ok(Number.isInteger(spawnedPid));
+    assert.equal(review.pid, spawnedPid);
+  } finally {
+    if (previousCommand === undefined) delete process.env.OMP_REVIEW_KIT_OMP;
+    else process.env.OMP_REVIEW_KIT_OMP = previousCommand;
     await rm(baseDir, { recursive: true, force: true });
   }
 });
@@ -473,8 +735,8 @@ test('default subprocess runner completes the fallback route without an OMP spen
   const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-fallback-e2e-'));
   const commandPath = path.join(baseDir, isWindows ? 'fake-omp.cmd' : 'fake-omp.sh');
   const command = isWindows
-    ? '@echo off\nif not "%4"=="--slow" goto badargs\nif not "%5"=="%3" goto badargs\nif not "%6"=="--smol" goto badargs\nif not "%7"=="%3" goto badargs\nif "%3"=="@slow" goto quota\necho REVIEW_RESULT=PASS\nexit /b 0\n:quota\necho Cloud Code Assist API error (429): quota reached 1>&2\nexit /b 1\n:badargs\necho args=%1,%2,%3,%4,%5,%6,%7,%8,%9 1>&2\nexit /b 2\n'
-    : '#!/bin/sh\nif [ "$4" != "--slow=$3" ] || [ "$5" != "--smol=$3" ] ]; then exit 2; fi\nif [ "$3" = "@slow" ]; then echo "Cloud Code Assist API error (429): quota reached" >&2; exit 1; fi\nprintf "REVIEW_RESULT=PASS\\n"\n';
+    ? '@echo off\nif not "%4"=="--slow" goto badargs\nif not "%5"=="%3" goto badargs\nif not "%6"=="--smol" goto badargs\nif not "%7"=="%3" goto badargs\nif "%3"=="acme/slow-max:max" goto quota\necho REVIEW_RESULT=PASS\nexit /b 0\n:quota\necho Cloud Code Assist API error (429): quota reached 1>&2\nexit /b 1\n:badargs\necho args=%1,%2,%3,%4,%5,%6,%7,%8,%9 1>&2\nexit /b 2\n'
+    : '#!/bin/sh\nif [ "$4" != "--slow=$3" ] || [ "$5" != "--smol=$3" ] ]; then exit 2; fi\nif [ "$3" = "acme/slow-max:max" ]; then echo "Cloud Code Assist API error (429): quota reached" >&2; exit 1; fi\nprintf "REVIEW_RESULT=PASS\\n"\n';
   const previousCommand = process.env.OMP_REVIEW_KIT_OMP;
   process.env.OMP_REVIEW_KIT_OMP = commandPath;
   try {
@@ -482,6 +744,7 @@ test('default subprocess runner completes the fallback route without an OMP spen
     if (!isWindows) await chmod(commandPath, 0o755);
 
     const adapter = new OmpCliReviewerAdapter({
+      roleResolver: testRoleResolver,
       primaryModel: '@slow',
       maxFallbacks: 1,
       modelsProvider: async () => ['fallback/working-model'],
@@ -495,5 +758,97 @@ test('default subprocess runner completes the fallback route without an OMP spen
     if (previousCommand === undefined) delete process.env.OMP_REVIEW_KIT_OMP;
     else process.env.OMP_REVIEW_KIT_OMP = previousCommand;
     await rm(baseDir, { recursive: true, force: true });
+  }
+});
+
+test('OMP_REVIEW_KIT_EFFORT rewrites the effort suffix of a resolved role', async () => {
+  const previous = process.env.OMP_REVIEW_KIT_EFFORT;
+  process.env.OMP_REVIEW_KIT_EFFORT = 'low';
+  try {
+    const events = [];
+    const telemetry = {
+      record: async (type, payload) => events.push({ type, payload }),
+      updateLastRun: async () => {},
+    };
+    const spawned = [];
+    const adapter = new OmpCliReviewerAdapter({
+      roleResolver: testRoleResolver,
+      primaryModel: '@smol',
+      runner: async (text, root, timeoutMs, model) => {
+        spawned.push(model);
+        return result(0, 'REVIEW_RESULT=PASS\n');
+      },
+    });
+
+    const review = await adapter.executeReview({ prompt, cwd, telemetry });
+
+    assert.equal(review.status, 0);
+    assert.deepEqual(spawned, ['acme/smol-flash:low']);
+    assert.equal(review.attempts[0].resolvedModel, 'acme/smol-flash:low');
+    assert.equal(
+      events.find((e) => e.type === 'review_chain').payload.effortOverride,
+      'low'
+    );
+  } finally {
+    if (previous === undefined) delete process.env.OMP_REVIEW_KIT_EFFORT;
+    else process.env.OMP_REVIEW_KIT_EFFORT = previous;
+  }
+});
+
+test('OMP_REVIEW_KIT_EFFORT appends effort to a concrete selector and reaches probes', async () => {
+  const previous = process.env.OMP_REVIEW_KIT_EFFORT;
+  process.env.OMP_REVIEW_KIT_EFFORT = 'max';
+  try {
+    const probed = [];
+    const spawned = [];
+    const adapter = new OmpCliReviewerAdapter({
+      roleResolver: testRoleResolver,
+      primaryModel: 'acme/explicit-1',
+      maxFallbacks: 1,
+      modelsProvider: async () => ['@task'],
+      modelProbe: async (root, timeoutMs, model) => {
+        probed.push(model);
+        return result(0, 'READY');
+      },
+      runner: async (text, root, timeoutMs, model) => {
+        spawned.push(model);
+        return model === 'acme/explicit-1:max'
+          ? result(1, '', '429 quota exceeded')
+          : result(0, 'REVIEW_RESULT=PASS\n');
+      },
+    });
+
+    const review = await adapter.executeReview({ prompt, cwd });
+
+    assert.equal(review.status, 0);
+    assert.deepEqual(spawned, ['acme/explicit-1:max', 'acme/task-fast:max']);
+    assert.deepEqual(probed, ['acme/task-fast:max']);
+  } finally {
+    if (previous === undefined) delete process.env.OMP_REVIEW_KIT_EFFORT;
+    else process.env.OMP_REVIEW_KIT_EFFORT = previous;
+  }
+});
+
+test('without OMP_REVIEW_KIT_EFFORT resolved selectors keep their configured effort', async () => {
+  const previous = process.env.OMP_REVIEW_KIT_EFFORT;
+  delete process.env.OMP_REVIEW_KIT_EFFORT;
+  try {
+    const spawned = [];
+    const adapter = new OmpCliReviewerAdapter({
+      roleResolver: testRoleResolver,
+      primaryModel: '@task',
+      runner: async (text, root, timeoutMs, model) => {
+        spawned.push(model);
+        return result(0, 'REVIEW_RESULT=PASS\n');
+      },
+    });
+
+    const review = await adapter.executeReview({ prompt, cwd });
+
+    assert.equal(review.status, 0);
+    assert.deepEqual(spawned, ['acme/task-fast:high']);
+  } finally {
+    if (previous === undefined) delete process.env.OMP_REVIEW_KIT_EFFORT;
+    else process.env.OMP_REVIEW_KIT_EFFORT = previous;
   }
 });

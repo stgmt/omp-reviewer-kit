@@ -4,7 +4,7 @@ import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import test, { describe, it } from 'node:test';
+import test, { after, describe, it } from 'node:test';
 import { ReviewPrompt } from '../src/index.mjs';
 
 const isLiveE2E = process.env.OMP_REVIEW_KIT_LIVE_E2E === '1';
@@ -39,8 +39,34 @@ function spawnOmp(commandArgs, options = {}) {
   return spawn(invocation.executable, invocation.args, options);
 }
 
+const liveOmpProcs = new Set();
+
+function killProcessTree(proc) {
+  if (process.platform === 'win32' && proc.pid) {
+    try {
+      spawnSync('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { windowsHide: true });
+    } catch {
+      // Fall back to the single-process kill below
+    }
+  }
+  try {
+    proc.kill('SIGKILL');
+  } catch {
+    // Already exited
+  }
+}
+
+after(() => {
+  for (const proc of liveOmpProcs) killProcessTree(proc);
+  liveOmpProcs.clear();
+});
+
 /**
  * Runs a real OMP command with piped stdin and closed EOF.
+ *
+ * Rejects with partial stdout/stderr tails on timeout so a hung model call
+ * still shows what OMP produced instead of a bare timeout message. On Windows
+ * the whole process tree is killed, not just the cmd wrapper.
  */
 function runLiveOmp(prompt, cwd, timeoutMs = 600_000, extraEnv = {}) {
   const commandArgs = ['-p', '--model', process.env.OMP_REVIEW_KIT_MODEL ?? '@slow', '--no-session'];
@@ -55,6 +81,7 @@ function runLiveOmp(prompt, cwd, timeoutMs = 600_000, extraEnv = {}) {
       },
       windowsHide: true,
     });
+    liveOmpProcs.add(proc);
 
     let stdout = '';
     let stderr = '';
@@ -67,12 +94,18 @@ function runLiveOmp(prompt, cwd, timeoutMs = 600_000, extraEnv = {}) {
     });
 
     const timer = setTimeout(() => {
-      proc.kill('SIGTERM');
-      reject(new Error(`Live OMP process timed out after ${timeoutMs}ms`));
+      killProcessTree(proc);
+      liveOmpProcs.delete(proc);
+      reject(new Error(
+        `Live OMP process timed out after ${timeoutMs}ms\n` +
+        `--- stdout tail ---\n${stdout.slice(-2000)}\n` +
+        `--- stderr tail ---\n${stderr.slice(-2000)}`
+      ));
     }, timeoutMs);
 
     proc.on('close', (code) => {
       clearTimeout(timer);
+      liveOmpProcs.delete(proc);
       resolve({
         status: code,
         stdout,
@@ -83,6 +116,7 @@ function runLiveOmp(prompt, cwd, timeoutMs = 600_000, extraEnv = {}) {
 
     proc.on('error', (err) => {
       clearTimeout(timer);
+      liveOmpProcs.delete(proc);
       reject(err);
     });
 
@@ -378,13 +412,13 @@ describe('Feature: Real Live OMP & Plugin Discovery E2E (No Mocks)', () => {
 
       const diffRes = git(['diff', '--cached', '--binary', '--no-ext-diff', '--']);
       assert.notEqual(diffRes.stdout.length, 0);
-
       const prompt = ReviewPrompt.forDiff(diffRes.stdout).toString();
       const result = await runLiveOmp(prompt, repoDir, 600_000);
 
-      assert.equal(result.status, 0, `OMP execution failed with status ${result.status}: ${result.stderr}`);
-      assert.match(result.stdout, /REVIEW_RESULT=PASS/);
-      assert.match(result.stdout, /coverage|findings/i);
+      assert.equal(result.status, 0,
+        `OMP exit=${result.status}\nstdout:\n${result.stdout.slice(0, 3000)}\nstderr:\n${result.stderr.slice(0, 1000)}`);
+      assert.match(result.stdout, /REVIEW_RESULT=PASS/, `stdout:\n${result.stdout.slice(0, 3000)}`);
+      assert.match(result.stdout, /coverage|findings/i, `stdout:\n${result.stdout.slice(0, 3000)}`);
     } finally {
       await rm(baseDir, { recursive: true, force: true }).catch(() => {});
     }
@@ -425,13 +459,13 @@ describe('Feature: Real Live OMP & Plugin Discovery E2E (No Mocks)', () => {
 
       const diffRes = git(['diff', '--cached', '--binary', '--no-ext-diff', '--']);
       assert.notEqual(diffRes.stdout.length, 0);
-
       const prompt = ReviewPrompt.forDiff(diffRes.stdout).toString();
       const result = await runLiveOmp(prompt, repoDir, 600_000);
 
-      assert.equal(result.status, 0, `OMP execution failed with status ${result.status}: ${result.stderr}`);
-      assert.match(result.stdout, /REVIEW_RESULT=BLOCK/);
-      assert.match(result.stdout, /calc\.js|zero|divide/i);
+      assert.equal(result.status, 0,
+        `OMP exit=${result.status}\nstdout:\n${result.stdout.slice(0, 3000)}\nstderr:\n${result.stderr.slice(0, 1000)}`);
+      assert.match(result.stdout, /REVIEW_RESULT=BLOCK/, `stdout:\n${result.stdout.slice(0, 3000)}`);
+      assert.match(result.stdout, /calc\.js|zero|divide/i, `stdout:\n${result.stdout.slice(0, 3000)}`);
     } finally {
       await rm(baseDir, { recursive: true, force: true }).catch(() => {});
     }

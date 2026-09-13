@@ -43,9 +43,11 @@ const manifest = JSON.parse(await readFile('package.json', 'utf8'));
 describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
   it('manifest and skills declare fixed reviewer identities', () => {
     assert.equal(manifest.name, 'omp-reviewer-kit');
-    assert.equal(manifest.version, '0.4.0');
+    assert.equal(manifest.version, '0.6.0');
     assert.match(realitySkill, /name: reality-first-review/);
     assert.match(multiStageSkill, /name: multi-stage-review/);
+    assert.match(realitySkill, /staged snapshot.*working tree/i);
+    assert.match(realitySkill, /Verified-OK/);
   });
 
   it('pre-commit hook derives the repository from its own trusted path without invoking Git', () => {
@@ -85,6 +87,7 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(reviewerKitAgent, /### Review coverage/);
     assert.match(reviewerKitAgent, /### Confirmed findings/);
     assert.match(reviewerKitAgent, /### Unproven\/rejected summary/);
+    assert.match(reviewerKitAgent, /### Verified-OK/);
 
     assert.match(reviewerKitAgent, /REVIEW_RESULT=PASS/);
     assert.match(reviewerKitAgent, /REVIEW_RESULT=BLOCK/);
@@ -93,6 +96,9 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.equal((reviewerKitAgent.match(/agent `review-risk-hunter`/g) ?? []).length, 1);
     assert.match(reviewerKitAgent, /CLI invocation pins the active, slow, and smol model roles/);
     assert.match(reviewerKitAgent, /omit `model`, `outputSchema`, `schemaMode`, and `isolated`/);
+    assert.match(reviewerKitAgent, /staged snapshot/i);
+    assert.match(reviewerKitAgent, /test evidence/i);
+    assert.match(reviewerKitAgent, /YAGNI|unnecessary/i);
     assert.doesNotMatch(reviewerKitAgent, /Pass that exact `model` selector/);
   });
 
@@ -116,7 +122,7 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
 
   it('review-context-scout specifies read-only context output schema and forbids verdict markers', () => {
     const fm = parseFrontmatter(scoutAgent);
-    assert.equal(fm.model, '@task');
+    assert.equal(fm.model, '@smol');
     assert.match(scoutAgent, /"change_goal"/);
     assert.match(scoutAgent, /"changed_paths"/);
     assert.match(scoutAgent, /"relevant_consumers"/);
@@ -127,6 +133,8 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(scoutAgent, /do not emit verdict markers/i);
     assert.match(scoutAgent, /existing `invariants` and `relevant_consumers`/);
     assert.match(scoutAgent, /`unknowns`/);
+    assert.match(scoutAgent, /staged snapshot/i);
+    assert.match(scoutAgent, /test evidence/i);
     assert.doesNotMatch(scoutAgent, /platform_primitives/);
   });
 
@@ -149,6 +157,9 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(hunterAgent, /Anti-Parasitic Correctness Gate/);
     assert.match(hunterAgent, /evidence proves both conditions/);
     assert.match(hunterAgent, /adds no product capability/);
+    assert.match(hunterAgent, /correctness lane.*test|test.*correctness lane/i);
+    assert.match(hunterAgent, /YAGNI|unnecessary/i);
+    assert.match(hunterAgent, /staged snapshot/i);
     assert.match(hunterAgent, /Do not flag a Port\/Adapter or Template Method that adds a real capability/);
     assert.doesNotMatch(hunterAgent, /lane: \"architecture\"/);
     assert.doesNotMatch(hunterAgent, /defect_class: \"parasitic_architecture\"/);
@@ -166,6 +177,7 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(verifierAgent, /zero new product capability/);
     assert.match(verifierAgent, /public user-facing CLIs/);
     assert.match(verifierAgent, /remote untrusted payloads/);
+    assert.match(verifierAgent, /staged snapshot/i);
   });
 
   it('multi-stage-review skill codifies the ordered protocol and schemas', () => {
@@ -179,6 +191,9 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(multiStageSkill, /Anti-Parasitic Correctness Gate/);
     assert.match(multiStageSkill, /both repository or declared-framework evidence/);
     assert.match(multiStageSkill, /review-rejection-envelope@1/);
+    assert.match(multiStageSkill, /staged snapshot.*working tree/i);
+    assert.match(multiStageSkill, /test evidence.*YAGNI|YAGNI.*test evidence/i);
+    assert.match(multiStageSkill, /Verified-OK/);
     assert.doesNotMatch(multiStageSkill, /lane: \"architecture\"/);
     assert.doesNotMatch(multiStageSkill, /platform_primitives/);
   });

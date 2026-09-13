@@ -36,11 +36,17 @@ Staged Diff (git diff --cached --binary --no-ext-diff --)
   - Emits a strict `review-rejection-envelope@1` before BLOCK and a solitary machine-readable verdict marker; PASS has no envelope.
 ```
 
+## Snapshot and evidence boundary
+
+The dispatcher materializes an absolute staged snapshot directory from the Git index before invoking the reviewer. All source-file contents, tests, and fixtures must be read from that snapshot; use the repository working tree only for read-only Git metadata, caller discovery, and project-skill discovery. The snapshot is the authoritative review input and prevents unstaged worktree content from entering the decision.
+
+The snapshot also carries the review inputs under `.review/`: `diff.patch` holds the complete staged diff and `changed-files.txt` lists every touched path. Every stage must read the diff from `.review/diff.patch` as a file; agents must not re-derive the staged diff or staged file bytes with `git diff`, `git show`, or `git cat-file`. The orchestrator passes both artifact paths into every task call it spawns.
+
 ## 2. Stage Contracts & Schemas
 
 ### Stage 1: Context Scout (`review-context-scout`)
-- **Role**: Read-only explorer. Discovers the purpose, blast radius, callers, and invariants of the staged change.
-- **Tools**: `read`, `grep`, `glob`, `lsp`, `bash` (read-only git diff/log commands only). No `task`, no mutating tools.
+- **Role**: Read-only explorer. Discovers the purpose, blast radius, callers, and invariants of the staged change. Reads the diff from `<snapshot>/.review/diff.patch` and the file list from `<snapshot>/.review/changed-files.txt`.
+- **Tools**: `read`, `grep`, `glob`, `lsp`, `bash` (read-only git diff/log commands only). No `task`, no mutating tools. Budget: roughly 20 tool calls — stop scouting once callers and tests for changed behavior are mapped.
 - **Output Contract**:
   - `change_goal`: Concise description of what the change attempts to achieve.
   - `changed_paths`: Array of files modified or added in the staged diff.
@@ -55,7 +61,8 @@ Staged Diff (git diff --cached --binary --no-ext-diff --)
 - **Role**: Generates focused defect candidates in two parallel lanes using the scout context:
   - `lane: "correctness"`: Boundary conditions, absence/default/failure values, side effects, determinism, resource/handle leaks, behavior-test gaps, and control infrastructure that duplicates an existing mechanism without adding product capability.
   - `lane: "security"`: Attacker-controlled input source, dangerous sink, missing/bypassed controls, credential leakage, permission bypass.
-- **Tools**: `read`, `grep`, `glob`, `lsp`, `bash` (read-only git commands only). No `task`, no mutating tools.
+- **Tools**: `read`, `grep`, `glob`, `lsp`, `bash` (read-only git commands only). No `task`, no mutating tools. Budget: roughly 30 tool calls per lane — analyze `.review/diff.patch`, read each changed file once, verify only deciding callers.
+- **Correctness test/YAGNI boundary**: Inspect focused tests for changed behavior and record concrete test evidence. Missing or weak tests and unnecessary code are not independent defect classes; raise them only when a reachable P1/P2 correctness impact is proven, and keep the existing `correctness`/`security` candidate schema.
 - **Anti-Noise Prohibitions**:
   - Never report formatting, whitespace, indentation, or line length.
   - Never suggest adding or modifying comments, docstrings, or type annotations.
@@ -84,7 +91,7 @@ Staged Diff (git diff --cached --binary --no-ext-diff --)
 - **Constraint**: Must NOT emit verdict markers (`REVIEW_RESULT=...`).
 
 ### Stage 3: Adversarial Verifier (`review-finding-verifier`)
-- **Role**: Defense attorney. Challenges every candidate against repository reality to eliminate false positives.
+- **Role**: Defense attorney. Challenges every candidate against repository reality to eliminate false positives. Budget: roughly 20 tool calls — one verification pass per candidate against the snapshot and deciding callers.
 - **Verification Method**:
   1. **Upstream Defenses**: Did a caller, controller, middleware, or type constraint already sanitize, validate, or guarantee this input? If yes -> disposition: `rejected`.
   2. **Concrete Trigger**: Is the trigger scenario realistically reachable in this codebase? If purely theoretical -> disposition: `not_proven`.
@@ -107,6 +114,7 @@ Staged Diff (git diff --cached --binary --no-ext-diff --)
   - `### Review coverage`: Summary of inspected diff, changed files, active skills, and stages executed.
   - `### Confirmed findings`: Detailed list of confirmed findings (priority, path, range, trigger, impact, evidence).
   - `### Unproven/rejected summary`: Terse summary of rejected or unproven candidates with rationale.
+  - `### Verified-OK`: Explicit paths, tests, caller checks, and invariants actually verified; never use this section to hide unresolved candidates.
 - **Rejection Envelope Rule**:
   - A confirmed-finding BLOCK emits one strict `review-rejection-envelope@1` with the current diff hash and only normalized `correctness` or `security` findings.
   - A mandatory-stage failure emits a `review_failure` envelope with `execution_failure` and a non-empty diagnostic message.

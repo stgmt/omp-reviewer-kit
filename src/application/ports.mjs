@@ -2,6 +2,7 @@
  * @typedef {import('../domain/diff-identity.mjs').DiffIdentity} DiffIdentity
  * @typedef {import('../domain/review-prompt.mjs').ReviewPrompt} ReviewPrompt
  * @typedef {import('../domain/review-report.mjs').ReviewReport} ReviewReport
+ * @typedef {import('../domain/staged-snapshot.mjs').StagedSnapshot} StagedSnapshot
  */
 
 /**
@@ -28,6 +29,46 @@ export class GitPort {
    */
   getStagedDiff(repoRoot) {
     throw new Error('GitPort.getStagedDiff must be implemented');
+  }
+
+  /**
+   * Captures the staged index as an immutable StagedSnapshot.
+   *
+   * @param {string} repoRoot
+   * @returns {Promise<StagedSnapshot>|StagedSnapshot}
+   */
+  getSnapshot(repoRoot) {
+    throw new Error('GitPort.getSnapshot must be implemented');
+  }
+}
+
+/**
+ * Port representing temporary storage for an immutable staged snapshot.
+ *
+ * @interface
+ */
+export class SnapshotStorePort {
+  /**
+   * Materializes a staged snapshot in an isolated temporary directory.
+   * When artifacts are provided the implementation also writes the review
+   * inputs (diff patch and changed-file manifest) under `<dir>/.review/`.
+   *
+   * @param {StagedSnapshot} snapshot
+   * @param {{ diffBytes?: Buffer, changedPaths?: string[] }} [artifacts]
+   * @returns {Promise<string>|string}
+   */
+  create(snapshot, artifacts) {
+    throw new Error('SnapshotStorePort.create must be implemented');
+  }
+
+  /**
+   * Removes a directory previously returned by create.
+   *
+   * @param {string} snapshotDir
+   * @returns {Promise<void>|void}
+   */
+  remove(snapshotDir) {
+    throw new Error('SnapshotStorePort.remove must be implemented');
   }
 }
 
@@ -66,5 +107,22 @@ export class ReportStorePort {
    */
   saveReport(repoRoot, report) {
     throw new Error('ReportStorePort.saveReport must be implemented');
+  }
+}
+
+/**
+ * Port representing the run telemetry sink factory.
+ * A port creates a run-scoped sink per review; the sink persists observability
+ * events and the live/last-run state without ever influencing the verdict.
+ *
+ * @interface
+ */
+export class TelemetryPort {
+  /**
+   * @param {{ repoRoot: string, runId: string }} context
+   * @returns {{ record: (type: string, payload?: object) => Promise<void>, updateLastRun: (state: object, opts?: { force?: boolean }) => Promise<void> }}
+   */
+  forRun(context) {
+    throw new Error('TelemetryPort.forRun must be implemented');
   }
 }

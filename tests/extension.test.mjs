@@ -573,6 +573,101 @@ describe('Feature: Native OMP Extension & Installer Service', () => {
     }
   });
 
+  it('shows live status from persisted last-run.json even without streamed hook output', async () => {
+    const { baseDir, repoDir } = await createTempRepo();
+    try {
+      const reportsDir = path.join(repoDir, 'audit-reports', 'commit-reviews');
+      await mkdir(reportsDir, { recursive: true });
+      await writeFile(path.join(reportsDir, 'last-run.json'), JSON.stringify({
+        schema: 'review-last-run@1',
+        runId: '2026-09-13T00-00-00-000Z-abc',
+        state: 'reviewing',
+        model: '@smol',
+        pid: 777001,
+        elapsedMs: 42_000,
+        updatedAt: new Date().toISOString(),
+      }), 'utf8');
+
+      const harness = createExtensionHarness();
+      const ctx = harness.makeCtx(repoDir);
+      const start = harness.events.get('tool_execution_start');
+      const end = harness.events.get('tool_execution_end');
+
+      await start({
+        type: 'tool_execution_start',
+        toolCallId: 'persisted-commit',
+        toolName: 'bash',
+        args: { command: 'git commit -m "live"' },
+      }, ctx);
+
+      // Poll interval is 2s; allow it to read the persisted state once.
+      await new Promise((resolve) => setTimeout(resolve, 2600));
+      assert.match(ctx.getStatus(), /@smol/);
+      assert.match(ctx.getStatus(), /pid 777001/);
+
+      await end({
+        type: 'tool_execution_end',
+        toolCallId: 'persisted-commit',
+        toolName: 'bash',
+        result: { content: [{ type: 'text', text: 'reviewer-kit PASS: x.md\n' }] },
+        isError: false,
+      }, ctx);
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  it('/reviewer-kit:status reports persisted last-run telemetry', async () => {
+    const { baseDir, repoDir } = await createTempRepo();
+    try {
+      const reportsDir = path.join(repoDir, 'audit-reports', 'commit-reviews');
+      await mkdir(reportsDir, { recursive: true });
+      await writeFile(path.join(reportsDir, 'last-run.json'), JSON.stringify({
+        schema: 'review-last-run@1',
+        runId: 'r2',
+        state: 'blocked',
+        verdict: 'BLOCK',
+        model: '@smol',
+        modelsTried: ['@smol', '@task'],
+        durationMs: 61_000,
+        reportPath: 'x.md',
+        updatedAt: '2026-09-13T10:00:00.000Z',
+      }), 'utf8');
+
+      const harness = createExtensionHarness();
+      const ctx = harness.makeCtx(repoDir);
+      const statusCmd = harness.commands.get('reviewer-kit:status');
+      assert.ok(statusCmd);
+      await statusCmd.handler('', ctx);
+
+      const text = ctx.notifications.map((n) => n.msg).join('\n');
+      assert.match(text, /Last Run: blocked · verdict BLOCK · model @smol · 61s/);
+      assert.match(text, /models tried: @smol -> @task/);
+      assert.match(text, /report: x\.md/);
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  it('/reviewer-kit:status degrades gracefully when last-run.json is malformed', async () => {
+    const { baseDir, repoDir } = await createTempRepo();
+    try {
+      const reportsDir = path.join(repoDir, 'audit-reports', 'commit-reviews');
+      await mkdir(reportsDir, { recursive: true });
+      await writeFile(path.join(reportsDir, 'last-run.json'), '{not json', 'utf8');
+
+      const harness = createExtensionHarness();
+      const ctx = harness.makeCtx(repoDir);
+      await harness.commands.get('reviewer-kit:status').handler('', ctx);
+
+      const text = ctx.notifications.map((n) => n.msg).join('\n');
+      assert.match(text, /Status:/);
+      assert.doesNotMatch(text, /Last Run:/);
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
   it('PluginInstallerService doctor reports diagnostic health checks', async () => {
     const { baseDir, repoDir } = await createTempRepo();
     try {

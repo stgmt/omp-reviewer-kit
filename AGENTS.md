@@ -19,17 +19,21 @@
    - `.githooks/pre-commit` resolves repository root and executes `.omp/review-kit/run-review.mjs` with Node.js.
    - The runner queries `GitPort` (`SubprocessGitAdapter`) for `git diff --cached --binary --no-ext-diff --`. Empty staged changes exit with code 0 immediately without invoking OMP.
    - `DiffIdentity` computes deterministic SHA-256 hash of the binary diff.
-   - `ReviewPrompt` carrying the diff hash invokes `ReviewerPort` (`OmpCliReviewerAdapter`) headlessly via `omp -p --model @slow --no-session` (overridable via `OMP_REVIEW_KIT_OMP` with no timeout; full review processes are never cancelled by this plugin). Provider quota, rate-limit, authentication, and model-capacity failures trigger up to three fallback attempts selected from `OMP_REVIEW_KIT_FALLBACK_MODELS` or the installed `omp models --json` catalog; catalog discovery and each candidate availability probe are bounded at 60 seconds by default, and successful candidates receive the same model through `--model`, `--slow`, and `--smol`; fallback attempts use the same 600,000ms timeout by default and never retry a real verdict or timeout. If every probe fails, the staged change remains BLOCKed.
+   - `ReviewPrompt` carrying the diff hash invokes `ReviewerPort` (`OmpCliReviewerAdapter`) headlessly via `omp -p --model @smol --no-session` (overridable via `OMP_REVIEW_KIT_OMP` with no timeout; full review processes are never cancelled by this plugin). Provider quota, rate-limit, authentication, and model-capacity failures trigger the deterministic fallback chain `@smol → @task`: each fallback candidate is probed first with a bounded no-tools request (`OMP_REVIEW_KIT_PROBE_TIMEOUT_MS`, 60,000ms default) before it receives a full review attempt. `OMP_REVIEW_KIT_FALLBACK_MODELS` overrides the candidate list; `OMP_REVIEW_KIT_MAX_FALLBACKS` caps attempts (default 3); `OMP_REVIEW_KIT_EFFORT` rewrites the `:effort` suffix of every resolved selector (probes and attempts). There is no automatic `omp models --json` catalog probing — fallback is a role selector resolving to the user's configured fast model. Successful candidates receive the same model through `--model`, `--slow`, and `--smol`; attempts never retry a real verdict or a timeout. If every model is unavailable the commit is BLOCKed with an actionable infrastructure-failure message identifying the models attempted and how to repoint `modelRoles.smol`/`modelRoles.task`.
+   - The staged snapshot also carries the review inputs under `<snapshot>/.review/`: `diff.patch` (the complete staged diff, byte-exact from `DiffIdentity.bytes`) and `changed-files.txt` (the changed-file manifest parsed from `diff --git` headers). Agents read the diff from these files instead of running `git diff`/`git show`; a staged path under `.review/` fails loudly as a reserved-directory collision.
    - OMP launches `reviewer-kit` (orchestrator), which executes the 4-stage protocol strictly in sequence:
-     1. **Stage 1 (Scout)**: Spawns `review-context-scout` (model `@task`) to map diff scope, touched paths, callers via LSP/grep, invariants, and tests.
+     1. **Stage 1 (Scout)**: Spawns `review-context-scout` (model `@smol`, riding the pinned reviewer model) to map diff scope, touched paths, callers via LSP/grep, invariants, and tests.
      2. **Stage 2 (Parallel Risk Hunters)**: Spawns batch `task` with two `review-risk-hunter` (model `@slow`) agents in parallel (`lane: "correctness"` and `lane: "security"`), generating candidate defects under strict anti-noise rules.
      3. **Stage 3 (Adversarial Verifier)**: Spawns `review-finding-verifier` (model `@slow`) acting as the author's defense lawyer, verifying upstream protections and reachability to confirm or reject candidates.
      4. **Stage 4 (Synthesis & Verdict)**: `reviewer-kit` synthesizes coverage, compiles confirmed findings, and emits the final report.
    - Output is parsed into `ReviewVerdict`. Invariant: only an exact solitary `REVIEW_RESULT=PASS` yields approval; any confirmed `P1`/`P2`, missing stage, malformed marker, or non-zero exit strictly yields `BLOCK`.
    - `ReviewReport` formats the markdown audit trail, which `ReportStorePort` (`FileSystemReportStoreAdapter`) writes to `audit-reports/commit-reviews/<timestamp>-<hash>.md`.
+   - `TelemetryPort` (`FileSystemTelemetryAdapter`) records the run trace to `audit-reports/commit-reviews/runs.jsonl` (append-only `review-run-event@1` events: `run_started`, `diff_collected`, `snapshot_materialized`, `review_attempt_started/finished` with child PID, `probe_started/finished`, `verdict_evaluated`, `report_written`, `run_finished`, `run_skipped`, `run_failed`) and maintains `audit-reports/commit-reviews/last-run.json` (`review-last-run@1`) as the live status channel, updated ~every 2s during active attempts. Telemetry failures are swallowed and never change the verdict; `OMP_REVIEW_KIT_TELEMETRY=0` disables it. The extension polls `last-run.json` while a `git commit` tool call is active and `/reviewer-kit:status` surfaces it via `installer.status().lastRun`.
    - `ReviewWorkflowService` outputs verdict to stdout/stderr and sets exit code 0 on PASS or 1 on BLOCK.
 
-`scripts/run-review.mjs` is the self-contained distributable runner; `.omp/review-kit/run-review.mjs` is the repository's self-hosted copy. `scripts/check-layout.mjs` enforces zero-drift equality between both files. `src/` provides modular OOP and DDD exports (`DiffIdentity`, `ReviewVerdict`, `ReviewPrompt`, `ReviewReport`, `ReviewExecutionResult`, `PluginInstallerService`, ports, adapters, and `ReviewWorkflowService`).
+`scripts/run-review.mjs` is the self-contained distributable runner; `.omp/review-kit/run-review.mjs` is the repository's self-hosted copy. `scripts/check-layout.mjs` enforces zero-drift equality between both files. `src/` provides modular OOP and DDD exports (`DiffIdentity`, `ReviewVerdict`, `ReviewPrompt`, `ReviewReport`, `ReviewExecutionResult`, `PluginInstallerService`, ports, adapters, telemetry adapters, and `ReviewWorkflowService`).
+
+`scripts/analyze-review-run.mjs` (`npm run analyze-review`) correlates `runs.jsonl` with OMP process logs (`~/.omp/logs/omp.<date>.<pid>.log`) by child PID — or by time window when `OMP_REVIEW_KIT_OMP` is a `.cmd` wrapper — and reports per-attempt timings, request counts, context growth, per-stage subagent timing, and provider-error classes. `.devin/skills/omp-review-incidents/SKILL.md` documents the incident-investigation playbook.
 
 ## Key Directories
 
@@ -40,9 +44,10 @@
 - `templates/githooks/`: pre-commit hook copied into target repositories.
 - `.omp/review-kit/`: self-hosted runner copy used by this repository's pre-commit hook.
 - `.omp-plugin/`: marketplace plugin catalog metadata.
-- `tests/`: flat native Node.js test suites (`*.test.mjs`), including contract, BDD, extension, marketplace, mutation, and real Git hook E2E suites.
+- `tests/`: flat native Node.js test suites (`*.test.mjs`), including contract, BDD, extension, marketplace, mutation, telemetry, and real Git hook E2E suites.
+- `.devin/skills/`: repository skills, including `omp-review-incidents` (incident-investigation playbook).
 - `.github/workflows/`: cross-platform CI automation (`ci.yml`).
-- `audit-reports/`: architecture records (`audit-reports/multi-stage-review-architecture.md`) and immutable commit reviews (`audit-reports/commit-reviews/`).
+- `audit-reports/`: architecture records (`audit-reports/multi-stage-review-architecture.md`), the observability domain spec (`audit-reports/review-observability-domain-spec.md`), and commit reviews plus run telemetry (`audit-reports/commit-reviews/`: `*.md` reports, `runs.jsonl`, `last-run.json`).
 
 ## Development Commands
 
@@ -53,12 +58,13 @@ npm run check                    # node scripts/check-layout.mjs
 node scripts/run-review.mjs      # review the current staged diff
 ```
 
-Opt-in live OMP verification (requires local OMP executable):
+Opt-in live OMP verification (requires local OMP executable). Run with the spec reporter for streaming progress, and capture output to a file instead of piping through `tail` so assertion failures keep the full OMP stdout/stderr:
 ```sh
-OMP_REVIEW_KIT_LIVE_E2E=1 node --test tests/live-e2e-omp.test.mjs
+OMP_REVIEW_KIT_LIVE_E2E=1 node --test --test-reporter=spec tests/live-e2e-omp.test.mjs > live-e2e.log 2>&1
 ```
+Live checks 3/4 drive real `omp -p --model @slow` directly via `runLiveOmp` and assert on the raw stdout; `runLiveOmp` kills the whole process tree on timeout and rejects with stdout/stderr tails. The matrix cases exercise the full pre-commit hook path (runner + adapter + report) through the real Git hook.
 
-Fallback configuration (optional): `OMP_REVIEW_KIT_MODEL` selects the primary model, `OMP_REVIEW_KIT_FALLBACK_MODELS` supplies a comma-separated fallback list, `OMP_REVIEW_KIT_MAX_FALLBACKS` caps retries, and `OMP_REVIEW_KIT_PROBE_TIMEOUT_MS` sets the availability-probe timeout (60,000ms by default). Full reviews are never automatically cancelled by this plugin.
+Fallback configuration (optional): `OMP_REVIEW_KIT_MODEL` selects the primary model (default `@smol`), `OMP_REVIEW_KIT_FALLBACK_MODELS` supplies a comma-separated fallback list (default `@task`), `OMP_REVIEW_KIT_MAX_FALLBACKS` caps retries, `OMP_REVIEW_KIT_PROBE_TIMEOUT_MS` sets the availability-probe timeout (60,000ms by default), and `OMP_REVIEW_KIT_EFFORT` rewrites the `:effort` suffix of resolved selectors (e.g. `low`, `medium`, `high`, `max`). `OMP_REVIEW_KIT_TELEMETRY=0` disables `runs.jsonl`/`last-run.json` writes. Full reviews are never automatically cancelled by this plugin. Note: `agentModelOverrides` in the user's `~/.omp/agent/config.yml` silently override agent frontmatter `model:` values and can defeat the intended fast chain.
 
 Installation via standard OMP commands:
 
@@ -90,6 +96,8 @@ There is no build, lint, format, or typecheck command. Run `npm test`, `npm run 
 - `src/extension.mjs`: native OMP extension registering `/reviewer-kit:*` slash commands and `session_start` handler.
 - `src/application/installer-service.mjs`: hook installation and health check diagnostics.
 - `scripts/run-review.mjs`: self-contained pre-commit runner and backward-compatible `runReview` facade.
+- `scripts/analyze-review-run.mjs`: correlates `runs.jsonl` telemetry with OMP process logs by PID or time window (`npm run analyze-review`).
+- `src/infra/filesystem-telemetry-adapter.mjs`: `RunTelemetry` sink, `FileSystemTelemetryAdapter`, `NullTelemetryAdapter`, `safeRunTelemetry`, `formatProviderOutageError`.
 - `scripts/run-mutation-tests.mjs`: dependency-free safety mutation test runner.
 - `.omp/review-kit/run-review.mjs`: self-hosted runtime copy invoked by the local hook.
 - `agents/reviewer-kit.md`: orchestrator agent, spawns allowlist, and final verdict synthesis.

@@ -110,6 +110,44 @@ Reports record:
 - Unproven and rejected candidate summaries with defense justifications
 - Machine-readable verdict marker (`REVIEW_RESULT=PASS` or `REVIEW_RESULT=BLOCK`)
 
+## Model Selection & Fallback
+
+The hook runs the review on the `@smol` role by default and falls back once to
+`@task` (each fallback is availability-probed first). If every model fails with
+a provider/quota error the commit is blocked with an actionable message — this
+is an infrastructure failure, not a code verdict.
+
+```text
+OMP_REVIEW_KIT_MODEL            # primary model selector (default: @smol)
+OMP_REVIEW_KIT_FALLBACK_MODELS  # comma-separated fallback list (default: @task)
+OMP_REVIEW_KIT_MAX_FALLBACKS    # max fallback attempts (default: 3)
+OMP_REVIEW_KIT_PROBE_TIMEOUT_MS # availability probe timeout (default: 60000)
+OMP_REVIEW_KIT_EFFORT           # override :effort suffix of resolved selectors (low|medium|high|max)
+OMP_REVIEW_KIT_OMP              # path/name of the omp executable
+OMP_REVIEW_KIT_TELEMETRY=0      # disable run telemetry writes
+```
+
+Point `modelRoles.smol` and `modelRoles.task` in `~/.omp/agent/config.yml` at
+fast, available models to keep reviews quick. Note that `agentModelOverrides`
+in that file silently override agent `model:` frontmatter.
+
+## Run Telemetry & Incident Analysis
+
+Every run appends `review-run-event@1` records to
+`audit-reports/commit-reviews/runs.jsonl` (attempts, probes, PIDs, timings,
+verdict) and maintains `last-run.json` as the live status channel — the OMP
+status bar polls it while a commit is running, and `/reviewer-kit:status`
+surfaces the last run.
+
+```sh
+npm run analyze-review            # latest run: per-attempt timing + OMP log trace
+node scripts/analyze-review-run.mjs --all   # all recorded runs
+node scripts/analyze-review-run.mjs --log ~/.omp/logs/omp.<date>.<pid>.log
+```
+
+See `audit-reports/review-observability-domain-spec.md` for the domain spec and
+`.devin/skills/omp-review-incidents/SKILL.md` for the investigation playbook.
+
 ## Development & Testing
 
 ```sh

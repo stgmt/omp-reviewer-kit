@@ -667,7 +667,10 @@ export class PluginInstallerService {
    *   runnerCurrent: boolean,
    *   isFullyActive: boolean,
    *   conflictReason: string|null,
-   *   latestReview?: { date: string, verdict: string, file: string }
+   *   latestReview?: { date: string, verdict: string, file: string },
+   *   lastRun?: { runId?: string, state?: string, verdict?: string, model?: string,
+   *     modelsTried?: string[], durationMs?: number, elapsedMs?: number, pid?: number,
+   *     updatedAt?: string, startedAt?: string, reportPath?: string, error?: string }
    * }>}
    */
   async status(targetDir) {
@@ -696,9 +699,36 @@ export class PluginInstallerService {
       // No reports directory yet
     }
 
+    // Persisted live/last review state written by the runner; absent or
+    // malformed files degrade silently (older runner versions lack it).
+    let lastRun;
+    try {
+      const raw = await readFile(path.join(reportsDir, 'last-run.json'), 'utf8');
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        lastRun = {
+          runId: parsed.runId,
+          state: parsed.state,
+          verdict: parsed.verdict,
+          model: parsed.model,
+          modelsTried: Array.isArray(parsed.modelsTried) ? parsed.modelsTried : undefined,
+          durationMs: Number.isFinite(parsed.durationMs) ? parsed.durationMs : undefined,
+          elapsedMs: Number.isFinite(parsed.elapsedMs) ? parsed.elapsedMs : undefined,
+          pid: Number.isInteger(parsed.pid) ? parsed.pid : undefined,
+          updatedAt: parsed.updatedAt,
+          startedAt: parsed.startedAt,
+          reportPath: parsed.reportPath,
+          error: typeof parsed.error === 'string' ? parsed.error : undefined,
+        };
+      }
+    } catch {
+      // No live-state file yet
+    }
+
     return {
       ...inspection,
       latestReview,
+      lastRun,
     };
   }
 

@@ -78,12 +78,14 @@ function rejectionOutputForHash(diffHash, { kind = 'confirmed_findings', filePat
   return ['REVIEW_REJECTION_ENVELOPE_BEGIN', JSON.stringify(value), 'REVIEW_REJECTION_ENVELOPE_END', 'REVIEW_RESULT=BLOCK', ''].join('\n');
 }
 
+const MOCK_ROLES_JSON = '{"key":"modelRoles","value":{"smol":"acme/smol-flash:high","task":"acme/task-fast:high","slow":"acme/slow-max:max"}}';
+
 async function writeMockReviewer(scriptPath, output) {
   const lines = output.trimEnd().split('\n');
   if (isWindows) {
-    await writeFile(scriptPath, '@echo off\r\n' + lines.map((line) => `echo ${line}`).join('\r\n') + '\r\nexit /b 0\r\n', 'utf8');
+    await writeFile(scriptPath, '@echo off\r\nif "%1"=="config" goto roles\r\n' + lines.map((line) => `echo ${line}`).join('\r\n') + '\r\nexit /b 0\r\n:roles\r\necho ' + MOCK_ROLES_JSON + '\r\nexit /b 0\r\n', 'utf8');
   } else {
-    await writeFile(scriptPath, '#!/bin/sh\n' + lines.map((line) => `printf \"%s\\n\" '${line}'`).join('\n') + '\nexit 0\n', 'utf8');
+    await writeFile(scriptPath, '#!/bin/sh\nif [ "$1" = "config" ]; then printf "%s\\n" \'' + MOCK_ROLES_JSON + '\'; exit 0; fi\n' + lines.map((line) => `printf \"%s\\n\" '${line}'`).join('\n') + '\nexit 0\n', 'utf8');
     await chmod(scriptPath, 0o755);
   }
 }
@@ -113,12 +115,7 @@ describe('Feature: Real Git Pre-commit Hook E2E Integration', () => {
 
     // Create mock OMP runner that approves the change
     const mockOmpScript = path.join(repoDir, isWindows ? 'mock-omp.cmd' : 'mock-omp.sh');
-    if (isWindows) {
-      await writeFile(mockOmpScript, '@echo off\r\necho REVIEW_RESULT=PASS\r\nexit /b 0\r\n', 'utf8');
-    } else {
-      await writeFile(mockOmpScript, '#!/bin/sh\necho "REVIEW_RESULT=PASS"\nexit 0\n', 'utf8');
-      await chmod(mockOmpScript, 0o755);
-    }
+    await writeMockReviewer(mockOmpScript, 'REVIEW_RESULT=PASS\n');
 
     // Stage a new file
     await writeFile(path.join(repoDir, 'approved.txt'), 'clean content\n', 'utf8');
@@ -288,20 +285,7 @@ describe('Feature: Real Git Pre-commit Hook E2E Integration', () => {
     const { repoDir, git } = fixture;
 
     const mockDupMarkerScript = path.join(repoDir, isWindows ? 'mock-dup-marker.cmd' : 'mock-dup-marker.sh');
-    if (isWindows) {
-      await writeFile(
-        mockDupMarkerScript,
-        '@echo off\r\necho REVIEW_RESULT=PASS\r\necho REVIEW_RESULT=BLOCK\r\nexit /b 0\r\n',
-        'utf8'
-      );
-    } else {
-      await writeFile(
-        mockDupMarkerScript,
-        '#!/bin/sh\necho "REVIEW_RESULT=PASS"\necho "REVIEW_RESULT=BLOCK"\nexit 0\n',
-        'utf8'
-      );
-      await chmod(mockDupMarkerScript, 0o755);
-    }
+    await writeMockReviewer(mockDupMarkerScript, 'REVIEW_RESULT=PASS\nREVIEW_RESULT=BLOCK\n');
 
     await writeFile(path.join(repoDir, 'dup-marker.txt'), 'content\n', 'utf8');
     let res = git(['add', 'dup-marker.txt']);
@@ -330,13 +314,13 @@ describe('Feature: Real Git Pre-commit Hook E2E Integration', () => {
     if (isWindows) {
       await writeFile(
         mockTimeoutScript,
-        '@echo off\r\necho Review timed out after 600000ms 1>&2\r\nexit /b 1\r\n',
+        '@echo off\r\nif "%1"=="config" goto roles\r\necho Review timed out after 600000ms 1>&2\r\nexit /b 1\r\n:roles\r\necho ' + MOCK_ROLES_JSON + '\r\nexit /b 0\r\n',
         'utf8'
       );
     } else {
       await writeFile(
         mockTimeoutScript,
-        '#!/bin/sh\necho "Review timed out after 600000ms" >&2\nexit 1\n',
+        '#!/bin/sh\nif [ "$1" = "config" ]; then printf "%s\\n" \'' + MOCK_ROLES_JSON + '\'; exit 0; fi\necho "Review timed out after 600000ms" >&2\nexit 1\n',
         'utf8'
       );
       await chmod(mockTimeoutScript, 0o755);

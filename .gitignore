@@ -2,3 +2,4 @@ node_modules/
 .audit/
 audit-reports/commit-reviews/
 .omp/plugins/
+.github/context-mode/

@@ -16,6 +16,9 @@ import {
 } from '../src/index.mjs';
 import { runReview } from '../scripts/run-review.mjs';
 
+const TEST_ROLES = { smol: 'acme/smol-flash:high', task: 'acme/task-fast:high', slow: 'acme/slow-max:max' };
+const testRoleResolver = () => TEST_ROLES;
+
 /**
  * Creates an isolated mock repository directory.
  */
@@ -91,6 +94,7 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
     const result = await runReview({
       cwd: repoRoot,
       git,
+      ompOptions: { roleResolver: testRoleResolver },
       omp: (prompt, cwd, timeout) => {
         return {
           status: 0,
@@ -127,6 +131,7 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
     const result = await runReview({
       cwd: repoRoot,
       git,
+      ompOptions: { roleResolver: testRoleResolver },
       omp: () => ({
         status: 0,
         stdout: rejectionOutput('bad diff content'),
@@ -155,6 +160,7 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
     const result = await runReview({
       cwd: repoRoot,
       git,
+      ompOptions: { roleResolver: testRoleResolver },
       omp: () => {
         ompCalled = true;
         return { status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' };
@@ -177,6 +183,7 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
     const result = await runReview({
       cwd: repoRoot,
       git,
+      ompOptions: { roleResolver: testRoleResolver },
       omp: () => ({
         status: 1,
         stdout: '',
@@ -200,6 +207,7 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
     const result = await runReview({
       cwd: repoRoot,
       git,
+      ompOptions: { roleResolver: testRoleResolver },
       omp: () => ({
         status: 0,
         stdout: 'Looks good! REVIEW_RESULT=PASSED\n',
@@ -221,6 +229,7 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
     const result = await runReview({
       cwd: repoRoot,
       git,
+      ompOptions: { roleResolver: testRoleResolver },
       omp: () => ({
         status: 0,
         stdout: 'REVIEW_RESULT=PASS\nWait, actually:\nREVIEW_RESULT=BLOCK\n',
@@ -243,6 +252,7 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
     const result = await runReview({
       cwd: repoRoot,
       git,
+      ompOptions: { roleResolver: testRoleResolver },
       omp: () => ({ status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' }),
     });
 
@@ -259,6 +269,7 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
     const first = await runReview({
       cwd: repoRoot,
       git,
+      ompOptions: { roleResolver: testRoleResolver },
       omp: () => ({ status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' }),
       now: new Date('2026-09-04T12:00:00.000Z'),
     });
@@ -266,6 +277,7 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
     const second = await runReview({
       cwd: repoRoot,
       git,
+      ompOptions: { roleResolver: testRoleResolver },
       omp: () => ({ status: 0, stdout: rejectionOutput('same diff content'), stderr: '' }),
       now: new Date('2026-09-04T12:00:01.000Z'),
     });
@@ -285,6 +297,7 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
     const result = await runReview({
       cwd: repoRoot,
       git,
+      ompOptions: { roleResolver: testRoleResolver },
       omp: () => ({
         status: 0,
         stdout: rejectionOutput('diff for stage failure test', { kind: 'review_failure' }),
@@ -310,6 +323,7 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
     await runReview({
       cwd: repoRoot,
       git,
+      ompOptions: { roleResolver: testRoleResolver },
       omp: (prompt) => {
         capturedPrompt = prompt;
         return { status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' };
@@ -322,6 +336,10 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
     assert.match(capturedPrompt, /skill:\/\/multi-stage-review/);
     assert.match(capturedPrompt, /skill:\/\/reality-first-review/);
     assert.match(capturedPrompt, /relevant project or user review skills discovered by OMP/);
+    assert.match(capturedPrompt, /staged snapshot directory/);
+    assert.match(capturedPrompt, /never from the working tree/);
+    assert.match(capturedPrompt, /correctness and security risk lanes/);
+    assert.match(capturedPrompt, /focused tests.*YAGNI|YAGNI.*focused tests/i);
     assert.match(capturedPrompt, /supported name, agent, and task fields/);
     assert.match(capturedPrompt, /omit model, outputSchema, schemaMode, and isolated/);
     assert.match(capturedPrompt, /reproduce its complete report verbatim/);
@@ -406,6 +424,37 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
       assert.equal(evaluated.verdict.value, 'BLOCK');
       assert.equal(evaluated.envelope.failure.code, expectedCode);
     }
+
+    const innerTaskResult = [
+      '<task-result id="ReviewerKit">',
+      '<output>',
+      'REVIEW_REJECTION_ENVELOPE_BEGIN',
+      JSON.stringify({
+        schema: 'review-rejection-envelope@1',
+        kind: 'review_failure',
+        diff_hash: diff.hash,
+        findings: [],
+        failure: { code: 'execution_failure', message: 'inner failure' },
+      }),
+      'REVIEW_REJECTION_ENVELOPE_END',
+      '</output>',
+      '</task-result>',
+    ].join('\n');
+
+    const recovered = ReviewRejectionEnvelope.evaluate({
+      output: `${innerTaskResult}\n${validOutput}`,
+      diffIdentity: diff,
+      processStatus: 0,
+    });
+    assert.equal(recovered.verdict.value, 'BLOCK');
+    assert.equal(recovered.envelope.kind, 'confirmed_findings');
+
+    const adjacentMalformed = ReviewRejectionEnvelope.evaluate({
+      output: `${innerTaskResult}\nREVIEW_REJECTION_ENVELOPE_BEGIN\n{still bad}\nREVIEW_REJECTION_ENVELOPE_END\nREVIEW_RESULT=BLOCK`,
+      diffIdentity: diff,
+      processStatus: 0,
+    });
+    assert.equal(adjacentMalformed.envelope.failure.code, 'malformed_rejection_envelope');
   });
 
   it('ReviewPrompt invariant: requires non-empty diff hash, mandates multi-stage-review, and embeds required agent name', () => {
@@ -416,6 +465,8 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
     assert.match(prompt.toString(), /multi-stage-review/);
     assert.match(prompt.toString(), /reality-first-review/);
     assert.match(prompt.toString(), /relevant project or user review skills discovered by OMP/);
+    assert.match(prompt.toString(), /correctness and security risk lanes/);
+    assert.match(prompt.toString(), /focused tests.*YAGNI|YAGNI.*focused tests/i);
     assert.match(prompt.toString(), /reproduce its complete report verbatim/);
         assert.match(prompt.toString(), /read that URI first/);
         assert.match(prompt.toString(), /never summarize or omit a rejection envelope/);
@@ -435,10 +486,26 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
     assert.match(report.toMarkdown(), /All tests passed\./);
   });
 
+  it('ReviewReport invariant: renders verified okay checks', () => {
+    const report = new ReviewReport({
+      diffIdentity: 'verified123',
+      verdict: 'PASS',
+      rawOutput: 'Reviewer report without a verified section.',
+      verifiedOk: ['staged snapshot was materialized from the Git index'],
+    });
+    assert.match(report.toMarkdown(), /### Verified-OK/);
+    assert.match(report.toMarkdown(), /staged snapshot was materialized from the Git index/);
+  });
+
   it('ReviewWorkflowService invariant: requires both status 0 and PASS verdict for approval', async () => {
     const repoRoot = await createTempRepo('omp-service-');
     const service = createReviewWorkflowService({
-      git: (args) => (args[0] === 'rev-parse' ? Buffer.from(`${repoRoot}\n`) : Buffer.from('staged diff')),
+      git: (args) => {
+        if (args[0] === 'rev-parse') return Buffer.from(`${repoRoot}\n`);
+        if (args[0] === 'diff') return Buffer.from('staged diff');
+        if (args[0] === 'ls-files') return Buffer.alloc(0);
+        return Buffer.alloc(0);
+      },
       omp: () => ({ status: 0, stdout: rejectionOutput('staged diff'), stderr: '' }),
       clock: () => new Date('2026-09-04T12:00:00.000Z'),
       logger: { log: () => {}, error: () => {} },
@@ -465,6 +532,73 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
       () => new ReviewExecutionResult({ exitCode: 1, skipped: false, verdict: 'BLOCK', modelsTried: 'not-an-array' }),
       /modelsTried must be an array of strings/,
     );
+  });
+
+  it('Scenario: Given a review run, When it completes, Then runs.jsonl and last-run.json expose the full trace', async () => {
+    // Given
+    const repoRoot = await createTempRepo('omp-telemetry-bdd-');
+    const git = createFakeGit(repoRoot, 'observable diff content');
+
+    // When
+    const result = await runReview({
+      cwd: repoRoot,
+      git,
+      ompOptions: { roleResolver: testRoleResolver },
+      omp: async (prompt, cwd, timeout, model, options) => {
+        options?.onSpawn?.(5150);
+        return { status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' };
+      },
+      now: new Date('2026-09-13T09:00:00.000Z'),
+      logger: { log: () => {}, error: () => {} },
+    });
+
+    // Then
+    assert.equal(result.exitCode, 0);
+    const reportsDir = path.join(repoRoot, 'audit-reports', 'commit-reviews');
+    const events = (await readFile(path.join(reportsDir, 'runs.jsonl'), 'utf8'))
+      .split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+    const attemptStarted = events.find((event) => event.type === 'review_attempt_started');
+    assert.equal(attemptStarted.pid, 5150);
+    const finished = events.find((event) => event.type === 'run_finished');
+    assert.equal(finished.verdict, 'PASS');
+    assert.ok(finished.ompLogHints.some((hint) => hint.includes('5150')));
+    const lastRun = JSON.parse(await readFile(path.join(reportsDir, 'last-run.json'), 'utf8'));
+    assert.equal(lastRun.state, 'passed');
+    assert.equal(lastRun.reportPath, result.reportPath);
+    await rm(repoRoot, { recursive: true, force: true }).catch(() => {});
+  });
+
+  it('Scenario: Given both fast model roles are down, When the review runs, Then the commit is blocked with an actionable infrastructure message', async () => {
+    // Given
+    const repoRoot = await createTempRepo('omp-outage-bdd-');
+    const git = createFakeGit(repoRoot, 'outage diff content');
+    const logs = [];
+    const logger = { log: (msg) => logs.push(msg), error: (msg) => logs.push(msg) };
+
+    // When
+    const result = await runReview({
+      cwd: repoRoot,
+      git,
+      omp: async () => ({ status: 1, stdout: '', stderr: 'HTTP 429 Too Many Requests' }),
+      ompOptions: {
+        primaryModel: '@smol',
+        modelsProvider: async () => ['@task'],
+        modelProbe: async () => ({ status: 1, stdout: '', stderr: 'provider unavailable' }),
+        roleResolver: () => ({ smol: 'acme/smol-flash:high', task: 'acme/task-fast:high' }),
+      },
+      now: new Date('2026-09-13T09:05:00.000Z'),
+      logger,
+    });
+
+    // Then
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.verdict, 'BLOCK');
+    assert.match(result.details, /infrastructure failure/);
+    assert.match(result.details, /modelRoles\.smol/);
+    const lastRun = JSON.parse(await readFile(
+      path.join(repoRoot, 'audit-reports', 'commit-reviews', 'last-run.json'), 'utf8'));
+    assert.equal(lastRun.state, 'blocked');
+    await rm(repoRoot, { recursive: true, force: true }).catch(() => {});
   });
 
 });

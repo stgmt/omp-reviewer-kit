@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import { PluginInstallerService } from './application/installer-service.mjs';
 import { parseReviewProgress } from './infra/omp-cli-reviewer-adapter.mjs';
 
@@ -156,6 +158,60 @@ function setReviewStatus(ctx, text) {
   ctx.ui?.setStatus?.(REVIEW_STATUS_KEY, text);
 }
 
+/**
+ * Reads the persisted live/last review state written by the pre-commit runner.
+ * This channel works even when Git does not stream hook stderr into OMP tool
+ * events. Returns undefined when the file is absent or malformed.
+ *
+ * @param {string} repoRoot
+ * @returns {Promise<object|undefined>}
+ */
+async function readLastRunState(repoRoot) {
+  try {
+    const raw = await readFile(
+      path.join(repoRoot, 'audit-reports', 'commit-reviews', 'last-run.json'),
+      'utf8',
+    );
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function formatAgo(iso) {
+  const ms = Date.now() - Date.parse(iso ?? '');
+  if (!Number.isFinite(ms) || ms < 0) return '';
+  if (ms < 60_000) return `${Math.round(ms / 1000)}s ago`;
+  if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m ago`;
+  if (ms < 86_400_000) return `${Math.round(ms / 3_600_000)}h ago`;
+  return `${Math.round(ms / 86_400_000)}d ago`;
+}
+
+const LIVE_RUN_STATES = {
+  started: 'started',
+  probing: 'probe',
+  reviewing: 'reviewing',
+  working: 'working',
+  response: 'response',
+  passed: 'passed',
+  blocked: 'blocked',
+  failed: 'error',
+  skipped: 'result',
+};
+
+function renderLiveRunStatus(run) {
+  const parts = [String(run.state ?? 'running')];
+  if (run.model) parts.push(run.model);
+  if (run.pid) parts.push(`pid ${run.pid}`);
+  if (Number.isFinite(run.elapsedMs)) parts.push(`${Math.round(run.elapsedMs / 1000)}s`);
+  else if (Number.isFinite(run.durationMs)) parts.push(`${Math.round(run.durationMs / 1000)}s`);
+  return renderReviewStatus({
+    state: LIVE_RUN_STATES[run.state] ?? 'reviewing',
+    text: parts.join(' · '),
+  });
+}
+
 function finalReviewStatus(output, isError) {
   if (/reviewer-kit BLOCK:/i.test(output)) {
     return 'reviewer-kit: commit hook review [██████████] 100% · BLOCK · commit stopped; report saved';
@@ -200,11 +256,23 @@ export default function initExtension(pi) {
     if (!isGitCommitCommand(command)) return;
 
     const generation = ++reviewGeneration;
-    activeReviews.set(event.toolCallId, { buffer: '', generation });
+    const active = { buffer: '', generation, poller: undefined };
+    activeReviews.set(event.toolCallId, active);
     setReviewStatus(ctx, renderReviewStatus({
       state: 'started',
       text: 'Git commit hook started; staged change sent to review',
     }));
+
+    // Poll the persisted live state: hook stderr does not reliably reach
+    // partialResult, so last-run.json is the dependable status channel.
+    const repoRoot = ctx.cwd ? installer.getRepoRoot(ctx.cwd) : null;
+    if (repoRoot) {
+      active.poller = setInterval(async () => {
+        const run = await readLastRunState(repoRoot);
+        if (run) setReviewStatus(ctx, renderLiveRunStatus(run));
+      }, 2_000);
+      active.poller.unref?.();
+    }
   });
 
   pi.on('tool_execution_update', async (event, ctx) => {
@@ -232,6 +300,7 @@ export default function initExtension(pi) {
     const active = activeReviews.get(event.toolCallId);
     if (!active) return;
     activeReviews.delete(event.toolCallId);
+    if (active.poller) clearInterval(active.poller);
     const previousTimer = finalStatusTimers.get(event.toolCallId);
     if (previousTimer) clearTimeout(previousTimer);
 
@@ -314,6 +383,30 @@ export default function initExtension(pi) {
           lines.push(`Latest Review: ${info.latestReview.verdict} (${info.latestReview.date})`);
         }
 
+        if (info.lastRun) {
+          const run = info.lastRun;
+          const duration = Number.isFinite(run.durationMs)
+            ? `${Math.round(run.durationMs / 1000)}s`
+            : (Number.isFinite(run.elapsedMs) ? `${Math.round(run.elapsedMs / 1000)}s+` : null);
+          const detail = [
+            run.state ?? 'unknown',
+            run.verdict ? `verdict ${run.verdict}` : null,
+            run.model ? `model ${run.model}` : null,
+            duration,
+            run.updatedAt ?? run.startedAt ?? null,
+          ].filter(Boolean).join(' · ');
+          lines.push(`Last Run: ${detail}`);
+          if (Array.isArray(run.modelsTried) && run.modelsTried.length > 0) {
+            lines.push(`  models tried: ${run.modelsTried.join(' -> ')}`);
+          }
+          if (run.error) {
+            lines.push(`  error: ${run.error}`);
+          }
+          if (run.reportPath) {
+            lines.push(`  report: ${run.reportPath}`);
+          }
+        }
+
         ctx.ui.notify(lines.join('\n'), notifyLevel);
       } catch (err) {
         ctx.ui.notify(`reviewer-kit status check failed: ${err instanceof Error ? err.message : String(err)}`, 'error');
@@ -349,7 +442,13 @@ export default function initExtension(pi) {
       const result = await installer.setup(ctx.cwd);
       if (ctx.ui?.setStatus) {
         if (result.success) {
-          ctx.ui.setStatus('reviewer-kit', 'reviewer-kit: active');
+          let text = 'reviewer-kit: active';
+          const run = info.repoRoot ? await readLastRunState(info.repoRoot) : undefined;
+          if (run?.verdict && run.verdict !== 'SKIPPED') {
+            const ago = formatAgo(run.finishedAt ?? run.updatedAt);
+            text += ` · last ${run.verdict}${ago ? ` ${ago}` : ''}`;
+          }
+          ctx.ui.setStatus('reviewer-kit', text);
         } else if (result.state === 'conflict') {
           ctx.ui.setStatus('reviewer-kit', 'reviewer-kit: conflict');
         }

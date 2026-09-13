@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-13
+
+### Added
+- **Review Run Telemetry**: `TelemetryPort`/`FileSystemTelemetryAdapter` persists append-only `audit-reports/commit-reviews/runs.jsonl` events (`review-run-event@1`) — run start/skip/finish, diff identity, snapshot size, per-attempt and per-probe model/PID/status/duration/provider-failure, verdict, report path, and OMP log hints — plus a throttled `last-run.json` live-state channel (`review-last-run@1`) updated during active reviews. `OMP_REVIEW_KIT_TELEMETRY=0` disables writes; telemetry failures never change the verdict.
+- **Run Analyzer**: `scripts/analyze-review-run.mjs` (`npm run analyze-review`) correlates a run with `~/.omp/logs/omp.<date>.<pid>.log` by child PID (or time window for `.cmd` wrappers) and reports request counts, models used, context growth, per-stage subagent timing, and provider-error classes.
+- **Incident Playbook**: `.devin/skills/omp-review-incidents/SKILL.md` documents telemetry/log locations, PID and time-window correlation, failure signatures, and reporting hygiene.
+- **Live Status Fallback**: the extension polls `last-run.json` while a `git commit` tool call is active, and `/reviewer-kit:status` reports persisted run telemetry via `installer.status().lastRun`.
+- **Materialized Review Inputs**: the staged snapshot now carries `.review/diff.patch` (the complete staged diff, byte-exact) and `.review/changed-files.txt` (the changed-file manifest parsed from `diff --git` headers). The dispatcher prompt names both artifacts and every agent contract instructs reading the diff as a file instead of re-deriving it with `git diff`/`git show` — measured runs showed ~76% of hunter tool calls were diff/staging plumbing.
+- **`OMP_REVIEW_KIT_EFFORT`**: rewrites the `:effort` suffix of every resolved `provider/model[:effort]` selector (appends when absent), applied consistently to availability probes and review attempts and recorded as `effortOverride` in the `review_chain` telemetry event.
+- **Soft tool-call budgets** in agent contracts: scout ~20, risk-hunter ~30 per lane, verifier ~20 calls — focuses verification on diff-touched symbols and deciding callers.
+- A staged path under `.review/` fails loudly as a reserved snapshot-artifacts directory collision.
+
+### Changed
+- **Default model chain is now `@smol → @task`**: the primary model defaults to the `@smol` role instead of `@slow`, and the only default fallback is the `@task` role. `OMP_REVIEW_KIT_MODEL`/`OMP_REVIEW_KIT_FALLBACK_MODELS`/`OMP_REVIEW_KIT_MAX_FALLBACKS` still override. Automatic `omp models --json` catalog probing is removed from the default path.
+- `review-context-scout` now declares `model: "@smol"` so it rides the same pinned reviewer model as the rest of the fleet; previously `@task` bypassed the `--slow`/`--smol` role pinning.
+
+### Fixed
+- A total provider outage now emits an actionable infrastructure-failure message (models attempted, how to repoint `modelRoles.smol`/`modelRoles.task`, telemetry location) instead of a bare report path.
+- **Verdict-emission contract failures** (7 of 16 historical reports ended `review_failure` without findings): all four agents now must return their complete result through the `yield` tool's data payload — never an empty `yield` or a bare closing message (OMP drops those results with `yield with null data`). The dispatcher prompt gains a deterministic fallback: when the task fails, returns empty, or its `agent://` URI is unreadable, it emits a `review_failure` envelope naming the observed error instead of summarizing — so the audit report keeps the real diagnostic instead of a bare `missing_verdict_marker`. The orchestrator contract also states the rejection envelope is exactly one JSON object, never YAML/prose (recurring `malformed_rejection_envelope` mode).
+- **Multi-envelope output resilience**: `ReviewRejectionEnvelope.evaluate` no longer rejects a BLOCK verdict when an earlier `<task-result>` embeds its own envelope pair — the marker-adjacent pair is parsed and validated, and only a marker-adjacent malformed payload falls back to `malformed_rejection_envelope`. `failure.message` also accepts any non-empty diagnostic (previously it had to equal the canonical text exactly, which misclassified the dispatcher's named-error fallback as malformed on v0.4.0 runners).
+- **Non-ASCII path handling**: `DiffIdentity.changedPaths` now decodes Git's octal-escaped quoted paths (`core.quotepath` default) instead of using `JSON.parse`, which threw `SyntaxError` on non-ASCII filenames (e.g. `café.js`, `руководство.md`) and permanently blocked commits.
+- **Submodule gitlink safety**: `SubprocessGitAdapter.getSnapshot` now skips gitlink index entries (mode 160000) instead of running `git cat-file blob` on a commit SHA, which exited 128 and blocked all commits in repositories containing submodules.
+- **Case-insensitive `.review` collision**: `FileSystemSnapshotAdapter.materialize` now normalizes staged paths (lowercase + backslash-to-slash) before checking the reserved `.review/` directory, preventing case-variant collisions (`.Review`) from bypassing the check on Windows/macOS.
+
+## [0.5.0] - 2026-09-10
+
+### Added
+- **Staged Index Snapshot**: Materializes the exact staged file bytes into a temporary read-only review source, keeping the real repository available for Git metadata and OMP discovery.
+- **Two-Lane Correctness Guidance**: Requires correctness and security risk lanes, focused test evidence, and bounded YAGNI checks without adding a new rejection category.
+- **Verified-OK Report Section**: Records paths, tests, caller checks, and invariants actually verified during the review.
+
+### Fixed
+- Snapshot materialization no longer adds generated metadata or allows unstaged worktree content to replace staged files.
+
 ## [0.4.0] - 2026-09-07
 
 ### Added

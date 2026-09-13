@@ -1,8 +1,35 @@
 import { createHash } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+
+function unquoteGitPath(quoted) {
+  const inner = quoted.slice(1, -1);
+  const bytes = [];
+  for (let i = 0; i < inner.length; i += 1) {
+    if (inner[i] === '\\' && i + 3 < inner.length && /[0-7]/.test(inner[i + 1]) && /[0-7]/.test(inner[i + 2]) && /[0-7]/.test(inner[i + 3])) {
+      bytes.push(parseInt(inner.slice(i + 1, i + 4), 8));
+      i += 3;
+    } else if (inner[i] === '\\' && inner[i + 1] === '\\') {
+      bytes.push(0x5c);
+      i += 1;
+    } else if (inner[i] === '\\' && inner[i + 1] === '"') {
+      bytes.push(0x22);
+      i += 1;
+    } else if (inner[i] === '\\' && inner[i + 1] === 't') {
+      bytes.push(0x09);
+      i += 1;
+    } else if (inner[i] === '\\' && inner[i + 1] === 'n') {
+      bytes.push(0x0a);
+      i += 1;
+    } else {
+      bytes.push(inner.charCodeAt(i));
+    }
+  }
+  return Buffer.from(bytes).toString('utf8');
+}
 
 /**
  * ============================================================================
@@ -50,6 +77,71 @@ export class DiffIdentity {
 
   get length() {
     return this.#bytes.length;
+  }
+
+  /**
+   * Unique repository-relative paths touched by this diff, parsed from
+   * `diff --git a/<old> b/<new>` headers (both sides for renames).
+   * @returns {string[]}
+   */
+  get changedPaths() {
+    const text = this.#bytes.toString('utf8');
+    const seen = new Set();
+    for (const header of text.matchAll(/^diff --git (.+)$/gm)) {
+      for (const side of header[1].match(/"[^"]*"|\S+/g) ?? []) {
+        const raw = side.startsWith('"') ? unquoteGitPath(side) : side;
+        seen.add(raw.replace(/^[ab]\//, ''));
+      }
+    }
+    return [...seen];
+  }
+}
+
+
+/**
+ * Immutable value object containing the complete staged index tree.
+ */
+export class StagedSnapshot {
+  #files;
+  #hash;
+
+  /**
+   * @param {{ path: string, content: Buffer }[]} files
+   */
+  constructor(files) {
+    if (!Array.isArray(files)) {
+      throw new TypeError('StagedSnapshot expects an array of files');
+    }
+
+    const normalizedFiles = files.map((file) => {
+      if (!file || typeof file.path !== 'string' || !Buffer.isBuffer(file.content)) {
+        throw new TypeError('StagedSnapshot files require a string path and Buffer content');
+      }
+      return Object.freeze({ path: file.path, content: Buffer.from(file.content) });
+    });
+
+    const hash = createHash('sha256');
+    for (const file of normalizedFiles) {
+      hash.update(file.path);
+      hash.update('\0');
+      hash.update(file.content);
+      hash.update('\0');
+    }
+
+    this.#files = Object.freeze(normalizedFiles);
+    this.#hash = hash.digest('hex');
+  }
+
+  get files() {
+    return this.#files;
+  }
+
+  get hash() {
+    return this.#hash;
+  }
+
+  isEmpty() {
+    return this.#files.length === 0;
   }
 }
 
@@ -430,29 +522,31 @@ export class ReviewRejectionEnvelope {
     if (beginIndexes.length === 0 && endIndexes.length === 0) {
       return blockWithFailure(rawOutput, diffHash, 'missing_rejection_envelope', verdict);
     }
-    if (beginIndexes.length !== 1 || endIndexes.length !== 1) {
-      return blockWithFailure(rawOutput, diffHash, 'malformed_rejection_envelope');
-    }
 
-    const beginIndex = beginIndexes[0];
-    const endIndex = endIndexes[0];
-    const blockIndex = lines.indexOf('REVIEW_RESULT=BLOCK');
-    if (beginIndex >= endIndex || endIndex >= blockIndex) {
-      return blockWithFailure(rawOutput, diffHash, 'contradictory_rejection_envelope');
-    }
-    if (blockIndex !== endIndex + 1) {
-      return blockWithFailure(rawOutput, diffHash, 'malformed_rejection_envelope');
-    }
-
-    try {
-      const parsed = parseStrictJson(lines.slice(beginIndex + 1, endIndex).join('\n'));
-      if (!validateEnvelope(parsed, diffHash)) {
-        return blockWithFailure(rawOutput, diffHash, 'malformed_rejection_envelope');
+    const pairs = [];
+    let openBegin = -1;
+    for (const index of [...beginIndexes, ...endIndexes].sort((a, b) => a - b)) {
+      if (beginIndexes.includes(index)) {
+        openBegin = index;
+      } else if (openBegin >= 0) {
+        pairs.push([openBegin, index]);
+        openBegin = -1;
       }
-      return { verdict, envelope: new ReviewRejectionEnvelope(parsed) };
-    } catch {
-      return blockWithFailure(rawOutput, diffHash, 'malformed_rejection_envelope');
     }
+
+    const blockIndex = lines.indexOf('REVIEW_RESULT=BLOCK');
+    for (const [beginIndex, endIndex] of pairs) {
+      if (endIndex >= blockIndex || blockIndex !== endIndex + 1) continue;
+      try {
+        const parsed = parseStrictJson(lines.slice(beginIndex + 1, endIndex).join('\n'));
+        if (validateEnvelope(parsed, diffHash)) {
+          return { verdict, envelope: new ReviewRejectionEnvelope(parsed) };
+        }
+      } catch {
+        // try the next envelope pair
+      }
+    }
+    return blockWithFailure(rawOutput, diffHash, 'malformed_rejection_envelope');
   }
 
   get schema() {
@@ -494,18 +588,23 @@ export class ReviewRejectionEnvelope {
  * Domain specification and builder for reviewer agent prompt instructions.
  */
 export class ReviewPrompt {
+  #snapshotDir;
   #diffHash;
 
-  constructor(diffHash) {
+  constructor(diffHash, snapshotDir = '') {
     if (!diffHash || typeof diffHash !== 'string') {
       throw new TypeError('ReviewPrompt requires a non-empty diff hash string');
     }
+    if (typeof snapshotDir !== 'string') {
+      throw new TypeError('ReviewPrompt snapshotDir must be a string');
+    }
     this.#diffHash = diffHash;
+    this.#snapshotDir = snapshotDir;
   }
 
-  static forDiff(target) {
+  static forDiff(target, snapshotDir = '') {
     const hash = target instanceof DiffIdentity ? target.hash : target;
-    return new ReviewPrompt(hash);
+    return new ReviewPrompt(hash, snapshotDir);
   }
 
   toString() {
@@ -516,15 +615,28 @@ export class ReviewPrompt {
       'Do not review the change yourself.',
       'The task must inspect only the current staged Git change.',
       'The task must execute the multi-stage review protocol from skill://multi-stage-review and skill://reality-first-review, reading only relevant project or user review skills discovered by OMP.',
+      'The task must run both correctness and security risk lanes; the correctness lane must inspect focused tests and YAGNI only when a concrete reachable P1/P2 impact is proven.',
       'The task must not edit, stage, reset, commit, or delete anything.',
       'Invoke the task with only the supported name, agent, and task fields; omit model, outputSchema, schemaMode, and isolated so the reviewer agent owns its declared schema and model roles.',
       'After the task returns, reproduce its complete report verbatim; if the result says it was truncated or provides an agent URI, read that URI first, and never summarize or omit a rejection envelope.',
+      'If the task fails, returns empty, or its result cannot be read, do not summarize: emit exactly one review_failure envelope — the line REVIEW_REJECTION_ENVELOPE_BEGIN, then one JSON object {"schema":"review-rejection-envelope@1","kind":"review_failure","diff_hash":"<the staged diff hash from this prompt>","findings":[],"failure":{"code":"execution_failure","message":"<the observed task error>"}}, then REVIEW_REJECTION_ENVELOPE_END, then REVIEW_RESULT=BLOCK on its own line.',
+      ...(this.#snapshotDir
+        ? [
+            `The staged snapshot directory is ${this.#snapshotDir}.`,
+            `The complete staged diff is materialized at ${this.#snapshotDir}/.review/diff.patch and the changed-file list at ${this.#snapshotDir}/.review/changed-files.txt. Read them as files; do not run git diff or git show to obtain review content.`,
+            'Read every source file from that staged snapshot directory, never from the working tree. Use the repository only for read-only Git metadata and project skill discovery.',
+          ]
+        : []),
       `The staged diff hash for this hook invocation is ${this.#diffHash}.`,
     ].join('\n');
   }
 
   get diffHash() {
     return this.#diffHash;
+  }
+
+  get snapshotDir() {
+    return this.#snapshotDir;
   }
 }
 
@@ -536,24 +648,19 @@ export class ReviewReport {
   #verdict;
   #rawOutput;
   #modelsTried;
+  #verifiedOk;
   #envelope;
   #timestamp;
 
-  /**
-   * @param {{
-   *   diffIdentity: DiffIdentity|string,
-   *   verdict: ReviewVerdict|string,
-   *   rawOutput: string,
-   *   modelsTried?: string[],
-   *   envelope?: ReviewRejectionEnvelope|null,
-   *   timestamp?: Date
-   * }} params
-   */
-  constructor({ diffIdentity, verdict, rawOutput = '', modelsTried, envelope = null, timestamp = new Date() }) {
+  constructor({ diffIdentity, verdict, rawOutput = '', modelsTried, verifiedOk = [], envelope = null, timestamp = new Date() }) {
     this.#diffHash = diffIdentity instanceof DiffIdentity ? diffIdentity.hash : String(diffIdentity);
     this.#verdict = verdict instanceof ReviewVerdict ? verdict.value : String(verdict);
     this.#rawOutput = rawOutput;
     this.#modelsTried = Array.isArray(modelsTried) ? modelsTried.filter((m) => typeof m === 'string') : undefined;
+    if (!Array.isArray(verifiedOk) || verifiedOk.some((item) => typeof item !== 'string' || item.trim().length === 0)) {
+      throw new TypeError('verifiedOk must be an array of non-empty strings');
+    }
+    this.#verifiedOk = Object.freeze(verifiedOk.map((item) => item.trim()));
     if (envelope !== null && !(envelope instanceof ReviewRejectionEnvelope)) {
       throw new TypeError('envelope must be a ReviewRejectionEnvelope or null');
     }
@@ -561,31 +668,15 @@ export class ReviewReport {
     this.#timestamp = timestamp instanceof Date ? timestamp : new Date(timestamp);
   }
 
-  /**
-   * Formats ISO timestamp into safe filename segment.
-   *
-   * @param {Date} date
-   * @returns {string}
-   */
   static formatTimestamp(date) {
     return date.toISOString().replace(/[:.]/g, '-');
   }
 
-  /**
-   * Computes standardized report filename.
-   *
-   * @returns {string}
-   */
   get filename() {
     const stamp = ReviewReport.formatTimestamp(this.#timestamp);
     return `${stamp}-${this.#diffHash}.md`;
   }
 
-  /**
-   * Renders the complete markdown audit report.
-   *
-   * @returns {string}
-   */
   toMarkdown() {
     const lines = [
       '# OMP Review Kit commit review',
@@ -599,7 +690,11 @@ export class ReviewReport {
     if (this.#envelope) {
       lines.push('', '## Normalized rejection envelope', '', '```json', this.#envelope.toString(), '```');
     }
-    lines.push('', this.#rawOutput.trim(), '');
+    const rawOutput = this.#rawOutput.trim();
+    if (this.#verifiedOk.length > 0 && !/^### Verified-OK\s*$/m.test(rawOutput)) {
+      lines.push('', '### Verified-OK', ...this.#verifiedOk.map((item) => `- ${item}`));
+    }
+    lines.push('', rawOutput, '');
     return lines.join('\n');
   }
 
@@ -617,6 +712,10 @@ export class ReviewReport {
 
   get modelsTried() {
     return this.#modelsTried;
+  }
+
+  get verifiedOk() {
+    return this.#verifiedOk;
   }
 
   get envelope() {
@@ -780,6 +879,20 @@ export class GitPort {
   getStagedDiff(repoRoot) {
     throw new Error('GitPort.getStagedDiff must be implemented');
   }
+
+  getSnapshot(repoRoot) {
+    throw new Error('GitPort.getSnapshot must be implemented');
+  }
+}
+
+export class SnapshotStorePort {
+  create(snapshot, artifacts) {
+    throw new Error('SnapshotStorePort.create must be implemented');
+  }
+
+  remove(snapshotDir) {
+    throw new Error('SnapshotStorePort.remove must be implemented');
+  }
 }
 
 export class ReviewerPort {
@@ -795,28 +908,38 @@ export class ReportStorePort {
 }
 
 /**
+ * Port representing the run telemetry sink factory.
+ * A port creates a run-scoped sink per review; the sink persists observability
+ * events and the live/last-run state without ever influencing the verdict.
+ */
+export class TelemetryPort {
+  /**
+   * @param {{ repoRoot: string, runId: string }} context
+   * @returns {RunTelemetry-like sink with record() and updateLastRun()}
+   */
+  forRun(context) {
+    throw new Error('TelemetryPort.forRun must be implemented');
+  }
+}
+
+/**
  * Application Orchestrator Service implementing the staged code review lifecycle use case.
  */
 export class ReviewWorkflowService {
   #gitPort;
   #reviewerPort;
   #reportStorePort;
+  #snapshotStorePort;
+  #telemetryPort;
   #clock;
   #logger;
 
-  /**
-   * @param {{
-   *   gitPort: GitPort,
-   *   reviewerPort: ReviewerPort,
-   *   reportStorePort: ReportStorePort,
-   *   clock?: () => Date,
-   *   logger?: { log: (msg: string) => void, error: (msg: string) => void }
-   * }} dependencies
-   */
   constructor({
     gitPort,
     reviewerPort,
     reportStorePort,
+    snapshotStorePort,
+    telemetryPort,
     clock = () => new Date(),
     logger = {
       log: (msg) => process.stdout.write(msg),
@@ -826,64 +949,178 @@ export class ReviewWorkflowService {
     if (!gitPort) throw new TypeError('ReviewWorkflowService requires gitPort');
     if (!reviewerPort) throw new TypeError('ReviewWorkflowService requires reviewerPort');
     if (!reportStorePort) throw new TypeError('ReviewWorkflowService requires reportStorePort');
+    if (!snapshotStorePort) throw new TypeError('ReviewWorkflowService requires snapshotStorePort');
 
     this.#gitPort = gitPort;
     this.#reviewerPort = reviewerPort;
     this.#reportStorePort = reportStorePort;
+    this.#snapshotStorePort = snapshotStorePort;
+    this.#telemetryPort = telemetryPort ?? new FileSystemTelemetryAdapter();
     this.#clock = clock;
     this.#logger = logger;
   }
 
-  /**
-   * Executes the complete review lifecycle.
-   *
-   * @param {{ cwd?: string }} [options]
-   * @returns {Promise<ReviewExecutionResult>}
-   */
   async execute({ cwd = process.cwd() } = {}) {
+    const startedAt = Date.now();
     const repoRoot = (await this.#gitPort.getRepoRoot(cwd)).trim();
     const diff = await this.#gitPort.getStagedDiff(repoRoot);
 
-    if (diff.isEmpty()) {
-      return ReviewExecutionResult.skipped();
+    const runStamp = ReviewReport.formatTimestamp(new Date(startedAt));
+    const runId = diff.isEmpty() ? `${runStamp}-skipped` : `${runStamp}-${diff.hash.slice(0, 12)}`;
+    let telemetry;
+    try {
+      telemetry = safeRunTelemetry(this.#telemetryPort.forRun({ repoRoot, runId }));
+    } catch {
+      telemetry = NULL_RUN_TELEMETRY;
     }
+    await telemetry.updateLastRun({
+      state: 'started',
+      runId,
+      repoRoot,
+      startedAt: new Date(startedAt).toISOString(),
+    }, { force: true });
 
-    const prompt = ReviewPrompt.forDiff(diff);
-    const execResult = await this.#reviewerPort.executeReview({
-      prompt,
-      cwd: repoRoot,
-    });
+    try {
+      await telemetry.record('run_started', {
+        cwd,
+        repoRoot,
+        node: process.version,
+        platform: process.platform,
+      });
 
-    const combinedOutput = execResult.combined ?? `${execResult.stdout ?? ''}\n${execResult.stderr ?? ''}`;
-    const modelsTried = execResult.modelsTried;
+      if (diff.isEmpty()) {
+        await telemetry.record('run_skipped', { reason: 'no staged changes' });
+        await telemetry.updateLastRun({
+          state: 'skipped',
+          verdict: 'SKIPPED',
+          exitCode: 0,
+          finishedAt: new Date().toISOString(),
+          durationMs: Date.now() - startedAt,
+        }, { force: true });
+        return ReviewExecutionResult.skipped();
+      }
 
-    const { verdict, envelope } = ReviewRejectionEnvelope.evaluate({
-      output: combinedOutput,
-      diffIdentity: diff,
-      processStatus: execResult.status,
-      processError: execResult.stderr,
-    });
+      await telemetry.record('diff_collected', {
+        diffHash: diff.hash,
+        diffBytes: diff.length,
+      });
 
-    const report = new ReviewReport({
-      diffIdentity: diff,
-      verdict,
-      rawOutput: combinedOutput,
-      modelsTried,
-      envelope,
-      timestamp: this.#clock(),
-    });
+      const snapshotStartedAt = Date.now();
+      const snapshot = await this.#gitPort.getSnapshot(repoRoot);
+      const snapshotDir = await this.#snapshotStorePort.create(snapshot, {
+        diffBytes: diff.bytes,
+        changedPaths: diff.changedPaths,
+      });
+      await telemetry.record('snapshot_materialized', {
+        files: snapshot.files.length,
+        bytes: snapshot.files.reduce((total, file) => total + file.content.length, 0),
+        durationMs: Date.now() - snapshotStartedAt,
+      });
 
-    const reportPath = await this.#reportStorePort.saveReport(repoRoot, report);
+      let execResult;
+      try {
+        const prompt = ReviewPrompt.forDiff(diff, snapshotDir);
+        execResult = await this.#reviewerPort.executeReview({
+          prompt,
+          cwd: repoRoot,
+          telemetry,
+        });
+      } finally {
+        await this.#snapshotStorePort.remove(snapshotDir);
+      }
 
-    if (verdict.isPass()) {
-      this.#logger.log(`reviewer-kit PASS: ${reportPath}\n`);
-      return ReviewExecutionResult.pass(reportPath, verdict.value, modelsTried);
+      const combinedOutput = execResult.combined ?? `${execResult.stdout ?? ''}\n${execResult.stderr ?? ''}`;
+      const modelsTried = execResult.modelsTried;
+
+      const { verdict, envelope } = ReviewRejectionEnvelope.evaluate({
+        output: combinedOutput,
+        diffIdentity: diff,
+        processStatus: execResult.status,
+        processError: execResult.stderr,
+      });
+
+      await telemetry.record('verdict_evaluated', {
+        verdict: verdict.value,
+        envelopeKind: envelope ? envelope.kind : null,
+        failureCode: envelope?.failure?.code ?? null,
+        findings: envelope ? envelope.findings.length : 0,
+      });
+
+      const verifiedOk = [
+        'The staged index was materialized into a temporary snapshot before review.',
+        'The reviewer ran from the repository root, preserving Git and project context.',
+      ];
+      if (execResult.status === 0) {
+        verifiedOk.push('The reviewer process exited successfully and its verdict was normalized.');
+      }
+
+      const report = new ReviewReport({
+        diffIdentity: diff,
+        verdict,
+        rawOutput: combinedOutput,
+        modelsTried,
+        verifiedOk,
+        envelope,
+        timestamp: this.#clock(),
+      });
+
+      const reportStartedAt = Date.now();
+      const reportPath = await this.#reportStorePort.saveReport(repoRoot, report);
+      await telemetry.record('report_written', {
+        reportPath,
+        durationMs: Date.now() - reportStartedAt,
+      });
+
+      const childPids = [
+        ...(Array.isArray(execResult.attempts) ? execResult.attempts : []),
+        ...(Array.isArray(execResult.probes) ? execResult.probes : []),
+      ].map((entry) => entry?.pid).filter((pid) => Number.isInteger(pid));
+      await telemetry.record('run_finished', {
+        verdict: verdict.value,
+        exitCode: verdict.isPass() ? 0 : 1,
+        durationMs: Date.now() - startedAt,
+        modelsTried,
+        attemptCount: Array.isArray(execResult.attempts) ? execResult.attempts.length : 0,
+        probeCount: Array.isArray(execResult.probes) ? execResult.probes.length : 0,
+        ompLogHints: [...new Set(childPids)].map((pid) => `~/.omp/logs/omp.*.${pid}.log`),
+      });
+      await telemetry.updateLastRun({
+        state: verdict.isPass() ? 'passed' : 'blocked',
+        verdict: verdict.value,
+        exitCode: verdict.isPass() ? 0 : 1,
+        reportPath,
+        durationMs: Date.now() - startedAt,
+        modelsTried,
+        finishedAt: new Date().toISOString(),
+      }, { force: true });
+
+      if (verdict.isPass()) {
+        this.#logger.log(`reviewer-kit PASS: ${reportPath}\n`);
+        return ReviewExecutionResult.pass(reportPath, verdict.value, modelsTried);
+      }
+
+      if (envelope && envelope.kind === 'review_failure' && typeof execResult.stderr === 'string') {
+        const detail = execResult.stderr.trim();
+        if (detail) {
+          this.#logger.error(detail.split(/\r?\n/).slice(-8).join('\n') + '\n');
+        }
+      }
+      this.#logger.error(`reviewer-kit BLOCK: ${reportPath}\n`);
+      this.#logger.error(`REVIEW_REJECTION_REPORT=${reportPath}\n`);
+
+      return ReviewExecutionResult.block(reportPath, combinedOutput.trim(), modelsTried, envelope);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await telemetry.record('run_failed', { error: message });
+      await telemetry.updateLastRun({
+        state: 'failed',
+        error: message,
+        exitCode: 1,
+        finishedAt: new Date().toISOString(),
+        durationMs: Date.now() - startedAt,
+      }, { force: true });
+      throw error;
     }
-
-    this.#logger.error(`reviewer-kit BLOCK: ${reportPath}\n`);
-    this.#logger.error(`REVIEW_REJECTION_REPORT=${reportPath}\n`);
-
-    return ReviewExecutionResult.block(reportPath, combinedOutput.trim(), modelsTried, envelope);
   }
 }
 
@@ -928,6 +1165,29 @@ export class SubprocessGitAdapter extends GitPort {
   async getStagedDiff(repoRoot) {
     const output = await this.#runner(['diff', '--cached', '--binary', '--no-ext-diff', '--'], repoRoot);
     return DiffIdentity.fromBuffer(output);
+  }
+
+  async getSnapshot(repoRoot) {
+    const listing = await this.#runner(['ls-files', '--cached', '-z', '--stage', '--'], repoRoot);
+    const entries = listing.toString('utf8').split('\0').filter(Boolean);
+    const files = [];
+
+    for (const entry of entries) {
+      const separator = entry.indexOf('\t');
+      if (separator < 0) throw new Error('git ls-files returned an invalid staged entry');
+      const metadata = entry.slice(0, separator).split(' ');
+      const mode = metadata[0];
+      const stage = metadata[2];
+      if (stage !== '0') throw new Error('Cannot review an unmerged staged index');
+      if (mode === '160000') continue;
+      const objectId = metadata[1];
+      const stagedPath = entry.slice(separator + 1);
+      const content = await this.#runner(['cat-file', 'blob', objectId], repoRoot);
+      files.push({ path: stagedPath, content });
+    }
+
+    files.sort((left, right) => left.path.localeCompare(right.path));
+    return new StagedSnapshot(files);
   }
 }
 
@@ -1012,6 +1272,21 @@ function isSafeModelSelector(value) {
   return typeof value === 'string' && /^[A-Za-z0-9@._:/+-]+$/.test(value);
 }
 
+/**
+ * Rewrites the `:effort` suffix of a concrete `provider/model[:effort]`
+ * selector when OMP_REVIEW_KIT_EFFORT is set. Appends the suffix when the
+ * selector has none; provider/model identity is preserved. Applied to every
+ * selector bound for spawn, so probes and attempts stay consistent.
+ */
+function applyEffortOverride(selector) {
+  const effort = process.env.OMP_REVIEW_KIT_EFFORT;
+  if (!effort || typeof selector !== 'string') return selector;
+  const slash = selector.indexOf('/');
+  const colon = selector.lastIndexOf(':');
+  const base = colon > slash ? selector.slice(0, colon) : selector;
+  return `${base}:${effort}`;
+}
+
 
 async function terminateProcessTree(proc) {
   if (!proc.pid) return;
@@ -1080,6 +1355,8 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
   #modelProbe;
   #probeTimeoutMs;
   #progress;
+  #roleResolver;
+  #rolesCache;
 
   /**
    * @param {{
@@ -1089,17 +1366,19 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
    *   maxFallbacks?: number,
    *   modelProbe?: (cwd: string, timeoutMs: number, model: string) => Promise<{ status: number, stdout?: string, stderr?: string }>|{ status: number, stdout?: string, stderr?: string },
    *   probeTimeoutMs?: number,
-   *   progress?: (event: { state: string, message: string, model?: string, elapsedMs?: number }) => void
+   *   progress?: (event: { state: string, message: string, model?: string, elapsedMs?: number }) => void,
+   *   roleResolver?: (cwd: string) => Promise<Record<string, string>>|Record<string, string>
    * }} [options]
    */
   constructor({
     runner,
     modelsProvider,
-    primaryModel = process.env.OMP_REVIEW_KIT_MODEL ?? '@slow',
+    primaryModel = process.env.OMP_REVIEW_KIT_MODEL ?? '@smol',
     maxFallbacks = configuredInteger(process.env.OMP_REVIEW_KIT_MAX_FALLBACKS, 3, 0),
     modelProbe,
     probeTimeoutMs = configuredInteger(process.env.OMP_REVIEW_KIT_PROBE_TIMEOUT_MS, 60_000, 1),
     progress,
+    roleResolver,
   } = {}) {
     super();
     this.#runner = runner ?? OmpCliReviewerAdapter.defaultRunner;
@@ -1109,6 +1388,8 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
     this.#modelProbe = modelProbe ?? OmpCliReviewerAdapter.defaultModelProbe;
     this.#probeTimeoutMs = configuredInteger(probeTimeoutMs, 60_000, 1);
     this.#progress = progress ?? (() => {});
+    this.#roleResolver = roleResolver ?? OmpCliReviewerAdapter.defaultRoleResolver;
+    this.#rolesCache = null;
   }
 
   #emitProgress(event) {
@@ -1119,16 +1400,63 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
     }
   }
 
-  async #runReviewAttempt(promptText, cwd, model) {
+  /**
+   * Resolves an OMP role selector (`@smol`, `@task`, ...) to the concrete
+   * `provider/model[:effort]` configured by the user. `--model` accepts
+   * `@role` syntax, but the `--slow`/`--smol` role *assignment* flags do not —
+   * passing `@role` there fails with `Model "@role" not found`, so the
+   * concrete selector must be resolved before the child is spawned.
+   */
+  async #resolveSelector(cwd, selector, telemetry) {
+    if (typeof selector !== 'string' || !selector.startsWith('@')) return applyEffortOverride(selector);
+    if (!this.#rolesCache) {
+      this.#rolesCache = Promise.resolve()
+        .then(() => this.#roleResolver(cwd))
+        .then((roles) => (roles && typeof roles === 'object' ? roles : {}))
+        .catch(() => ({}));
+      const roles = await this.#rolesCache;
+      await telemetry.record('roles_resolved', { roles });
+    }
+    const resolved = (await this.#rolesCache)[selector.slice(1)];
+    if (typeof resolved !== 'string' || !isSafeModelSelector(resolved)) {
+      throw new Error(`Model role ${selector} not found in OMP configuration`);
+    }
+    return applyEffortOverride(resolved);
+  }
+
+  async #runReviewAttempt(promptText, cwd, model, telemetry, attempts, attemptIndex) {
     const startedAt = Date.now();
+    const record = { model, attemptIndex, startedAt: new Date(startedAt).toISOString() };
+    attempts.push(record);
+    let resolvedModel;
+    try {
+      resolvedModel = await this.#resolveSelector(cwd, model, telemetry);
+    } catch (error) {
+      record.status = 1;
+      record.durationMs = Date.now() - startedAt;
+      record.providerFailure = true;
+      record.stderrBytes = 0;
+      record.error = error?.message ?? String(error);
+      await telemetry.record('review_attempt_finished', { ...record });
+      return { status: 1, stdout: '', stderr: record.error };
+    }
+    if (resolvedModel !== model) record.resolvedModel = resolvedModel;
     let responseObserved = false;
     let workingSignalObserved = false;
-    const emitRunning = () => this.#emitProgress({
-      state: 'reviewing',
-      message: 'commit hook review running; waiting for model response',
-      model,
-      elapsedMs: Date.now() - startedAt,
-    });
+    const emitRunning = () => {
+      this.#emitProgress({
+        state: 'reviewing',
+        message: 'commit hook review running; waiting for model response',
+        model,
+        elapsedMs: Date.now() - startedAt,
+      });
+      void telemetry.updateLastRun({
+        state: 'reviewing',
+        model,
+        pid: record.pid,
+        elapsedMs: Date.now() - startedAt,
+      });
+    };
 
     this.#emitProgress({
       state: 'reviewing',
@@ -1139,7 +1467,12 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
     const heartbeat = setInterval(emitRunning, 5_000);
     heartbeat.unref?.();
     try {
-      return await this.#runner(promptText, cwd, undefined, model, {
+      const result = await this.#runner(promptText, cwd, undefined, resolvedModel, {
+        onSpawn: (pid) => {
+          record.pid = pid;
+          void telemetry.record('review_attempt_started', { ...record, pid });
+          void telemetry.updateLastRun({ state: 'reviewing', model, pid });
+        },
         onOutput: (chunk, stream) => {
           const text = String(chunk);
           if (stream === 'stderr' && !workingSignalObserved && /Working\.\.\./i.test(text)) {
@@ -1150,6 +1483,9 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
               model,
               elapsedMs: Date.now() - startedAt,
             });
+            void telemetry.record('review_attempt_working', {
+              model, attemptIndex, pid: record.pid, elapsedMs: Date.now() - startedAt,
+            });
           }
           if (stream === 'stdout' && !responseObserved && text.trim()) {
             responseObserved = true;
@@ -1159,22 +1495,47 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
               model,
               elapsedMs: Date.now() - startedAt,
             });
+            void telemetry.record('review_attempt_first_output', {
+              model, attemptIndex, pid: record.pid, elapsedMs: Date.now() - startedAt,
+            });
           }
         },
       });
+      record.status = result?.status;
+      record.durationMs = Date.now() - startedAt;
+      record.providerFailure = isModelProviderFailure(result ?? {});
+      record.stdoutBytes = typeof result?.stdout === 'string' ? Buffer.byteLength(result.stdout) : 0;
+      record.stderrBytes = typeof result?.stderr === 'string' ? Buffer.byteLength(result.stderr) : 0;
+      await telemetry.record('review_attempt_finished', { ...record });
+      return result;
     } finally {
       clearInterval(heartbeat);
     }
   }
 
-  async #runModelProbe(cwd, model) {
+  async #runModelProbe(cwd, model, telemetry, probes) {
     const startedAt = Date.now();
+    const record = { model, startedAt: new Date(startedAt).toISOString() };
+    probes.push(record);
+    let resolvedModel;
+    try {
+      resolvedModel = await this.#resolveSelector(cwd, model, telemetry);
+    } catch (error) {
+      record.status = 1;
+      record.durationMs = Date.now() - startedAt;
+      record.error = error?.message ?? String(error);
+      await telemetry.record('probe_finished', { ...record });
+      return { status: 1, stdout: '', stderr: record.error };
+    }
+    if (resolvedModel !== model) record.resolvedModel = resolvedModel;
+    await telemetry.record('probe_started', { ...record });
     this.#emitProgress({
       state: 'probe',
       message: 'checking model availability',
       model,
       elapsedMs: 0,
     });
+    void telemetry.updateLastRun({ state: 'probing', model });
     const heartbeat = setInterval(() => this.#emitProgress({
       state: 'probe',
       message: 'checking model availability',
@@ -1183,7 +1544,12 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
     }), 5_000);
     heartbeat.unref?.();
     try {
-      return await this.#modelProbe(cwd, this.#probeTimeoutMs, model);
+      const result = await this.#modelProbe(cwd, this.#probeTimeoutMs, resolvedModel);
+      record.pid = result?.pid;
+      record.status = result?.status;
+      record.durationMs = Date.now() - startedAt;
+      await telemetry.record('probe_finished', { ...record });
+      return result;
     } finally {
       clearInterval(heartbeat);
     }
@@ -1194,14 +1560,13 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
    *
    * Priority:
    * 1. `OMP_REVIEW_KIT_FALLBACK_MODELS` (comma-separated) overrides the list.
-   * 2. Otherwise probe the OMP model catalog and pick the cheapest advertised
-   *    models first so a quota-exhausted provider can be substituted by one
-   *    that is available in the same installation.
+   * 2. Otherwise the single role fallback `@task` — a role selector always
+   *    resolves to whatever fast model the user configured, without probing
+   *    the `omp models --json` catalog for arbitrary providers.
    *
    * @returns {Promise<string[]>}
    */
-  static async defaultModelsProvider(timeoutMs = configuredInteger(process.env.OMP_REVIEW_KIT_PROBE_TIMEOUT_MS, 60_000, 1)) {
-    timeoutMs = configuredInteger(timeoutMs, 60_000, 1);
+  static async defaultModelsProvider() {
     const explicit = process.env.OMP_REVIEW_KIT_FALLBACK_MODELS;
     if (explicit) {
       return explicit
@@ -1209,77 +1574,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
         .map((s) => s.trim())
         .filter(isSafeModelSelector);
     }
-
-    const command = process.env.OMP_REVIEW_KIT_OMP ?? 'omp';
-    const isWindowsWrapper = /\.(cmd|bat)$/i.test(command);
-    const executable = isWindowsWrapper ? (process.env.ComSpec ?? 'cmd.exe') : command;
-
-    try {
-      const output = await new Promise((resolve) => {
-        const proc = spawn(executable, isWindowsWrapper
-          ? ['/d', '/c', 'call', command, 'models', '--json']
-          : ['models', '--json'], {
-          stdio: ['ignore', 'pipe', 'pipe'],
-          windowsHide: true,
-          detached: process.platform !== 'win32',
-        });
-
-        let stdout = '';
-        let stderr = '';
-        let settled = false;
-        let timedOut = false;
-        const finish = (result) => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timer);
-          resolve(result);
-        };
-        const timer = timeoutMs > 0
-          ? setTimeout(async () => {
-            timedOut = true;
-            await terminateProcessTree(proc);
-            finish({ stdout, stderr: 'Model catalog timed out after ' + timeoutMs + 'ms\n' + stderr });
-          }, timeoutMs)
-          : undefined;
-        proc.stdout.on('data', (chunk) => {
-          stdout += chunk.toString('utf8');
-        });
-        proc.stderr.on('data', (chunk) => {
-          stderr += chunk.toString('utf8');
-        });
-        proc.on('close', () => {
-          if (timedOut) return;
-          finish({ stdout, stderr });
-        });
-        proc.on('error', (err) => {
-          if (timedOut) return;
-          finish({ stdout, stderr: err.message || String(err) });
-        });
-      });
-
-      const payload = JSON.parse(output.stdout);
-      const models = Array.isArray(payload) ? payload : (payload.models ?? []);
-      const byCost = (model) => {
-        const cost = Number(model?.cost?.output ?? 0) + Number(model?.cost?.input ?? 0);
-        return cost > 0 ? cost : 0;
-      };
-      const providerOf = (model) => model.provider ?? model.selector.split('/')[0];
-      const seenProviders = new Set();
-
-      return models
-        .filter((model) => isSafeModelSelector(model?.selector))
-        .sort((a, b) => (byCost(a) - byCost(b)) || a.selector.localeCompare(b.selector))
-        .filter((model) => {
-          const provider = providerOf(model);
-          if (seenProviders.has(provider)) return false;
-          seenProviders.add(provider);
-          return true;
-        })
-        .slice(0, 8)
-        .map((model) => model.selector);
-    } catch {
-      return [];
-    }
+    return ['@task'];
   }
 
   /**
@@ -1289,13 +1584,13 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
    * @param {string} cwd
    * @param {number} [timeout]
    * @param {string} [model]
-   * @param {{ noTools?: boolean }} [options]
-   * @returns {Promise<{ status: number, stdout: string, stderr: string }>}
+   * @param {{ noTools?: boolean, onOutput?: (chunk: unknown, stream: 'stdout'|'stderr') => void, onSpawn?: (pid: number|undefined) => void }} [options]
+   * @returns {Promise<{ status: number, stdout: string, stderr: string, pid?: number }>}
    */
-  static defaultRunner(prompt, cwd, timeout, model, { noTools = false, onOutput } = {}) {
+  static defaultRunner(prompt, cwd, timeout, model, { noTools = false, onOutput, onSpawn } = {}) {
     return new Promise((resolve) => {
       const command = process.env.OMP_REVIEW_KIT_OMP ?? 'omp';
-      const selectedModel = model ?? process.env.OMP_REVIEW_KIT_MODEL ?? '@slow';
+      const selectedModel = model ?? process.env.OMP_REVIEW_KIT_MODEL ?? '@smol';
       if (!isSafeModelSelector(selectedModel)) {
         resolve({ status: 1, stdout: '', stderr: 'Rejected unsafe model selector' });
         return;
@@ -1317,6 +1612,12 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
         windowsHide: true,
         detached: process.platform !== 'win32',
       });
+      const pid = Number.isInteger(proc.pid) ? proc.pid : undefined;
+      try {
+        onSpawn?.(pid);
+      } catch {
+        // Telemetry callbacks must never affect the review process.
+      }
 
       let stdout = '';
       let stderr = '';
@@ -1326,7 +1627,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        resolve(result);
+        resolve({ pid, ...result });
       };
       let timer;
 
@@ -1400,19 +1701,89 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
   }
 
   /**
+   * Resolves the user's OMP role map (`omp config get modelRoles --json`).
+   * Best-effort: returns `{}` when the command is unavailable or slow.
+   *
+   * @param {string} cwd
+   * @returns {Promise<Record<string, string>>}
+   */
+  static defaultRoleResolver(cwd) {
+    return new Promise((resolve) => {
+      const command = process.env.OMP_REVIEW_KIT_OMP ?? 'omp';
+      const isWindowsWrapper = /\.(cmd|bat)$/i.test(command);
+      const commandArgs = ['config', 'get', 'modelRoles', '--json'];
+      const executable = isWindowsWrapper ? (process.env.ComSpec ?? 'cmd.exe') : command;
+      const args = isWindowsWrapper
+        ? ['/d', '/c', 'call', command, ...commandArgs]
+        : commandArgs;
+      let proc;
+      try {
+        proc = spawn(executable, args, {
+          cwd,
+          stdio: ['ignore', 'pipe', 'pipe'],
+          windowsHide: true,
+        });
+      } catch {
+        resolve({});
+        return;
+      }
+      let stdout = '';
+      let settled = false;
+      const finish = (roles) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(roles);
+      };
+      const timer = setTimeout(async () => {
+        await terminateProcessTree(proc);
+        finish({});
+      }, 15_000);
+      timer.unref?.();
+      proc.stdout.on('data', (chunk) => {
+        stdout += chunk.toString('utf8');
+      });
+      proc.on('close', (code) => {
+        if (code !== 0) {
+          finish({});
+          return;
+        }
+        try {
+          const value = JSON.parse(stdout)?.value;
+          finish(value && typeof value === 'object' ? value : {});
+        } catch {
+          finish({});
+        }
+      });
+      proc.on('error', () => finish({}));
+    });
+  }
+
+  /**
    * @param {{
    *   prompt: import('../domain/review-prompt.mjs').ReviewPrompt|string,
    *   cwd: string,
+   *   telemetry?: { record: (type: string, payload?: object) => Promise<void>, updateLastRun: (state: object, opts?: { force?: boolean }) => Promise<void> },
    * }} params
-   * @returns {Promise<{ status: number, stdout: string, stderr: string, combined: string, modelsTried: string[] }>}
+   * @returns {Promise<{ status: number, stdout: string, stderr: string, combined: string, modelsTried: string[], attempts: object[], probes: object[] }>}
    */
-  async executeReview({ prompt, cwd }) {
+  async executeReview({ prompt, cwd, telemetry = NULL_RUN_TELEMETRY }) {
+    telemetry = safeRunTelemetry(telemetry);
+    await telemetry.record('review_chain', {
+      primaryModel: this.#primaryModel,
+      maxFallbacks: this.#maxFallbacks,
+      probeTimeoutMs: this.#probeTimeoutMs,
+      effortOverride: process.env.OMP_REVIEW_KIT_EFFORT ?? null,
+    });
     const promptText = typeof prompt === 'string' ? prompt : prompt.toString();
     const primaryModel = this.#primaryModel;
     const modelsTried = [primaryModel];
-    let result = await this.#runReviewAttempt(promptText, cwd, primaryModel);
+    const attempts = [];
+    const probes = [];
+    let result = await this.#runReviewAttempt(promptText, cwd, primaryModel, telemetry, attempts, 0);
+    let providerOutage = isModelProviderFailure(result);
 
-    if (isModelProviderFailure(result) && this.#maxFallbacks > 0) {
+    if (providerOutage && this.#maxFallbacks > 0) {
       let fallbackModels = [];
       try {
         fallbackModels = await this.#modelsProvider(this.#probeTimeoutMs);
@@ -1425,7 +1796,6 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
           .filter((model) => typeof model === 'string' && model.length > 0 && model !== primaryModel)
           .filter((model, index, models) => models.indexOf(model) === index)
         : [];
-      let lastProbeFailure;
       let reviewAttempts = 0;
 
       for (const model of candidates) {
@@ -1433,28 +1803,33 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
         modelsTried.push(model);
         let probeResult;
         try {
-          probeResult = await this.#runModelProbe(cwd, model);
+          probeResult = await this.#runModelProbe(cwd, model, telemetry, probes);
         } catch (error) {
           probeResult = { status: 1, stdout: '', stderr: error?.message ?? String(error) };
+          const probeRecord = probes.at(-1);
+          if (probeRecord) {
+            probeRecord.status = 1;
+            probeRecord.error = error?.message ?? String(error);
+            probeRecord.durationMs = Date.now() - Date.parse(probeRecord.startedAt);
+          }
         }
         if (probeResult?.status !== 0) {
-          lastProbeFailure = probeResult;
           continue;
         }
 
         reviewAttempts += 1;
-        result = await this.#runReviewAttempt(promptText, cwd, model);
-        if (!isModelProviderFailure(result)) break;
+        result = await this.#runReviewAttempt(promptText, cwd, model, telemetry, attempts, reviewAttempts);
+        providerOutage = isModelProviderFailure(result);
+        if (!providerOutage) break;
       }
+    }
 
-      if (isModelProviderFailure(result) && lastProbeFailure && candidates.length > 0
-        && reviewAttempts === 0) {
-        result = {
-          status: 1,
-          stdout: '',
-          stderr: 'fallback model availability probe failed; no fallback model was available',
-        };
-      }
+    if (providerOutage) {
+      result = {
+        status: 1,
+        stdout: result.stdout ?? '',
+        stderr: formatProviderOutageError(modelsTried, result.stderr),
+      };
     }
 
     const stdout = result.stdout ?? '';
@@ -1467,7 +1842,74 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       stderr,
       combined,
       modelsTried,
+      attempts,
+      probes,
     };
+  }
+}
+
+
+function assertSafeSnapshotPath(filePath) {
+  if (
+    typeof filePath !== 'string' ||
+    filePath.length === 0 ||
+    path.posix.isAbsolute(filePath) ||
+    path.win32.isAbsolute(filePath) ||
+    /^[A-Za-z]:/.test(filePath) ||
+    filePath.split('/').includes('..')
+  ) {
+    throw new Error(`Unsafe staged path in snapshot: ${filePath}`);
+  }
+}
+
+export class FileSystemSnapshotAdapter extends SnapshotStorePort {
+  constructor() {
+    super();
+  }
+
+  async create(snapshot, artifacts) {
+    const targetDir = await mkdtemp(path.join(tmpdir(), 'reviewer-kit-snapshot-'));
+    try {
+      await this.materialize(snapshot, targetDir);
+      await this.#writeReviewArtifacts(targetDir, artifacts);
+      return targetDir;
+    } catch (error) {
+      await this.remove(targetDir);
+      throw error;
+    }
+  }
+
+  async remove(snapshotDir) {
+    await rm(snapshotDir, { recursive: true, force: true });
+  }
+
+  async materialize(snapshot, targetDir) {
+    for (const file of snapshot.files) {
+      assertSafeSnapshotPath(file.path);
+      const normalized = file.path.replace(/\\/g, '/').toLowerCase();
+      if (normalized === '.review' || normalized.startsWith('.review/')) {
+        throw new Error(`Staged path collides with reserved snapshot artifacts directory: ${file.path}`);
+      }
+      const destination = path.resolve(targetDir, ...file.path.split('/'));
+      const root = path.resolve(targetDir) + path.sep;
+      if (!destination.startsWith(root)) {
+        throw new Error(`Staged path escapes snapshot directory: ${file.path}`);
+      }
+      await mkdir(path.dirname(destination), { recursive: true });
+      await writeFile(destination, file.content);
+    }
+
+  }
+
+  async #writeReviewArtifacts(targetDir, artifacts) {
+    if (!artifacts || artifacts.diffBytes === undefined) {
+      return;
+    }
+    const reviewDir = path.join(targetDir, '.review');
+    await mkdir(reviewDir, { recursive: true });
+    await writeFile(path.join(reviewDir, 'diff.patch'), artifacts.diffBytes);
+    const manifest = (artifacts.changedPaths ?? []).join('\n') + '\n';
+    await writeFile(path.join(reviewDir, 'changed-files.txt'), manifest, 'utf8');
   }
 }
 
@@ -1491,21 +1933,172 @@ export class FileSystemReportStoreAdapter extends ReportStorePort {
   }
 }
 
+const REVIEW_EVENT_SCHEMA = 'review-run-event@1';
+const REVIEW_LAST_RUN_SCHEMA = 'review-last-run@1';
+const LAST_RUN_THROTTLE_MS = 2_000;
+
+/**
+ * Builds the user-facing message emitted when every model in the chain failed
+ * with a provider/availability error. The review produced no verdict; the
+ * commit is blocked by infrastructure, not by findings.
+ */
+function formatProviderOutageError(modelsTried, lastStderr) {
+  const lines = [
+    'reviewer-kit infrastructure failure: no review verdict was produced.',
+    'Every configured model failed with a provider/availability error (this is an outage, not a code verdict).',
+    `Models attempted: ${modelsTried.join(' -> ')}`,
+    'Fix: point the fast roles at available fast models in ~/.omp/agent/config.yml',
+    '  (modelRoles.smol / modelRoles.task), or set OMP_REVIEW_KIT_MODEL /',
+    '  OMP_REVIEW_KIT_FALLBACK_MODELS to explicit model selectors.',
+    'The detailed report and run telemetry are under audit-reports/commit-reviews/.',
+  ];
+  const tail = typeof lastStderr === 'string'
+    ? lastStderr.trim().split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(-3).join(' | ')
+    : '';
+  if (tail) lines.push(`Last provider error: ${tail}`);
+  return `${lines.join('\n')}\n`;
+}
+
+const NULL_RUN_TELEMETRY = Object.freeze({
+  record: async () => {},
+  updateLastRun: async () => {},
+});
+
+/**
+ * Wraps a run telemetry sink so that throwing/rejecting sinks (custom ports,
+ * injected doubles) can never change the review verdict or exit code.
+ */
+function safeRunTelemetry(sink) {
+  if (!sink || typeof sink.record !== 'function' || typeof sink.updateLastRun !== 'function') {
+    return NULL_RUN_TELEMETRY;
+  }
+  return {
+    record: (type, payload) => {
+      try {
+        return Promise.resolve(sink.record(type, payload)).catch(() => {});
+      } catch {
+        return Promise.resolve();
+      }
+    },
+    updateLastRun: (state, opts) => {
+      try {
+        return Promise.resolve(sink.updateLastRun(state, opts)).catch(() => {});
+      } catch {
+        return Promise.resolve();
+      }
+    },
+  };
+}
+
+export class NullTelemetryAdapter extends TelemetryPort {
+  forRun() {
+    return NULL_RUN_TELEMETRY;
+  }
+}
+
+/**
+ * Run-scoped telemetry sink. Appends one JSONL event per record() call to
+ * <reportDir>/runs.jsonl and maintains <reportDir>/last-run.json as the live
+ * state channel (throttled, last-writer-wins). All failures are swallowed:
+ * telemetry must never change the review verdict or exit code.
+ */
+class RunTelemetry {
+  #eventsFile;
+  #lastRunFile;
+  #runId;
+  #base;
+  #lastWriteAt = 0;
+  #pendingWrite = Promise.resolve();
+
+  constructor({ reportDir, runId, base }) {
+    this.#eventsFile = path.join(reportDir, 'runs.jsonl');
+    this.#lastRunFile = path.join(reportDir, 'last-run.json');
+    this.#runId = runId;
+    this.#base = base;
+  }
+
+  record(type, payload = {}) {
+    const event = {
+      schema: REVIEW_EVENT_SCHEMA,
+      runId: this.#runId,
+      type,
+      at: new Date().toISOString(),
+      ...payload,
+    };
+    return this.#enqueue(async () => {
+      await mkdir(path.dirname(this.#eventsFile), { recursive: true });
+      await appendFile(this.#eventsFile, `${JSON.stringify(event)}\n`, 'utf8');
+    });
+  }
+
+  updateLastRun(state, { force = false } = {}) {
+    const now = Date.now();
+    if (!force && now - this.#lastWriteAt < LAST_RUN_THROTTLE_MS) {
+      return Promise.resolve();
+    }
+    this.#lastWriteAt = now;
+    const doc = {
+      schema: REVIEW_LAST_RUN_SCHEMA,
+      runId: this.#runId,
+      ...this.#base,
+      updatedAt: new Date(now).toISOString(),
+      ...state,
+    };
+    return this.#enqueue(async () => {
+      await mkdir(path.dirname(this.#lastRunFile), { recursive: true });
+      await writeFile(this.#lastRunFile, `${JSON.stringify(doc, null, 2)}\n`, 'utf8');
+    });
+  }
+
+  async #enqueue(operation) {
+    this.#pendingWrite = this.#pendingWrite.then(operation, operation).catch(() => {});
+    await this.#pendingWrite;
+  }
+}
+
+export class FileSystemTelemetryAdapter extends TelemetryPort {
+  #relativeDir;
+
+  constructor(relativeDir = path.join('audit-reports', 'commit-reviews')) {
+    super();
+    this.#relativeDir = relativeDir;
+  }
+
+  forRun({ repoRoot, runId }) {
+    if (process.env.OMP_REVIEW_KIT_TELEMETRY === '0') {
+      return NULL_RUN_TELEMETRY;
+    }
+    const override = process.env.OMP_REVIEW_KIT_TELEMETRY_DIR;
+    const reportDir = override
+      ? (path.isAbsolute(override) ? override : path.join(repoRoot, override))
+      : path.join(repoRoot, this.#relativeDir);
+    return new RunTelemetry({
+      reportDir,
+      runId,
+      base: { repoRoot },
+    });
+  }
+}
+
 /**
  * ============================================================================
  * Public Facade / Composition Root
  * ============================================================================
  */
 
-export function createReviewWorkflowService({ git, omp, clock, logger, progress } = {}) {
+export function createReviewWorkflowService({ git, omp, ompOptions, clock, logger, progress, telemetry } = {}) {
   const gitPort = new SubprocessGitAdapter(git);
-  const reviewerPort = new OmpCliReviewerAdapter({ runner: omp, progress });
+  const reviewerPort = new OmpCliReviewerAdapter({ runner: omp, progress, ...ompOptions });
   const reportStorePort = new FileSystemReportStoreAdapter();
+  const snapshotStorePort = new FileSystemSnapshotAdapter();
+  const telemetryPort = telemetry ?? new FileSystemTelemetryAdapter();
 
   return new ReviewWorkflowService({
     gitPort,
     reviewerPort,
     reportStorePort,
+    snapshotStorePort,
+    telemetryPort,
     clock,
     logger,
   });
@@ -1526,16 +2119,20 @@ export async function runReview({
   cwd = process.cwd(),
   git,
   omp,
+  ompOptions,
   now = new Date(),
   logger,
   progress,
+  telemetry,
 } = {}) {
   const service = createReviewWorkflowService({
     git,
     omp,
+    ompOptions,
     clock: () => now,
     logger,
     progress,
+    telemetry,
   });
 
   const result = await service.execute({ cwd });

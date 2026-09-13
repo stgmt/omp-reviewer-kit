@@ -6,6 +6,7 @@ description: OMP Review Kit methodology for evidence-first code review and proje
 # Reality-first review
 
 Use this method for every staged change.
+The dispatcher provides an absolute staged snapshot directory. Read source files, tests, and fixtures from that snapshot only; use the repository working tree only for read-only Git metadata, caller discovery, and selected skill discovery. Treat the snapshot as the authoritative review input so unstaged worktree content cannot influence findings. The staged diff itself is materialized at `<snapshot>/.review/diff.patch` and the changed-file list at `<snapshot>/.review/changed-files.txt` — read them as files instead of running `git diff` or `git show` for review content.
 
 ## Review contract
 
@@ -22,6 +23,7 @@ Execution of review stages follows the `multi-stage-review` protocol: context di
 8. Check every caller and consumer at the boundary.
 9. Check the new success path, not only the new rejection path.
 10. Require a test that would fail without the change when behavior changed.
+For correctness review, inspect focused tests and record concrete test evidence. Missing tests or unnecessary code are not separate defect classes; report them only when a reachable P1/P2 correctness impact is proven, using the existing `correctness` or `security` envelope categories.
 
 ## The sixteen review rules
 
@@ -90,6 +92,8 @@ Every finding includes:
 Do not report guesses as defects. If evidence is missing, say `not proven` and keep it separate from blocking findings.
 
 ## Final result
+
+The report also contains `### Verified-OK`, listing paths, tests, caller checks, and invariants actually verified; it does not convert unresolved findings into approval.
 
 The `reviewer-kit` orchestrator synthesizes the verified findings from the multi-stage pipeline. A BLOCK must carry exactly one `review-rejection-envelope@1` between standalone `REVIEW_REJECTION_ENVELOPE_BEGIN` and `REVIEW_REJECTION_ENVELOPE_END` lines immediately before the verdict. Confirmed findings use only `correctness` or `security`; a stage failure uses the `execution_failure` code and a non-empty diagnostic message. PASS carries no envelope. The response finishes with exactly one machine-readable line:
 
