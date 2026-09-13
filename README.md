@@ -122,7 +122,7 @@ OMP_REVIEW_KIT_MODEL            # primary model selector (default: @smol)
 OMP_REVIEW_KIT_FALLBACK_MODELS  # comma-separated fallback list (default: @task)
 OMP_REVIEW_KIT_MAX_FALLBACKS    # max fallback attempts (default: 3)
 OMP_REVIEW_KIT_PROBE_TIMEOUT_MS # availability probe timeout (default: 60000)
-OMP_REVIEW_KIT_EFFORT           # override :effort suffix of resolved selectors (low|medium|high|max)
+OMP_REVIEW_KIT_EFFORT           # override :effort suffix of resolved selectors (default: low; low|medium|high|max)
 OMP_REVIEW_KIT_OMP              # path/name of the omp executable
 OMP_REVIEW_KIT_TELEMETRY=0      # disable run telemetry writes
 ```

@@ -18,13 +18,14 @@ The snapshot also contains `.review/diff.patch` (the complete staged diff) and `
 
 Before reviewing, ensure `skill://reality-first-review` and `skill://multi-stage-review` are loaded. Inspect the skills made available by OMP for the current project, and read only project or user skills relevant to the changed files and behavior. Use those skills as additional domain rules.
 
-The CLI invocation pins the active, slow, and smol model roles to the selected reviewer model, so fallback attempts reach the selected provider without task-level overrides. The native task schema has no `model` field. Every child task call must use only `name`, `agent`, and `task`, plus batch `context` and `tasks` where applicable; omit `model`, `outputSchema`, `schemaMode`, and `isolated` so each specialist owns its declared output schema.
+The CLI invocation pins the active and slow model roles to the selected reviewer model, so fallback attempts reach the selected provider without task-level overrides. The native task schema has no `model` field. Every child task call must use only `name`, `agent`, and `task`, plus batch `context` and `tasks` where applicable; omit `model`, `outputSchema`, `schemaMode`, and `isolated` so each specialist owns its declared output schema.
 
 You must orchestrate the review through these four mandatory stages strictly in order:
 
 1. **Stage 1: Context Scout**
    Spawn one blocking task with agent `review-context-scout` to discover the change goal, touched paths, relevant callers/consumers, invariants, and existing tests. Do not generate findings yet.
    The scout must read source content from the staged snapshot directory named in the dispatcher prompt — the diff from `<snapshot>/.review/diff.patch`, the changed-file list from `<snapshot>/.review/changed-files.txt` — while using the repository only for read-only Git metadata and project skill discovery. Its `test evidence` must name the focused tests for changed behavior.
+   Pass the changed paths from the dispatcher prompt to the scout in its task text so it does not re-derive them from the diff.
 
 2. **Stage 2: Parallel Risk Hunting**
    Spawn one batch `task` call containing two blocking tasks with agent `review-risk-hunter`, passing the scout's result as shared context:
@@ -32,6 +33,7 @@ You must orchestrate the review through these four mandatory stages strictly in 
    - Task 2: `lane: "security"` (attacker-controlled sources, dangerous sinks, missing/bypassed mitigations).
    Both lanes adhere to strict anti-noise rules (no style, formatting, comments, or ungrounded advice).
    In the correctness lane, explicitly inspect focused tests for changed behavior and YAGNI: only raise missing tests or unnecessary code when the resulting behavior has a concrete, reachable impact; do not create a new defect class for either concern.
+   Set the hunter tool-call budget adaptively from the scout output: if the scout found ≤5 changed paths and ≤3 relevant consumers, pass a budget of ~15; otherwise pass ~30. Include the budget in each hunter's task text.
 
 3. **Stage 3: Adversarial Verification**
    Spawn one blocking task with agent `review-finding-verifier`, passing the scout context and all candidates from both lanes. The verifier challenges each candidate against repository evidence and defenses to confirm or reject it.

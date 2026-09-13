@@ -90,8 +90,8 @@ function isSafeModelSelector(value) {
  * selector bound for spawn, so probes and attempts stay consistent.
  */
 function applyEffortOverride(selector) {
-  const effort = process.env.OMP_REVIEW_KIT_EFFORT;
-  if (!effort || typeof selector !== 'string') return selector;
+  const effort = process.env.OMP_REVIEW_KIT_EFFORT ?? 'low';
+  if (typeof selector !== 'string') return selector;
   const slash = selector.indexOf('/');
   const colon = selector.lastIndexOf(':');
   const base = colon > slash ? selector.slice(0, colon) : selector;
@@ -408,10 +408,10 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       }
       const isWindowsWrapper = /\.(cmd|bat)$/i.test(command);
       const modelRoleArgs = isWindowsWrapper
-        ? ['--slow', selectedModel, '--smol', selectedModel]
-        : [`--slow=${selectedModel}`, `--smol=${selectedModel}`];
+        ? ['--slow', selectedModel]
+        : [`--slow=${selectedModel}`];
       const commandArgs = ['-p', '--model', selectedModel, ...modelRoleArgs, ...(noTools ? ['--no-tools'] : ['--tools', 'task,read']), '--no-session'];
-      const dispatchPrompt = `${prompt}\nThe CLI already pins the active, slow, and smol model roles to ${selectedModel}. Use task calls without model, outputSchema, schemaMode, or isolated fields.`;
+      const dispatchPrompt = `${prompt}\nThe CLI already pins the active and slow model roles to ${selectedModel}. Use task calls without model, outputSchema, schemaMode, or isolated fields.`;
       const executable = isWindowsWrapper ? (process.env.ComSpec ?? 'cmd.exe') : command;
       const args = isWindowsWrapper
         ? ['/d', '/c', 'call', command, ...commandArgs]

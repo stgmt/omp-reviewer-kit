@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-13
+
+### Changed
+- **Default effort is now `low`**: `OMP_REVIEW_KIT_EFFORT` defaults to `low` instead of preserving the configured effort suffix. This halves thinking-block latency on gemini-flash (30–60s → ~15–30s per response). Set `OMP_REVIEW_KIT_EFFORT=high` or `=max` for complex diffs requiring deeper analysis.
+- **Scout receives changed paths in prompt**: `ReviewPrompt.forDiff` now inlines `diff.changedPaths` into the dispatcher prompt, and the orchestrator passes them to the scout's task text. The scout no longer reads `.review/changed-files.txt` separately when paths are provided — eliminating redundant inventory tool calls (~3–6 min → ~2 min scout stage).
+- **Adaptive hunter budget**: the orchestrator reads scout output and sets the hunter tool-call budget adaptively — ≤5 changed paths and ≤3 relevant consumers → ~15 calls, otherwise ~30. Hunters receive the budget in their task text instead of a fixed ~30.
+- **Scout decoupled from `--smol` pin**: the CLI no longer passes `--smol` to pin the smol role to the selected reviewer model. The scout (`model: "@smol"`) resolves to the user's configured `@smol` role (e.g. antigravity) independently of `OMP_REVIEW_KIT_MODEL`, so when the reviewer runs on `@task`→swe-2, the scout still rides the fast `@smol` model.
+
+### Fixed
+- `applyEffortOverride` now applies a default `low` effort even when `OMP_REVIEW_KIT_EFFORT` is unset, ensuring consistent effort across probes and attempts without requiring explicit configuration.
+
 ## [0.6.0] - 2026-09-13
 
 ### Added

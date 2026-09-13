@@ -119,7 +119,7 @@ export class ReviewWorkflowService {
 
       let execResult;
       try {
-        const prompt = ReviewPrompt.forDiff(diff, snapshotDir);
+        const prompt = ReviewPrompt.forDiff(diff, snapshotDir, diff.changedPaths);
         execResult = await this.#reviewerPort.executeReview({
           prompt,
           cwd: repoRoot,

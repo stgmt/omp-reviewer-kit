@@ -43,7 +43,7 @@ const manifest = JSON.parse(await readFile('package.json', 'utf8'));
 describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
   it('manifest and skills declare fixed reviewer identities', () => {
     assert.equal(manifest.name, 'omp-reviewer-kit');
-    assert.equal(manifest.version, '0.6.0');
+    assert.equal(manifest.version, '0.7.0');
     assert.match(realitySkill, /name: reality-first-review/);
     assert.match(multiStageSkill, /name: multi-stage-review/);
     assert.match(realitySkill, /staged snapshot.*working tree/i);
@@ -94,7 +94,7 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(reviewerKitAgent, /review-rejection-envelope@1/);
     assert.equal((reviewerKitAgent.match(/Stage [1-4]:/g) ?? []).length, 4);
     assert.equal((reviewerKitAgent.match(/agent `review-risk-hunter`/g) ?? []).length, 1);
-    assert.match(reviewerKitAgent, /CLI invocation pins the active, slow, and smol model roles/);
+    assert.match(reviewerKitAgent, /CLI invocation pins the active and slow model roles/);
     assert.match(reviewerKitAgent, /omit `model`, `outputSchema`, `schemaMode`, and `isolated`/);
     assert.match(reviewerKitAgent, /staged snapshot/i);
     assert.match(reviewerKitAgent, /test evidence/i);
