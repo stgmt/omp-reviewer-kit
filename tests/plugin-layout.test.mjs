@@ -39,15 +39,18 @@ const realitySkill = await readFile('skills/reality-first-review/SKILL.md', 'utf
 const multiStageSkill = await readFile('skills/multi-stage-review/SKILL.md', 'utf8');
 const rangeAuditorAgent = await readFile('agents/review-range-auditor.md', 'utf8');
 const rangeAuditSkill = await readFile('skills/range-audit/SKILL.md', 'utf8');
+const slopSkill = await readFile('skills/slop/SKILL.md', 'utf8');
 const hookTemplate = await readFile('templates/githooks/pre-commit', 'utf8');
 const manifest = JSON.parse(await readFile('package.json', 'utf8'));
 
 describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
   it('manifest and skills declare fixed reviewer identities', () => {
     assert.equal(manifest.name, 'omp-reviewer-kit');
-    assert.equal(manifest.version, '0.9.0');
+    assert.equal(manifest.version, '0.10.0');
     assert.match(realitySkill, /name: reality-first-review/);
     assert.match(multiStageSkill, /name: multi-stage-review/);
+    assert.match(rangeAuditSkill, /name: range-audit/);
+    assert.match(slopSkill, /name: slop/);
     assert.match(realitySkill, /staged snapshot.*working tree/i);
     assert.match(realitySkill, /Verified-OK/);
     assert.match(realitySkill, /Anti-neuroslop contract/);
@@ -219,5 +222,16 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(multiStageSkill, /triage/);
     assert.doesNotMatch(multiStageSkill, /lane: \"architecture\"/);
     assert.doesNotMatch(multiStageSkill, /platform_primitives/);
+  });
+
+  it('slop skill codifies the 2-in-1 adversarial audit doctrine with hook scoping guard', () => {
+    assert.match(slopSkill, /^name:\s*slop$/m);
+    assert.match(slopSkill, /Parasitic Architecture Audit/);
+    assert.match(slopSkill, /Spec Slop & Integrity Audit/);
+    assert.match(slopSkill, /Anti-Noise Gate/);
+    assert.match(slopSkill, /Reviewer Kit Hook Scoping Guard/);
+    assert.match(slopSkill, /REVIEW_RESULT=PASS/);
+    assert.match(slopSkill, /REVIEW_RESULT=BLOCK/);
+    assert.match(slopSkill, /VERDICT:\s*\[BLOCKED\s*\|\s*CLEAN\s*\|\s*ACCEPTABLE_WITH_NOTES\]/);
   });
 });

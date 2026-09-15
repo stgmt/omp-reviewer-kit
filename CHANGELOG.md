@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-09-15
+
+### Added
+- **`skill://slop` vendored doctrine**: adversarial architecture, code, and specification audit skill covering parasitic meta-infrastructure detection, spec slop and integrity review, a standalone `VERDICT` report format, and a hook scoping guard restricting the standalone `VERDICT` format to standalone audits (hook reviews keep the `REVIEW_RESULT` contract).
+
+### Fixed
+- **Rejection-envelope validator misclassified reviewer failure envelopes**: `scripts/run-review.mjs` required `failure.message` to equal the canned `FAILURE_MESSAGES` string, while the dispatcher contract (`src/domain/review-prompt.mjs`, `agents/reviewer-kit.md`) specifies a non-empty diagnostic. Reviewer-emitted `review_failure` envelopes with descriptive messages were normalized to `malformed_rejection_envelope`, hiding the real failure. The runner now accepts any non-empty message, matching `src/domain/review-rejection-envelope.mjs`.
+- **Verdict-marker line splitting tolerated fewer line terminators than the verdict regex**: `ReviewVerdict.fromOutput` accepts `REVIEW_RESULT=BLOCK` followed by a bare `\r` (or U+2028/U+2029), but the envelope evaluator split only on `\r?\n`, so a CR-terminated marker was never found and a valid envelope was reported as malformed. Both copies now split on `/\r\n|[\n\r\u2028\u2029]/`.
+- **Live E2E matrix environment**: isolated test profiles now relax `artifactSpillThreshold` and route the review through a session-persistent OMP wrapper (`OMP_REVIEW_KIT_OMP` shim stripping `--no-session`), so `agent://` handles for truncated task-result previews resolve instead of collapsing into fallback `review_failure` envelopes. The default evidence-wording regex also accepts equivalent failure-semantics phrasings (`true by construction`, `red_proof`, `cannot fail`, `vacuous`, `unexercised`, `no test coverage`, `not product`).
+
 ## [0.9.0] - 2026-09-15
 
 ### Added

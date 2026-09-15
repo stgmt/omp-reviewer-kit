@@ -778,7 +778,7 @@ function validateEnvelope(value, diffHash) {
       && value.findings.length === 0
       && hasExactKeys(value.failure, FAILURE_KEYS)
       && Object.hasOwn(FAILURE_MESSAGES, value.failure.code)
-      && value.failure.message === FAILURE_MESSAGES[value.failure.code];
+      && isNonEmptyString(value.failure.message);
   }
   return false;
 }
@@ -845,7 +845,7 @@ export class ReviewRejectionEnvelope {
       return blockWithFailure(rawOutput, diffHash, 'multiple_verdict_markers', verdict);
     }
 
-    const lines = rawOutput.split(/\r?\n/);
+    const lines = rawOutput.split(/\r\n|[\n\r\u2028\u2029]/);
     const beginIndexes = [];
     const endIndexes = [];
     for (let index = 0; index < lines.length; index += 1) {

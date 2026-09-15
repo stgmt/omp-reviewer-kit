@@ -30,6 +30,7 @@ const required = [
   'scripts/audit-range.mjs',
   'skills/range-audit/SKILL.md',
   'agents/review-range-auditor.md',
+  'skills/slop/SKILL.md',
 ];
 
 for (const file of required) {

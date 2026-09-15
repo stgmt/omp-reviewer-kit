@@ -129,6 +129,41 @@ test('rejects an unsupported rejection defect class', async () => {
   assert.equal(result.envelope.failure.code, 'malformed_rejection_envelope');
 });
 
+test('keeps the reviewer review_failure envelope when the verdict marker ends with a bare carriage return', async () => {
+  // Live incident (2026-09-15): the reviewer emitted a valid review_failure
+  // envelope on stdout while the REVIEW_RESULT=BLOCK marker arrived on stderr
+  // terminated by a bare '\r'. The verdict regex tolerates a trailing CR, but
+  // the envelope evaluator's exact-line marker lookup did not, so the run was
+  // normalized to malformed_rejection_envelope and the real failure reason was
+  // lost. The report trims raw output, hiding the CR in the audit trail.
+  const diffText = 'diff';
+  const diffHash = createHash('sha256').update(diffText).digest('hex');
+  const reviewerEnvelope = JSON.stringify({
+    schema: 'review-rejection-envelope@1',
+    kind: 'review_failure',
+    diff_hash: diffHash,
+    findings: [],
+    failure: {
+      code: 'execution_failure',
+      message: "reviewer-kit task completed but its report was truncated in the result preview and the full payload could not be read: agent://ReviewerKit, agent://ReviewerKit/report, and agent://ReviewerKit?q=.report all returned 'No artifacts directory found'; history://ReviewerKit confirmed the yield payload was also truncated.",
+    },
+  });
+  const { result } = await runFixture(diffText, {
+    status: 0,
+    stdout: [
+      'REVIEW_REJECTION_ENVELOPE_BEGIN',
+      reviewerEnvelope,
+      'REVIEW_REJECTION_ENVELOPE_END',
+    ].join('\n'),
+    stderr: 'REVIEW_RESULT=BLOCK\r',
+  });
+
+  assert.equal(result.exitCode, 1);
+  assert.equal(result.verdict, 'BLOCK');
+  assert.equal(result.envelope.kind, 'review_failure');
+  assert.equal(result.envelope.failure.code, 'execution_failure');
+});
+
 test('rejects a malformed result marker', async () => {
   const { result } = await runFixture('diff', {
     status: 0,
