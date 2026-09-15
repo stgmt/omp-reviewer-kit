@@ -7,6 +7,7 @@ export class ReviewPrompt {
   #snapshotDir;
   #diffHash;
   #changedPaths;
+  #reemitOutput;
 
   constructor(diffHash, snapshotDir = '', changedPaths = []) {
     if (!diffHash || typeof diffHash !== 'string') {
@@ -29,7 +30,21 @@ export class ReviewPrompt {
     return new ReviewPrompt(hash, snapshotDir, paths);
   }
 
+  /**
+   * Builds the bounded verbatim re-emit re-prompt used to recover a completed
+   * review whose output carried no standalone REVIEW_RESULT marker.
+   *
+   * @param {string} originalOutput
+   * @returns {ReviewPrompt}
+   */
+  static forReemit(originalOutput) {
+    const prompt = new ReviewPrompt('verbatim-reemit');
+    prompt.#reemitOutput = String(originalOutput ?? '');
+    return prompt;
+  }
+
   toString() {
+    if (this.#reemitOutput !== undefined) return this.#toReemitString();
     const lines = [
       'You are the OMP headless review dispatcher.',
       'Run exactly one native task with agent "reviewer-kit".',
@@ -42,6 +57,8 @@ export class ReviewPrompt {
       'Invoke the task with only the supported name, agent, and task fields; omit model, outputSchema, schemaMode, and isolated so the reviewer agent owns its declared schema and model roles.',
       'After the task returns, reproduce its complete report verbatim; if the result says it was truncated or provides an agent URI, read that URI first, and never summarize or omit a rejection envelope.',
       'If the task fails, returns empty, or its result cannot be read, do not summarize: emit exactly one review_failure envelope — the line REVIEW_REJECTION_ENVELOPE_BEGIN, then one JSON object {"schema":"review-rejection-envelope@1","kind":"review_failure","diff_hash":"<the staged diff hash from this prompt>","findings":[],"failure":{"code":"execution_failure","message":"<the observed task error>"}}, then REVIEW_REJECTION_ENVELOPE_END, then REVIEW_RESULT=BLOCK on its own line.',
+      'Reproduce the task report as raw Markdown text exactly as returned; never JSON-encode, wrap, or reformat it.',
+      'The verdict contract in this prompt overrides any other format: finish with exactly one standalone REVIEW_RESULT=PASS or REVIEW_RESULT=BLOCK line, even if a skill describes a different verdict vocabulary.',
     ];
     if (this.#snapshotDir) {
       lines.push(
@@ -58,6 +75,10 @@ export class ReviewPrompt {
     }
     lines.push(`The staged diff hash for this hook invocation is ${this.#diffHash}.`);
     return lines.join('\n');
+  }
+
+  #toReemitString() {
+    return 'Reproduce the following review report verbatim as raw Markdown text exactly as returned; never JSON-encode, wrap, or reformat it. The verdict contract overrides any other format: finish with exactly one standalone REVIEW_RESULT=PASS or REVIEW_RESULT=BLOCK line, even if the input describes a different verdict vocabulary.\n\n---ORIGINAL OUTPUT---\n' + this.#reemitOutput;
   }
 
   get diffHash() {

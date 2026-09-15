@@ -591,6 +591,7 @@ export class ReviewPrompt {
   #snapshotDir;
   #diffHash;
   #changedPaths;
+  #reemitOutput;
 
   constructor(diffHash, snapshotDir = '', changedPaths = []) {
     if (!diffHash || typeof diffHash !== 'string') {
@@ -613,7 +614,21 @@ export class ReviewPrompt {
     return new ReviewPrompt(hash, snapshotDir, paths);
   }
 
+  /**
+   * Builds the bounded verbatim re-emit re-prompt used to recover a completed
+   * review whose output carried no standalone REVIEW_RESULT marker.
+   *
+   * @param {string} originalOutput
+   * @returns {ReviewPrompt}
+   */
+  static forReemit(originalOutput) {
+    const prompt = new ReviewPrompt('verbatim-reemit');
+    prompt.#reemitOutput = String(originalOutput ?? '');
+    return prompt;
+  }
+
   toString() {
+    if (this.#reemitOutput !== undefined) return this.#toReemitString();
     const lines = [
       'You are the OMP headless review dispatcher.',
       'Run exactly one native task with agent "reviewer-kit".',
@@ -626,6 +641,8 @@ export class ReviewPrompt {
       'Invoke the task with only the supported name, agent, and task fields; omit model, outputSchema, schemaMode, and isolated so the reviewer agent owns its declared schema and model roles.',
       'After the task returns, reproduce its complete report verbatim; if the result says it was truncated or provides an agent URI, read that URI first, and never summarize or omit a rejection envelope.',
       'If the task fails, returns empty, or its result cannot be read, do not summarize: emit exactly one review_failure envelope — the line REVIEW_REJECTION_ENVELOPE_BEGIN, then one JSON object {"schema":"review-rejection-envelope@1","kind":"review_failure","diff_hash":"<the staged diff hash from this prompt>","findings":[],"failure":{"code":"execution_failure","message":"<the observed task error>"}}, then REVIEW_REJECTION_ENVELOPE_END, then REVIEW_RESULT=BLOCK on its own line.',
+      'Reproduce the task report as raw Markdown text exactly as returned; never JSON-encode, wrap, or reformat it.',
+      'The verdict contract in this prompt overrides any other format: finish with exactly one standalone REVIEW_RESULT=PASS or REVIEW_RESULT=BLOCK line, even if a skill describes a different verdict vocabulary.',
     ];
     if (this.#snapshotDir) {
       lines.push(
@@ -642,6 +659,10 @@ export class ReviewPrompt {
     }
     lines.push(`The staged diff hash for this hook invocation is ${this.#diffHash}.`);
     return lines.join('\n');
+  }
+
+  #toReemitString() {
+    return 'Reproduce the following review report verbatim as raw Markdown text exactly as returned; never JSON-encode, wrap, or reformat it. The verdict contract overrides any other format: finish with exactly one standalone REVIEW_RESULT=PASS or REVIEW_RESULT=BLOCK line, even if the input describes a different verdict vocabulary.\n\n---ORIGINAL OUTPUT---\n' + this.#reemitOutput;
   }
 
   get diffHash() {
@@ -916,6 +937,23 @@ export class ReviewerPort {
   executeReview(params) {
     throw new Error('ReviewerPort.executeReview must be implemented');
   }
+
+  /**
+   * Re-emits a completed review output verbatim through one bounded no-tools
+   * re-prompt on the same model. Recovery path for exit-0 reviews that
+   * produced output but no standalone REVIEW_RESULT marker.
+   *
+   * @param {{
+   *   prompt: import('../domain/review-prompt.mjs').ReviewPrompt|string,
+   *   cwd: string,
+   *   timeoutMs?: number,
+   *   telemetry?: { record: (type: string, payload?: object) => Promise<void>, updateLastRun: (state: object, opts?: { force?: boolean }) => Promise<void> },
+   * }} params
+   * @returns {Promise<{ status: number, stdout: string, stderr: string, pid?: number, attempts: object[] }>}
+   */
+  reemitVerbatim(params) {
+    throw new Error('ReviewerPort.reemitVerbatim must be implemented');
+  }
 }
 
 export class ReportStorePort {
@@ -937,6 +975,105 @@ export class TelemetryPort {
   forRun(context) {
     throw new Error('TelemetryPort.forRun must be implemented');
   }
+}
+
+/**
+ * Signal guard for review runs.
+ * Traps SIGINT / SIGTERM to record failure telemetry and update live state
+ * before forcing process termination.
+ */
+
+/**
+ * Creates an interruption signal handler that updates telemetry and exits.
+ *
+ * @param {{
+ *   telemetry?: { record?: (type: string, payload?: object) => Promise<void>, updateLastRun?: (state: object, opts?: { force?: boolean }) => Promise<void> },
+ *   runId?: string,
+ *   exit?: (code: number) => void,
+ *   timeoutMs?: number,
+ * }} [options]
+ * @returns {(signal: string) => Promise<void>}
+ */
+export function createSignalHandler({
+  telemetry,
+  runId,
+  exit = process.exit,
+  timeoutMs = 500,
+} = {}) {
+  return async function handler(signal) {
+    const error = `interrupted by signal ${signal}`;
+    const code = signal === 'SIGTERM' ? 143 : 130;
+
+    const telemetryWork = (async () => {
+      try {
+        await telemetry?.record?.('run_failed', { error });
+      } catch {
+        // Telemetry calls must never throw out of the handler
+      }
+      try {
+        await telemetry?.updateLastRun?.({
+          state: 'interrupted',
+          error,
+          runId,
+          finishedAt: new Date().toISOString(),
+          exitCode: 1,
+        }, { force: true });
+      } catch {
+        // Telemetry calls must never throw out of the handler
+      }
+    })();
+
+    let timer;
+    const timeoutPromise = new Promise((resolve) => {
+      timer = setTimeout(resolve, timeoutMs);
+      if (typeof timer?.unref === 'function') {
+        timer.unref();
+      }
+    });
+
+    try {
+      await Promise.race([telemetryWork, timeoutPromise]);
+    } catch {
+      // Guard against any race rejection
+    } finally {
+      clearTimeout(timer);
+    }
+
+    try {
+      exit(code);
+    } catch {
+      // Guard against injectable exit throwing
+    }
+  };
+}
+
+/**
+ * Installs one-shot SIGINT/SIGTERM handlers for a review run.
+ *
+ * @param {{
+ *   telemetry?: { record?: (type: string, payload?: object) => Promise<void>, updateLastRun?: (state: object, opts?: { force?: boolean }) => Promise<void> },
+ *   runId?: string,
+ *   exit?: (code: number) => void,
+ *   timeoutMs?: number,
+ * }} [options]
+ * @returns {() => void}
+ */
+export function installRunSignalGuard({
+  telemetry,
+  runId,
+  exit = process.exit,
+  timeoutMs = 500,
+} = {}) {
+  // Accepted E10 race: OS pid reuse can theoretically misattribute liveness — safety-neutral, verdict path untouched.
+  const handler = createSignalHandler({ telemetry, runId, exit, timeoutMs });
+
+  process.once('SIGINT', handler);
+  process.once('SIGTERM', handler);
+
+  return function uninstall() {
+    process.removeListener('SIGINT', handler);
+    process.removeListener('SIGTERM', handler);
+  };
 }
 
 /**
@@ -997,6 +1134,8 @@ export class ReviewWorkflowService {
       startedAt: new Date(startedAt).toISOString(),
     }, { force: true });
 
+    const uninstall = installRunSignalGuard({ telemetry, runId });
+
     try {
       await telemetry.record('run_started', {
         cwd,
@@ -1046,15 +1185,60 @@ export class ReviewWorkflowService {
         await this.#snapshotStorePort.remove(snapshotDir);
       }
 
-      const combinedOutput = execResult.combined ?? `${execResult.stdout ?? ''}\n${execResult.stderr ?? ''}`;
+      let combinedOutput = execResult.combined ?? `${execResult.stdout ?? ''}\n${execResult.stderr ?? ''}`;
       const modelsTried = execResult.modelsTried;
 
-      const { verdict, envelope } = ReviewRejectionEnvelope.evaluate({
+      let { verdict, envelope } = ReviewRejectionEnvelope.evaluate({
         output: combinedOutput,
         diffIdentity: diff,
         processStatus: execResult.status,
         processError: execResult.stderr,
       });
+
+      // Fail-closed verbatim re-emit recovery: when the reviewer exited cleanly
+      // and produced output but no standalone verdict marker, ask the same
+      // model once — with no tools and a bounded timeout — to reproduce its
+      // report verbatim under the verdict contract, then re-run the full
+      // envelope evaluation on the re-emitted output. A failed re-emit keeps
+      // the original verdict; exactly one re-emit is ever attempted.
+      if (
+        verdict.reason === 'missing_verdict_marker'
+        && execResult.status === 0
+        && combinedOutput.trim() !== ''
+        && process.env.OMP_REVIEW_KIT_REEMIT !== '0'
+      ) {
+        const reemitStartedAt = Date.now();
+        const originalBytes = Buffer.byteLength(combinedOutput);
+        const reemitResult = await this.#reviewerPort.reemitVerbatim({
+          prompt: ReviewPrompt.forReemit(combinedOutput),
+          cwd: repoRoot,
+          telemetry,
+        });
+        if (Array.isArray(reemitResult?.attempts)) {
+          execResult.attempts = [
+            ...(Array.isArray(execResult.attempts) ? execResult.attempts : []),
+            ...reemitResult.attempts,
+          ];
+        }
+        if (reemitResult?.status === 0) {
+          const reemittedOutput = reemitResult.combined ?? `${reemitResult.stdout ?? ''}\n${reemitResult.stderr ?? ''}`;
+          const reevaluated = ReviewRejectionEnvelope.evaluate({
+            output: reemittedOutput,
+            diffIdentity: diff,
+            processStatus: reemitResult.status,
+            processError: reemitResult.stderr,
+          });
+          verdict = reevaluated.verdict;
+          envelope = reevaluated.envelope;
+          combinedOutput = reemittedOutput;
+        }
+        await telemetry.record('reemit_recovery', {
+          originalBytes,
+          recovered: verdict.reason !== 'missing_verdict_marker',
+          reemitStatus: reemitResult?.status ?? null,
+          durationMs: Date.now() - reemitStartedAt,
+        });
+      }
 
       await telemetry.record('verdict_evaluated', {
         verdict: verdict.value,
@@ -1137,6 +1321,8 @@ export class ReviewWorkflowService {
         durationMs: Date.now() - startedAt,
       }, { force: true });
       throw error;
+    } finally {
+      uninstall?.();
     }
   }
 }
@@ -1248,6 +1434,23 @@ export function writeReviewProgress(event) {
 }
 
 /**
+ * Sanitizes stderr from reviewer execution:
+ * (a) removes every line matching /^\s*Working\.\.\.\s*$/i (OMP print-mode progress noise),
+ * (b) normalizes CRLF to LF.
+ *
+ * @param {string} stderr
+ * @returns {string}
+ */
+export function sanitizeReviewerOutput(stderr) {
+  if (typeof stderr !== 'string' || stderr === '') return '';
+  return stderr
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .filter((line) => !/^\s*Working\.\.\.\s*$/i.test(line))
+    .join('\n');
+}
+
+/**
  * Static heuristic proving a review attempt failed because the model provider
  * refused the request (quota, rate limit, auth, or capacity), rather than
  * because the review itself produced a verdict or timed out.
@@ -1271,7 +1474,7 @@ export function isModelProviderFailure(result) {
   // A provider-side refusal can be wrapped in a synthetic BLOCK marker by
   // the orchestrator when dispatch fails. Detect it before treating BLOCK as
   // a completed review.
-  if (/^REVIEW_RESULT=(?:PASS|BLOCK)$/m.test(combined)) return false;
+  if (ReviewVerdict.fromOutput(combined).reason !== 'missing_verdict_marker') return false;
 
   const providerFailure = /(quota|rate ?limit|RESOURCE_EXHAUSTED|insufficient[ _-]?(?:quota|capacity|credits|balance)|model (not )?(found|available|supported)|model [^\n]{0,80}(not found|unavailable|unsupported)|no endpoints found|provider (error|unavailable)|invalid api[-_ ]?key|set an api key environment variable|upgrade your subscription|(?:status(?: code)?|error code|response code)\s*[:=]?\s*(?:401|403|429)\b[^\n]{0,30}\b(?:Unauthorized|Forbidden|Too Many Requests)\b|\b(?:401|403|429)\s*(?:Unauthorized|Forbidden|Too Many Requests)\b|(?:^|\n)\s*(?:(?:(?:error|failure|failed)\s*:?\s*)?HTTP\s+(?:401|403|429)\b|status(?: code)?\s*[:=]?\s*(?:401|403|429)\b|(?:error|response) code\s*[:=]?\s*(?:401|403|429)\b))/i.test(combined);
   if (providerFailure) return true;
@@ -1374,6 +1577,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
   #progress;
   #roleResolver;
   #rolesCache;
+  #lastReviewModel;
 
   /**
    * @param {{
@@ -1407,6 +1611,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
     this.#progress = progress ?? (() => {});
     this.#roleResolver = roleResolver ?? OmpCliReviewerAdapter.defaultRoleResolver;
     this.#rolesCache = null;
+    this.#lastReviewModel = null;
   }
 
   #emitProgress(event) {
@@ -1458,6 +1663,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       return { status: 1, stdout: '', stderr: record.error };
     }
     if (resolvedModel !== model) record.resolvedModel = resolvedModel;
+    this.#lastReviewModel = model;
     let responseObserved = false;
     let workingSignalObserved = false;
     const emitRunning = () => {
@@ -1851,7 +2057,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
 
     const stdout = result.stdout ?? '';
     const stderr = result.stderr ?? '';
-    const combined = `${stdout}\n${stderr}`;
+    const combined = `${stdout}\n${sanitizeReviewerOutput(stderr)}`;
 
     return {
       status: result.status ?? 1,
@@ -1862,6 +2068,73 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       attempts,
       probes,
     };
+  }
+
+  /**
+   * Runs exactly one bounded no-tools re-prompt asking the same model to
+   * reproduce its previous output verbatim under the verdict contract.
+   * Reuses the single-shot runner path and the probe-timeout budget; never
+   * probes the catalog and never falls back to another model.
+   *
+   * @param {{
+   *   prompt: import('../domain/review-prompt.mjs').ReviewPrompt|string,
+   *   cwd: string,
+   *   timeoutMs?: number,
+   *   telemetry?: { record: (type: string, payload?: object) => Promise<void>, updateLastRun: (state: object, opts?: { force?: boolean }) => Promise<void> },
+   * }} params
+   * @returns {Promise<{ status: number, stdout: string, stderr: string, pid?: number, attempts: object[] }>}
+   */
+  async reemitVerbatim({ prompt, cwd, timeoutMs, telemetry = NULL_RUN_TELEMETRY }) {
+    telemetry = safeRunTelemetry(telemetry);
+    const promptText = typeof prompt === 'string' ? prompt : prompt.toString();
+    const model = this.#lastReviewModel ?? this.#primaryModel;
+    const timeout = configuredInteger(timeoutMs, this.#probeTimeoutMs, 1);
+    const startedAt = Date.now();
+    const record = { model, kind: 'reemit', startedAt: new Date(startedAt).toISOString() };
+    const attempts = [record];
+    let resolvedModel;
+    try {
+      resolvedModel = await this.#resolveSelector(cwd, model, telemetry);
+    } catch (error) {
+      record.status = 1;
+      record.durationMs = Date.now() - startedAt;
+      record.stderrBytes = 0;
+      record.error = error?.message ?? String(error);
+      await telemetry.record('reemit_finished', { ...record });
+      return { status: 1, stdout: '', stderr: record.error, attempts };
+    }
+    if (resolvedModel !== model) record.resolvedModel = resolvedModel;
+    await telemetry.record('reemit_started', { ...record });
+    void telemetry.updateLastRun({ state: 'reemitting', model });
+    try {
+      const result = await this.#runner(promptText, cwd, timeout, resolvedModel, {
+        noTools: true,
+        onSpawn: (pid) => {
+          record.pid = pid;
+          void telemetry.updateLastRun({ state: 'reemitting', model, pid });
+        },
+      });
+      record.pid = record.pid ?? result?.pid;
+      record.status = result?.status;
+      record.durationMs = Date.now() - startedAt;
+      record.stdoutBytes = typeof result?.stdout === 'string' ? Buffer.byteLength(result.stdout) : 0;
+      record.stderrBytes = typeof result?.stderr === 'string' ? Buffer.byteLength(result.stderr) : 0;
+      await telemetry.record('reemit_finished', { ...record });
+      return {
+        status: result?.status ?? 1,
+        stdout: result?.stdout ?? '',
+        stderr: result?.stderr ?? '',
+        pid: record.pid,
+        attempts,
+      };
+    } catch (error) {
+      record.status = 1;
+      record.durationMs = Date.now() - startedAt;
+      record.stderrBytes = 0;
+      record.error = error?.message ?? String(error);
+      await telemetry.record('reemit_finished', { ...record });
+      return { status: 1, stdout: '', stderr: record.error, pid: record.pid, attempts };
+    }
   }
 }
 

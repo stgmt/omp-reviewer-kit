@@ -79,7 +79,7 @@ Once installed, manage the review hook directly inside your OMP session without 
 - `/reviewer-kit:status` — Displays current hook configuration, runner integrity, and the latest review verdict.
 - `/reviewer-kit:doctor` — Runs environment and toolchain health checks (Node.js, Git, OMP CLI, hook permissions).
 
-The plugin also observes `session_start` and updates the OMP status bar indicator (`reviewer-kit: active` or `reviewer-kit: unconfigured`).
+The plugin also observes `session_start`: opening any Git repository in OMP auto-installs the review hook in the background (manual `/reviewer-kit:setup` remains as fallback), and updates the OMP status bar indicator (`reviewer-kit: active` or `reviewer-kit: unconfigured`).
 
 ## Standalone / CI Installation (Fallback)
 

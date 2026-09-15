@@ -5,7 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.8.0] - 2026-09-15
+
+### Added
+- **Verbatim re-emit recovery on missing marker**: when the reviewer output ends without a verdict marker, the adapter issues one bounded no-tools re-prompt asking the model to re-emit its previous answer verbatim, then re-evaluates the full envelope on the recovered output. `OMP_REVIEW_KIT_REEMIT=0` disables the recovery pass.
+- **Run signal guard**: `RunSignalGuard` (`src/infra/run-signal-guard.mjs`) records `run_failed`/`interrupted` telemetry when the review process is terminated by a signal, so interrupted runs no longer vanish silently from `runs.jsonl`/`last-run.json`.
+- **Stale-reviewing liveness reconcile in status**: `/reviewer-kit:status` reconciles a persisted `reviewing` state against the live child PID and reports it as stale when the recorded process is gone.
+- **Dispatcher prompt hardening**: the dispatcher prompt now explicitly forbids wrapping the verdict in JSON and states that the verdict contract takes precedence over conflicting output instructions.
+
+### Fixed
+- **stderr `Working...` progress noise**: spinner/progress lines emitted on stderr are stripped from combined output and from stored audit reports instead of leaking into parsed review text.
+- **CRLF normalization**: reviewer output is normalized to LF before marker/envelope parsing so Windows line endings no longer corrupt verdict detection.
 
 ## [0.7.1] - 2026-09-13
 

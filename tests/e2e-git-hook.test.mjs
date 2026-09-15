@@ -80,12 +80,24 @@ function rejectionOutputForHash(diffHash, { kind = 'confirmed_findings', filePat
 
 const MOCK_ROLES_JSON = '{"key":"modelRoles","value":{"smol":"acme/smol-flash:high","task":"acme/task-fast:high","slow":"acme/slow-max:max"}}';
 
-async function writeMockReviewer(scriptPath, output) {
-  const lines = output.trimEnd().split('\n');
+async function writeMockReviewer(scriptPath, output, reemitOutput = output) {
+  const handlerPath = path.join(path.dirname(scriptPath), `${path.basename(scriptPath, path.extname(scriptPath))}-handler.mjs`);
+  const handlerCode = `import process from 'node:process';
+const args = process.argv.slice(2);
+if (args[0] === 'config') {
+  process.stdout.write(${JSON.stringify(MOCK_ROLES_JSON)} + '\\n');
+  process.exit(0);
+}
+const isReemit = args.includes('--no-tools');
+const out = isReemit ? ${JSON.stringify(reemitOutput)} : ${JSON.stringify(output)};
+process.stdout.write(out.endsWith('\\n') ? out : out + '\\n');
+process.exit(0);
+`;
+  await writeFile(handlerPath, handlerCode, 'utf8');
   if (isWindows) {
-    await writeFile(scriptPath, '@echo off\r\nif "%1"=="config" goto roles\r\n' + lines.map((line) => `echo ${line}`).join('\r\n') + '\r\nexit /b 0\r\n:roles\r\necho ' + MOCK_ROLES_JSON + '\r\nexit /b 0\r\n', 'utf8');
+    await writeFile(scriptPath, `@echo off\r\nnode "%~dp0${path.basename(handlerPath)}" %*\r\nexit /b %ERRORLEVEL%\r\n`, 'utf8');
   } else {
-    await writeFile(scriptPath, '#!/bin/sh\nif [ "$1" = "config" ]; then printf "%s\\n" \'' + MOCK_ROLES_JSON + '\'; exit 0; fi\n' + lines.map((line) => `printf \"%s\\n\" '${line}'`).join('\n') + '\nexit 0\n', 'utf8');
+    await writeFile(scriptPath, `#!/bin/sh\nnode "$(dirname "$0")/${path.basename(handlerPath)}" "$@"\n`, 'utf8');
     await chmod(scriptPath, 0o755);
   }
 }
@@ -359,5 +371,73 @@ describe('Feature: Real Git Pre-commit Hook E2E Integration', () => {
     assert.equal(res.status, 0, `git commit --no-verify should succeed: ${res.stderr}`);
     const logRes = git(['log', '-1', '--oneline']);
     assert.match(logRes.stdout, /Bypass commit/);
+  });
+
+  it('recovers cleanly via verbatim re-emit when fake omp returns JSON-wrapped PASS', async () => {
+    const { repoDir, git } = fixture;
+    const mockOmpScript = path.join(repoDir, isWindows ? 'mock-reemit-pass.cmd' : 'mock-reemit-pass.sh');
+
+    const reportText = '### Review coverage\n- Diff Hash: clean\n\n### Confirmed findings\nNone.\n\n### Verdict\nPASS';
+    const wrappedPass = JSON.stringify({ verdict: 'PASS', report: reportText });
+    const reemittedPass = `${reportText}\n\nREVIEW_RESULT=PASS\n`;
+
+    await writeMockReviewer(mockOmpScript, wrappedPass, reemittedPass);
+
+    await writeFile(path.join(repoDir, 'reemit-pass.txt'), 'clean content\n', 'utf8');
+    let res = git(['add', 'reemit-pass.txt']);
+    assert.equal(res.status, 0);
+
+    res = git(['commit', '-m', 'Commit recovered via re-emit'], {
+      env: {
+        ...process.env,
+        OMP_REVIEW_KIT_OMP: mockOmpScript,
+      },
+    });
+
+    assert.equal(res.status, 0, `git commit should succeed via re-emit: ${res.stderr}`);
+    const output = res.stdout + res.stderr;
+    assert.match(output, /reviewer-kit PASS/);
+    const passMatches = [...output.matchAll(/^reviewer-kit PASS: (.+)$/gm)];
+    assert.equal(passMatches.length, 1, 'PASS must emit exactly one report pointer');
+    const reportPath = passMatches[0][1].trim();
+    const reportContent = await readFile(reportPath, 'utf8');
+    assert.match(reportContent, /- result: PASS/);
+    assert.match(reportContent, /REVIEW_RESULT=PASS/);
+
+    const logRes = git(['log', '-1', '--oneline']);
+    assert.equal(logRes.status, 0);
+    assert.match(logRes.stdout, /Commit recovered via re-emit/);
+  });
+
+  it('strictly blocks when fake omp returns bare verdict JSON on both review and re-emit', async () => {
+    const { repoDir, git } = fixture;
+    const mockOmpScript = path.join(repoDir, isWindows ? 'mock-bare-verdict.cmd' : 'mock-bare-verdict.sh');
+
+    const bareVerdict = '{"verdict":"PASS"}\n';
+    await writeMockReviewer(mockOmpScript, bareVerdict, bareVerdict);
+
+    await writeFile(path.join(repoDir, 'bare-verdict.txt'), 'content\n', 'utf8');
+    let res = git(['add', 'bare-verdict.txt']);
+    assert.equal(res.status, 0);
+
+    res = git(['commit', '-m', 'Commit with bare verdict'], {
+      env: {
+        ...process.env,
+        OMP_REVIEW_KIT_OMP: mockOmpScript,
+      },
+    });
+
+    assert.notEqual(res.status, 0, 'git commit must fail when reviewer-kit returns BLOCK');
+    const output = res.stdout + res.stderr;
+    assert.match(output, /reviewer-kit BLOCK/);
+    const reportPath = rejectionReportPath(output);
+    const reportContent = await readFile(reportPath, 'utf8');
+    assert.match(reportContent, /- result: BLOCK/);
+    assert.match(reportContent, /missing_verdict_marker/);
+
+    const logRes = git(['log', '-1', '--oneline']);
+    assert.doesNotMatch(logRes.stdout, /Commit with bare verdict/);
+    const statusRes = git(['status', '--porcelain']);
+    assert.match(statusRes.stdout, /A  bare-verdict.txt/);
   });
 });

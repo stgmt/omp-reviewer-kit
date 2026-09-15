@@ -9,6 +9,7 @@ import {
   formatReviewProgress,
   isModelProviderFailure,
   parseReviewProgress,
+  sanitizeReviewerOutput,
 } from '../src/infra/omp-cli-reviewer-adapter.mjs';
 
 const prompt = 'review this staged change';
@@ -858,4 +859,86 @@ test('without OMP_REVIEW_KIT_EFFORT resolved selectors default to low effort', a
     if (previous === undefined) delete process.env.OMP_REVIEW_KIT_EFFORT;
     else process.env.OMP_REVIEW_KIT_EFFORT = previous;
   }
+});
+
+test('sanitizeReviewerOutput removes Working... lines and normalizes CRLF to LF', () => {
+  // Given
+  const noise = 'Working...\n';
+  const crlfNoise = '  working...  \r\n';
+  const mixed = 'Review starting\r\nWorking...\r\nWarnings detected\r\n';
+
+  // When
+  const cleanNoise = sanitizeReviewerOutput(noise);
+  const cleanCrlf = sanitizeReviewerOutput(crlfNoise);
+  const cleanMixed = sanitizeReviewerOutput(mixed);
+
+  // Then
+  assert.equal(cleanNoise, '');
+  assert.equal(cleanCrlf, '');
+  assert.equal(cleanMixed, 'Review starting\nWarnings detected\n');
+  assert.equal(sanitizeReviewerOutput(''), '');
+  assert.equal(sanitizeReviewerOutput(null), '');
+});
+
+test('S6: stderr "Working...\\n" + clean stdout with standalone marker => combined has marker and no "Working"', async () => {
+  // Given
+  const adapter = new OmpCliReviewerAdapter({
+    roleResolver: testRoleResolver,
+    runner: async () => result(0, '### Review coverage\nAll tests passed.\nREVIEW_RESULT=PASS\n', 'Working...\n'),
+  });
+
+  // When
+  const review = await adapter.executeReview({ prompt, cwd });
+
+  // Then
+  assert.equal(review.status, 0);
+  assert.ok(review.combined.includes('REVIEW_RESULT=PASS\n'));
+  assert.ok(!review.combined.includes('Working...'));
+});
+
+test('E3: stderr/stdout with CRLF REVIEW_RESULT=PASS\\r\\n => combined contains clean REVIEW_RESULT=PASS\\n line', async () => {
+  // Given
+  const adapter = new OmpCliReviewerAdapter({
+    roleResolver: testRoleResolver,
+    runner: async () => result(0, '', 'REVIEW_RESULT=PASS\r\n'),
+  });
+
+  // When
+  const review = await adapter.executeReview({ prompt, cwd });
+
+  // Then
+  assert.equal(review.status, 0);
+  assert.ok(review.combined.includes('REVIEW_RESULT=PASS\n'));
+  assert.ok(!review.combined.includes('REVIEW_RESULT=PASS\r\n'));
+});
+
+test('E9: literal "Working..." line inside STDOUT report body => preserved byte-for-byte', async () => {
+  // Given
+  const stdoutBody = '### Review coverage\nWorking...\nAll tests passed.\nREVIEW_RESULT=PASS\n';
+  const adapter = new OmpCliReviewerAdapter({
+    roleResolver: testRoleResolver,
+    runner: async () => result(0, stdoutBody, 'Working...\n'),
+  });
+
+  // When
+  const review = await adapter.executeReview({ prompt, cwd });
+
+  // Then
+  assert.equal(review.status, 0);
+  assert.equal(review.stdout, stdoutBody);
+  assert.ok(review.combined.includes(stdoutBody));
+});
+
+test('isModelProviderFailure delegates marker detection to ReviewVerdict invariant', () => {
+  // Given
+  const passResult = result(1, 'REVIEW_RESULT=PASS\n', '');
+  const blockResult = result(1, 'REVIEW_RESULT=BLOCK\n', 'provider quota exceeded');
+  const multipleResult = result(1, 'REVIEW_RESULT=PASS\nREVIEW_RESULT=BLOCK\n', '');
+  const missingResult = result(1, '', '429 quota exceeded');
+
+  // When / Then
+  assert.equal(isModelProviderFailure(passResult), false);
+  assert.equal(isModelProviderFailure(blockResult), false);
+  assert.equal(isModelProviderFailure(multipleResult), false);
+  assert.equal(isModelProviderFailure(missingResult), true);
 });

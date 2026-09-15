@@ -12,7 +12,7 @@ export { PluginInstallerService } from './application/installer-service.mjs';
 
 export { SubprocessGitAdapter } from './infra/subprocess-git-adapter.mjs';
 export { FileSystemSnapshotAdapter } from './infra/filesystem-snapshot-adapter.mjs';
-export { OmpCliReviewerAdapter } from './infra/omp-cli-reviewer-adapter.mjs';
+export { OmpCliReviewerAdapter, sanitizeReviewerOutput } from './infra/omp-cli-reviewer-adapter.mjs';
 export { FileSystemReportStoreAdapter } from './infra/filesystem-report-store-adapter.mjs';
 export {
   FileSystemTelemetryAdapter,

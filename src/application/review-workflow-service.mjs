@@ -4,6 +4,7 @@ import { ReviewReport } from '../domain/review-report.mjs';
 import { ReviewExecutionResult } from '../domain/review-execution-result.mjs';
 import { GitPort, ReviewerPort, ReportStorePort, SnapshotStorePort, TelemetryPort } from './ports.mjs';
 import { FileSystemTelemetryAdapter, NULL_RUN_TELEMETRY, safeRunTelemetry } from '../infra/filesystem-telemetry-adapter.mjs';
+import { installRunSignalGuard } from '../infra/run-signal-guard.mjs';
 
 /**
  * Application Orchestrator Service implementing the staged code review lifecycle use case.
@@ -73,6 +74,7 @@ export class ReviewWorkflowService {
     } catch {
       telemetry = NULL_RUN_TELEMETRY;
     }
+    const uninstall = installRunSignalGuard({ telemetry, runId });
     await telemetry.updateLastRun({
       state: 'started',
       runId,
@@ -129,15 +131,60 @@ export class ReviewWorkflowService {
         await this.#snapshotStorePort.remove(snapshotDir);
       }
 
-      const combinedOutput = execResult.combined ?? `${execResult.stdout ?? ''}\n${execResult.stderr ?? ''}`;
+      let combinedOutput = execResult.combined ?? `${execResult.stdout ?? ''}\n${execResult.stderr ?? ''}`;
       const modelsTried = execResult.modelsTried;
 
-      const { verdict, envelope } = ReviewRejectionEnvelope.evaluate({
+      let { verdict, envelope } = ReviewRejectionEnvelope.evaluate({
         output: combinedOutput,
         diffIdentity: diff,
         processStatus: execResult.status,
         processError: execResult.stderr,
       });
+
+      // Fail-closed verbatim re-emit recovery: when the reviewer exited cleanly
+      // and produced output but no standalone verdict marker, ask the same
+      // model once — with no tools and a bounded timeout — to reproduce its
+      // report verbatim under the verdict contract, then re-run the full
+      // envelope evaluation on the re-emitted output. A failed re-emit keeps
+      // the original verdict; exactly one re-emit is ever attempted.
+      if (
+        verdict.reason === 'missing_verdict_marker'
+        && execResult.status === 0
+        && combinedOutput.trim() !== ''
+        && process.env.OMP_REVIEW_KIT_REEMIT !== '0'
+      ) {
+        const reemitStartedAt = Date.now();
+        const originalBytes = Buffer.byteLength(combinedOutput);
+        const reemitResult = await this.#reviewerPort.reemitVerbatim({
+          prompt: ReviewPrompt.forReemit(combinedOutput),
+          cwd: repoRoot,
+          telemetry,
+        });
+        if (Array.isArray(reemitResult?.attempts)) {
+          execResult.attempts = [
+            ...(Array.isArray(execResult.attempts) ? execResult.attempts : []),
+            ...reemitResult.attempts,
+          ];
+        }
+        if (reemitResult?.status === 0) {
+          const reemittedOutput = reemitResult.combined ?? `${reemitResult.stdout ?? ''}\n${reemitResult.stderr ?? ''}`;
+          const reevaluated = ReviewRejectionEnvelope.evaluate({
+            output: reemittedOutput,
+            diffIdentity: diff,
+            processStatus: reemitResult.status,
+            processError: reemitResult.stderr,
+          });
+          verdict = reevaluated.verdict;
+          envelope = reevaluated.envelope;
+          combinedOutput = reemittedOutput;
+        }
+        await telemetry.record('reemit_recovery', {
+          originalBytes,
+          recovered: verdict.reason !== 'missing_verdict_marker',
+          reemitStatus: reemitResult?.status ?? null,
+          durationMs: Date.now() - reemitStartedAt,
+        });
+      }
 
       await telemetry.record('verdict_evaluated', {
         verdict: verdict.value,
@@ -220,6 +267,8 @@ export class ReviewWorkflowService {
         durationMs: Date.now() - startedAt,
       }, { force: true });
       throw error;
+    } finally {
+      uninstall?.();
     }
   }
 }

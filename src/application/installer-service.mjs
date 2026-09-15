@@ -219,15 +219,81 @@ function writeFileAtomicallyOnWindows(directoryPath, destinationPath, content) {
     throw new Error('Atomic Windows file replacement failed: ' + destinationPath);
   }
 }
+/**
+ * Checks whether a process is alive, dead, or unknown via a signal 0 probe.
+ *
+ * @param {number} pid
+ * @param {((pid: number, signal: number) => void)} [killFn]
+ * @returns {'alive'|'dead'|'unknown'}
+ */
+export function checkProcessLiveness(pid, killFn = process.kill) {
+  if (!Number.isInteger(pid)) {
+    return 'unknown';
+  }
+  try {
+    killFn(pid, 0);
+    return 'alive';
+  } catch (err) {
+    if (err?.code === 'ESRCH') {
+      return 'dead';
+    }
+    if (err?.code === 'EPERM') {
+      return 'alive';
+    }
+    return 'unknown';
+  }
+}
+
+/**
+ * Reconciles a persisted last-run object against live process state.
+ * When the state is 'reviewing', checks whether the recorded process is alive.
+ *
+ * @param {object|undefined} lastRun
+ * @param {((pid: number, signal: number) => void)} [killFn]
+ * @returns {object|undefined}
+ */
+export function reconcileLastRun(lastRun, killFn = process.kill) {
+  if (!lastRun || typeof lastRun !== 'object') {
+    return lastRun;
+  }
+  if (lastRun.state === 'reviewing') {
+    if (Number.isInteger(lastRun.pid)) {
+      const liveness = checkProcessLiveness(lastRun.pid, killFn);
+      if (liveness === 'dead') {
+        const detail = 'review process gone; no finish event recorded';
+        return {
+          ...lastRun,
+          state: 'interrupted',
+          error: lastRun.error ?? detail,
+          message: lastRun.message ?? detail,
+        };
+      }
+      if (liveness === 'unknown') {
+        return {
+          ...lastRun,
+          state: 'unknown',
+        };
+      }
+      return lastRun;
+    }
+    return {
+      ...lastRun,
+      state: 'unknown',
+    };
+  }
+  return lastRun;
+}
 
 /**
  * Domain & Application service managing the installation and diagnostics of the Git review hook.
  */
 export class PluginInstallerService {
   #pluginRoot;
+  #killFn;
 
-  constructor({ pluginRoot = PLUGIN_ROOT } = {}) {
+  constructor({ pluginRoot = PLUGIN_ROOT, killFn = process.kill } = {}) {
     this.#pluginRoot = pluginRoot;
+    this.#killFn = killFn;
   }
 
   /**
@@ -706,7 +772,7 @@ export class PluginInstallerService {
       const raw = await readFile(path.join(reportsDir, 'last-run.json'), 'utf8');
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        lastRun = {
+        lastRun = reconcileLastRun({
           runId: parsed.runId,
           state: parsed.state,
           verdict: parsed.verdict,
@@ -719,7 +785,7 @@ export class PluginInstallerService {
           startedAt: parsed.startedAt,
           reportPath: parsed.reportPath,
           error: typeof parsed.error === 'string' ? parsed.error : undefined,
-        };
+        }, this.#killFn);
       }
     } catch {
       // No live-state file yet

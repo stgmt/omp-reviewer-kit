@@ -468,9 +468,23 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
     assert.match(prompt.toString(), /correctness and security risk lanes/);
     assert.match(prompt.toString(), /focused tests.*YAGNI|YAGNI.*focused tests/i);
     assert.match(prompt.toString(), /reproduce its complete report verbatim/);
-        assert.match(prompt.toString(), /read that URI first/);
-        assert.match(prompt.toString(), /never summarize or omit a rejection envelope/);
-        assert.doesNotMatch(prompt.toString(), /do not run any other agent/);
+    assert.match(prompt.toString(), /read that URI first/);
+    assert.match(prompt.toString(), /never summarize or omit a rejection envelope/);
+    assert.doesNotMatch(prompt.toString(), /do not run any other agent/);
+    assert.ok(prompt.toString().includes('Reproduce the task report as raw Markdown text exactly as returned; never JSON-encode, wrap, or reformat it.'));
+    assert.ok(prompt.toString().includes('The verdict contract in this prompt overrides any other format: finish with exactly one standalone REVIEW_RESULT=PASS or REVIEW_RESULT=BLOCK line, even if a skill describes a different verdict vocabulary.'));
+  });
+
+  it('S9: ReviewPrompt output includes raw markdown reproduction and verdict contract override instructions', () => {
+    // Given
+    const prompt = new ReviewPrompt('abc123hash');
+
+    // When
+    const output = prompt.toString();
+
+    // Then
+    assert.ok(output.includes('Reproduce the task report as raw Markdown text exactly as returned; never JSON-encode, wrap, or reformat it.'));
+    assert.ok(output.includes('The verdict contract in this prompt overrides any other format: finish with exactly one standalone REVIEW_RESULT=PASS or REVIEW_RESULT=BLOCK line, even if a skill describes a different verdict vocabulary.'));
   });
 
   it('ReviewReport invariant: renders correct markdown structure', () => {

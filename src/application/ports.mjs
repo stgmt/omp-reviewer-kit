@@ -90,6 +90,23 @@ export class ReviewerPort {
   executeReview(params) {
     throw new Error('ReviewerPort.executeReview must be implemented');
   }
+
+  /**
+   * Re-emits a completed review output verbatim through one bounded no-tools
+   * re-prompt on the same model. Recovery path for exit-0 reviews that
+   * produced output but no standalone REVIEW_RESULT marker.
+   *
+   * @param {{
+   *   prompt: ReviewPrompt|string,
+   *   cwd: string,
+   *   timeoutMs?: number,
+   *   telemetry?: object,
+   * }} params
+   * @returns {Promise<{ status: number, stdout: string, stderr: string, pid?: number, attempts?: object[] }>}
+   */
+  reemitVerbatim(params) {
+    throw new Error('ReviewerPort.reemitVerbatim must be implemented');
+  }
 }
 
 /**

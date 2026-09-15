@@ -77,3 +77,5 @@ when zero confirmed findings remain, or:
 REVIEW_RESULT=BLOCK
 ```
 when at least one confirmed P1 or P2 finding exists, or if any mandatory stage fails, times out, or produces invalid output.
+
+Reproduce the task report as raw Markdown text exactly as returned; never JSON-encode, wrap, or reformat it. The verdict contract in this prompt overrides any other format: finish with exactly one standalone `REVIEW_RESULT=PASS` or `REVIEW_RESULT=BLOCK` line, even if a skill describes a different verdict vocabulary.

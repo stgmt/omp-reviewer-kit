@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { ReviewerPort } from '../application/ports.mjs';
+import { ReviewVerdict } from '../domain/review-verdict.mjs';
 import { NULL_RUN_TELEMETRY, formatProviderOutageError, safeRunTelemetry } from './filesystem-telemetry-adapter.mjs';
 
 export const REVIEW_PROGRESS_PREFIX = 'reviewer-kit progress: ';
@@ -42,6 +43,22 @@ export function writeReviewProgress(event) {
 }
 
 /**
+ * Sanitizes stderr from reviewer execution:
+ * (a) removes every line matching /^\s*Working\.\.\.\s*$/i (OMP print-mode progress noise),
+ * (b) normalizes CRLF to LF.
+ *
+ * @param {string} stderr
+ * @returns {string}
+ */
+export function sanitizeReviewerOutput(stderr) {
+  if (typeof stderr !== 'string') return '';
+  const normalized = stderr.replace(/\r\n/g, '\n');
+  const lines = normalized.split('\n');
+  const filtered = lines.filter((line) => !/^\s*Working\.\.\.\s*$/i.test(line));
+  return filtered.join('\n');
+}
+
+/**
  * Static heuristic proving a review attempt failed because the model provider
  * refused the request (quota, rate limit, auth, or capacity), rather than
  * because the review itself produced a verdict or timed out.
@@ -65,7 +82,7 @@ export function isModelProviderFailure(result) {
   // A provider-side refusal can be wrapped in a synthetic BLOCK marker by
   // the orchestrator when dispatch fails. Detect it before treating BLOCK as
   // a completed review.
-  if (/^REVIEW_RESULT=(?:PASS|BLOCK)$/m.test(combined)) return false;
+  if (ReviewVerdict.fromOutput(combined).reason !== 'missing_verdict_marker') return false;
 
   const providerFailure = /(quota|rate ?limit|RESOURCE_EXHAUSTED|insufficient[ _-]?(?:quota|capacity|credits|balance)|model (not )?(found|available|supported)|model [^\n]{0,80}(not found|unavailable|unsupported)|no endpoints found|provider (error|unavailable)|invalid api[-_ ]?key|set an api key environment variable|upgrade your subscription|(?:status(?: code)?|error code|response code)\s*[:=]?\s*(?:401|403|429)\b[^\n]{0,30}\b(?:Unauthorized|Forbidden|Too Many Requests)\b|\b(?:401|403|429)\s*(?:Unauthorized|Forbidden|Too Many Requests)\b|(?:^|\n)\s*(?:(?:(?:error|failure|failed)\s*:?\s*)?HTTP\s+(?:401|403|429)\b|status(?: code)?\s*[:=]?\s*(?:401|403|429)\b|(?:error|response) code\s*[:=]?\s*(?:401|403|429)\b))/i.test(combined);
   if (providerFailure) return true;
@@ -168,6 +185,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
   #progress;
   #roleResolver;
   #rolesCache;
+  #lastReviewModel;
 
   /**
    * @param {{
@@ -201,6 +219,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
     this.#progress = progress ?? (() => {});
     this.#roleResolver = roleResolver ?? OmpCliReviewerAdapter.defaultRoleResolver;
     this.#rolesCache = null;
+    this.#lastReviewModel = null;
   }
 
   #emitProgress(event) {
@@ -252,6 +271,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       return { status: 1, stdout: '', stderr: record.error };
     }
     if (resolvedModel !== model) record.resolvedModel = resolvedModel;
+    this.#lastReviewModel = model;
     let responseObserved = false;
     let workingSignalObserved = false;
     const emitRunning = () => {
@@ -645,7 +665,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
 
     const stdout = result.stdout ?? '';
     const stderr = result.stderr ?? '';
-    const combined = `${stdout}\n${stderr}`;
+    const combined = `${stdout}\n${sanitizeReviewerOutput(stderr)}`;
 
     return {
       status: result.status ?? 1,
@@ -656,5 +676,72 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       attempts,
       probes,
     };
+  }
+
+  /**
+   * Runs exactly one bounded no-tools re-prompt asking the same model to
+   * reproduce its previous output verbatim under the verdict contract.
+   * Reuses the single-shot runner path and the probe-timeout budget; never
+   * probes the catalog and never falls back to another model.
+   *
+   * @param {{
+   *   prompt: import('../domain/review-prompt.mjs').ReviewPrompt|string,
+   *   cwd: string,
+   *   timeoutMs?: number,
+   *   telemetry?: { record: (type: string, payload?: object) => Promise<void>, updateLastRun: (state: object, opts?: { force?: boolean }) => Promise<void> },
+   * }} params
+   * @returns {Promise<{ status: number, stdout: string, stderr: string, pid?: number, attempts: object[] }>}
+   */
+  async reemitVerbatim({ prompt, cwd, timeoutMs, telemetry = NULL_RUN_TELEMETRY }) {
+    telemetry = safeRunTelemetry(telemetry);
+    const promptText = typeof prompt === 'string' ? prompt : prompt.toString();
+    const model = this.#lastReviewModel ?? this.#primaryModel;
+    const timeout = configuredInteger(timeoutMs, this.#probeTimeoutMs, 1);
+    const startedAt = Date.now();
+    const record = { model, kind: 'reemit', startedAt: new Date(startedAt).toISOString() };
+    const attempts = [record];
+    let resolvedModel;
+    try {
+      resolvedModel = await this.#resolveSelector(cwd, model, telemetry);
+    } catch (error) {
+      record.status = 1;
+      record.durationMs = Date.now() - startedAt;
+      record.stderrBytes = 0;
+      record.error = error?.message ?? String(error);
+      await telemetry.record('reemit_finished', { ...record });
+      return { status: 1, stdout: '', stderr: record.error, attempts };
+    }
+    if (resolvedModel !== model) record.resolvedModel = resolvedModel;
+    await telemetry.record('reemit_started', { ...record });
+    void telemetry.updateLastRun({ state: 'reemitting', model });
+    try {
+      const result = await this.#runner(promptText, cwd, timeout, resolvedModel, {
+        noTools: true,
+        onSpawn: (pid) => {
+          record.pid = pid;
+          void telemetry.updateLastRun({ state: 'reemitting', model, pid });
+        },
+      });
+      record.pid = record.pid ?? result?.pid;
+      record.status = result?.status;
+      record.durationMs = Date.now() - startedAt;
+      record.stdoutBytes = typeof result?.stdout === 'string' ? Buffer.byteLength(result.stdout) : 0;
+      record.stderrBytes = typeof result?.stderr === 'string' ? Buffer.byteLength(result.stderr) : 0;
+      await telemetry.record('reemit_finished', { ...record });
+      return {
+        status: result?.status ?? 1,
+        stdout: result?.stdout ?? '',
+        stderr: result?.stderr ?? '',
+        pid: record.pid,
+        attempts,
+      };
+    } catch (error) {
+      record.status = 1;
+      record.durationMs = Date.now() - startedAt;
+      record.stderrBytes = 0;
+      record.error = error?.message ?? String(error);
+      await telemetry.record('reemit_finished', { ...record });
+      return { status: 1, stdout: '', stderr: record.error, pid: record.pid, attempts };
+    }
   }
 }
