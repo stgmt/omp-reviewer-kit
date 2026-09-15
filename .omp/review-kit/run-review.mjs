@@ -148,6 +148,25 @@ export class StagedSnapshot {
 const RESULT_LINE_RE = /^REVIEW_RESULT=(PASS|BLOCK)$/gm;
 
 /**
+ * Git context variables a hook inherits from git itself. They win over cwd and
+ * `-C` in every descendant, so they must not reach the reviewer process.
+ */
+const HOOK_GIT_VARS = Object.freeze([
+  'GIT_DIR',
+  'GIT_WORK_TREE',
+  'GIT_INDEX_FILE',
+  'GIT_COMMON_DIR',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+]);
+
+function reviewerEnv(env = process.env) {
+  const copy = { ...env };
+  for (const key of HOOK_GIT_VARS) delete copy[key];
+  return copy;
+}
+
+/**
  * Domain Value Object encapsulating the review verdict and fail-closed validation rules.
  */
 export class ReviewVerdict {
@@ -197,6 +216,13 @@ export class ReviewVerdict {
     }
 
     if (matches.length === 0) {
+      const envelopeVerdict = ReviewVerdict.fromJsonEnvelope(output);
+      if (envelopeVerdict) {
+        return new ReviewVerdict(envelopeVerdict, {
+          reason: envelopeVerdict === ReviewVerdict.PASS ? 'verified_json_envelope' : 'explicit_block_json_envelope',
+          rawOutput: output,
+        });
+      }
       return new ReviewVerdict(ReviewVerdict.BLOCK, {
         reason: 'missing_verdict_marker',
         rawOutput: output,
@@ -207,6 +233,51 @@ export class ReviewVerdict {
       reason: 'multiple_verdict_markers',
       rawOutput: output,
     });
+  }
+
+  /**
+   * The reviewer model occasionally wraps its verdict in a JSON envelope
+   * instead of emitting the solitary marker line (observed shape:
+   * `{"verdict": "PASS", "report": "…"}`). Accept that form only when the
+   * output *starts* with a single JSON object carrying exactly one valid
+   * `verdict` field — a report that merely mentions the word cannot pass, and
+   * every other shape still fails closed.
+   */
+  static fromJsonEnvelope(output) {
+    const start = output.search(/\S/u);
+    if (start === -1 || output[start] !== '{') return null;
+    let depth = 0;
+    let end = -1;
+    let inString = false;
+    let escaped = false;
+    for (let index = start; index < output.length; index += 1) {
+      const char = output[index];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (char === '\\') escaped = true;
+        else if (char === '"') inString = false;
+        continue;
+      }
+      if (char === '"') inString = true;
+      else if (char === '{') depth += 1;
+      else if (char === '}') {
+        depth -= 1;
+        if (depth === 0) {
+          end = index;
+          break;
+        }
+      }
+    }
+    if (end === -1) return null;
+    let parsed;
+    try {
+      parsed = JSON.parse(output.slice(start, end + 1));
+    } catch {
+      return null;
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    const value = parsed.verdict;
+    return value === ReviewVerdict.PASS || value === ReviewVerdict.BLOCK ? value : null;
   }
 
   static blockDueToFailure(errorDetails) {
@@ -1628,6 +1699,11 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
         stdio: ['pipe', 'pipe', 'pipe'],
         windowsHide: true,
         detached: process.platform !== 'win32',
+        // A pre-commit hook inherits GIT_DIR/GIT_INDEX_FILE from git, and those
+        // override cwd and `-C` in every descendant: without this the reviewer
+        // (which runs the repository's test suite) would commit into the
+        // product worktree instead of the tests' temporary repositories.
+        env: reviewerEnv(),
       });
       const pid = Number.isInteger(proc.pid) ? proc.pid : undefined;
       try {
