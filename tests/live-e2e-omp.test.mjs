@@ -1,13 +1,34 @@
+/**
+ * Live E2E test suite for omp-reviewer-kit against real OMP processes.
+ *
+ * Live-Run Convention:
+ * - Environment Variables:
+ *     OMP_REVIEW_KIT_LIVE_E2E=1     Enable live test execution (otherwise skipped).
+ *     OMP_REVIEW_KIT_MODEL=<model>  Primary model (e.g. @slow, google-antigravity/gemini-3.8-flash:high).
+ *     OMP_REVIEW_KIT_EFFORT=<effort> Optional effort level override (e.g. low, medium, high).
+ * - Logging Convention:
+ *     Live test output and traces MUST be directed to %TEMP% or a system temp directory,
+ *     using tee if console streaming is desired:
+ *       OMP_REVIEW_KIT_LIVE_E2E=1 node --test tests/live-e2e-omp.test.mjs 2>&1 | tee %TEMP%\live-e2e.log
+ *     NEVER write or redirect live execution logs into the repository tree.
+ */
+
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { chmod, copyFile, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const isDirectExecution = Boolean(process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url)));
 import test, { after, describe, it } from 'node:test';
 import { ReviewPrompt } from '../src/index.mjs';
 
 const isLiveE2E = process.env.OMP_REVIEW_KIT_LIVE_E2E === '1';
+export const INFRA_RETRY_PATTERN = /RESOURCE_EXHAUSTED|429|socket connection was closed|timed out/i;
+
+export const DEFAULT_EVIDENCE_PATTERN = /adds? no|(?:no|not) (?:a |new )?(?:product|user-facing|domain)|only (?:wraps|duplicates|reimplements)|same responsibility|duplicate|true by construction|red_proof|cannot fail|never fail|vacuous|tautolog|unexercised|no test coverage/i;
+
 
 const hasOmp = (() => {
   try {
@@ -55,19 +76,17 @@ function killProcessTree(proc) {
   }
 }
 
-after(() => {
-  for (const proc of liveOmpProcs) killProcessTree(proc);
-  liveOmpProcs.clear();
-});
+if (isDirectExecution) {
+  after(() => {
+    for (const proc of liveOmpProcs) killProcessTree(proc);
+    liveOmpProcs.clear();
+  });
+}
 
 /**
- * Runs a real OMP command with piped stdin and closed EOF.
- *
- * Rejects with partial stdout/stderr tails on timeout so a hung model call
- * still shows what OMP produced instead of a bare timeout message. On Windows
- * the whole process tree is killed, not just the cmd wrapper.
+ * Executes a single attempt of a real OMP command with piped stdin and closed EOF.
  */
-function runLiveOmp(prompt, cwd, timeoutMs = 600_000, extraEnv = {}, ompCommand) {
+function executeLiveOmpAttempt(prompt, cwd, timeoutMs = 600_000, extraEnv = {}, ompCommand) {
   const commandArgs = ['-p', '--model', process.env.OMP_REVIEW_KIT_MODEL ?? '@slow', '--no-session'];
 
   return new Promise((resolve, reject) => {
@@ -129,6 +148,34 @@ function runLiveOmp(prompt, cwd, timeoutMs = 600_000, extraEnv = {}, ompCommand)
   });
 }
 
+/**
+ * Runs a real OMP command with piped stdin, closed EOF, and retry-once on infra failures.
+ *
+ * Rejects with partial stdout/stderr tails on timeout so a hung model call
+ * still shows what OMP produced instead of a bare timeout message. On Windows
+ * the whole process tree is killed, not just the cmd wrapper.
+ */
+export async function runLiveOmp(prompt, cwd, timeoutMs = 600_000, extraEnv = {}, ompCommand) {
+  try {
+    const result = await executeLiveOmpAttempt(prompt, cwd, timeoutMs, extraEnv, ompCommand);
+    if (result.status !== 0 && INFRA_RETRY_PATTERN.test(result.combined)) {
+      const match = result.combined.match(INFRA_RETRY_PATTERN)[0];
+      console.warn(`[runLiveOmp] Infra failure detected (${match}) with exit status ${result.status}. Retrying once (attempt 2/2)...`);
+      return await executeLiveOmpAttempt(prompt, cwd, timeoutMs, extraEnv, ompCommand);
+    }
+    return result;
+  } catch (err) {
+    const isTimeout = /timed out/i.test(err.message);
+    const match = err.message.match(INFRA_RETRY_PATTERN);
+    if (isTimeout || match) {
+      const signature = match ? match[0] : 'timed out';
+      console.warn(`[runLiveOmp] Infra failure / timeout detected (${signature}). Retrying once (attempt 2/2)...`);
+      return await executeLiveOmpAttempt(prompt, cwd, timeoutMs, extraEnv, ompCommand);
+    }
+    throw err;
+  }
+}
+
 
 function resolveAgentDir(profile) {
   const args = [...(profile ? ['--profile', profile] : []), 'config', 'path'];
@@ -152,10 +199,14 @@ async function copyDefaultProfileConfig(targetAgentDir) {
   // instead of depending on artifact reads inside a throwaway profile.
   const configPath = path.join(targetAgentDir, 'config.yml');
   const config = await readFile(configPath, 'utf8');
-  const patched = /artifactSpillThreshold:\s*\d+(?:\.\d+)?/.test(config)
-    ? config.replace(/artifactSpillThreshold:\s*\d+(?:\.\d+)?/, 'artifactSpillThreshold: 1024')
-    : `${config.trimEnd()}\ntools:\n  artifactSpillThreshold: 1024\n`;
+  const patched = patchArtifactSpillThreshold(config, 1024);
   await writeFile(configPath, patched, 'utf8');
+}
+
+export function patchArtifactSpillThreshold(configYaml, threshold = 1024) {
+  return /artifactSpillThreshold:\s*\d+(?:\.\d+)?/.test(configYaml)
+    ? configYaml.replace(/artifactSpillThreshold:\s*\d+(?:\.\d+)?/, `artifactSpillThreshold: ${threshold}`)
+    : `${configYaml.trimEnd()}\ntools:\n  artifactSpillThreshold: ${threshold}\n`;
 }
 
 /**
@@ -166,12 +217,15 @@ async function copyDefaultProfileConfig(targetAgentDir) {
  * previews can never resolve and the orchestrator falls back to a
  * `review_failure` envelope instead of reporting real findings.
  */
-async function writeSessionedOmpWrapper(dir) {
+export async function writeSessionedOmpWrapper(dir, targetOverride = undefined, options = {}) {
   const realOmp = process.env.OMP_REVIEW_KIT_OMP ?? 'omp';
-  if (process.platform === 'win32') {
-    const resolved = spawnSync('where.exe', [realOmp], { encoding: 'utf8', windowsHide: true });
-    const candidates = (resolved.stdout ?? '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-    const target = candidates.find((candidate) => /\.exe$/i.test(candidate)) ?? candidates[0] ?? realOmp;
+  const platform = options.platform ?? process.platform;
+  if (platform === 'win32') {
+    const target = targetOverride ?? (() => {
+      const resolved = spawnSync('where.exe', [realOmp], { encoding: 'utf8', windowsHide: true });
+      const candidates = (resolved.stdout ?? '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      return candidates.find((candidate) => /\.exe$/i.test(candidate)) ?? candidates[0] ?? realOmp;
+    })();
     const wrapper = path.join(dir, 'omp-sessioned.cmd');
     // %* keeps the raw argument string; a %~1 loop would split `task,read`
     // on the comma and corrupt `--tools task,read` into two arguments.
@@ -186,6 +240,7 @@ async function writeSessionedOmpWrapper(dir) {
     ].join('\r\n'), 'utf8');
     return wrapper;
   }
+  const target = targetOverride ?? realOmp;
   const wrapper = path.join(dir, 'omp-sessioned.sh');
   await writeFile(wrapper, [
     '#!/bin/sh',
@@ -196,7 +251,7 @@ async function writeSessionedOmpWrapper(dir) {
     '  args="$args \'$a\'"',
     'done',
     'eval "set -- $args"',
-    `exec "${realOmp}" "$@"`,
+    `exec "${target}" "$@"`,
     '',
   ].join('\n'), 'utf8');
   await chmod(wrapper, 0o755);
@@ -284,6 +339,7 @@ const LIVE_REVIEW_CASES = [
     baseline: {
       'ARCHITECTURE.md': 'Command observability uses logger.logCommand with bounded structured domain events. Raw binary capture has no product consumer.\n',
       'src/logger.mjs': 'export const logger = { logCommand(event) { return JSON.stringify({ command: event.command, status: event.status }); } };\n',
+      '.audit/.gitkeep': '',
     },
     stagedContent: "import { spawnSync } from 'node:child_process'; import { appendFileSync } from 'node:fs';\nexport function captureCommand(command, args) { const result = spawnSync(command, args, { encoding: null, maxBuffer: Number.MAX_SAFE_INTEGER }); appendFileSync('.audit/all-command-bytes.bin', Buffer.concat([result.stdout ?? Buffer.alloc(0), result.stderr ?? Buffer.alloc(0)])); return result; }\n",
   },
@@ -292,7 +348,8 @@ const LIVE_REVIEW_CASES = [
     expected: 'PASS',
     stagedPath: 'src/export-transport.mjs',
     baseline: { 'ARCHITECTURE.md': 'The product needs a new remote export capability with one invariant shared by transports.\n' },
-    stagedContent: `export class ExportPort { async export(_document) { throw new Error('ExportPort.export must be implemented'); } }\nexport class GovernedExportTransport extends ExportPort { async export(document) { if (!document.id) throw new TypeError('document id required'); return this.send(document); } async send(_document) { throw new Error('send must be implemented'); } }\nexport class JsonHttpExportAdapter extends GovernedExportTransport { constructor(post) { super(); this.post = post; } async send(document) { return this.post('/exports', JSON.stringify(document)); } }\n`,
+    // PASS fixtures must be clean and free of defect-hunting traps.
+    stagedContent: `export class ExportPort { async export(_document) { throw new Error('ExportPort.export must be implemented'); } }\nexport class GovernedExportTransport extends ExportPort { async export(document) { if (document.id === undefined || document.id === null) throw new TypeError('document id required'); return this.send(document); } async send(_document) { throw new Error('send must be implemented'); } }\nexport class JsonHttpExportAdapter extends GovernedExportTransport { constructor(post) { super(); this.post = post; } async send(document) { return this.post('/exports', JSON.stringify(document)); } }\n`,
   },
   {
     name: 'passes a public user-facing CLI boundary',
@@ -365,7 +422,7 @@ async function runLiveReviewCase(reviewCase) {
     }
     const stagedBefore = git(['diff', '--cached', '--binary', '--no-ext-diff', '--']).stdout;
     assert.notEqual(stagedBefore.length, 0);
-    const commit = git(['commit', '-m', `Review matrix ${reviewCase.expected}`], {
+    const executeCommitReview = () => git(['commit', '-m', `Review matrix ${reviewCase.expected}`], {
       env: {
         ...process.env,
         OMP_PROFILE: profile,
@@ -375,7 +432,16 @@ async function runLiveReviewCase(reviewCase) {
       },
       timeout: 900_000,
     });
-    const output = commit.stdout + commit.stderr;
+
+    let commit = executeCommitReview();
+    let output = commit.stdout + commit.stderr;
+
+    if (commit.status !== 0 && INFRA_RETRY_PATTERN.test(output)) {
+      const match = output.match(INFRA_RETRY_PATTERN)[0];
+      console.warn(`[runLiveReviewCase] Infra failure detected (${match}) during git commit review for "${reviewCase.name}". Retrying attempt 2/2...`);
+      commit = executeCommitReview();
+      output = commit.stdout + commit.stderr;
+    }
 
     if (reviewCase.expected === 'PASS') {
       // Surface the rejection report on unexpected BLOCK so the failure is
@@ -394,35 +460,91 @@ async function runLiveReviewCase(reviewCase) {
       return;
     }
 
-    assert.notEqual(commit.status, 0, `Expected BLOCK for ${reviewCase.name}\n${output}`);
-    const pointers = [...output.matchAll(/^REVIEW_REJECTION_REPORT=(.+)$/gm)];
-    assert.equal(pointers.length, 1, output);
-    const reportPath = pointers[0][1].trim();
-    const report = await readFile(reportPath, 'utf8');
-    const envelope = extractNormalizedEnvelope(report);
-    assert.equal(envelope.kind, 'confirmed_findings', report);
-    assert.ok(envelope.findings.length >= 1, report);
-    const finding = envelope.findings.find((item) => item.file_path === reviewCase.stagedPath);
-    assert.ok(finding, `Missing finding for ${reviewCase.stagedPath}\n${report}`);
-    assert.match(finding.priority, /^P[12]$/);
-    assert.equal(finding.defect_class, 'correctness');
-    const lineCount = (reviewCase.stagedContent ?? stagedFiles[reviewCase.stagedPath]).split('\n').length;
-    assert.ok(finding.line_start >= 1 && finding.line_end <= lineCount);
-    assert.match(finding.verifier_argument + ' ' + finding.counterexample, reviewCase.nativeEvidence);
-    if (reviewCase.evidencePattern) {
-      assert.match(finding.verifier_argument + ' ' + finding.counterexample, reviewCase.evidencePattern);
-    } else {
-      assert.match(finding.verifier_argument + ' ' + finding.counterexample, /adds? no|(?:no|not) (?:a |new )?(?:product|user-facing|domain)|only (?:wraps|duplicates|reimplements)|same responsibility|duplicate|true by construction|red_proof|cannot fail|never fail|vacuous|tautolog|unexercised|no test coverage/i);
+    let reportText = '';
+    const reportPointer = output.match(/^REVIEW_REJECTION_REPORT=(.+)$/m);
+    if (reportPointer) {
+      try {
+        reportText = await readFile(reportPointer[1].trim(), 'utf8');
+      } catch { /* report unreadable */ }
     }
-    assert.equal(git(['diff', '--cached', '--binary', '--no-ext-diff', '--']).stdout, stagedBefore);
-    assert.doesNotMatch(git(['log', '-1', '--pretty=%s']).stdout, /Review matrix BLOCK/);
+
+    try {
+      assert.notEqual(commit.status, 0, `Expected BLOCK for ${reviewCase.name}\n${output}`);
+      const pointers = [...output.matchAll(/^REVIEW_REJECTION_REPORT=(.+)$/gm)];
+      assert.equal(pointers.length, 1, output);
+      const reportPath = pointers[0][1].trim();
+      const report = reportText || (await readFile(reportPath, 'utf8'));
+      const envelope = extractNormalizedEnvelope(report);
+      assert.equal(envelope.kind, 'confirmed_findings', report);
+      assert.ok(envelope.findings.length >= 1, report);
+      const finding = envelope.findings.find((item) => item.file_path === reviewCase.stagedPath);
+      assert.ok(finding, `Missing finding for ${reviewCase.stagedPath}\n${report}`);
+      assert.match(finding.priority, /^P[12]$/);
+      assert.equal(finding.defect_class, 'correctness');
+      const lineCount = (reviewCase.stagedContent ?? stagedFiles[reviewCase.stagedPath]).split('\n').length;
+      assert.ok(finding.line_start >= 1 && finding.line_end <= lineCount);
+      assert.match(finding.verifier_argument + ' ' + finding.counterexample, reviewCase.nativeEvidence);
+      if (reviewCase.evidencePattern) {
+        assert.match(finding.verifier_argument + ' ' + finding.counterexample, reviewCase.evidencePattern);
+      } else {
+        assert.match(finding.verifier_argument + ' ' + finding.counterexample, DEFAULT_EVIDENCE_PATTERN);
+      }
+      assert.equal(git(['diff', '--cached', '--binary', '--no-ext-diff', '--']).stdout, stagedBefore);
+      assert.doesNotMatch(git(['log', '-1', '--pretty=%s']).stdout, /Review matrix BLOCK/);
+    } catch (err) {
+      if (reportText && !err.message.includes('--- rejection report ---')) {
+        err.message += '\n--- rejection report ---\n' + reportText.slice(0, 6000);
+      }
+      throw err;
+    }
   } finally {
     await rm(baseDir, { recursive: true, force: true }).catch(() => {});
     await rm(profileDir, { recursive: true, force: true }).catch(() => {});
   }
 }
 
+if (isDirectExecution) {
 describe('Feature: Real Live OMP & Plugin Discovery E2E (No Mocks)', () => {
+  it('Live Preflight: isolated profile OMP probe verifies model availability before live matrix', { skip: !isLiveE2E }, async () => {
+    const profile = `omp-rev-preflight-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const agentDir = resolveAgentDir(profile);
+    const profileDir = path.dirname(agentDir);
+    const model = process.env.OMP_REVIEW_KIT_MODEL ?? process.env.MODEL;
+    if (!model) {
+      throw new Error(
+        'Live Preflight failed: no model configured.\n' +
+        'Actionable fix: set OMP_REVIEW_KIT_MODEL (or MODEL) in the environment, e.g. OMP_REVIEW_KIT_MODEL=@slow'
+      );
+    }
+
+    try {
+      await copyDefaultProfileConfig(agentDir);
+      const probeResult = spawnOmpSync(['-p', '--model', model, '--tools', '', '--no-session', 'respond with OK'], {
+        encoding: 'utf8',
+        windowsHide: true,
+        timeout: 60_000,
+        env: {
+          ...process.env,
+          OMP_PROFILE: profile,
+        },
+      });
+
+      if (probeResult.status !== 0 || (probeResult.error && probeResult.error.code === 'ETIMEDOUT')) {
+        const detail = probeResult.stderr || probeResult.stdout || probeResult.error?.message || 'unknown failure';
+        throw new Error(
+          `Live Preflight failed: model "${model}" failed probe in isolated profile "${profile}".\n` +
+          `Cause: ${detail.trim()}\n` +
+          `Actionable fix: Model "${model}" appears missing or unauthorized in the isolated profile.\n` +
+          `  1. Verify "${model}" is listed in ~/.omp/agent/models.yml or configured in ~/.omp/agent/config.yml\n` +
+          `  2. Check credentials or run 'omp models' to confirm availability\n` +
+          `  3. Or choose an available model via OMP_REVIEW_KIT_MODEL=<valid-model>`
+        );
+      }
+    } finally {
+      await rm(profileDir, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
   it('Live Check 1: OMP plugin doctor confirms omp-reviewer-kit is linked and healthy', { skip: !hasOmp }, () => {
     const res = spawnOmpSync(['plugin', 'doctor'], { encoding: 'utf8', windowsHide: true });
     assert.equal(res.status, 0, `omp plugin doctor failed: ${res.stderr}`);
@@ -711,3 +833,4 @@ describe('Feature: Real Live OMP & Plugin Discovery E2E (No Mocks)', () => {
     });
   }
 });
+}

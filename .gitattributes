@@ -1,0 +1,2 @@
+scripts/run-review.mjs text eol=lf
+.omp/review-kit/run-review.mjs text eol=lf
