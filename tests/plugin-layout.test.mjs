@@ -48,6 +48,13 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(multiStageSkill, /name: multi-stage-review/);
     assert.match(realitySkill, /staged snapshot.*working tree/i);
     assert.match(realitySkill, /Verified-OK/);
+    assert.match(realitySkill, /Anti-neuroslop contract/);
+    assert.match(realitySkill, /six neuroslop forms/i);
+    assert.match(realitySkill, /red question/i);
+    assert.match(realitySkill, /Self-tool rule/);
+    assert.match(realitySkill, /Vacuum checklist/);
+    assert.match(realitySkill, /Triage/);
+    assert.match(realitySkill, /Blocking and non-blocking/);
   });
 
   it('pre-commit hook derives the repository from its own trusted path without invoking Git', () => {
@@ -88,6 +95,7 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(reviewerKitAgent, /### Confirmed findings/);
     assert.match(reviewerKitAgent, /### Unproven\/rejected summary/);
     assert.match(reviewerKitAgent, /### Verified-OK/);
+    assert.match(reviewerKitAgent, /### Notes/);
 
     assert.match(reviewerKitAgent, /REVIEW_RESULT=PASS/);
     assert.match(reviewerKitAgent, /REVIEW_RESULT=BLOCK/);
@@ -130,6 +138,8 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(scoutAgent, /"test_evidence"/);
     assert.match(scoutAgent, /"unknowns"/);
     assert.match(scoutAgent, /"reviewed_paths"/);
+    assert.match(scoutAgent, /"claims"/);
+    assert.match(scoutAgent, /"declared_checks"/);
     assert.match(scoutAgent, /do not emit verdict markers/i);
     assert.match(scoutAgent, /existing `invariants` and `relevant_consumers`/);
     assert.match(scoutAgent, /`unknowns`/);
@@ -152,6 +162,8 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(hunterAgent, /"trigger_scenario"/);
     assert.match(hunterAgent, /"impact"/);
     assert.match(hunterAgent, /"evidence"/);
+    assert.match(hunterAgent, /"red_proof"/);
+    assert.match(hunterAgent, /Neuroslop Pass/);
     assert.match(hunterAgent, /Anti-Noise Prohibitions/);
     assert.match(hunterAgent, /Do not emit verdict markers/i);
     assert.match(hunterAgent, /Anti-Parasitic Correctness Gate/);
@@ -170,6 +182,9 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.equal(fm.model, '@slow');
     assert.match(verifierAgent, /"disposition": "confirmed \| rejected \| not_proven"/);
     assert.match(verifierAgent, /"confirmed_findings"/);
+    assert.match(verifierAgent, /"triage":/);
+    assert.match(verifierAgent, /Neuroslop confirmation/);
+    assert.match(verifierAgent, /Self-tool audit/);
     assert.match(verifierAgent, /Adversarial Verification Checks/);
     assert.match(verifierAgent, /Upstream Defenses/);
     assert.match(verifierAgent, /must NOT suggest replacement patches or emit verdict markers/i);
@@ -194,6 +209,10 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(multiStageSkill, /staged snapshot.*working tree/i);
     assert.match(multiStageSkill, /test evidence.*YAGNI|YAGNI.*test evidence/i);
     assert.match(multiStageSkill, /Verified-OK/);
+    assert.match(multiStageSkill, /red_proof/);
+    assert.match(multiStageSkill, /declared_checks/);
+    assert.match(multiStageSkill, /### Notes/);
+    assert.match(multiStageSkill, /triage/);
     assert.doesNotMatch(multiStageSkill, /lane: \"architecture\"/);
     assert.doesNotMatch(multiStageSkill, /platform_primitives/);
   });

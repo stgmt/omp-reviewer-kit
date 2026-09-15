@@ -25,6 +25,9 @@ For each candidate defect, perform these rigorous checks:
 5. **Deduplication**: If multiple candidates describe the same underlying defect across different lines or lanes, consolidate them into one confirmed finding and reject the duplicates.
 6. **Anti-Parasitic Proof**: For a correctness candidate alleging duplicated control infrastructure, confirm it only when repository or declared-framework evidence proves both an existing mechanism for the same responsibility and zero new product capability. Ownership cost is impact, not another gate. Reject or mark unproven any candidate missing either proof. Explicitly reject false positives against capability-adding Port/Adapter or Template Method designs, public user-facing CLIs, and cryptography for remote untrusted payloads.
 7. **Test and YAGNI Claims**: Verify changed source from the staged snapshot and inspect the focused test evidence. Missing tests or unnecessary code alone are not defects; confirm only a reachable behavior with concrete P1/P2 impact, and preserve the existing `correctness` or `security` schema without adding a new envelope class.
+8. **Neuroslop confirmation**: Confirm a candidate alleging a dead, vacuous, or tautological check only after counting inspected units with your own query, finding a positive control outside the checked zone, and verifying an empty `red_proof`.
+9. **Self-tool audit**: Reject or mark not-proven any candidate whose proof relies on a query with zero matches unless a known-positive control is proven.
+10. **Triage**: Classify each decision into triage categories: `lie`, `stale_record`, `disclosed_gap`, or `not_applicable`.
 
 Use the absolute staged snapshot directory for every source read; use the repository only for read-only Git metadata and project-skill discovery.
 
@@ -38,6 +41,7 @@ Return your verdict decisions and confirmed findings as structured JSON:
     {
       "candidate_id": "correctness-1",
       "disposition": "confirmed | rejected | not_proven",
+      "triage": "lie | stale_record | disclosed_gap | not_applicable",
       "reason": "Detailed factual justification explaining why this candidate was confirmed, rejected, or unproven",
       "evidence": "Repository citations (callers, sanitizers, or tests) supporting this disposition"
     }

@@ -320,6 +320,30 @@ const MUTANTS = [
     replacement: '&& true',
     description: 'Attempts re-emit even when reviewer process produced empty output',
   },
+  {
+    id: 'anti-neuroslop-section-removed',
+    file: 'skills/reality-first-review/SKILL.md',
+    testFile: 'tests/plugin-layout.test.mjs',
+    original: '### The red question',
+    replacement: '### Notes on assertions',
+    description: 'Removes the red question from reality-first-review skill',
+  },
+  {
+    id: 'hunter-red-proof-field-removed',
+    file: 'agents/review-risk-hunter.md',
+    testFile: 'tests/plugin-layout.test.mjs',
+    original: '"red_proof": "Concrete tree breakage that would make this check fail; empty string means the check cannot fail",',
+    replacement: '// red_proof field removed',
+    description: 'Removes red_proof field from risk hunter schema',
+  },
+  {
+    id: 'verifier-triage-field-removed',
+    file: 'agents/review-finding-verifier.md',
+    testFile: 'tests/plugin-layout.test.mjs',
+    original: '"triage": "lie | stale_record | disclosed_gap | not_applicable",',
+    replacement: '// triage field removed',
+    description: 'Removes triage field from verifier decisions schema',
+  },
 ];
 
 const DIRECTORIES_TO_COPY = ['src', 'scripts', 'agents', 'skills', 'tests', 'templates', '.omp-plugin'];

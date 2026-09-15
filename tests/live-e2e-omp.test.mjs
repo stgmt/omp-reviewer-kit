@@ -254,6 +254,20 @@ const LIVE_REVIEW_CASES = [
     baseline: { 'ARCHITECTURE.md': 'Webhook payloads arrive from a remote untrusted network boundary and must be authenticated before processing.\n' },
     stagedContent: `import { verify } from 'node:crypto';\nexport function verifyRemoteWebhook(payload, signature, trustedPublicKey) { if (!Buffer.isBuffer(payload) || !Buffer.isBuffer(signature)) throw new TypeError('binary payload and signature required'); return verify(null, payload, trustedPublicKey, signature); }\n`,
   },
+  {
+    name: 'blocks vacuous check asserting true with unexercised passing report',
+    expected: 'BLOCK',
+    stagedPath: 'tests/calc.test.mjs',
+    stagedFiles: {
+      'tests/calc.test.mjs': "import assert from 'node:assert/strict';\nimport test from 'node:test';\n\ntest('all 594 calculations pass', () => {\n  assert.ok(true);\n});\n",
+      'REPORT.md': '# Calculation Report\n\nAll 594 checks verified and passed.\n',
+    },
+    baseline: {
+      'src/calc.mjs': 'export function add(a, b) { return a + b; }\n',
+    },
+    nativeEvidence: /calc\.test\.mjs|assert\.ok|cannot fail|vacuous|red_proof|failing power/i,
+    evidencePattern: /cannot fail|assert\.ok|vacuous|red_proof|never fail|tautolog|no test coverage|unexercised|594/i,
+  },
 ];
 
 async function runLiveReviewCase(reviewCase) {
@@ -288,8 +302,11 @@ async function runLiveReviewCase(reviewCase) {
     });
     assert.equal(setup.status, 0, `Hook setup failed: ${setup.stderr}`);
 
-    await writeTree(repoDir, { [reviewCase.stagedPath]: reviewCase.stagedContent });
-    git(['add', reviewCase.stagedPath]);
+    const stagedFiles = reviewCase.stagedFiles ?? { [reviewCase.stagedPath]: reviewCase.stagedContent };
+    await writeTree(repoDir, stagedFiles);
+    for (const relPath of Object.keys(stagedFiles)) {
+      git(['add', relPath]);
+    }
     const stagedBefore = git(['diff', '--cached', '--binary', '--no-ext-diff', '--']).stdout;
     assert.notEqual(stagedBefore.length, 0);
 
@@ -324,9 +341,14 @@ async function runLiveReviewCase(reviewCase) {
     assert.ok(finding, `Missing finding for ${reviewCase.stagedPath}\n${report}`);
     assert.equal(finding.priority, 'P2');
     assert.equal(finding.defect_class, 'correctness');
-    assert.ok(finding.line_start >= 1 && finding.line_end <= reviewCase.stagedContent.split('\n').length);
+    const lineCount = (reviewCase.stagedContent ?? stagedFiles[reviewCase.stagedPath]).split('\n').length;
+    assert.ok(finding.line_start >= 1 && finding.line_end <= lineCount);
     assert.match(finding.verifier_argument + ' ' + finding.counterexample, reviewCase.nativeEvidence);
-    assert.match(finding.verifier_argument + ' ' + finding.counterexample, /adds? no|no (?:new )?(?:product|user-facing|domain)|only (?:wraps|duplicates|reimplements)|same responsibility|duplicate/i);
+    if (reviewCase.evidencePattern) {
+      assert.match(finding.verifier_argument + ' ' + finding.counterexample, reviewCase.evidencePattern);
+    } else {
+      assert.match(finding.verifier_argument + ' ' + finding.counterexample, /adds? no|no (?:new )?(?:product|user-facing|domain)|only (?:wraps|duplicates|reimplements)|same responsibility|duplicate/i);
+    }
     assert.equal(git(['diff', '--cached', '--binary', '--no-ext-diff', '--']).stdout, stagedBefore);
     assert.doesNotMatch(git(['log', '-1', '--pretty=%s']).stdout, /Review matrix BLOCK/);
   } finally {

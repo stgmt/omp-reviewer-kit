@@ -29,7 +29,7 @@ You must orchestrate the review through these four mandatory stages strictly in 
 
 2. **Stage 2: Parallel Risk Hunting**
    Spawn one batch `task` call containing two blocking tasks with agent `review-risk-hunter`, passing the scout's result as shared context:
-   - Task 1: `lane: "correctness"` (boundary conditions, failure paths, null/default states, resource leaks, and anti-parasitic correctness defects requiring both existing-mechanism and zero-product-capability proof).
+   - Task 1: `lane: "correctness"` (boundary conditions, failure paths, null/default states, resource leaks, anti-parasitic correctness defects, and mandatory Neuroslop Pass checking every staged assertion, check, status claim, and number against the red question and vacuum checklist).
    - Task 2: `lane: "security"` (attacker-controlled sources, dangerous sinks, missing/bypassed mitigations).
    Both lanes adhere to strict anti-noise rules (no style, formatting, comments, or ungrounded advice).
    In the correctness lane, explicitly inspect focused tests for changed behavior and YAGNI: only raise missing tests or unnecessary code when the resulting behavior has a concrete, reachable impact; do not create a new defect class for either concern.
@@ -46,11 +46,13 @@ Format the final report with these exact section headers:
 ### Review coverage
 ### Confirmed findings
 ### Unproven/rejected summary
+### Notes
 ### Verified-OK
 ```
 
 Every confirmed finding must report: priority (P1 or P2), file path, line range overlapping added diff lines, observed behavior, expected behavior, trigger scenario, impact, and repository evidence.
-The `### Verified-OK` section must list the paths, tests, caller checks, and invariants that were actually verified and found sound; never use it to hide an unresolved finding.
+The `### Notes` section records non-blocking observations (stale records with intact code, check commands suppressing output, showcase stub tests, disclosed gaps with named owners); it never enters the rejection envelope and never blocks PASS.
+The `### Verified-OK` section must list the paths, tests, caller checks, and invariants that were actually verified and found sound, each carrying a concrete measure (inspected unit count, path, positive control). Bare "looks correct" is prohibited; never use it to hide an unresolved finding.
 
 When BLOCKing for confirmed findings, immediately before the verdict marker emit exactly one envelope:
 

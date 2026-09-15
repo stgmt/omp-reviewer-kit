@@ -19,6 +19,8 @@ Read all modified and added source content from the absolute staged snapshot dir
 
 When the staged change introduces a new process boundary, transport, state store, trust mechanism, proof format, or command wrapper, identify any existing repository or declared-framework mechanism for the same responsibility. Record proven mechanisms in the existing `invariants` and `relevant_consumers` fields. Record unresolved framework or capability claims in `unknowns`. Do not broaden the scan beyond evidence relevant to the staged change and do not add schema fields.
 
+Extract verifiable claims from staged content (recorded numbers, done/closed status markers, recorded command outputs) into `claims` with their exact `source_path` and `source_line`. Extract check commands or test selectors declared in staged content into `declared_checks` with their `source_path` and `source_line`. Do not invent claims or checks: extract them strictly from staged content.
+
 Return your analysis as a structured report with these exact fields:
 
 ```json
@@ -28,6 +30,21 @@ Return your analysis as a structured report with these exact fields:
   "relevant_consumers": ["Callers, consumers, entrypoints, or downstream files affected"],
   "invariants": ["Domain invariants, contracts, or assumptions found in the touched code"],
   "test_evidence": ["Existing automated test suites, fixtures, or scenarios covering this area"],
+  "claims": [
+    {
+      "claim": "Verifiable claim text from staged content",
+      "source_path": "path/to/source.ext",
+      "source_line": 42,
+      "kind": "number | status | check_output | verified_claim"
+    }
+  ],
+  "declared_checks": [
+    {
+      "selector": "Test command or selector string from staged content",
+      "source_path": "path/to/source.ext",
+      "source_line": 42
+    }
+  ],
   "unknowns": ["Areas where caller behavior or external contracts could not be confirmed"],
   "reviewed_paths": ["Complete list of files read during context discovery"]
 }

@@ -53,6 +53,8 @@ The snapshot also carries the review inputs under `.review/`: `diff.patch` holds
   - `relevant_consumers`: Direct callers, consumers, or downstream dependencies affected.
   - `invariants`: Domain invariants, contracts, or assumptions in the touched code.
   - `test_evidence`: Existing automated tests exercising the touched areas.
+  - `claims`: Array of `{claim, source_path, source_line, kind}` (`kind` in `"number" | "status" | "check_output" | "verified_claim"`) — verifiable claims found in staged content.
+  - `declared_checks`: Array of `{selector, source_path, source_line}` — check commands or test selectors declared in staged content.
   - `unknowns`: Areas with insufficient visibility or ungrounded assumptions.
   - `reviewed_paths`: Complete list of repository files read during scouting.
 - **Constraint**: Must NOT generate defect findings or verdict markers (`REVIEW_RESULT=...`).
@@ -63,6 +65,14 @@ The snapshot also carries the review inputs under `.review/`: `diff.patch` holds
   - `lane: "security"`: Attacker-controlled input source, dangerous sink, missing/bypassed controls, credential leakage, permission bypass.
 - **Tools**: `read`, `grep`, `glob`, `lsp`, `bash` (read-only git commands only). No `task`, no mutating tools. Budget: roughly 30 tool calls per lane — analyze `.review/diff.patch`, read each changed file once, verify only deciding callers.
 - **Correctness test/YAGNI boundary**: Inspect focused tests for changed behavior and record concrete test evidence. Missing or weak tests and unnecessary code are not independent defect classes; raise them only when a reachable P1/P2 correctness impact is proven, and keep the existing `correctness`/`security` candidate schema.
+- **Neuroslop Pass**: In lane `correctness`, execute an explicit pass across every staged assertion, check, status claim, and number:
+  - Ask the red question: "what would have to break in the tree for this check to fail?"
+  - Apply the vacuum checklist: count inspected units with your own query, find a positive control outside the checked zone, verify missing/renamed behavior.
+  - Check for stub oracles returning asserted values.
+  - Recount every staged number with your own query.
+  - Resolve every `declared_checks` selector against the snapshot.
+  - Apply the self-tool rule: zero matches prove nothing without positive control.
+  - An empty `red_proof` is a finding.
 - **Anti-Noise Prohibitions**:
   - Never report formatting, whitespace, indentation, or line length.
   - Never suggest adding or modifying comments, docstrings, or type annotations.
@@ -87,6 +97,7 @@ The snapshot also carries the review inputs under `.review/`: `diff.patch` holds
   - `expected_behavior`: Factual description of what the contract requires.
   - `trigger_scenario`: Concrete input or sequence triggering the defect.
   - `impact`: Concrete failure consequence.
+  - `red_proof`: Concrete tree breakage that would make this check fail; empty string means the check cannot fail.
   - `evidence`: Array of repository citations (files, lines, callers).
 - **Constraint**: Must NOT emit verdict markers (`REVIEW_RESULT=...`).
 
@@ -98,11 +109,15 @@ The snapshot also carries the review inputs under `.review/`: `diff.patch` holds
   3. **Diff Ownership**: Is the defect genuinely introduced by this staged change? If pre-existing -> disposition: `rejected`.
   4. **Security Defense**: Is there a credible source-to-sink path without effective mitigations? If mitigated -> disposition: `rejected`.
   5. **Deduplication**: Collapse duplicate candidate findings representing the same root cause.
+  6. **Neuroslop confirmation**: Confirm candidate about dead, vacuous, or tautological checks only with own unit count, positive control, and empty `red_proof`.
+  7. **Self-tool audit**: Reject or mark not-proven any candidate whose proof relies on zero matches without positive control.
+  8. **Triage**: Classify decision into triage categories (`lie`, `stale_record`, `disclosed_gap`, or `not_applicable`).
 - **Output Contract**:
   - `coverage_summary`: Summary of verified candidates.
   - `decisions`: Array of per-candidate decisions with fields:
     - `candidate_id`: Matching candidate identifier.
     - `disposition`: `"confirmed"` | `"rejected"` | `"not_proven"`.
+    - `triage`: `"lie"` | `"stale_record"` | `"disclosed_gap"` | `"not_applicable"`.
     - `reason`: Factual justification citing repository evidence.
     - `evidence`: File and line citations supporting the decision.
   - `confirmed_findings`: Array of validated findings with normalized priority (`P1` | `P2`), file_path, line range, observed, expected, trigger, impact, and evidence.
@@ -114,7 +129,8 @@ The snapshot also carries the review inputs under `.review/`: `diff.patch` holds
   - `### Review coverage`: Summary of inspected diff, changed files, active skills, and stages executed.
   - `### Confirmed findings`: Detailed list of confirmed findings (priority, path, range, trigger, impact, evidence).
   - `### Unproven/rejected summary`: Terse summary of rejected or unproven candidates with rationale.
-  - `### Verified-OK`: Explicit paths, tests, caller checks, and invariants actually verified; never use this section to hide unresolved candidates.
+  - `### Notes`: Non-blocking observations (stale records with intact code, check commands suppressing output, showcase stub tests, disclosed gaps with named owners); never part of rejection envelope and never blocks PASS.
+  - `### Verified-OK`: Explicit paths, tests, caller checks, and invariants actually verified, each carrying a concrete measure (unit count, path, positive control). Bare "looks correct" is prohibited; never use this section to hide unresolved candidates.
 - **Rejection Envelope Rule**:
   - A confirmed-finding BLOCK emits one strict `review-rejection-envelope@1` with the current diff hash and only normalized `correctness` or `security` findings.
   - A mandatory-stage failure emits a `review_failure` envelope with `execution_failure` and a non-empty diagnostic message.

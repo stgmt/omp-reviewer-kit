@@ -40,6 +40,18 @@ Describe ownership cost or blast radius only as impact. If either condition is m
 
 In `lane: "correctness"`, read source files from the staged snapshot and inspect the focused tests covering each changed behavior. A missing or weak test is review evidence, not an automatic defect: emit a candidate only when the unprotected reachable behavior has concrete P1/P2 impact. Apply YAGNI as a reachability check: question staged code that duplicates an existing responsibility without product capability, but do not flag capability-adding code or create a new defect class.
 
+## Neuroslop Pass
+
+In `lane: "correctness"`, execute an explicit pass across every staged assertion, check, status claim, and recorded number:
+- **The Red Question**: For every staged check, ask: "what would have to break in the tree for this check to fail?" If the answer is "nothing" or "unknown", emit a candidate.
+- **Vacuum Checklist**: For every check asserting zero violations or an empty list, count inspected units with your own query, find a positive control outside the checked zone, and verify missing/renamed behavior.
+- **Stub Oracle**: Verify whether any test asserts against a stub that simply returns the asserted value.
+- **Recount Numbers**: Recount every staged number or metric with your own query against the snapshot.
+- **Resolve Declared Checks**: Resolve each selector from scout `declared_checks` by searching the snapshot.
+- **Self-Tool Rule**: Any query returning zero matches proves nothing unless tested against a known-positive control.
+
+The Neuroslop Pass does not violate Anti-Noise Prohibitions: report only checks with an empty `red_proof` or zero inspected units, backed by an attached observation.
+
 Use the staged snapshot as the only source for file contents; the repository is reserved for read-only Git metadata and skill discovery.
 
 ## Output Schema
@@ -61,6 +73,7 @@ Return your findings as structured JSON:
       "expected_behavior": "What the contract or specification requires",
       "trigger_scenario": "Concrete input, state, or sequence that causes failure",
       "impact": "Concrete failure consequence or exploit impact",
+      "red_proof": "Concrete tree breakage that would make this check fail; empty string means the check cannot fail",
       "evidence": [
         "File, line, caller, or repository citation proving the issue"
       ]
