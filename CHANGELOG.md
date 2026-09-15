@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-09-15
+
+### Added
+- **Anti-neuroslop review contracts**: hardened review prompts and agent contracts based on adversarial review methodology:
+  - Six neuroslop forms codified in `skill://reality-first-review` and `skill://multi-stage-review`.
+  - The "red question" ("what would have to break for this check to fail?") and vacuum checklist for every staged assertion.
+  - The "self-tool rule": queries with zero matches prove nothing without positive controls.
+  - `review-context-scout` extracts verifiable `claims` and `declared_checks` from staged content.
+  - `review-risk-hunter` performs a mandatory Neuroslop Pass on the correctness lane, producing a `red_proof` candidate field.
+  - `review-finding-verifier` adds Neuroslop confirmation, Self-tool audit, and `triage` classification (`lie`, `stale_record`, `disclosed_gap`).
+  - `### Notes` report section for non-blocking observations that never interfere with `PASS`.
+  - Measurable `### Verified-OK` section requiring concrete counts, paths, and positive controls (bare "looks correct" prohibited).
+- **Deterministic suspicion map**: automatically computed from the staged diff by analyzing assert line deltas, deleted test files, and removed test declarations in test files (`src/domain/suspicion-map.mjs`).
+- **Opt-in test execution evidence**: optional pre-review check execution (`OMP_REVIEW_KIT_EXECUTE=1`) and red-proof reverted snapshot execution (`OMP_REVIEW_KIT_RED_PROOF=1`) with 2×2 interpretation matrix passed to review agents.
+- **Commit-range audit CLI**: `node scripts/audit-range.mjs <base>..<head>` for auditing entire commit ranges for stealth test weakening, deleted assertions, and vacuous checks, with optional LLM exploration via new agent `review-range-auditor` and `skill://range-audit`.
+
+### Changed
+- Dispatcher prompt now carries the deterministic suspicion map and optional execution evidence.
+- Environment variables added: `OMP_REVIEW_KIT_ASSERT_PATTERNS`, `OMP_REVIEW_KIT_TEST_PATH_PATTERNS`, `OMP_REVIEW_KIT_EXECUTE`, `OMP_REVIEW_KIT_EXECUTE_COMMAND`, `OMP_REVIEW_KIT_EXECUTE_TIMEOUT_MS`, `OMP_REVIEW_KIT_EXECUTE_LINK_DIRS`, `OMP_REVIEW_KIT_RED_PROOF`.
+- Extension status bar reflects the `executing: 'running project checks'` lifecycle phase.
+
 ## [0.8.0] - 2026-09-15
 
 ### Added
