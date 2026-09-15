@@ -2,6 +2,7 @@ import { ReviewRejectionEnvelope } from '../domain/review-rejection-envelope.mjs
 import { ReviewPrompt } from '../domain/review-prompt.mjs';
 import { ReviewReport } from '../domain/review-report.mjs';
 import { ReviewExecutionResult } from '../domain/review-execution-result.mjs';
+import { SuspicionMap, DEFAULT_ASSERT_PATTERNS, DEFAULT_TEST_PATH_PATTERNS, DEFAULT_TEST_DECLARATION_PATTERNS } from '../domain/suspicion-map.mjs';
 import { GitPort, ReviewerPort, ReportStorePort, SnapshotStorePort, TelemetryPort } from './ports.mjs';
 import { FileSystemTelemetryAdapter, NULL_RUN_TELEMETRY, safeRunTelemetry } from '../infra/filesystem-telemetry-adapter.mjs';
 import { installRunSignalGuard } from '../infra/run-signal-guard.mjs';
@@ -17,6 +18,9 @@ export class ReviewWorkflowService {
   #telemetryPort;
   #clock;
   #logger;
+  #assertPatterns;
+  #testPathPatterns;
+  #testDeclarationPatterns;
 
   /**
    * @param {{
@@ -40,6 +44,9 @@ export class ReviewWorkflowService {
       log: (msg) => process.stdout.write(msg),
       error: (msg) => process.stderr.write(msg),
     },
+    assertPatterns,
+    testPathPatterns,
+    testDeclarationPatterns,
   }) {
     if (!gitPort) throw new TypeError('ReviewWorkflowService requires gitPort');
     if (!reviewerPort) throw new TypeError('ReviewWorkflowService requires reviewerPort');
@@ -53,6 +60,11 @@ export class ReviewWorkflowService {
     this.#telemetryPort = telemetryPort ?? new FileSystemTelemetryAdapter();
     this.#clock = clock;
     this.#logger = logger;
+    const envAssert = process.env.OMP_REVIEW_KIT_ASSERT_PATTERNS?.trim();
+    const envTestPaths = process.env.OMP_REVIEW_KIT_TEST_PATH_PATTERNS?.trim();
+    this.#assertPatterns = assertPatterns ?? (envAssert ? envAssert.split(',').map((s) => s.trim()).filter(Boolean) : undefined);
+    this.#testPathPatterns = testPathPatterns ?? (envTestPaths ? envTestPaths.split(',').map((s) => s.trim()).filter(Boolean) : undefined);
+    this.#testDeclarationPatterns = testDeclarationPatterns;
   }
 
   /**
@@ -107,6 +119,20 @@ export class ReviewWorkflowService {
         diffBytes: diff.length,
       });
 
+      const suspicionMap = SuspicionMap.compute({
+        diffBytes: diff.bytes,
+        assertPatterns: this.#assertPatterns,
+        testPathPatterns: this.#testPathPatterns,
+        testDeclarationPatterns: this.#testDeclarationPatterns,
+      });
+
+      await telemetry.record('suspicion_map_computed', {
+        entries: suspicionMap.entries.length,
+        assertDelta: suspicionMap.entries.filter((e) => e.kind === 'assert_delta').length,
+        deletedTestFiles: suspicionMap.entries.filter((e) => e.kind === 'deleted_test_file').length,
+        removedTestDeclarations: suspicionMap.entries.filter((e) => e.kind === 'removed_test_declarations').length,
+      });
+
       const snapshotStartedAt = Date.now();
       const snapshot = await this.#gitPort.getSnapshot(repoRoot);
       const snapshotDir = await this.#snapshotStorePort.create(snapshot, {
@@ -121,7 +147,9 @@ export class ReviewWorkflowService {
 
       let execResult;
       try {
-        const prompt = ReviewPrompt.forDiff(diff, snapshotDir, diff.changedPaths);
+        const prompt = ReviewPrompt.forDiff(diff, snapshotDir, diff.changedPaths, {
+          suspicionMapText: suspicionMap.toPromptText(),
+        });
         execResult = await this.#reviewerPort.executeReview({
           prompt,
           cwd: repoRoot,

@@ -125,6 +125,8 @@ OMP_REVIEW_KIT_PROBE_TIMEOUT_MS # availability probe timeout (default: 60000)
 OMP_REVIEW_KIT_EFFORT           # override :effort suffix of resolved selectors (default: low; low|medium|high|max)
 OMP_REVIEW_KIT_OMP              # path/name of the omp executable
 OMP_REVIEW_KIT_TELEMETRY=0      # disable run telemetry writes
+OMP_REVIEW_KIT_ASSERT_PATTERNS    # comma-separated regexes identifying assert statements (suspicion map)
+OMP_REVIEW_KIT_TEST_PATH_PATTERNS # comma-separated regexes identifying test file paths (suspicion map)
 ```
 
 Point `modelRoles.smol` and `modelRoles.task` in `~/.omp/agent/config.yml` at

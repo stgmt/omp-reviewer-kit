@@ -615,4 +615,43 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
     await rm(repoRoot, { recursive: true, force: true }).catch(() => {});
   });
 
+  it('Scenario: Given staged diff with a deleted test file, When reviewed, Then the dispatcher prompt carries the suspicion map entry', async () => {
+    // Given a repository with a deleted test file in staged diff
+    const repoRoot = await mkdtemp(path.join(tmpdir(), 'omp-bdd-suspicion-'));
+    const stagedDiff = [
+      'diff --git a/tests/old.test.mjs b/tests/old.test.mjs',
+      'deleted file mode 100644',
+      '--- a/tests/old.test.mjs',
+      '+++ /dev/null',
+      '@@ -1,10 +0,0 @@',
+      ...Array.from({ length: 10 }, (_, i) => `-line ${i}`),
+    ].join('\n');
+
+    let capturedPrompt = '';
+    const fakeGit = (args) => {
+      if (args[0] === 'rev-parse') return Buffer.from(`${repoRoot}\n`);
+      if (args[0] === 'diff') return Buffer.from(stagedDiff);
+      return Buffer.alloc(0);
+    };
+    const fakeOmp = (prompt) => {
+      capturedPrompt = prompt;
+      return { status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' };
+    };
+
+    // When reviewed
+    const result = await runReview({
+      cwd: repoRoot,
+      git: fakeGit,
+      omp: fakeOmp,
+      ompOptions: { roleResolver: () => ({ smol: 'acme/smol-flash:high', task: 'acme/task-fast:high' }) },
+      now: new Date('2026-09-15T10:00:00.000Z'),
+    });
+
+    // Then
+    assert.equal(result.exitCode, 0);
+    assert.match(capturedPrompt, /Deterministic suspicion map \(computed from the staged diff; every entry must be addressed\):/);
+    assert.match(capturedPrompt, /- tests\/old\.test\.mjs: deleted test file \(10 removed lines\)/);
+    await rm(repoRoot, { recursive: true, force: true }).catch(() => {});
+  });
+
 });

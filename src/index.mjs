@@ -3,6 +3,14 @@ export { StagedSnapshot } from './domain/staged-snapshot.mjs';
 export { ReviewVerdict } from './domain/review-verdict.mjs';
 export { ReviewRejectionEnvelope } from './domain/review-rejection-envelope.mjs';
 export { ReviewPrompt } from './domain/review-prompt.mjs';
+export {
+  SuspicionMap,
+  isTestPath,
+  parseDiffBlocks,
+  DEFAULT_ASSERT_PATTERNS,
+  DEFAULT_TEST_PATH_PATTERNS,
+  DEFAULT_TEST_DECLARATION_PATTERNS,
+} from './domain/suspicion-map.mjs';
 export { ReviewReport } from './domain/review-report.mjs';
 export { ReviewExecutionResult } from './domain/review-execution-result.mjs';
 
@@ -43,7 +51,7 @@ import { ReviewWorkflowService } from './application/review-workflow-service.mjs
  * }} [options]
  * @returns {ReviewWorkflowService}
  */
-export function createReviewWorkflowService({ git, omp, ompOptions, clock, logger, progress, telemetry } = {}) {
+export function createReviewWorkflowService({ git, omp, ompOptions, clock, logger, progress, telemetry, assertPatterns, testPathPatterns, testDeclarationPatterns } = {}) {
   const gitPort = new SubprocessGitAdapter(git);
   const reviewerPort = new OmpCliReviewerAdapter({ runner: omp, progress, ...ompOptions });
   const reportStorePort = new FileSystemReportStoreAdapter();
@@ -58,6 +66,9 @@ export function createReviewWorkflowService({ git, omp, ompOptions, clock, logge
     telemetryPort,
     clock,
     logger,
+    assertPatterns,
+    testPathPatterns,
+    testDeclarationPatterns,
   });
 }
 

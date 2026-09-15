@@ -256,3 +256,39 @@ test('does not overwrite an earlier report', async () => {
   assert.match(await readFile(first.result.reportPath, 'utf8'), /result: PASS/);
   assert.match(await readFile(second.result.reportPath, 'utf8'), /result: BLOCK/);
 });
+
+test('dispatcher prompt carries deterministic suspicion map for deleted test file and assert deltas', async () => {
+  const root = await makeRoot('omp-review-kit-suspicion-');
+  const stagedDiff = [
+    'diff --git a/tests/obsolete.test.mjs b/tests/obsolete.test.mjs',
+    'deleted file mode 100644',
+    '--- a/tests/obsolete.test.mjs',
+    '+++ /dev/null',
+    '@@ -1,50 +0,0 @@',
+    ...Array.from({ length: 50 }, (_, i) => `-line ${i}`),
+    'diff --git a/tests/calc.test.mjs b/tests/calc.test.mjs',
+    '--- a/tests/calc.test.mjs',
+    '+++ b/tests/calc.test.mjs',
+    '@@ -1,5 +1,2 @@',
+    '-assert.equal(a, 1);',
+    '-assert.equal(b, 2);',
+    '-assert.equal(c, 3);',
+    '+assert.equal(a, 10);',
+  ].join('\n');
+
+  let prompt = '';
+  const result = await runReview({
+    cwd: root,
+    git: fakeGit(root, stagedDiff),
+    omp: (value) => {
+      prompt = value;
+      return { status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' };
+    },
+    ompOptions: { roleResolver: testRoleResolver },
+  });
+
+  assert.equal(result.exitCode, 0);
+  assert.match(prompt, /Deterministic suspicion map \(computed from the staged diff; every entry must be addressed\):/);
+  assert.match(prompt, /- tests\/obsolete\.test\.mjs: deleted test file \(50 removed lines\)/);
+  assert.match(prompt, /- tests\/calc\.test\.mjs: assert lines \+1\/-3 \(net -2\)/);
+});

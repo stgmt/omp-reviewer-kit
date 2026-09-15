@@ -98,6 +98,210 @@ export class DiffIdentity {
 }
 
 
+export const DEFAULT_ASSERT_PATTERNS = [
+  '\\bassert\\b',
+  '\\bexpect\\s*\\(',
+  '\\bshould\\b',
+  '\\brequire\\s*\\(',
+  '\\bt\\.(?:Fatal|Error|Fatalf|Errorf)\\b',
+];
+
+export const DEFAULT_TEST_PATH_PATTERNS = [
+  '(^|/)tests?/',
+  '(^|/)__tests__/',
+  '(^|/)spec/',
+  '\\.test\\.',
+  '\\.spec\\.',
+  '_test\\.',
+  '(^|/)test_',
+];
+
+export const DEFAULT_TEST_DECLARATION_PATTERNS = [
+  '\\bdef\\s+test_',
+  '\\bit\\s*\\(',
+  '\\btest\\s*\\(',
+  '\\bdescribe\\s*\\(',
+  '\\bfunc\\s+Test',
+  '@Test\\b',
+];
+
+export function isTestPath(path, patterns = DEFAULT_TEST_PATH_PATTERNS) {
+  if (typeof path !== 'string' || path.length === 0) return false;
+  return patterns.some((p) => new RegExp(p).test(path));
+}
+
+export function parseDiffBlocks(diffText) {
+  if (typeof diffText !== 'string' || diffText.trim().length === 0) {
+    return [];
+  }
+
+  const blocks = [];
+  const rawBlocks = diffText.split(/^diff --git /m);
+  for (let i = 1; i < rawBlocks.length; i += 1) {
+    const blockText = rawBlocks[i];
+    if (blockText.includes('Binary files ') && blockText.includes(' differ')) {
+      continue;
+    }
+
+    const firstLineEnd = blockText.indexOf('\n');
+    const headerLine = firstLineEnd === -1 ? blockText : blockText.slice(0, firstLineEnd);
+    const sides = headerLine.match(/"[^"]*"|\S+/g) ?? [];
+    if (sides.length < 2) continue;
+
+    const bSide = sides[1];
+    const raw = bSide.startsWith('"') ? unquoteGitPath(bSide) : bSide;
+    const path = raw.replace(/^b\//, '');
+
+    const deleted = /^deleted file mode \d+/m.test(blockText);
+
+    const addedLines = [];
+    const removedLines = [];
+
+    const lines = blockText.split('\n');
+    for (const line of lines) {
+      if (line.startsWith('+++') || line.startsWith('---')) continue;
+      if (line.startsWith('+')) {
+        addedLines.push(line.slice(1));
+      } else if (line.startsWith('-')) {
+        removedLines.push(line.slice(1));
+      }
+    }
+
+    blocks.push({
+      path,
+      deleted,
+      addedLines,
+      removedLines,
+    });
+  }
+
+  return blocks;
+}
+
+export class SuspicionMap {
+  #entries;
+
+  constructor(entries = []) {
+    this.#entries = Object.freeze([...entries]);
+  }
+
+  get entries() {
+    return this.#entries;
+  }
+
+  get isEmpty() {
+    return this.#entries.length === 0;
+  }
+
+  static compute({
+    diffBytes,
+    assertPatterns = DEFAULT_ASSERT_PATTERNS,
+    testPathPatterns = DEFAULT_TEST_PATH_PATTERNS,
+    testDeclarationPatterns = DEFAULT_TEST_DECLARATION_PATTERNS,
+  } = {}) {
+    if (!diffBytes || diffBytes.length === 0) {
+      return new SuspicionMap([]);
+    }
+
+    const diffText = Buffer.isBuffer(diffBytes)
+      ? diffBytes.toString('utf8')
+      : String(diffBytes);
+
+    const blocks = parseDiffBlocks(diffText);
+    const entries = [];
+
+    const assertRegexes = assertPatterns.map((p) => new RegExp(p));
+    const declRegexes = testDeclarationPatterns.map((p) => new RegExp(p));
+
+    for (const block of blocks) {
+      if (!isTestPath(block.path, testPathPatterns)) {
+        continue;
+      }
+
+      if (block.deleted) {
+        entries.push({
+          path: block.path,
+          kind: 'deleted_test_file',
+          added: 0,
+          removed: block.removedLines.length,
+          net: -block.removedLines.length,
+          detail: `${block.removedLines.length} removed lines`,
+        });
+        continue;
+      }
+
+      let addedAsserts = 0;
+      for (const line of block.addedLines) {
+        if (assertRegexes.some((re) => re.test(line))) {
+          addedAsserts += 1;
+        }
+      }
+
+      let removedAsserts = 0;
+      for (const line of block.removedLines) {
+        if (assertRegexes.some((re) => re.test(line))) {
+          removedAsserts += 1;
+        }
+      }
+
+      if (addedAsserts !== 0 || removedAsserts !== 0) {
+        const net = addedAsserts - removedAsserts;
+        entries.push({
+          path: block.path,
+          kind: 'assert_delta',
+          added: addedAsserts,
+          removed: removedAsserts,
+          net,
+          detail: `assert lines +${addedAsserts}/-${removedAsserts} (net ${net > 0 ? `+${net}` : net})`,
+        });
+      }
+
+      let removedDecls = 0;
+      for (const line of block.removedLines) {
+        if (declRegexes.some((re) => re.test(line))) {
+          removedDecls += 1;
+        }
+      }
+
+      if (removedDecls > 0) {
+        entries.push({
+          path: block.path,
+          kind: 'removed_test_declarations',
+          added: 0,
+          removed: removedDecls,
+          net: -removedDecls,
+          detail: `${removedDecls} test declaration${removedDecls === 1 ? '' : 's'} removed`,
+        });
+      }
+    }
+
+    return new SuspicionMap(entries);
+  }
+
+  toPromptText() {
+    if (this.isEmpty) {
+      return 'Deterministic suspicion map: no test-file assert deltas, deletions, or removed test declarations detected.';
+    }
+
+    const lines = [
+      'Deterministic suspicion map (computed from the staged diff; every entry must be addressed):',
+    ];
+
+    for (const entry of this.#entries) {
+      if (entry.kind === 'assert_delta') {
+        const netStr = entry.net > 0 ? `+${entry.net}` : `${entry.net}`;
+        lines.push(`- ${entry.path}: assert lines +${entry.added}/-${entry.removed} (net ${netStr})`);
+      } else if (entry.kind === 'deleted_test_file') {
+        lines.push(`- ${entry.path}: deleted test file (${entry.removed} removed lines)`);
+      } else if (entry.kind === 'removed_test_declarations') {
+        lines.push(`- ${entry.path}: ${entry.removed} test declaration${entry.removed === 1 ? '' : 's'} removed`);
+      }
+    }
+
+    return lines.join('\n');
+  }
+}
+
 /**
  * Immutable value object containing the complete staged index tree.
  */
@@ -591,9 +795,11 @@ export class ReviewPrompt {
   #snapshotDir;
   #diffHash;
   #changedPaths;
+  #suspicionMapText;
+  #executionEvidenceText;
   #reemitOutput;
 
-  constructor(diffHash, snapshotDir = '', changedPaths = []) {
+  constructor(diffHash, snapshotDir = '', changedPaths = [], extras = {}) {
     if (!diffHash || typeof diffHash !== 'string') {
       throw new TypeError('ReviewPrompt requires a non-empty diff hash string');
     }
@@ -606,12 +812,14 @@ export class ReviewPrompt {
     this.#diffHash = diffHash;
     this.#snapshotDir = snapshotDir;
     this.#changedPaths = changedPaths;
+    this.#suspicionMapText = typeof extras?.suspicionMapText === 'string' ? extras.suspicionMapText : '';
+    this.#executionEvidenceText = typeof extras?.executionEvidenceText === 'string' ? extras.executionEvidenceText : '';
   }
 
-  static forDiff(target, snapshotDir = '', changedPaths = []) {
+  static forDiff(target, snapshotDir = '', changedPaths = [], extras = {}) {
     const hash = target instanceof DiffIdentity ? target.hash : target;
     const paths = target instanceof DiffIdentity ? target.changedPaths : changedPaths;
-    return new ReviewPrompt(hash, snapshotDir, paths);
+    return new ReviewPrompt(hash, snapshotDir, paths, extras);
   }
 
   /**
@@ -657,6 +865,12 @@ export class ReviewPrompt {
         'Pass these paths to the context scout in its task text so it does not re-derive them from the diff.',
       );
     }
+    if (this.#suspicionMapText) {
+      lines.push('', this.#suspicionMapText);
+    }
+    if (this.#executionEvidenceText) {
+      lines.push('', this.#executionEvidenceText);
+    }
     lines.push(`The staged diff hash for this hook invocation is ${this.#diffHash}.`);
     return lines.join('\n');
   }
@@ -675,6 +889,14 @@ export class ReviewPrompt {
 
   get changedPaths() {
     return [...this.#changedPaths];
+  }
+
+  get suspicionMapText() {
+    return this.#suspicionMapText;
+  }
+
+  get executionEvidenceText() {
+    return this.#executionEvidenceText;
   }
 }
 
@@ -1087,6 +1309,9 @@ export class ReviewWorkflowService {
   #telemetryPort;
   #clock;
   #logger;
+  #assertPatterns;
+  #testPathPatterns;
+  #testDeclarationPatterns;
 
   constructor({
     gitPort,
@@ -1099,6 +1324,9 @@ export class ReviewWorkflowService {
       log: (msg) => process.stdout.write(msg),
       error: (msg) => process.stderr.write(msg),
     },
+    assertPatterns,
+    testPathPatterns,
+    testDeclarationPatterns,
   }) {
     if (!gitPort) throw new TypeError('ReviewWorkflowService requires gitPort');
     if (!reviewerPort) throw new TypeError('ReviewWorkflowService requires reviewerPort');
@@ -1112,6 +1340,11 @@ export class ReviewWorkflowService {
     this.#telemetryPort = telemetryPort ?? new FileSystemTelemetryAdapter();
     this.#clock = clock;
     this.#logger = logger;
+    const envAssert = process.env.OMP_REVIEW_KIT_ASSERT_PATTERNS?.trim();
+    const envTestPaths = process.env.OMP_REVIEW_KIT_TEST_PATH_PATTERNS?.trim();
+    this.#assertPatterns = assertPatterns ?? (envAssert ? envAssert.split(',').map((s) => s.trim()).filter(Boolean) : DEFAULT_ASSERT_PATTERNS);
+    this.#testPathPatterns = testPathPatterns ?? (envTestPaths ? envTestPaths.split(',').map((s) => s.trim()).filter(Boolean) : DEFAULT_TEST_PATH_PATTERNS);
+    this.#testDeclarationPatterns = testDeclarationPatterns ?? DEFAULT_TEST_DECLARATION_PATTERNS;
   }
 
   async execute({ cwd = process.cwd() } = {}) {
@@ -1161,6 +1394,20 @@ export class ReviewWorkflowService {
         diffBytes: diff.length,
       });
 
+      const suspicionMap = SuspicionMap.compute({
+        diffBytes: diff.bytes,
+        assertPatterns: this.#assertPatterns,
+        testPathPatterns: this.#testPathPatterns,
+        testDeclarationPatterns: this.#testDeclarationPatterns,
+      });
+
+      await telemetry.record('suspicion_map_computed', {
+        entries: suspicionMap.entries.length,
+        assertDelta: suspicionMap.entries.filter((e) => e.kind === 'assert_delta').length,
+        deletedTestFiles: suspicionMap.entries.filter((e) => e.kind === 'deleted_test_file').length,
+        removedTestDeclarations: suspicionMap.entries.filter((e) => e.kind === 'removed_test_declarations').length,
+      });
+
       const snapshotStartedAt = Date.now();
       const snapshot = await this.#gitPort.getSnapshot(repoRoot);
       const snapshotDir = await this.#snapshotStorePort.create(snapshot, {
@@ -1175,7 +1422,9 @@ export class ReviewWorkflowService {
 
       let execResult;
       try {
-        const prompt = ReviewPrompt.forDiff(diff, snapshotDir, diff.changedPaths);
+        const prompt = ReviewPrompt.forDiff(diff, snapshotDir, diff.changedPaths, {
+          suspicionMapText: suspicionMap.toPromptText(),
+        });
         execResult = await this.#reviewerPort.executeReview({
           prompt,
           cwd: repoRoot,
@@ -2376,7 +2625,7 @@ export class FileSystemTelemetryAdapter extends TelemetryPort {
  * ============================================================================
  */
 
-export function createReviewWorkflowService({ git, omp, ompOptions, clock, logger, progress, telemetry } = {}) {
+export function createReviewWorkflowService({ git, omp, ompOptions, clock, logger, progress, telemetry, assertPatterns, testPathPatterns, testDeclarationPatterns } = {}) {
   const gitPort = new SubprocessGitAdapter(git);
   const reviewerPort = new OmpCliReviewerAdapter({ runner: omp, progress, ...ompOptions });
   const reportStorePort = new FileSystemReportStoreAdapter();
@@ -2391,6 +2640,9 @@ export function createReviewWorkflowService({ git, omp, ompOptions, clock, logge
     telemetryPort,
     clock,
     logger,
+    assertPatterns,
+    testPathPatterns,
+    testDeclarationPatterns,
   });
 }
 

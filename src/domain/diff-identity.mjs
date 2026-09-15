@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
  * when `core.quotepath` is true (the default). Each `\ooo` sequence is one raw
  * byte; consecutive octal escapes form multi-byte UTF-8 sequences.
  */
-function unquoteGitPath(quoted) {
+export function unquoteGitPath(quoted) {
   const inner = quoted.slice(1, -1);
   const bytes = [];
   for (let i = 0; i < inner.length; i += 1) {

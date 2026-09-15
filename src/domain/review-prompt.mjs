@@ -7,9 +7,11 @@ export class ReviewPrompt {
   #snapshotDir;
   #diffHash;
   #changedPaths;
+  #suspicionMapText;
+  #executionEvidenceText;
   #reemitOutput;
 
-  constructor(diffHash, snapshotDir = '', changedPaths = []) {
+  constructor(diffHash, snapshotDir = '', changedPaths = [], extras = {}) {
     if (!diffHash || typeof diffHash !== 'string') {
       throw new TypeError('ReviewPrompt requires a non-empty diff hash string');
     }
@@ -22,12 +24,14 @@ export class ReviewPrompt {
     this.#diffHash = diffHash;
     this.#snapshotDir = snapshotDir;
     this.#changedPaths = changedPaths;
+    this.#suspicionMapText = typeof extras?.suspicionMapText === 'string' ? extras.suspicionMapText : '';
+    this.#executionEvidenceText = typeof extras?.executionEvidenceText === 'string' ? extras.executionEvidenceText : '';
   }
 
-  static forDiff(target, snapshotDir = '', changedPaths = []) {
+  static forDiff(target, snapshotDir = '', changedPaths = [], extras = {}) {
     const hash = target instanceof DiffIdentity ? target.hash : target;
     const paths = target instanceof DiffIdentity ? target.changedPaths : changedPaths;
-    return new ReviewPrompt(hash, snapshotDir, paths);
+    return new ReviewPrompt(hash, snapshotDir, paths, extras);
   }
 
   /**
@@ -73,6 +77,12 @@ export class ReviewPrompt {
         'Pass these paths to the context scout in its task text so it does not re-derive them from the diff.',
       );
     }
+    if (this.#suspicionMapText) {
+      lines.push('', this.#suspicionMapText);
+    }
+    if (this.#executionEvidenceText) {
+      lines.push('', this.#executionEvidenceText);
+    }
     lines.push(`The staged diff hash for this hook invocation is ${this.#diffHash}.`);
     return lines.join('\n');
   }
@@ -91,5 +101,13 @@ export class ReviewPrompt {
 
   get changedPaths() {
     return [...this.#changedPaths];
+  }
+
+  get suspicionMapText() {
+    return this.#suspicionMapText;
+  }
+
+  get executionEvidenceText() {
+    return this.#executionEvidenceText;
   }
 }

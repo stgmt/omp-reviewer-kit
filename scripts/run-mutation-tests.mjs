@@ -344,6 +344,22 @@ const MUTANTS = [
     replacement: '// triage field removed',
     description: 'Removes triage field from verifier decisions schema',
   },
+  {
+    id: 'modular-suspicion-assert-delta',
+    file: 'src/domain/suspicion-map.mjs',
+    testFile: 'tests/suspicion-map.test.mjs',
+    original: 'const net = addedAsserts - removedAsserts;',
+    replacement: 'const net = removedAsserts - addedAsserts;',
+    description: 'Inverts net assert delta calculation in domain suspicion map',
+  },
+  {
+    id: 'runner-suspicion-assert-delta',
+    file: 'scripts/run-review.mjs',
+    testFile: 'tests/run-review.test.mjs',
+    original: 'const net = addedAsserts - removedAsserts;',
+    replacement: 'const net = removedAsserts - addedAsserts;',
+    description: 'Inverts net assert delta calculation in distributable runner suspicion map',
+  },
 ];
 
 const DIRECTORIES_TO_COPY = ['src', 'scripts', 'agents', 'skills', 'tests', 'templates', '.omp-plugin'];
