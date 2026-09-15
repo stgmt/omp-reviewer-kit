@@ -191,6 +191,7 @@ function formatAgo(iso) {
 const LIVE_RUN_STATES = {
   started: 'started',
   probing: 'probe',
+  executing: 'running project checks',
   reviewing: 'reviewing',
   working: 'working',
   response: 'response',

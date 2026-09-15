@@ -127,7 +127,23 @@ OMP_REVIEW_KIT_OMP              # path/name of the omp executable
 OMP_REVIEW_KIT_TELEMETRY=0      # disable run telemetry writes
 OMP_REVIEW_KIT_ASSERT_PATTERNS    # comma-separated regexes identifying assert statements (suspicion map)
 OMP_REVIEW_KIT_TEST_PATH_PATTERNS # comma-separated regexes identifying test file paths (suspicion map)
+OMP_REVIEW_KIT_EXECUTE=1          # enable opt-in pre-review check execution (default: 0)
+OMP_REVIEW_KIT_EXECUTE_COMMAND    # shell command to run in staged/reverted snapshots (e.g. npm test)
+OMP_REVIEW_KIT_EXECUTE_TIMEOUT_MS # timeout for check execution (default: 600000)
+OMP_REVIEW_KIT_EXECUTE_LINK_DIRS  # comma-separated dir names to link from repoRoot (default: node_modules,.venv,venv)
+OMP_REVIEW_KIT_RED_PROOF=1        # enable reverted snapshot run for red proof (default: 0)
 ```
+
+### Pre-Review Check Execution & Red-Proof Matrix
+
+When `OMP_REVIEW_KIT_EXECUTE=1` is configured with `OMP_REVIEW_KIT_EXECUTE_COMMAND`, the dispatcher executes the command in the staged snapshot before starting the review. If `OMP_REVIEW_KIT_RED_PROOF=1` is also enabled and both test and non-test files were modified, it creates a reverted snapshot (non-test files reverted to HEAD) and runs the same command to verify whether tests can fail without the code changes.
+
+The 2×2 interpretation matrix is passed directly to the review agents:
+- **staged pass + reverted fail**: tests prove the change; red proof achieved.
+- **staged pass + reverted pass**: tests do not discriminate the change; raises a P2 correctness candidate when test files were touched.
+- **staged fail + reverted pass**: change breaks the project's own checks; raises a P1 correctness candidate.
+- **staged fail + reverted fail**: pre-existing failure; compare output tails.
+- **unavailable**: check execution was unavailable or failed; absence proves nothing (fail-open).
 
 Point `modelRoles.smol` and `modelRoles.task` in `~/.omp/agent/config.yml` at
 fast, available models to keep reviews quick. Note that `agentModelOverrides`

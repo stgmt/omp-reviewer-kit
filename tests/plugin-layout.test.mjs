@@ -97,6 +97,7 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(reviewerKitAgent, /### Verified-OK/);
     assert.match(reviewerKitAgent, /### Notes/);
     assert.match(reviewerKitAgent, /suspicion map/i);
+    assert.match(reviewerKitAgent, /execution evidence/i);
 
     assert.match(reviewerKitAgent, /REVIEW_RESULT=PASS/);
     assert.match(reviewerKitAgent, /REVIEW_RESULT=BLOCK/);

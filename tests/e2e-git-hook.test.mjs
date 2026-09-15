@@ -80,14 +80,17 @@ function rejectionOutputForHash(diffHash, { kind = 'confirmed_findings', filePat
 
 const MOCK_ROLES_JSON = '{"key":"modelRoles","value":{"smol":"acme/smol-flash:high","task":"acme/task-fast:high","slow":"acme/slow-max:max"}}';
 
-async function writeMockReviewer(scriptPath, output, reemitOutput = output) {
+async function writeMockReviewer(scriptPath, output, reemitOutput = output, captureStdinPath = null) {
   const handlerPath = path.join(path.dirname(scriptPath), `${path.basename(scriptPath, path.extname(scriptPath))}-handler.mjs`);
+  const captureExpr = captureStdinPath ? `try { const input = readFileSync(0, 'utf8'); writeFileSync(${JSON.stringify(captureStdinPath)}, input, 'utf8'); } catch {}` : '';
   const handlerCode = `import process from 'node:process';
+import { readFileSync, writeFileSync } from 'node:fs';
 const args = process.argv.slice(2);
 if (args[0] === 'config') {
   process.stdout.write(${JSON.stringify(MOCK_ROLES_JSON)} + '\\n');
   process.exit(0);
 }
+${captureExpr}
 const isReemit = args.includes('--no-tools');
 const out = isReemit ? ${JSON.stringify(reemitOutput)} : ${JSON.stringify(output)};
 process.stdout.write(out.endsWith('\\n') ? out : out + '\\n');
@@ -439,5 +442,30 @@ describe('Feature: Real Git Pre-commit Hook E2E Integration', () => {
     assert.doesNotMatch(logRes.stdout, /Commit with bare verdict/);
     const statusRes = git(['status', '--porcelain']);
     assert.match(statusRes.stdout, /A  bare-verdict.txt/);
+  });
+
+  it('passes execution evidence to reviewer stdin when OMP_REVIEW_KIT_EXECUTE is enabled', async () => {
+    const { repoDir, git } = fixture;
+    const mockOmpScript = path.join(repoDir, isWindows ? 'mock-exec-omp.cmd' : 'mock-exec-omp.sh');
+    const stdinCapturePath = path.join(repoDir, 'captured-stdin.txt');
+
+    await writeMockReviewer(mockOmpScript, 'REVIEW_RESULT=PASS\n', 'REVIEW_RESULT=PASS\n', stdinCapturePath);
+
+    await writeFile(path.join(repoDir, 'exec-test.txt'), 'content\n', 'utf8');
+    git(['add', 'exec-test.txt']);
+
+    const res = git(['commit', '-m', 'Commit with execution enabled'], {
+      env: {
+        ...process.env,
+        OMP_REVIEW_KIT_OMP: mockOmpScript,
+        OMP_REVIEW_KIT_EXECUTE: '1',
+        OMP_REVIEW_KIT_EXECUTE_COMMAND: 'node -e "process.stdout.write(\'checks ran fine\'); process.exit(0)"',
+      },
+    });
+
+    assert.equal(res.status, 0, `git commit should succeed: ${res.stderr}`);
+    const captured = await readFile(stdinCapturePath, 'utf8');
+    assert.match(captured, /Execution evidence \(opt-in, produced by the dispatcher before this review\):/);
+    assert.match(captured, /checks ran fine/);
   });
 });

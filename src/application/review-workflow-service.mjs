@@ -2,7 +2,11 @@ import { ReviewRejectionEnvelope } from '../domain/review-rejection-envelope.mjs
 import { ReviewPrompt } from '../domain/review-prompt.mjs';
 import { ReviewReport } from '../domain/review-report.mjs';
 import { ReviewExecutionResult } from '../domain/review-execution-result.mjs';
-import { SuspicionMap, DEFAULT_ASSERT_PATTERNS, DEFAULT_TEST_PATH_PATTERNS, DEFAULT_TEST_DECLARATION_PATTERNS } from '../domain/suspicion-map.mjs';
+import { SuspicionMap, isTestPath, DEFAULT_ASSERT_PATTERNS, DEFAULT_TEST_PATH_PATTERNS, DEFAULT_TEST_DECLARATION_PATTERNS } from '../domain/suspicion-map.mjs';
+import { ExecutionEvidence } from '../domain/execution-evidence.mjs';
+import { buildRevertedFiles } from '../domain/reverted-snapshot.mjs';
+import { StagedSnapshot } from '../domain/staged-snapshot.mjs';
+import { SubprocessExecutionAdapter, linkDependencyDirs } from '../infra/subprocess-execution-adapter.mjs';
 import { GitPort, ReviewerPort, ReportStorePort, SnapshotStorePort, TelemetryPort } from './ports.mjs';
 import { FileSystemTelemetryAdapter, NULL_RUN_TELEMETRY, safeRunTelemetry } from '../infra/filesystem-telemetry-adapter.mjs';
 import { installRunSignalGuard } from '../infra/run-signal-guard.mjs';
@@ -21,6 +25,8 @@ export class ReviewWorkflowService {
   #assertPatterns;
   #testPathPatterns;
   #testDeclarationPatterns;
+  #executionPort;
+  #execution;
 
   /**
    * @param {{
@@ -47,6 +53,8 @@ export class ReviewWorkflowService {
     assertPatterns,
     testPathPatterns,
     testDeclarationPatterns,
+    executionPort,
+    execution = {},
   }) {
     if (!gitPort) throw new TypeError('ReviewWorkflowService requires gitPort');
     if (!reviewerPort) throw new TypeError('ReviewWorkflowService requires reviewerPort');
@@ -65,6 +73,26 @@ export class ReviewWorkflowService {
     this.#assertPatterns = assertPatterns ?? (envAssert ? envAssert.split(',').map((s) => s.trim()).filter(Boolean) : undefined);
     this.#testPathPatterns = testPathPatterns ?? (envTestPaths ? envTestPaths.split(',').map((s) => s.trim()).filter(Boolean) : undefined);
     this.#testDeclarationPatterns = testDeclarationPatterns;
+
+    const envExecute = process.env.OMP_REVIEW_KIT_EXECUTE === '1';
+    const envCommand = process.env.OMP_REVIEW_KIT_EXECUTE_COMMAND?.trim() ?? '';
+    const envTimeout = Number(process.env.OMP_REVIEW_KIT_EXECUTE_TIMEOUT_MS) || 600000;
+    const envLinkDirs = process.env.OMP_REVIEW_KIT_EXECUTE_LINK_DIRS
+      ? process.env.OMP_REVIEW_KIT_EXECUTE_LINK_DIRS.split(',').map((s) => s.trim()).filter(Boolean)
+      : ['node_modules', '.venv', 'venv'];
+    const envRedProof = process.env.OMP_REVIEW_KIT_RED_PROOF === '1';
+
+    const execEnabled = execution.enabled ?? envExecute;
+    const execCommand = execution.command ?? envCommand;
+
+    this.#executionPort = executionPort ?? ((execEnabled || execCommand) ? new SubprocessExecutionAdapter() : null);
+    this.#execution = {
+      enabled: execEnabled,
+      command: execCommand,
+      timeoutMs: execution.timeoutMs ?? envTimeout,
+      linkDirs: execution.linkDirs ?? envLinkDirs,
+      redProof: execution.redProof ?? envRedProof,
+    };
   }
 
   /**
@@ -145,10 +173,137 @@ export class ReviewWorkflowService {
         durationMs: Date.now() - snapshotStartedAt,
       });
 
+      let executionEvidence = null;
+      if (this.#execution.enabled || this.#execution.command) {
+        if (!this.#execution.command) {
+          executionEvidence = new ExecutionEvidence({
+            command: '',
+            staged: { ok: false, error: 'no command configured' },
+            reverted: null,
+          });
+        } else if (this.#executionPort) {
+          try {
+            await telemetry.updateLastRun({
+              state: 'executing',
+              phase: 'staged',
+              command: this.#execution.command,
+              runId,
+              repoRoot,
+            }, { force: true });
+
+            await telemetry.record('execution_started', {
+              phase: 'staged',
+              command: this.#execution.command,
+              timeoutMs: this.#execution.timeoutMs,
+            });
+
+            const linkWarnings = await linkDependencyDirs(repoRoot, snapshotDir, this.#execution.linkDirs);
+            const stagedResult = await this.#executionPort.run({
+              command: this.#execution.command,
+              cwd: snapshotDir,
+              timeoutMs: this.#execution.timeoutMs,
+            });
+
+            await telemetry.record('execution_finished', {
+              phase: 'staged',
+              exitCode: stagedResult.exitCode,
+              timedOut: stagedResult.timedOut,
+              durationMs: stagedResult.durationMs,
+              stdoutBytes: Buffer.byteLength(stagedResult.stdout ?? ''),
+              stderrBytes: Buffer.byteLength(stagedResult.stderr ?? ''),
+            });
+
+            let revertedResult = null;
+            let revertedSkipReason = '';
+
+            if (this.#execution.redProof && stagedResult.ok) {
+              const hasTest = diff.changedPaths.some((p) => isTestPath(p, this.#testPathPatterns));
+              const hasNonTest = diff.changedPaths.some((p) => !isTestPath(p, this.#testPathPatterns));
+
+              if (hasTest && hasNonTest) {
+                const headFiles = new Map();
+                for (const p of diff.changedPaths) {
+                  if (!isTestPath(p, this.#testPathPatterns)) {
+                    headFiles.set(p, await this.#gitPort.getHeadFile(repoRoot, p));
+                  }
+                }
+
+                const revertedFiles = buildRevertedFiles({
+                  files: snapshot.files,
+                  changedPaths: diff.changedPaths,
+                  testPathPatterns: this.#testPathPatterns,
+                  headFiles,
+                });
+
+                const revertedSnapshot = new StagedSnapshot(revertedFiles);
+                const revertedDir = await this.#snapshotStorePort.create(revertedSnapshot, {
+                  artifacts: false,
+                });
+
+                try {
+                  await telemetry.updateLastRun({
+                    state: 'executing',
+                    phase: 'reverted',
+                    command: this.#execution.command,
+                    runId,
+                    repoRoot,
+                  }, { force: true });
+
+                  await telemetry.record('execution_started', {
+                    phase: 'reverted',
+                    command: this.#execution.command,
+                    timeoutMs: this.#execution.timeoutMs,
+                  });
+
+                  await linkDependencyDirs(repoRoot, revertedDir, this.#execution.linkDirs);
+                  revertedResult = await this.#executionPort.run({
+                    command: this.#execution.command,
+                    cwd: revertedDir,
+                    timeoutMs: this.#execution.timeoutMs,
+                  });
+
+                  await telemetry.record('execution_finished', {
+                    phase: 'reverted',
+                    exitCode: revertedResult.exitCode,
+                    timedOut: revertedResult.timedOut,
+                    durationMs: revertedResult.durationMs,
+                    stdoutBytes: Buffer.byteLength(revertedResult.stdout ?? ''),
+                    stderrBytes: Buffer.byteLength(revertedResult.stderr ?? ''),
+                  });
+                } finally {
+                  await this.#snapshotStorePort.remove(revertedDir);
+                }
+              } else {
+                revertedSkipReason = !hasTest ? 'no test changes staged' : 'no non-test changes staged';
+              }
+            } else if (!this.#execution.redProof) {
+              revertedSkipReason = 'red proof disabled';
+            }
+
+            executionEvidence = new ExecutionEvidence({
+              command: this.#execution.command,
+              timeoutMs: this.#execution.timeoutMs,
+              staged: stagedResult,
+              reverted: revertedResult,
+              revertedSkipReason,
+              warnings: linkWarnings,
+            });
+          } catch (err) {
+            executionEvidence = new ExecutionEvidence({
+              command: this.#execution.command,
+              timeoutMs: this.#execution.timeoutMs,
+              staged: { ok: false, error: err.message },
+              reverted: null,
+            });
+          }
+        }
+      }
+
       let execResult;
       try {
         const prompt = ReviewPrompt.forDiff(diff, snapshotDir, diff.changedPaths, {
           suspicionMapText: suspicionMap.toPromptText(),
+          executionEvidenceText: executionEvidence ? executionEvidence.toPromptText() : '',
         });
         execResult = await this.#reviewerPort.executeReview({
           prompt,

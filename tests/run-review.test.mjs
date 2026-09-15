@@ -292,3 +292,65 @@ test('dispatcher prompt carries deterministic suspicion map for deleted test fil
   assert.match(prompt, /- tests\/obsolete\.test\.mjs: deleted test file \(50 removed lines\)/);
   assert.match(prompt, /- tests\/calc\.test\.mjs: assert lines \+1\/-3 \(net -2\)/);
 });
+
+test('dispatcher prompt carries execution evidence when OMP_REVIEW_KIT_EXECUTE is enabled', async () => {
+  const root = await makeRoot('omp-review-kit-exec-');
+  const stagedDiff = 'diff --git a/test.mjs b/test.mjs\n--- a/test.mjs\n+++ b/test.mjs\n@@ -1 +1 @@\n-1\n+2\n';
+
+  const origExec = process.env.OMP_REVIEW_KIT_EXECUTE;
+  const origCmd = process.env.OMP_REVIEW_KIT_EXECUTE_COMMAND;
+  process.env.OMP_REVIEW_KIT_EXECUTE = '1';
+  process.env.OMP_REVIEW_KIT_EXECUTE_COMMAND = 'node -e "process.stdout.write(\'tests passing\'); process.exit(0)"';
+
+  let prompt = '';
+  try {
+    const result = await runReview({
+      cwd: root,
+      git: fakeGit(root, stagedDiff),
+      omp: (value) => {
+        prompt = value;
+        return { status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' };
+      },
+      ompOptions: { roleResolver: testRoleResolver },
+    });
+
+    assert.equal(result.exitCode, 0);
+    assert.match(prompt, /Execution evidence \(opt-in, produced by the dispatcher before this review\):/);
+    assert.match(prompt, /- Staged snapshot: exit 0 in/);
+    assert.match(prompt, /tests passing/);
+  } finally {
+    if (origExec !== undefined) process.env.OMP_REVIEW_KIT_EXECUTE = origExec;
+    else delete process.env.OMP_REVIEW_KIT_EXECUTE;
+    if (origCmd !== undefined) process.env.OMP_REVIEW_KIT_EXECUTE_COMMAND = origCmd;
+    else delete process.env.OMP_REVIEW_KIT_EXECUTE_COMMAND;
+  }
+});
+
+test('runner fails open and includes unavailable in prompt when execution throws', async () => {
+  const root = await makeRoot('omp-review-kit-exec-fail-');
+  const stagedDiff = 'diff --git a/test.mjs b/test.mjs\n--- a/test.mjs\n+++ b/test.mjs\n@@ -1 +1 @@\n-1\n+2\n';
+
+  const throwingPort = {
+    run: async () => { throw new Error('runner execution crashed'); },
+  };
+
+  let prompt = '';
+  const result = await runReview({
+    cwd: root,
+    git: fakeGit(root, stagedDiff),
+    executionPort: throwingPort,
+    execution: {
+      enabled: true,
+      command: 'npm test',
+    },
+    omp: (value) => {
+      prompt = value;
+      return { status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' };
+    },
+    ompOptions: { roleResolver: testRoleResolver },
+  });
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.verdict, 'PASS');
+  assert.match(prompt, /- Staged snapshot: unavailable \(runner execution crashed\)/);
+});

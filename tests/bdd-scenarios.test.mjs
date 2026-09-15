@@ -654,4 +654,55 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
     await rm(repoRoot, { recursive: true, force: true }).catch(() => {});
   });
 
+  it('Scenario: Given execution enabled and a staged test that passes without the change, When reviewed, Then the prompt carries the staged-pass/reverted-pass interpretation', async () => {
+    const repoRoot = await mkdtemp(path.join(tmpdir(), 'omp-bdd-exec-'));
+    const stagedDiff = [
+      'diff --git a/tests/calc.test.mjs b/tests/calc.test.mjs',
+      '--- a/tests/calc.test.mjs',
+      '+++ b/tests/calc.test.mjs',
+      '@@ -1 +1 @@',
+      '-1',
+      '+2',
+      'diff --git a/src/calc.mjs b/src/calc.mjs',
+      '--- a/src/calc.mjs',
+      '+++ b/src/calc.mjs',
+      '@@ -1 +1 @@',
+      '-1',
+      '+2',
+    ].join('\n');
+
+    let capturedPrompt = '';
+    const fakeGit = (args) => {
+      if (args[0] === 'rev-parse') return Buffer.from(`${repoRoot}\n`);
+      if (args[0] === 'diff') return Buffer.from(stagedDiff);
+      if (args[0] === 'cat-file') return Buffer.from('1');
+      return Buffer.alloc(0);
+    };
+
+    const fakeExecutionPort = {
+      run: async () => ({ ok: true, exitCode: 0, durationMs: 50, stdout: 'all passed\n', stderr: '' }),
+    };
+
+    const result = await runReview({
+      cwd: repoRoot,
+      git: fakeGit,
+      executionPort: fakeExecutionPort,
+      execution: {
+        enabled: true,
+        command: 'npm test',
+        redProof: true,
+      },
+      omp: (prompt) => {
+        capturedPrompt = prompt;
+        return { status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' };
+      },
+      ompOptions: { roleResolver: () => ({ smol: 'acme/smol-flash:high', task: 'acme/task-fast:high' }) },
+      now: new Date('2026-09-15T11:00:00.000Z'),
+    });
+
+    assert.equal(result.exitCode, 0);
+    assert.match(capturedPrompt, /staged pass \+ reverted pass => the staged tests do not discriminate the staged change/);
+    await rm(repoRoot, { recursive: true, force: true }).catch(() => {});
+  });
+
 });

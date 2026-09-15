@@ -40,6 +40,17 @@ export class GitPort {
   getSnapshot(repoRoot) {
     throw new Error('GitPort.getSnapshot must be implemented');
   }
+
+  /**
+   * Reads a file content from HEAD if it exists, or null.
+   *
+   * @param {string} repoRoot
+   * @param {string} path
+   * @returns {Promise<Buffer | null>|Buffer|null}
+   */
+  getHeadFile(repoRoot, path) {
+    throw new Error('GitPort.getHeadFile must be implemented');
+  }
 }
 
 /**
@@ -141,5 +152,22 @@ export class TelemetryPort {
    */
   forRun(context) {
     throw new Error('TelemetryPort.forRun must be implemented');
+  }
+}
+
+/**
+ * Port representing external check/test command execution.
+ *
+ * @interface
+ */
+export class ExecutionPort {
+  /**
+   * Executes a command within the specified working directory with bounded timeout.
+   *
+   * @param {{ command: string, cwd: string, timeoutMs?: number }} options
+   * @returns {Promise<{ ok: true, exitCode: number, timedOut: boolean, durationMs: number, stdout: string, stderr: string } | { ok: false, error: string }>}
+   */
+  run({ command, cwd, timeoutMs }) {
+    throw new Error('ExecutionPort.run must be implemented');
   }
 }

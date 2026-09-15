@@ -144,7 +144,7 @@ function resolveAgentDir(profile) {
 async function copyDefaultProfileConfig(targetAgentDir) {
   const defaultAgentDir = resolveAgentDir();
   await mkdir(targetAgentDir, { recursive: true });
-  for (const filename of ['models.yml', 'config.yml', 'agent.db']) {
+  for (const filename of ['models.yml', 'config.yml', 'agent.db', 'models.db']) {
     await copyFile(path.join(defaultAgentDir, filename), path.join(targetAgentDir, filename));
   }
 }

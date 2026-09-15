@@ -360,6 +360,48 @@ const MUTANTS = [
     replacement: 'const net = removedAsserts - addedAsserts;',
     description: 'Inverts net assert delta calculation in distributable runner suspicion map',
   },
+  {
+    id: 'modular-execution-fail-open',
+    file: 'src/application/review-workflow-service.mjs',
+    testFile: 'tests/execution-evidence.test.mjs',
+    original: `          } catch (err) {
+            executionEvidence = new ExecutionEvidence({
+              command: this.#execution.command,
+              timeoutMs: this.#execution.timeoutMs,
+              staged: { ok: false, error: err.message },
+              reverted: null,
+            });
+          }`,
+    replacement: `          } catch (err) {
+            throw err;
+          }`,
+    description: 'Replaces fail-open execution catch with throw in modular service',
+  },
+  {
+    id: 'runner-execution-fail-open',
+    file: 'scripts/run-review.mjs',
+    testFile: 'tests/run-review.test.mjs',
+    original: `          } catch (err) {
+            executionEvidence = new ExecutionEvidence({
+              command: this.#execution.command,
+              timeoutMs: this.#execution.timeoutMs,
+              staged: { ok: false, error: err.message },
+              reverted: null,
+            });
+          }`,
+    replacement: `          } catch (err) {
+            throw err;
+          }`,
+    description: 'Replaces fail-open execution catch with throw in runner service',
+  },
+  {
+    id: 'reverted-snapshot-keeps-staged',
+    file: 'src/domain/reverted-snapshot.mjs',
+    testFile: 'tests/reverted-snapshot.test.mjs',
+    original: 'if (!changedSet.has(file.path) || isTestPath(file.path, testPathPatterns)) {',
+    replacement: 'if (!changedSet.has(file.path) || true) {',
+    description: 'Reverted snapshot builder keeps staged content for all files',
+  },
 ];
 
 const DIRECTORIES_TO_COPY = ['src', 'scripts', 'agents', 'skills', 'tests', 'templates', '.omp-plugin'];

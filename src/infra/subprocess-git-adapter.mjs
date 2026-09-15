@@ -71,6 +71,15 @@ export class SubprocessGitAdapter extends GitPort {
    * @param {string} repoRoot
    * @returns {Promise<StagedSnapshot>}
    */
+  async getHeadFile(repoRoot, filePath) {
+    try {
+      const buffer = await this.#runner(['cat-file', 'blob', `HEAD:${filePath}`], repoRoot);
+      return Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer ?? '');
+    } catch {
+      return null;
+    }
+  }
+
   async getSnapshot(repoRoot) {
     const listing = await this.#runner(['ls-files', '--cached', '-z', '--stage', '--'], repoRoot);
     const entries = listing.toString('utf8').split('\0').filter(Boolean);

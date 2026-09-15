@@ -3,6 +3,8 @@ export { StagedSnapshot } from './domain/staged-snapshot.mjs';
 export { ReviewVerdict } from './domain/review-verdict.mjs';
 export { ReviewRejectionEnvelope } from './domain/review-rejection-envelope.mjs';
 export { ReviewPrompt } from './domain/review-prompt.mjs';
+export { ExecutionEvidence } from './domain/execution-evidence.mjs';
+export { buildRevertedFiles } from './domain/reverted-snapshot.mjs';
 export {
   SuspicionMap,
   isTestPath,
@@ -14,7 +16,7 @@ export {
 export { ReviewReport } from './domain/review-report.mjs';
 export { ReviewExecutionResult } from './domain/review-execution-result.mjs';
 
-export { GitPort, ReviewerPort, ReportStorePort, SnapshotStorePort, TelemetryPort } from './application/ports.mjs';
+export { GitPort, ReviewerPort, ReportStorePort, SnapshotStorePort, TelemetryPort, ExecutionPort } from './application/ports.mjs';
 export { ReviewWorkflowService } from './application/review-workflow-service.mjs';
 export { PluginInstallerService } from './application/installer-service.mjs';
 
@@ -22,6 +24,7 @@ export { SubprocessGitAdapter } from './infra/subprocess-git-adapter.mjs';
 export { FileSystemSnapshotAdapter } from './infra/filesystem-snapshot-adapter.mjs';
 export { OmpCliReviewerAdapter, sanitizeReviewerOutput } from './infra/omp-cli-reviewer-adapter.mjs';
 export { FileSystemReportStoreAdapter } from './infra/filesystem-report-store-adapter.mjs';
+export { SubprocessExecutionAdapter, linkDependencyDirs } from './infra/subprocess-execution-adapter.mjs';
 export {
   FileSystemTelemetryAdapter,
   NullTelemetryAdapter,
@@ -51,7 +54,7 @@ import { ReviewWorkflowService } from './application/review-workflow-service.mjs
  * }} [options]
  * @returns {ReviewWorkflowService}
  */
-export function createReviewWorkflowService({ git, omp, ompOptions, clock, logger, progress, telemetry, assertPatterns, testPathPatterns, testDeclarationPatterns } = {}) {
+export function createReviewWorkflowService({ git, omp, ompOptions, clock, logger, progress, telemetry, assertPatterns, testPathPatterns, testDeclarationPatterns, executionPort, execution } = {}) {
   const gitPort = new SubprocessGitAdapter(git);
   const reviewerPort = new OmpCliReviewerAdapter({ runner: omp, progress, ...ompOptions });
   const reportStorePort = new FileSystemReportStoreAdapter();
@@ -69,6 +72,8 @@ export function createReviewWorkflowService({ git, omp, ompOptions, clock, logge
     assertPatterns,
     testPathPatterns,
     testDeclarationPatterns,
+    executionPort,
+    execution,
   });
 }
 
@@ -93,6 +98,11 @@ export async function runReview({
   logger,
   progress,
   telemetry,
+  assertPatterns,
+  testPathPatterns,
+  testDeclarationPatterns,
+  executionPort,
+  execution,
 } = {}) {
   const service = createReviewWorkflowService({
     git,
@@ -102,6 +112,11 @@ export async function runReview({
     logger,
     progress,
     telemetry,
+    assertPatterns,
+    testPathPatterns,
+    testDeclarationPatterns,
+    executionPort,
+    execution,
   });
 
   const result = await service.execute({ cwd });

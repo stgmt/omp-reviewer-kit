@@ -305,6 +305,143 @@ export class SuspicionMap {
 /**
  * Immutable value object containing the complete staged index tree.
  */
+export function buildRevertedFiles({
+  files = [],
+  changedPaths = [],
+  testPathPatterns,
+  headFiles = new Map(),
+} = {}) {
+  const changedSet = new Set(changedPaths);
+  const resultFiles = [];
+  const processedPaths = new Set();
+
+  for (const file of files) {
+    processedPaths.add(file.path);
+    if (!changedSet.has(file.path) || isTestPath(file.path, testPathPatterns)) {
+      resultFiles.push({ path: file.path, content: file.content });
+      continue;
+    }
+
+    const headContent = headFiles.get(file.path);
+    if (headContent !== null && headContent !== undefined) {
+      resultFiles.push({ path: file.path, content: headContent });
+    }
+  }
+
+  for (const p of changedPaths) {
+    if (!processedPaths.has(p) && !isTestPath(p, testPathPatterns)) {
+      const headContent = headFiles.get(p);
+      if (headContent !== null && headContent !== undefined) {
+        resultFiles.push({ path: p, content: headContent });
+      }
+    }
+  }
+
+  return resultFiles;
+}
+
+export class ExecutionEvidence {
+  #command;
+  #timeoutMs;
+  #staged;
+  #reverted;
+  #revertedSkipReason;
+  #warnings;
+
+  constructor({
+    command = '',
+    timeoutMs = 600000,
+    staged = null,
+    reverted = null,
+    revertedSkipReason = '',
+    warnings = [],
+  } = {}) {
+    this.#command = command;
+    this.#timeoutMs = timeoutMs;
+    this.#staged = staged;
+    this.#reverted = reverted;
+    this.#revertedSkipReason = revertedSkipReason;
+    this.#warnings = Object.freeze([...warnings]);
+  }
+
+  get command() {
+    return this.#command;
+  }
+
+  get staged() {
+    return this.#staged;
+  }
+
+  get reverted() {
+    return this.#reverted;
+  }
+
+  get warnings() {
+    return this.#warnings;
+  }
+
+  static tail(output, maxLines = 20) {
+    if (!output || typeof output !== 'string') return '';
+    const lines = output.trimEnd().split(/\r?\n/);
+    if (lines.length <= maxLines) return lines.join('\n');
+    return lines.slice(-maxLines).join('\n');
+  }
+
+  toPromptText() {
+    const timeoutSec = Math.round(this.#timeoutMs / 1000);
+    const lines = [
+      'Execution evidence (opt-in, produced by the dispatcher before this review):',
+      `- Command: \`${this.#command}\` (timeout ${timeoutSec}s)`,
+    ];
+
+    for (const warning of this.#warnings) {
+      lines.push(`- Warning: ${warning}`);
+    }
+
+    if (!this.#staged) {
+      lines.push('- Staged snapshot: not executed');
+    } else if (!this.#staged.ok) {
+      lines.push(`- Staged snapshot: unavailable (${this.#staged.error})`);
+    } else {
+      const durationSec = (this.#staged.durationMs / 1000).toFixed(1);
+      lines.push(`- Staged snapshot: exit ${this.#staged.exitCode} in ${durationSec}s`);
+      const combined = `${this.#staged.stdout ?? ''}\n${this.#staged.stderr ?? ''}`.trim();
+      const tail = ExecutionEvidence.tail(combined);
+      if (tail) {
+        lines.push(`  tail: ${tail.replace(/\n/g, '\n  ')}`);
+      }
+    }
+
+    if (this.#reverted && this.#reverted.ok !== undefined) {
+      if (!this.#reverted.ok) {
+        lines.push(`- Reverted snapshot: unavailable (${this.#reverted.error})`);
+      } else {
+        const durationSec = (this.#reverted.durationMs / 1000).toFixed(1);
+        lines.push(`- Reverted snapshot (non-test staged changes reverted to HEAD): exit ${this.#reverted.exitCode} in ${durationSec}s`);
+        const combined = `${this.#reverted.stdout ?? ''}\n${this.#reverted.stderr ?? ''}`.trim();
+        const tail = ExecutionEvidence.tail(combined);
+        if (tail) {
+          lines.push(`  tail: ${tail.replace(/\n/g, '\n  ')}`);
+        }
+      }
+    } else {
+      const reason = this.#revertedSkipReason || (this.#staged && !this.#staged.ok ? 'staged execution unavailable' : 'skipped');
+      lines.push(`- Reverted snapshot: skipped (${reason})`);
+    }
+
+    lines.push(
+      'Interpretation (apply; do not re-derive):',
+      '- staged pass + reverted fail => the staged tests prove the staged change (red proof achieved).',
+      '- staged pass + reverted pass => the staged tests do not discriminate the staged change; raise a correctness candidate when test files changed.',
+      "- staged fail + reverted pass => the staged change breaks the project's own gates; P1 correctness candidate.",
+      '- staged fail + reverted fail => pre-existing failure; compare tails; do not attribute it to this change without evidence.',
+      '- unavailable => execution evidence is absent; absence proves nothing.',
+    );
+
+    return lines.join('\n');
+  }
+}
+
 export class StagedSnapshot {
   #files;
   #hash;
@@ -1143,6 +1280,10 @@ export class GitPort {
   getSnapshot(repoRoot) {
     throw new Error('GitPort.getSnapshot must be implemented');
   }
+
+  getHeadFile(repoRoot, path) {
+    throw new Error('GitPort.getHeadFile must be implemented');
+  }
 }
 
 export class SnapshotStorePort {
@@ -1152,6 +1293,12 @@ export class SnapshotStorePort {
 
   remove(snapshotDir) {
     throw new Error('SnapshotStorePort.remove must be implemented');
+  }
+}
+
+export class ExecutionPort {
+  run({ command, cwd, timeoutMs }) {
+    throw new Error('ExecutionPort.run must be implemented');
   }
 }
 
@@ -1312,6 +1459,8 @@ export class ReviewWorkflowService {
   #assertPatterns;
   #testPathPatterns;
   #testDeclarationPatterns;
+  #executionPort;
+  #execution;
 
   constructor({
     gitPort,
@@ -1327,6 +1476,8 @@ export class ReviewWorkflowService {
     assertPatterns,
     testPathPatterns,
     testDeclarationPatterns,
+    executionPort,
+    execution = {},
   }) {
     if (!gitPort) throw new TypeError('ReviewWorkflowService requires gitPort');
     if (!reviewerPort) throw new TypeError('ReviewWorkflowService requires reviewerPort');
@@ -1345,6 +1496,26 @@ export class ReviewWorkflowService {
     this.#assertPatterns = assertPatterns ?? (envAssert ? envAssert.split(',').map((s) => s.trim()).filter(Boolean) : DEFAULT_ASSERT_PATTERNS);
     this.#testPathPatterns = testPathPatterns ?? (envTestPaths ? envTestPaths.split(',').map((s) => s.trim()).filter(Boolean) : DEFAULT_TEST_PATH_PATTERNS);
     this.#testDeclarationPatterns = testDeclarationPatterns ?? DEFAULT_TEST_DECLARATION_PATTERNS;
+
+    const envExecute = process.env.OMP_REVIEW_KIT_EXECUTE === '1';
+    const envCommand = process.env.OMP_REVIEW_KIT_EXECUTE_COMMAND?.trim() ?? '';
+    const envTimeout = Number(process.env.OMP_REVIEW_KIT_EXECUTE_TIMEOUT_MS) || 600000;
+    const envLinkDirs = process.env.OMP_REVIEW_KIT_EXECUTE_LINK_DIRS
+      ? process.env.OMP_REVIEW_KIT_EXECUTE_LINK_DIRS.split(',').map((s) => s.trim()).filter(Boolean)
+      : ['node_modules', '.venv', 'venv'];
+    const envRedProof = process.env.OMP_REVIEW_KIT_RED_PROOF === '1';
+
+    const execEnabled = execution.enabled ?? envExecute;
+    const execCommand = execution.command ?? envCommand;
+
+    this.#executionPort = executionPort ?? ((execEnabled || execCommand) ? new SubprocessExecutionAdapter() : null);
+    this.#execution = {
+      enabled: execEnabled,
+      command: execCommand,
+      timeoutMs: execution.timeoutMs ?? envTimeout,
+      linkDirs: execution.linkDirs ?? envLinkDirs,
+      redProof: execution.redProof ?? envRedProof,
+    };
   }
 
   async execute({ cwd = process.cwd() } = {}) {
@@ -1420,10 +1591,137 @@ export class ReviewWorkflowService {
         durationMs: Date.now() - snapshotStartedAt,
       });
 
+      let executionEvidence = null;
+      if (this.#execution.enabled || this.#execution.command) {
+        if (!this.#execution.command) {
+          executionEvidence = new ExecutionEvidence({
+            command: '',
+            staged: { ok: false, error: 'no command configured' },
+            reverted: null,
+          });
+        } else if (this.#executionPort) {
+          try {
+            await telemetry.updateLastRun({
+              state: 'executing',
+              phase: 'staged',
+              command: this.#execution.command,
+              runId,
+              repoRoot,
+            }, { force: true });
+
+            await telemetry.record('execution_started', {
+              phase: 'staged',
+              command: this.#execution.command,
+              timeoutMs: this.#execution.timeoutMs,
+            });
+
+            const linkWarnings = await linkDependencyDirs(repoRoot, snapshotDir, this.#execution.linkDirs);
+            const stagedResult = await this.#executionPort.run({
+              command: this.#execution.command,
+              cwd: snapshotDir,
+              timeoutMs: this.#execution.timeoutMs,
+            });
+
+            await telemetry.record('execution_finished', {
+              phase: 'staged',
+              exitCode: stagedResult.exitCode,
+              timedOut: stagedResult.timedOut,
+              durationMs: stagedResult.durationMs,
+              stdoutBytes: Buffer.byteLength(stagedResult.stdout ?? ''),
+              stderrBytes: Buffer.byteLength(stagedResult.stderr ?? ''),
+            });
+
+            let revertedResult = null;
+            let revertedSkipReason = '';
+
+            if (this.#execution.redProof && stagedResult.ok) {
+              const hasTest = diff.changedPaths.some((p) => isTestPath(p, this.#testPathPatterns));
+              const hasNonTest = diff.changedPaths.some((p) => !isTestPath(p, this.#testPathPatterns));
+
+              if (hasTest && hasNonTest) {
+                const headFiles = new Map();
+                for (const p of diff.changedPaths) {
+                  if (!isTestPath(p, this.#testPathPatterns)) {
+                    headFiles.set(p, await this.#gitPort.getHeadFile(repoRoot, p));
+                  }
+                }
+
+                const revertedFiles = buildRevertedFiles({
+                  files: snapshot.files,
+                  changedPaths: diff.changedPaths,
+                  testPathPatterns: this.#testPathPatterns,
+                  headFiles,
+                });
+
+                const revertedSnapshot = new StagedSnapshot(revertedFiles);
+                const revertedDir = await this.#snapshotStorePort.create(revertedSnapshot, {
+                  artifacts: false,
+                });
+
+                try {
+                  await telemetry.updateLastRun({
+                    state: 'executing',
+                    phase: 'reverted',
+                    command: this.#execution.command,
+                    runId,
+                    repoRoot,
+                  }, { force: true });
+
+                  await telemetry.record('execution_started', {
+                    phase: 'reverted',
+                    command: this.#execution.command,
+                    timeoutMs: this.#execution.timeoutMs,
+                  });
+
+                  await linkDependencyDirs(repoRoot, revertedDir, this.#execution.linkDirs);
+                  revertedResult = await this.#executionPort.run({
+                    command: this.#execution.command,
+                    cwd: revertedDir,
+                    timeoutMs: this.#execution.timeoutMs,
+                  });
+
+                  await telemetry.record('execution_finished', {
+                    phase: 'reverted',
+                    exitCode: revertedResult.exitCode,
+                    timedOut: revertedResult.timedOut,
+                    durationMs: revertedResult.durationMs,
+                    stdoutBytes: Buffer.byteLength(revertedResult.stdout ?? ''),
+                    stderrBytes: Buffer.byteLength(revertedResult.stderr ?? ''),
+                  });
+                } finally {
+                  await this.#snapshotStorePort.remove(revertedDir);
+                }
+              } else {
+                revertedSkipReason = !hasTest ? 'no test changes staged' : 'no non-test changes staged';
+              }
+            } else if (!this.#execution.redProof) {
+              revertedSkipReason = 'red proof disabled';
+            }
+
+            executionEvidence = new ExecutionEvidence({
+              command: this.#execution.command,
+              timeoutMs: this.#execution.timeoutMs,
+              staged: stagedResult,
+              reverted: revertedResult,
+              revertedSkipReason,
+              warnings: linkWarnings,
+            });
+          } catch (err) {
+            executionEvidence = new ExecutionEvidence({
+              command: this.#execution.command,
+              timeoutMs: this.#execution.timeoutMs,
+              staged: { ok: false, error: err.message },
+              reverted: null,
+            });
+          }
+        }
+      }
+
       let execResult;
       try {
         const prompt = ReviewPrompt.forDiff(diff, snapshotDir, diff.changedPaths, {
           suspicionMapText: suspicionMap.toPromptText(),
+          executionEvidenceText: executionEvidence ? executionEvidence.toPromptText() : '',
         });
         execResult = await this.#reviewerPort.executeReview({
           prompt,
@@ -1617,6 +1915,15 @@ export class SubprocessGitAdapter extends GitPort {
   async getStagedDiff(repoRoot) {
     const output = await this.#runner(['diff', '--cached', '--binary', '--no-ext-diff', '--'], repoRoot);
     return DiffIdentity.fromBuffer(output);
+  }
+
+  async getHeadFile(repoRoot, filePath) {
+    try {
+      const buffer = await this.#runner(['cat-file', 'blob', `HEAD:${filePath}`], repoRoot);
+      return Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer ?? '');
+    } catch {
+      return null;
+    }
   }
 
   async getSnapshot(repoRoot) {
@@ -2401,6 +2708,95 @@ function assertSafeSnapshotPath(filePath) {
   }
 }
 
+export async function linkDependencyDirs(repoRoot, snapshotDir, dirNames = ['node_modules', '.venv', 'venv']) {
+  const warnings = [];
+  const { stat, symlink } = await import('node:fs/promises');
+  for (const name of dirNames) {
+    const source = path.join(repoRoot, name);
+    const destination = path.join(snapshotDir, name);
+    try {
+      const srcStat = await stat(source).catch(() => null);
+      if (!srcStat || !srcStat.isDirectory()) continue;
+      const destStat = await stat(destination).catch(() => null);
+      if (destStat) continue;
+
+      const symlinkType = process.platform === 'win32' ? 'junction' : 'dir';
+      await symlink(source, destination, symlinkType);
+    } catch (err) {
+      warnings.push(`Failed to link ${name}: ${err.message}`);
+    }
+  }
+  return warnings;
+}
+
+export class SubprocessExecutionAdapter extends ExecutionPort {
+  async run({ command, cwd, timeoutMs = 600000 }) {
+    if (!command || typeof command !== 'string' || command.trim().length === 0) {
+      return { ok: false, error: 'No command specified' };
+    }
+
+    return new Promise((resolve) => {
+      const startedAt = Date.now();
+      let timedOut = false;
+      let timer = null;
+
+      let child;
+      try {
+        child = spawn(command, {
+          shell: true,
+          cwd,
+          env: process.env,
+          windowsHide: true,
+        });
+      } catch (err) {
+        return resolve({ ok: false, error: err.message });
+      }
+
+      const MAX_LINES = 200;
+      let stdoutLines = [];
+      let stderrLines = [];
+
+      child.stdout?.on('data', (chunk) => {
+        const lines = chunk.toString('utf8').split(/\r?\n/);
+        stdoutLines = stdoutLines.concat(lines).slice(-MAX_LINES);
+      });
+
+      child.stderr?.on('data', (chunk) => {
+        const lines = chunk.toString('utf8').split(/\r?\n/);
+        stderrLines = stderrLines.concat(lines).slice(-MAX_LINES);
+      });
+
+      if (timeoutMs > 0) {
+        timer = setTimeout(async () => {
+          timedOut = true;
+          await terminateProcessTree(child);
+        }, timeoutMs);
+        if (typeof timer?.unref === 'function') {
+          timer.unref();
+        }
+      }
+
+      child.on('error', (err) => {
+        if (timer) clearTimeout(timer);
+        resolve({ ok: false, error: err.message });
+      });
+
+      child.on('close', (exitCode) => {
+        if (timer) clearTimeout(timer);
+        const durationMs = Date.now() - startedAt;
+        resolve({
+          ok: true,
+          exitCode: exitCode ?? (timedOut ? 1 : 0),
+          timedOut,
+          durationMs,
+          stdout: stdoutLines.join('\n'),
+          stderr: stderrLines.join('\n'),
+        });
+      });
+    });
+  }
+}
+
 export class FileSystemSnapshotAdapter extends SnapshotStorePort {
   constructor() {
     super();
@@ -2441,7 +2837,7 @@ export class FileSystemSnapshotAdapter extends SnapshotStorePort {
   }
 
   async #writeReviewArtifacts(targetDir, artifacts) {
-    if (!artifacts || artifacts.diffBytes === undefined) {
+    if (!artifacts || artifacts.artifacts === false || artifacts.diffBytes === undefined) {
       return;
     }
     const reviewDir = path.join(targetDir, '.review');
@@ -2625,7 +3021,7 @@ export class FileSystemTelemetryAdapter extends TelemetryPort {
  * ============================================================================
  */
 
-export function createReviewWorkflowService({ git, omp, ompOptions, clock, logger, progress, telemetry, assertPatterns, testPathPatterns, testDeclarationPatterns } = {}) {
+export function createReviewWorkflowService({ git, omp, ompOptions, clock, logger, progress, telemetry, assertPatterns, testPathPatterns, testDeclarationPatterns, executionPort, execution } = {}) {
   const gitPort = new SubprocessGitAdapter(git);
   const reviewerPort = new OmpCliReviewerAdapter({ runner: omp, progress, ...ompOptions });
   const reportStorePort = new FileSystemReportStoreAdapter();
@@ -2643,6 +3039,8 @@ export function createReviewWorkflowService({ git, omp, ompOptions, clock, logge
     assertPatterns,
     testPathPatterns,
     testDeclarationPatterns,
+    executionPort,
+    execution,
   });
 }
 
@@ -2666,6 +3064,11 @@ export async function runReview({
   logger,
   progress,
   telemetry,
+  assertPatterns,
+  testPathPatterns,
+  testDeclarationPatterns,
+  executionPort,
+  execution,
 } = {}) {
   const service = createReviewWorkflowService({
     git,
@@ -2675,6 +3078,11 @@ export async function runReview({
     logger,
     progress,
     telemetry,
+    assertPatterns,
+    testPathPatterns,
+    testDeclarationPatterns,
+    executionPort,
+    execution,
   });
 
   const result = await service.execute({ cwd });

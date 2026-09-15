@@ -77,7 +77,7 @@ export class FileSystemSnapshotAdapter extends SnapshotStorePort {
   }
 
   async #writeReviewArtifacts(targetDir, artifacts) {
-    if (!artifacts || artifacts.diffBytes === undefined) {
+    if (!artifacts || artifacts.artifacts === false || artifacts.diffBytes === undefined) {
       return;
     }
     const reviewDir = path.join(targetDir, '.review');
