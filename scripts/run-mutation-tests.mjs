@@ -402,6 +402,14 @@ const MUTANTS = [
     replacement: 'if (!changedSet.has(file.path) || true) {',
     description: 'Reverted snapshot builder keeps staged content for all files',
   },
+  {
+    id: 'audit-range-deleted-test-detection',
+    file: 'scripts/audit-range.mjs',
+    testFile: 'tests/audit-range.test.mjs',
+    original: 'deletedFilesSet.add(entry.path);',
+    replacement: '// deleted file ignored',
+    description: 'Audit range ignores deleted test files in aggregate flags',
+  },
 ];
 
 const DIRECTORIES_TO_COPY = ['src', 'scripts', 'agents', 'skills', 'tests', 'templates', '.omp-plugin'];

@@ -37,6 +37,8 @@ const hunterAgent = await readFile('agents/review-risk-hunter.md', 'utf8');
 const verifierAgent = await readFile('agents/review-finding-verifier.md', 'utf8');
 const realitySkill = await readFile('skills/reality-first-review/SKILL.md', 'utf8');
 const multiStageSkill = await readFile('skills/multi-stage-review/SKILL.md', 'utf8');
+const rangeAuditorAgent = await readFile('agents/review-range-auditor.md', 'utf8');
+const rangeAuditSkill = await readFile('skills/range-audit/SKILL.md', 'utf8');
 const hookTemplate = await readFile('templates/githooks/pre-commit', 'utf8');
 const manifest = JSON.parse(await readFile('package.json', 'utf8'));
 

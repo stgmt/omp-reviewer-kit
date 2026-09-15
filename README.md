@@ -134,6 +134,19 @@ OMP_REVIEW_KIT_EXECUTE_LINK_DIRS  # comma-separated dir names to link from repoR
 OMP_REVIEW_KIT_RED_PROOF=1        # enable reverted snapshot run for red proof (default: 0)
 ```
 
+## Commit-Range Audit CLI
+
+Audit an entire commit range for stealth test weakening, deleted assertions, vacuum checks, and neuroslop:
+
+```sh
+node scripts/audit-range.mjs <base>..<head>
+node scripts/audit-range.mjs <base>..<head> --json
+node scripts/audit-range.mjs <base>..<head> --out report.md
+node scripts/audit-range.mjs <base>..<head> --llm
+```
+
+The CLI runs a deterministic pass across each commit using `SuspicionMap`, aggregates net assert deltas and deleted test files, and optionally invokes the native `review-range-auditor` agent (`--llm`) to adversarially challenge the change history under `skill://range-audit`.
+
 ### Pre-Review Check Execution & Red-Proof Matrix
 
 When `OMP_REVIEW_KIT_EXECUTE=1` is configured with `OMP_REVIEW_KIT_EXECUTE_COMMAND`, the dispatcher executes the command in the staged snapshot before starting the review. If `OMP_REVIEW_KIT_RED_PROOF=1` is also enabled and both test and non-test files were modified, it creates a reverted snapshot (non-test files reverted to HEAD) and runs the same command to verify whether tests can fail without the code changes.

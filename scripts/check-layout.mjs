@@ -23,6 +23,13 @@ const required = [
   'CHANGELOG.md',
   '.github/workflows/ci.yml',
   '.github/workflows/release.yml',
+  'src/domain/suspicion-map.mjs',
+  'src/domain/execution-evidence.mjs',
+  'src/domain/reverted-snapshot.mjs',
+  'src/infra/subprocess-execution-adapter.mjs',
+  'scripts/audit-range.mjs',
+  'skills/range-audit/SKILL.md',
+  'agents/review-range-auditor.md',
 ];
 
 for (const file of required) {
