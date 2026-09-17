@@ -113,18 +113,21 @@ Reports record:
 ## Model Selection & Fallback
 
 The hook runs the review on the `@smol` role by default and falls back once to
-`@task` (each fallback is availability-probed first). If every model fails with
-a provider/quota error the commit is blocked with an actionable message — this
-is an infrastructure failure, not a code verdict.
+`@task` (each fallback is availability-probed first). Only OMP role selectors
+(`@name`) are accepted — the child resolves the role itself, so the user's
+`modelRoles` assignments and `retry.fallbackChains` apply inside the review
+child. Concrete `provider/model` selectors are rejected. If every role fails
+with a provider/quota error the commit is blocked with an actionable message —
+this is an infrastructure failure, not a code verdict.
 
 ```text
-OMP_REVIEW_KIT_MODEL            # primary model selector (default: @smol)
-OMP_REVIEW_KIT_FALLBACK_MODELS  # comma-separated fallback list (default: @task)
+OMP_REVIEW_KIT_MODEL            # primary model role selector (default: @smol)
+OMP_REVIEW_KIT_FALLBACK_MODELS  # comma-separated @role fallback list (default: @task)
 OMP_REVIEW_KIT_MAX_FALLBACKS    # max fallback attempts (default: 3)
 OMP_REVIEW_KIT_PROBE_TIMEOUT_MS # availability probe timeout (default: 60000)
 OMP_REVIEW_KIT_QUOTA_STALL_MS   # kill silent reviews after provider refusal (default: 300000; 0 disables)
 OMP_REVIEW_KIT_MAX_TIME         # opt-in child-side bound via omp --max-time (default: off; 600|10m|1h shapes)
-OMP_REVIEW_KIT_EFFORT           # override :effort suffix of resolved selectors (default: low; low|medium|high|max)
+OMP_REVIEW_KIT_EFFORT           # map to omp --thinking (default: unset = role's configured effort; off|minimal|low|medium|high|xhigh|max|auto)
 OMP_REVIEW_KIT_OMP              # path/name of the omp executable
 OMP_REVIEW_KIT_TELEMETRY=0      # disable run telemetry writes
 OMP_REVIEW_KIT_ASSERT_PATTERNS    # comma-separated regexes identifying assert statements (suspicion map)

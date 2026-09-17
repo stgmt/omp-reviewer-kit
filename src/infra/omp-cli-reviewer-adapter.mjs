@@ -208,18 +208,24 @@ export function isMaxTimeExpiry({ stdout, durationMs, maxTimeMs }) {
 }
 
 /**
- * Rewrites the `:effort` suffix of a concrete `provider/model[:effort]`
- * selector when OMP_REVIEW_KIT_EFFORT is set. Appends the suffix when the
- * selector has none; provider/model identity is preserved. Applied to every
- * selector bound for spawn, so probes and attempts stay consistent.
+ * Review children are spawned with OMP role selectors only (`@smol`,
+ * `@task`, ...). A concrete `provider/model` selector would bypass the
+ * user's `retry.fallbackChains` (chains key off the configured role) and
+ * could pick a model the user never assigned, so non-role selectors are
+ * rejected before spawn.
  */
-function applyEffortOverride(selector) {
-  const effort = process.env.OMP_REVIEW_KIT_EFFORT ?? 'low';
-  if (typeof selector !== 'string') return selector;
-  const slash = selector.indexOf('/');
-  const colon = selector.lastIndexOf(':');
-  const base = colon > slash ? selector.slice(0, colon) : selector;
-  return `${base}:${effort}`;
+function isRoleSelector(value) {
+  return typeof value === 'string' && /^@[A-Za-z0-9_-]+$/.test(value);
+}
+
+/**
+ * Thinking levels accepted by `omp --thinking`. OMP_REVIEW_KIT_EFFORT maps
+ * to that flag; unset means the role's own configured effort applies.
+ */
+const REVIEW_THINKING_LEVELS = new Set(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'auto']);
+function reviewThinkingLevel() {
+  const raw = process.env.OMP_REVIEW_KIT_EFFORT;
+  return REVIEW_THINKING_LEVELS.has(raw) ? raw : null;
 }
 
 
@@ -346,14 +352,16 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
   }
 
   /**
-   * Resolves an OMP role selector (`@smol`, `@task`, ...) to the concrete
-   * `provider/model[:effort]` configured by the user. `--model` accepts
-   * `@role` syntax, but the `--slow`/`--smol` role *assignment* flags do not —
-   * passing `@role` there fails with `Model "@role" not found`, so the
-   * concrete selector must be resolved before the child is spawned.
+   * Validates an OMP role selector (`@smol`, `@task`, ...) against the
+   * user's configured roles and returns the concrete `provider/model[:effort]`
+   * for telemetry. The child itself is spawned with the raw `@role` so OMP
+   * resolves the role inside the child and the user's `retry.fallbackChains`
+   * stay active there. Non-role selectors are rejected.
    */
   async #resolveSelector(cwd, selector, telemetry) {
-    if (typeof selector !== 'string' || !selector.startsWith('@')) return applyEffortOverride(selector);
+    if (!isRoleSelector(selector)) {
+      throw new Error(`Model selector ${JSON.stringify(selector)} is not an OMP role (@name); reviewer-kit uses only configured roles`);
+    }
     if (!this.#rolesCache) {
       this.#rolesCache = Promise.resolve()
         .then(() => this.#roleResolver(cwd))
@@ -366,7 +374,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
     if (typeof resolved !== 'string' || !isSafeModelSelector(resolved)) {
       throw new Error(`Model role ${selector} not found in OMP configuration`);
     }
-    return applyEffortOverride(resolved);
+    return resolved;
   }
 
   async #runReviewAttempt(promptText, cwd, model, telemetry, attempts, attemptIndex) {
@@ -413,7 +421,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
     const heartbeat = setInterval(emitRunning, 5_000);
     heartbeat.unref?.();
     try {
-      const result = await this.#runner(promptText, cwd, undefined, resolvedModel, {
+      const result = await this.#runner(promptText, cwd, undefined, model, {
         maxTime: this.#reviewMaxTime.arg,
         quotaStallMs: this.#quotaStallMs,
         onSpawn: (pid) => {
@@ -498,7 +506,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
     }), 5_000);
     heartbeat.unref?.();
     try {
-      const result = await this.#modelProbe(cwd, this.#probeTimeoutMs, resolvedModel);
+      const result = await this.#modelProbe(cwd, this.#probeTimeoutMs, model);
       record.pid = result?.pid;
       record.status = result?.status;
       record.durationMs = Date.now() - startedAt;
@@ -526,7 +534,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       return explicit
         .split(',')
         .map((s) => s.trim())
-        .filter(isSafeModelSelector);
+        .filter(isRoleSelector);
     }
     return ['@task'];
   }
@@ -545,23 +553,24 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
     return new Promise((resolve) => {
       const command = process.env.OMP_REVIEW_KIT_OMP ?? 'omp';
       const selectedModel = model ?? process.env.OMP_REVIEW_KIT_MODEL ?? '@smol';
-      if (!isSafeModelSelector(selectedModel)) {
-        resolve({ status: 1, stdout: '', stderr: 'Rejected unsafe model selector' });
+      if (!isRoleSelector(selectedModel)) {
+        resolve({ status: 1, stdout: '', stderr: 'Rejected non-role model selector' });
         return;
       }
       const isWindowsWrapper = /\.(cmd|bat)$/i.test(command);
-      const modelRoleArgs = isWindowsWrapper
-        ? ['--slow', selectedModel]
-        : [`--slow=${selectedModel}`];
       // Read-only review child: session titles are never displayed in print
       // mode and project rules guard edits the child cannot perform (its
       // tools are task/read plus read-only specialists), so skip title
-      // generation and rules discovery on every spawned session.
-      const commandArgs = ['-p', '--model', selectedModel, ...modelRoleArgs, ...(noTools ? ['--no-tools'] : ['--tools', 'task,read']), '--no-session', '--no-title', '--no-rules'];
+      // generation and rules discovery on every spawned session. The model
+      // stays a role selector so the child resolves the user's configured
+      // role itself and keeps that role's retry.fallbackChains.
+      const commandArgs = ['-p', '--model', selectedModel, ...(noTools ? ['--no-tools'] : ['--tools', 'task,read']), '--no-session', '--no-title', '--no-rules'];
+      const thinking = reviewThinkingLevel();
+      if (thinking) commandArgs.push('--thinking', thinking);
       if (typeof maxTime === 'string' && REVIEW_MAX_TIME_RE.test(maxTime)) {
         commandArgs.push('--max-time', maxTime);
       }
-      const dispatchPrompt = `${prompt}\nThe CLI already pins the active and slow model roles to ${selectedModel}. Use task calls without model, outputSchema, schemaMode, or isolated fields.`;
+      const dispatchPrompt = `${prompt}\nUse task calls without model, outputSchema, schemaMode, or isolated fields.`;
       const executable = isWindowsWrapper ? (process.env.ComSpec ?? 'cmd.exe') : command;
       const args = isWindowsWrapper
         ? ['/d', '/c', 'call', command, ...commandArgs]
@@ -782,7 +791,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       probeTimeoutMs: this.#probeTimeoutMs,
       maxTime: this.#reviewMaxTime.arg,
       quotaStallMs: this.#quotaStallMs,
-      effortOverride: process.env.OMP_REVIEW_KIT_EFFORT ?? 'low',
+      effortOverride: reviewThinkingLevel(),
     });
     const promptText = typeof prompt === 'string' ? prompt : prompt.toString();
     const primaryModel = this.#primaryModel;
@@ -893,7 +902,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
     await telemetry.record('reemit_started', { ...record });
     void telemetry.updateLastRun({ state: 'reemitting', model });
     try {
-      const result = await this.#runner(promptText, cwd, timeout, resolvedModel, {
+      const result = await this.#runner(promptText, cwd, timeout, model, {
         noTools: true,
         onSpawn: (pid) => {
           record.pid = pid;
