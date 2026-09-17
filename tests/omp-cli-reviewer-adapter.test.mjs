@@ -942,3 +942,33 @@ test('isModelProviderFailure delegates marker detection to ReviewVerdict invaria
   assert.equal(isModelProviderFailure(multipleResult), false);
   assert.equal(isModelProviderFailure(missingResult), true);
 });
+
+test('default subprocess runner skips title and rules for the read-only review child', async () => {
+  const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-spawn-diet-'));
+  const commandPath = path.join(baseDir, isWindows ? 'fake-omp.cmd' : 'fake-omp.sh');
+  const argsPath = path.join(baseDir, 'args.txt');
+  const command = isWindows
+    ? '@echo off\n> "%OMP_REVIEW_TEST_ARGS%" echo %*\necho REVIEW_RESULT=PASS\nexit /b 0\n'
+    : '#!/bin/sh\nprintf "%s\\n" "$@" > "$OMP_REVIEW_TEST_ARGS"\nprintf "REVIEW_RESULT=PASS\\n"\n';
+  const previousCommand = process.env.OMP_REVIEW_KIT_OMP;
+  const previousArgsPath = process.env.OMP_REVIEW_TEST_ARGS;
+  process.env.OMP_REVIEW_KIT_OMP = commandPath;
+  process.env.OMP_REVIEW_TEST_ARGS = argsPath;
+  try {
+    await writeFile(commandPath, command, 'utf8');
+    if (!isWindows) await chmod(commandPath, 0o755);
+
+    const review = await OmpCliReviewerAdapter.defaultRunner('probe', cwd, 0, 'provider/model');
+
+    assert.equal(review.status, 0, review.stderr);
+    const args = await readFile(argsPath, 'utf8');
+    assert.match(args, /--no-title/);
+    assert.match(args, /--no-rules/);
+  } finally {
+    if (previousCommand === undefined) delete process.env.OMP_REVIEW_KIT_OMP;
+    else process.env.OMP_REVIEW_KIT_OMP = previousCommand;
+    if (previousArgsPath === undefined) delete process.env.OMP_REVIEW_TEST_ARGS;
+    else process.env.OMP_REVIEW_TEST_ARGS = previousArgsPath;
+    await rm(baseDir, { recursive: true, force: true });
+  }
+});

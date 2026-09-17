@@ -430,7 +430,11 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       const modelRoleArgs = isWindowsWrapper
         ? ['--slow', selectedModel]
         : [`--slow=${selectedModel}`];
-      const commandArgs = ['-p', '--model', selectedModel, ...modelRoleArgs, ...(noTools ? ['--no-tools'] : ['--tools', 'task,read']), '--no-session'];
+      // Read-only review child: session titles are never displayed in print
+      // mode and project rules guard edits the child cannot perform (its
+      // tools are task/read plus read-only specialists), so skip title
+      // generation and rules discovery on every spawned session.
+      const commandArgs = ['-p', '--model', selectedModel, ...modelRoleArgs, ...(noTools ? ['--no-tools'] : ['--tools', 'task,read']), '--no-session', '--no-title', '--no-rules'];
       const dispatchPrompt = `${prompt}\nThe CLI already pins the active and slow model roles to ${selectedModel}. Use task calls without model, outputSchema, schemaMode, or isolated fields.`;
       const executable = isWindowsWrapper ? (process.env.ComSpec ?? 'cmd.exe') : command;
       const args = isWindowsWrapper

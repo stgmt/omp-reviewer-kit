@@ -117,6 +117,14 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.doesNotMatch(reviewerKitAgent, /Pass that exact `model` selector/);
   });
 
+  it('dispatcher dispatches without reading files and passes skill names downstream', () => {
+    assert.match(reviewerKitAgent, /without reading any files yourself/);
+    assert.match(reviewerKitAgent, /pass those names to the scout in its task text/);
+    assert.match(reviewerKitAgent, /Forward the same project skill names given to the scout/);
+    assert.match(scoutAgent, /read those skill files first/);
+    assert.match(hunterAgent, /read those skill files before hunting/);
+  });
+
   it('all review subagents strictly exclude mutation tools and task spawning', () => {
     const subagents = [
       { name: 'review-context-scout', content: scoutAgent },
