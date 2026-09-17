@@ -40,7 +40,7 @@ Staged Diff (git diff --cached --binary --no-ext-diff --)
 
 The dispatcher materializes an absolute staged snapshot directory from the Git index before invoking the reviewer. All source-file contents, tests, and fixtures must be read from that snapshot; use the repository working tree only for read-only Git metadata, caller discovery, and project-skill discovery. The snapshot is the authoritative review input and prevents unstaged worktree content from entering the decision.
 
-The snapshot also carries the review inputs under `.review/`: `diff.patch` holds the complete staged diff and `changed-files.txt` lists every touched path. Every stage must read the diff from `.review/diff.patch` as a file; agents must not re-derive the staged diff or staged file bytes with `git diff`, `git show`, or `git cat-file`. The orchestrator passes both artifact paths into every task call it spawns.
+The snapshot also carries the review inputs under `.review/`: `diff.patch` holds the complete staged diff and `changed-files.txt` lists every touched path. When the dispatch prompt carries an inline `---STAGED DIFF---` block, that block is authoritative: embed it verbatim into every subagent's task text (the context scout keeps file paths for repository context; both risk hunters and the verifier receive the diff inline instead of the `.review/diff.patch` path). Otherwise every stage reads the diff from `.review/diff.patch` as a file. In both cases agents must not re-derive the staged diff or staged file bytes with `git diff`, `git show`, or `git cat-file`.
 
 ## 2. Stage Contracts & Schemas
 

@@ -933,6 +933,7 @@ export class ReviewPrompt {
   #diffHash;
   #changedPaths;
   #suspicionMapText;
+  #inlineDiff;
   #executionEvidenceText;
   #reemitOutput;
 
@@ -951,6 +952,7 @@ export class ReviewPrompt {
     this.#changedPaths = changedPaths;
     this.#suspicionMapText = typeof extras?.suspicionMapText === 'string' ? extras.suspicionMapText : '';
     this.#executionEvidenceText = typeof extras?.executionEvidenceText === 'string' ? extras.executionEvidenceText : '';
+    this.#inlineDiff = typeof extras?.inlineDiff === 'string' && extras.inlineDiff.length > 0 ? extras.inlineDiff : null;
   }
 
   static forDiff(target, snapshotDir = '', changedPaths = [], extras = {}) {
@@ -989,7 +991,17 @@ export class ReviewPrompt {
       'Reproduce the task report as raw Markdown text exactly as returned; never JSON-encode, wrap, or reformat it.',
       'The verdict contract in this prompt overrides any other format: finish with exactly one standalone REVIEW_RESULT=PASS or REVIEW_RESULT=BLOCK line, even if a skill describes a different verdict vocabulary.',
     ];
-    if (this.#snapshotDir) {
+    if (this.#inlineDiff) {
+      lines.push(
+        `The staged snapshot directory is ${this.#snapshotDir}.`,
+        'The complete staged diff is inlined below between the STAGED DIFF markers — it is authoritative. You MUST NOT run git diff, git show, or git cat-file to obtain review content; the snapshot directory is for reading full source files only.',
+        'Embed the inline diff verbatim into every subagent task text: the context scout keeps file paths for repository context, while both risk hunters and the verifier receive the diff inline instead of the .review/diff.patch path.',
+        'Read every source file from that staged snapshot directory, never from the working tree. Use the repository only for read-only Git metadata and project skill discovery.',
+        '---STAGED DIFF (inline, authoritative)---',
+        this.#inlineDiff,
+        '---END STAGED DIFF---',
+      );
+    } else if (this.#snapshotDir) {
       lines.push(
         `The staged snapshot directory is ${this.#snapshotDir}.`,
         `The complete staged diff is materialized at ${this.#snapshotDir}/.review/diff.patch and the changed-file list at ${this.#snapshotDir}/.review/changed-files.txt. Read them as files; do not run git diff or git show to obtain review content.`,
@@ -1722,6 +1734,8 @@ export class ReviewWorkflowService {
         const prompt = ReviewPrompt.forDiff(diff, snapshotDir, diff.changedPaths, {
           suspicionMapText: suspicionMap.toPromptText(),
           executionEvidenceText: executionEvidence ? executionEvidence.toPromptText() : '',
+          // ~50KB ≈ 12K tokens — cheaper than four read round-trips per subagent.
+          inlineDiff: diff.length <= 50_000 ? diff.bytes.toString('utf8') : '',
         });
         execResult = await this.#reviewerPort.executeReview({
           prompt,
