@@ -1,13 +1,19 @@
 import assert from 'node:assert/strict';
-import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import test from 'node:test';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import {
   OmpCliReviewerAdapter,
+  childLogHasQuotaSignal,
+  containsProviderRefusal,
+  containsQuotaStallSignal,
   formatReviewProgress,
+  isMaxTimeExpiry,
   isModelProviderFailure,
+  isQuotaStallStderr,
+  parseReviewMaxTime,
   parseReviewProgress,
   sanitizeReviewerOutput,
 } from '../src/infra/omp-cli-reviewer-adapter.mjs';
@@ -969,6 +975,421 @@ test('default subprocess runner skips title and rules for the read-only review c
     else process.env.OMP_REVIEW_KIT_OMP = previousCommand;
     if (previousArgsPath === undefined) delete process.env.OMP_REVIEW_TEST_ARGS;
     else process.env.OMP_REVIEW_TEST_ARGS = previousArgsPath;
+    await rm(baseDir, { recursive: true, force: true });
+  }
+});
+
+test('parseReviewMaxTime accepts documented omp duration shapes', () => {
+  assert.deepEqual(parseReviewMaxTime('15m'), { arg: '15m', ms: 900_000 });
+  assert.deepEqual(parseReviewMaxTime('600'), { arg: '600', ms: 600_000 });
+  assert.deepEqual(parseReviewMaxTime('1h'), { arg: '1h', ms: 3_600_000 });
+  assert.deepEqual(parseReviewMaxTime(' 10m '), { arg: '10m', ms: 600_000 });
+});
+
+test('parseReviewMaxTime disables the bound on empty, zero, or invalid values', () => {
+  for (const value of ['', '0', '  ', '10x', '-5m', '1d', 'm', '15 m', '15m;rm', null, undefined, 42]) {
+    assert.deepEqual(parseReviewMaxTime(value), { arg: null, ms: null }, `value: ${String(value)}`);
+  }
+});
+
+test('isMaxTimeExpiry matches only empty output at the bound', () => {
+  assert.equal(isMaxTimeExpiry({ stdout: '', durationMs: 900_000, maxTimeMs: 900_000 }), true);
+  assert.equal(isMaxTimeExpiry({ stdout: '  \n ', durationMs: 871_000, maxTimeMs: 900_000 }), true);
+  assert.equal(isMaxTimeExpiry({ stdout: '', durationMs: 869_999, maxTimeMs: 900_000 }), false);
+  assert.equal(isMaxTimeExpiry({ stdout: 'REVIEW_RESULT=PASS\n', durationMs: 900_000, maxTimeMs: 900_000 }), false);
+  assert.equal(isMaxTimeExpiry({ stdout: '', durationMs: 900_000, maxTimeMs: null }), false);
+  assert.equal(isMaxTimeExpiry({ stdout: '', durationMs: 900_000, maxTimeMs: 0 }), false);
+});
+
+test('review attempts forward the configured max-time while keeping the runner timeout unset', async () => {
+  const previous = process.env.OMP_REVIEW_KIT_MAX_TIME;
+  process.env.OMP_REVIEW_KIT_MAX_TIME = '10m';
+  try {
+    let observed;
+    const adapter = new OmpCliReviewerAdapter({
+      roleResolver: testRoleResolver,
+      runner: async (text, root, timeoutMs, model, options) => {
+        observed = { timeoutMs, maxTime: options?.maxTime };
+        return result(0, 'REVIEW_RESULT=PASS\n');
+      },
+    });
+
+    await adapter.executeReview({ prompt, cwd });
+
+    assert.deepEqual(observed, { timeoutMs: undefined, maxTime: '10m' });
+  } finally {
+    if (previous === undefined) delete process.env.OMP_REVIEW_KIT_MAX_TIME;
+    else process.env.OMP_REVIEW_KIT_MAX_TIME = previous;
+  }
+});
+
+test('review attempts leave max-time unset by default and forward it when configured', async () => {
+  const previous = process.env.OMP_REVIEW_KIT_MAX_TIME;
+  try {
+    const seen = [];
+    const capture = () => new OmpCliReviewerAdapter({
+      roleResolver: testRoleResolver,
+      runner: async (text, root, timeoutMs, model, options) => {
+        seen.push(options?.maxTime ?? null);
+        return result(0, 'REVIEW_RESULT=PASS\n');
+      },
+    });
+
+    delete process.env.OMP_REVIEW_KIT_MAX_TIME;
+    await capture().executeReview({ prompt, cwd });
+    process.env.OMP_REVIEW_KIT_MAX_TIME = '0';
+    await capture().executeReview({ prompt, cwd });
+    process.env.OMP_REVIEW_KIT_MAX_TIME = '15m';
+    await capture().executeReview({ prompt, cwd });
+
+    assert.deepEqual(seen, [null, null, '15m']);
+  } finally {
+    if (previous === undefined) delete process.env.OMP_REVIEW_KIT_MAX_TIME;
+    else process.env.OMP_REVIEW_KIT_MAX_TIME = previous;
+  }
+});
+
+test('attempt record flags max-time expiry without triggering the fallback chain', async () => {
+  const adapter = new OmpCliReviewerAdapter({
+    roleResolver: testRoleResolver,
+    maxTime: '1s',
+    runner: async () => result(0, ''),
+  });
+
+  const review = await adapter.executeReview({ prompt, cwd });
+
+  assert.equal(review.attempts.length, 1);
+  assert.equal(review.attempts[0].timedOut, true);
+  assert.equal(review.attempts[0].providerFailure, false);
+
+  const verdictAdapter = new OmpCliReviewerAdapter({
+    roleResolver: testRoleResolver,
+    maxTime: '1s',
+    runner: async () => result(0, 'REVIEW_RESULT=PASS\n'),
+  });
+  const verdictReview = await verdictAdapter.executeReview({ prompt, cwd });
+  assert.equal(verdictReview.attempts[0].timedOut, false);
+});
+
+test('review_chain telemetry records the effective max-time bound', async () => {
+  const previous = process.env.OMP_REVIEW_KIT_MAX_TIME;
+  try {
+    const events = [];
+    const telemetry = {
+      record: async (type, payload) => events.push({ type, payload }),
+      updateLastRun: async () => {},
+    };
+    const run = (maxTime) => new OmpCliReviewerAdapter({
+      roleResolver: testRoleResolver,
+      ...(maxTime === undefined ? {} : { maxTime }),
+      runner: async () => result(0, 'REVIEW_RESULT=PASS\n'),
+    }).executeReview({ prompt, cwd, telemetry });
+
+    delete process.env.OMP_REVIEW_KIT_MAX_TIME;
+    await run(undefined);
+    await run('0');
+    await run('15m');
+
+    const chains = events.filter((event) => event.type === 'review_chain');
+    assert.deepEqual(chains.map((event) => event.payload.maxTime), [null, null, '15m']);
+  } finally {
+    if (previous === undefined) delete process.env.OMP_REVIEW_KIT_MAX_TIME;
+    else process.env.OMP_REVIEW_KIT_MAX_TIME = previous;
+  }
+});
+
+test('default subprocess runner forwards a valid max-time to the omp child', async () => {
+  const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-max-time-e2e-'));
+  const commandPath = path.join(baseDir, isWindows ? 'fake-omp.cmd' : 'fake-omp.sh');
+  const argsPath = path.join(baseDir, 'args.txt');
+  const command = isWindows
+    ? '@echo off\n> "%OMP_REVIEW_TEST_ARGS%" echo %*\necho REVIEW_RESULT=PASS\nexit /b 0\n'
+    : '#!/bin/sh\nprintf "%s\\n" "$@" > "$OMP_REVIEW_TEST_ARGS"\nprintf "REVIEW_RESULT=PASS\\n"\n';
+  const previousCommand = process.env.OMP_REVIEW_KIT_OMP;
+  const previousArgsPath = process.env.OMP_REVIEW_TEST_ARGS;
+  process.env.OMP_REVIEW_KIT_OMP = commandPath;
+  process.env.OMP_REVIEW_TEST_ARGS = argsPath;
+  try {
+    await writeFile(commandPath, command, 'utf8');
+    if (!isWindows) await chmod(commandPath, 0o755);
+
+    const review = await OmpCliReviewerAdapter.defaultRunner('probe', cwd, 0, 'provider/model', { maxTime: '15m' });
+
+    assert.equal(review.status, 0, review.stderr);
+    const args = await readFile(argsPath, 'utf8');
+    assert.match(args, /--max-time(?:\s+|=)15m/);
+    assert.match(args, /--no-title/);
+    assert.match(args, /--no-rules/);
+  } finally {
+    if (previousCommand === undefined) delete process.env.OMP_REVIEW_KIT_OMP;
+    else process.env.OMP_REVIEW_KIT_OMP = previousCommand;
+    if (previousArgsPath === undefined) delete process.env.OMP_REVIEW_TEST_ARGS;
+    else process.env.OMP_REVIEW_TEST_ARGS = previousArgsPath;
+    await rm(baseDir, { recursive: true, force: true });
+  }
+});
+
+test('default subprocess runner drops invalid max-time values', async () => {
+  const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-max-time-drop-'));
+  const commandPath = path.join(baseDir, isWindows ? 'fake-omp.cmd' : 'fake-omp.sh');
+  const argsPath = path.join(baseDir, 'args.txt');
+  const command = isWindows
+    ? '@echo off\n> "%OMP_REVIEW_TEST_ARGS%" echo %*\necho REVIEW_RESULT=PASS\nexit /b 0\n'
+    : '#!/bin/sh\nprintf "%s\\n" "$@" > "$OMP_REVIEW_TEST_ARGS"\nprintf "REVIEW_RESULT=PASS\\n"\n';
+  const previousCommand = process.env.OMP_REVIEW_KIT_OMP;
+  const previousArgsPath = process.env.OMP_REVIEW_TEST_ARGS;
+  process.env.OMP_REVIEW_KIT_OMP = commandPath;
+  process.env.OMP_REVIEW_TEST_ARGS = argsPath;
+  try {
+    await writeFile(commandPath, command, 'utf8');
+    if (!isWindows) await chmod(commandPath, 0o755);
+
+    const review = await OmpCliReviewerAdapter.defaultRunner('probe', cwd, 0, 'provider/model', { maxTime: '15m&whoami' });
+
+    assert.equal(review.status, 0, review.stderr);
+    const args = await readFile(argsPath, 'utf8');
+    assert.doesNotMatch(args, /--max-time/);
+  } finally {
+    if (previousCommand === undefined) delete process.env.OMP_REVIEW_KIT_OMP;
+    else process.env.OMP_REVIEW_KIT_OMP = previousCommand;
+    if (previousArgsPath === undefined) delete process.env.OMP_REVIEW_TEST_ARGS;
+    else process.env.OMP_REVIEW_TEST_ARGS = previousArgsPath;
+    await rm(baseDir, { recursive: true, force: true });
+  }
+});
+
+test('containsProviderRefusal matches quota text anywhere in the chunk', () => {
+  assert.equal(containsProviderRefusal('Cloud Code Assist API error (429): quota reached'), true);
+  assert.equal(containsProviderRefusal('HTTP 429 Too Many Requests'), true);
+  assert.equal(containsProviderRefusal('Working...'), false);
+  assert.equal(containsProviderRefusal(''), false);
+  assert.equal(containsProviderRefusal(null), false);
+  assert.equal(containsProviderRefusal(undefined), false);
+});
+
+test('containsQuotaStallSignal catches mid-line log shapes the strict pattern misses', () => {
+  assert.equal(containsQuotaStallSignal('Error 429: Daily free limit reached on model deepseek/deepseek-v4.1-flash. Try again in 6h 5m'), true);
+  assert.equal(containsQuotaStallSignal('"errorMessage":"429 Error 429: Daily free limit (type=INFERENCE_CAP_ERROR)"'), true);
+  assert.equal(containsQuotaStallSignal('429 quota exceeded'), true);
+  assert.equal(containsQuotaStallSignal('Working...'), false);
+  assert.equal(containsQuotaStallSignal('"requestBytes":241285,"compressedBytes":85699'), false);
+  assert.equal(containsQuotaStallSignal(''), false);
+  assert.equal(containsQuotaStallSignal(null), false);
+});
+
+test('isQuotaStallStderr detects only the runner stall marker', () => {
+  assert.equal(isQuotaStallStderr('Review stalled on provider quota after 300000ms\n429 quota'), true);
+  assert.equal(isQuotaStallStderr('Review timed out after 60000ms\n'), false);
+  assert.equal(isQuotaStallStderr('429 quota exceeded'), false);
+  assert.equal(isQuotaStallStderr(''), false);
+  assert.equal(isQuotaStallStderr(null), false);
+});
+
+test('review attempts forward the quota-stall bound with 5m default', async () => {
+  const previous = process.env.OMP_REVIEW_KIT_QUOTA_STALL_MS;
+  try {
+    const seen = [];
+    const capture = () => new OmpCliReviewerAdapter({
+      roleResolver: testRoleResolver,
+      runner: async (text, root, timeoutMs, model, options) => {
+        seen.push(options?.quotaStallMs);
+        return result(0, 'REVIEW_RESULT=PASS\n');
+      },
+    });
+
+    delete process.env.OMP_REVIEW_KIT_QUOTA_STALL_MS;
+    await capture().executeReview({ prompt, cwd });
+    process.env.OMP_REVIEW_KIT_QUOTA_STALL_MS = '0';
+    await capture().executeReview({ prompt, cwd });
+    process.env.OMP_REVIEW_KIT_QUOTA_STALL_MS = 'bogus';
+    await capture().executeReview({ prompt, cwd });
+    process.env.OMP_REVIEW_KIT_QUOTA_STALL_MS = '60000';
+    await capture().executeReview({ prompt, cwd });
+
+    assert.deepEqual(seen, [300_000, 0, 300_000, 60_000]);
+  } finally {
+    if (previous === undefined) delete process.env.OMP_REVIEW_KIT_QUOTA_STALL_MS;
+    else process.env.OMP_REVIEW_KIT_QUOTA_STALL_MS = previous;
+  }
+});
+
+test('review_chain telemetry records the effective quota-stall bound', async () => {
+  const previous = process.env.OMP_REVIEW_KIT_QUOTA_STALL_MS;
+  try {
+    const events = [];
+    const telemetry = {
+      record: async (type, payload) => events.push({ type, payload }),
+      updateLastRun: async () => {},
+    };
+    const run = (quotaStallMs) => new OmpCliReviewerAdapter({
+      roleResolver: testRoleResolver,
+      ...(quotaStallMs === undefined ? {} : { quotaStallMs }),
+      runner: async () => result(0, 'REVIEW_RESULT=PASS\n'),
+    }).executeReview({ prompt, cwd, telemetry });
+
+    delete process.env.OMP_REVIEW_KIT_QUOTA_STALL_MS;
+    await run(undefined);
+    await run(0);
+
+    const chains = events.filter((event) => event.type === 'review_chain');
+    assert.deepEqual(chains.map((event) => event.payload.quotaStallMs), [300_000, 0]);
+  } finally {
+    if (previous === undefined) delete process.env.OMP_REVIEW_KIT_QUOTA_STALL_MS;
+    else process.env.OMP_REVIEW_KIT_QUOTA_STALL_MS = previous;
+  }
+});
+
+test('quota-stall kill advances the outer chain with a fresh attempt', async () => {
+  const calls = [];
+  const adapter = new OmpCliReviewerAdapter({
+    roleResolver: testRoleResolver,
+    primaryModel: '@slow',
+    maxFallbacks: 2,
+    modelsProvider: async () => ['@slow', 'free/provider-model:high'],
+    modelProbe: async () => result(0),
+    runner: async (text, root, timeoutMs, model) => {
+      calls.push(model);
+      return calls.length === 1
+        ? result(1, '', 'Review stalled on provider quota after 300000ms\nWorking...\n')
+        : result(0, 'REVIEW_RESULT=PASS\n');
+    },
+  });
+
+  const review = await adapter.executeReview({ prompt, cwd });
+
+  assert.equal(review.status, 0);
+  assert.deepEqual(review.modelsTried, ['@slow', 'free/provider-model:high']);
+  assert.equal(review.attempts.length, 2);
+  assert.equal(review.attempts[0].stalledOnQuota, true);
+  assert.equal(review.attempts[0].providerFailure, true);
+  assert.equal(review.attempts[1].stalledOnQuota, false);
+});
+
+test('default subprocess runner kills a quota-grinding child and marks the stall', async () => {
+  const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-quota-stall-e2e-'));
+  const commandPath = path.join(baseDir, isWindows ? 'fake-omp.cmd' : 'fake-omp.sh');
+  const command = isWindows
+    ? '@echo off\necho Cloud Code Assist API error (429): quota reached 1>&2\nping -n 6 127.0.0.1 >nul\necho REVIEW_RESULT=PASS\nexit /b 0\n'
+    : '#!/bin/sh\necho "Cloud Code Assist API error (429): quota reached" >&2\nsleep 5\nprintf "REVIEW_RESULT=PASS\\n"\n';
+  const previousCommand = process.env.OMP_REVIEW_KIT_OMP;
+  process.env.OMP_REVIEW_KIT_OMP = commandPath;
+  try {
+    await writeFile(commandPath, command, 'utf8');
+    if (!isWindows) await chmod(commandPath, 0o755);
+
+    const review = await OmpCliReviewerAdapter.defaultRunner('probe', cwd, 0, 'provider/model', { quotaStallMs: 500 });
+
+    assert.equal(review.status, 1);
+    assert.match(review.stderr, /Review stalled on provider quota after 500ms/);
+    assert.match(review.stderr, /quota reached/);
+    assert.equal(review.stdout, '');
+  } finally {
+    if (previousCommand === undefined) delete process.env.OMP_REVIEW_KIT_OMP;
+    else process.env.OMP_REVIEW_KIT_OMP = previousCommand;
+    await rm(baseDir, { recursive: true, force: true });
+  }
+});
+
+test('default subprocess runner lets stdout progress cancel the stall watchdog', async () => {
+  const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-quota-progress-'));
+  const commandPath = path.join(baseDir, isWindows ? 'fake-omp.cmd' : 'fake-omp.sh');
+  const command = isWindows
+    ? '@echo off\necho Cloud Code Assist API error (429): quota reached 1>&2\necho REVIEW_RESULT=PASS\nping -n 3 127.0.0.1 >nul\nexit /b 0\n'
+    : '#!/bin/sh\necho "Cloud Code Assist API error (429): quota reached" >&2\nprintf "REVIEW_RESULT=PASS\\n"\nsleep 2\n';
+  const previousCommand = process.env.OMP_REVIEW_KIT_OMP;
+  process.env.OMP_REVIEW_KIT_OMP = commandPath;
+  try {
+    await writeFile(commandPath, command, 'utf8');
+    if (!isWindows) await chmod(commandPath, 0o755);
+
+    const review = await OmpCliReviewerAdapter.defaultRunner('probe', cwd, 0, 'provider/model', { quotaStallMs: 500 });
+
+    assert.equal(review.status, 0, review.stderr);
+    assert.match(review.stdout, /REVIEW_RESULT=PASS/);
+    assert.doesNotMatch(review.stderr, /Review stalled on provider quota/);
+  } finally {
+    if (previousCommand === undefined) delete process.env.OMP_REVIEW_KIT_OMP;
+    else process.env.OMP_REVIEW_KIT_OMP = previousCommand;
+    await rm(baseDir, { recursive: true, force: true });
+  }
+});
+
+test('default subprocess runner never arms the watchdog without a refusal', async () => {
+  const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-quota-quiet-'));
+  const commandPath = path.join(baseDir, isWindows ? 'fake-omp.cmd' : 'fake-omp.sh');
+  const command = isWindows
+    ? '@echo off\nping -n 2 127.0.0.1 >nul\necho REVIEW_RESULT=PASS\nexit /b 0\n'
+    : '#!/bin/sh\nsleep 1\nprintf "REVIEW_RESULT=PASS\\n"\n';
+  const previousCommand = process.env.OMP_REVIEW_KIT_OMP;
+  process.env.OMP_REVIEW_KIT_OMP = commandPath;
+  try {
+    await writeFile(commandPath, command, 'utf8');
+    if (!isWindows) await chmod(commandPath, 0o755);
+
+    const review = await OmpCliReviewerAdapter.defaultRunner('probe', cwd, 0, 'provider/model', { quotaStallMs: 300 });
+
+    assert.equal(review.status, 0, review.stderr);
+    assert.doesNotMatch(review.stderr, /Review stalled on provider quota/);
+  } finally {
+    if (previousCommand === undefined) delete process.env.OMP_REVIEW_KIT_OMP;
+    else process.env.OMP_REVIEW_KIT_OMP = previousCommand;
+    await rm(baseDir, { recursive: true, force: true });
+  }
+});
+
+test('isModelProviderFailure classifies a stall marker without refusal text', () => {
+  assert.equal(isModelProviderFailure(result(1, '', 'Review stalled on provider quota after 300000ms\nWorking...\n')), true);
+  assert.equal(isModelProviderFailure(result(0, '', 'Review stalled on provider quota after 300000ms\n')), false);
+});
+
+test('childLogHasQuotaSignal reads only the matching pid log tail', async () => {
+  const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-quota-log-'));
+  try {
+    await writeFile(path.join(baseDir, 'omp.2026-09-17.424242.log'), '{"message":"devin: sending chat request"}\n{"errorMessage":"429 Error 429: Daily free limit (type=INFERENCE_CAP_ERROR)"}\n', 'utf8');
+    await writeFile(path.join(baseDir, 'omp.2026-09-17.111.log'), '{"message":"devin: sending chat request"}\n', 'utf8');
+
+    assert.equal(await childLogHasQuotaSignal({ logDir: baseDir, pid: 424242 }), true);
+    assert.equal(await childLogHasQuotaSignal({ logDir: baseDir, pid: 111 }), false);
+    assert.equal(await childLogHasQuotaSignal({ logDir: baseDir, pid: 999999 }), false);
+    assert.equal(await childLogHasQuotaSignal({ logDir: path.join(baseDir, 'missing'), pid: 424242 }), false);
+    assert.equal(await childLogHasQuotaSignal({ logDir: baseDir, pid: 0 }), false);
+    assert.equal(await childLogHasQuotaSignal({ logDir: baseDir, pid: -5 }), false);
+  } finally {
+    await rm(baseDir, { recursive: true, force: true });
+  }
+});
+
+test('default subprocess runner kills on a quota signal in the child log', async () => {
+  const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-quota-log-e2e-'));
+  const commandPath = path.join(baseDir, isWindows ? 'fake-omp.cmd' : 'fake-omp.sh');
+  const logDir = path.join(baseDir, 'logs');
+  const command = isWindows
+    ? '@echo off\nping -n 6 127.0.0.1 >nul\necho REVIEW_RESULT=PASS\nexit /b 0\n'
+    : '#!/bin/sh\nsleep 5\nprintf "REVIEW_RESULT=PASS\\n"\n';
+  const previousCommand = process.env.OMP_REVIEW_KIT_OMP;
+  process.env.OMP_REVIEW_KIT_OMP = commandPath;
+  try {
+    await writeFile(commandPath, command, 'utf8');
+    if (!isWindows) await chmod(commandPath, 0o755);
+
+    const review = await OmpCliReviewerAdapter.defaultRunner('probe', cwd, 0, 'provider/model', {
+      quotaStallMs: 400,
+      quotaPollMs: 50,
+      quotaLogDir: logDir,
+      onSpawn: (pid) => {
+        void (async () => {
+          await mkdir(logDir, { recursive: true });
+          await writeFile(path.join(logDir, `omp.2026-09-17.${pid}.log`), '{"errorMessage":"429 Error 429: Daily free limit (type=INFERENCE_CAP_ERROR)"}\n', 'utf8');
+        })();
+      },
+    });
+
+    assert.equal(review.status, 1);
+    assert.match(review.stderr, /Review stalled on provider quota after 400ms/);
+    assert.equal(review.stdout, '');
+  } finally {
+    if (previousCommand === undefined) delete process.env.OMP_REVIEW_KIT_OMP;
+    else process.env.OMP_REVIEW_KIT_OMP = previousCommand;
     await rm(baseDir, { recursive: true, force: true });
   }
 });
