@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Quota-stall watchdog with outer-chain retry**: when a provider refusal appears in child stderr or the child OMP log tail and no stdout follows within `OMP_REVIEW_KIT_QUOTA_STALL_MS` (default 300000, `0` disables), the runner kills the tree and the attempt classifies as provider failure, so the outer chain starts a fresh session on the next model. stdout progress cancels the watchdog; probes and re-emit passes never arm it. Mid-run 429s (which OMP logs but does not print) are caught via the pid-keyed log tail; the stall marker alone classifies even when accumulated output carries no refusal text.
+- **Opt-in child-side review bound via `omp --max-time`**: `OMP_REVIEW_KIT_MAX_TIME` (default off) is forwarded to every full review attempt as a backstop for non-quota stalls. Expiry surfaces as exit-0-with-empty-stdout and flows through the existing missing-marker path fail-closed. The pinned no-runner-timeout contract is intact: with both knobs at defaults the plugin never kills a working child.
+- **`stalledOnQuota` / `timedOut` attempt telemetry**: stall kills and max-time hits are flagged in `review_attempt_finished`, and the effective bounds are recorded in `review_chain`, so quota stalls are distinguishable from model-returned-empty.
+
 ## [0.10.0] - 2026-09-15
 
 ### Added
