@@ -115,7 +115,15 @@ export class ReviewWorkflowService {
     } catch {
       telemetry = NULL_RUN_TELEMETRY;
     }
-    const uninstall = installRunSignalGuard({ telemetry, runId });
+    // Snapshot dirs created during this run; the signal guard removes them
+    // before exit() since the finally blocks below never run on SIGINT/SIGTERM.
+    const liveSnapshotDirs = new Set();
+    const cleanupSnapshots = async () => {
+      for (const dir of liveSnapshotDirs) {
+        await this.#snapshotStorePort.remove(dir).catch(() => {});
+      }
+    };
+    const uninstall = installRunSignalGuard({ telemetry, runId, cleanup: cleanupSnapshots });
     await telemetry.updateLastRun({
       state: 'started',
       runId,
@@ -168,6 +176,7 @@ export class ReviewWorkflowService {
         diffBytes: diff.bytes,
         changedPaths: diff.changedPaths,
       });
+      liveSnapshotDirs.add(snapshotDir);
       await telemetry.record('snapshot_materialized', {
         files: snapshot.files.length,
         bytes: snapshot.files.reduce((total, file) => total + file.content.length, 0),
@@ -236,10 +245,10 @@ export class ReviewWorkflowService {
                   headFiles,
                 });
 
-                const revertedSnapshot = new StagedSnapshot(revertedFiles);
                 const revertedDir = await this.#snapshotStorePort.create(revertedSnapshot, {
                   artifacts: false,
                 });
+                liveSnapshotDirs.add(revertedDir);
 
                 try {
                   await telemetry.updateLastRun({
@@ -273,6 +282,7 @@ export class ReviewWorkflowService {
                   });
                 } finally {
                   await this.#snapshotStorePort.remove(revertedDir);
+                  liveSnapshotDirs.delete(revertedDir);
                 }
               } else {
                 revertedSkipReason = !hasTest ? 'no test changes staged' : 'no non-test changes staged';
@@ -315,6 +325,7 @@ export class ReviewWorkflowService {
         });
       } finally {
         await this.#snapshotStorePort.remove(snapshotDir);
+        liveSnapshotDirs.delete(snapshotDir);
       }
 
       let combinedOutput = execResult.combined ?? `${execResult.stdout ?? ''}\n${execResult.stderr ?? ''}`;

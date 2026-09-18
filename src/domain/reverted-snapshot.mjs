@@ -25,13 +25,13 @@ export function buildRevertedFiles({
   for (const file of files) {
     processedPaths.add(file.path);
     if (!changedSet.has(file.path) || isTestPath(file.path, testPathPatterns)) {
-      resultFiles.push({ path: file.path, content: file.content });
+      resultFiles.push({ path: file.path, content: file.content, mode: file.mode });
       continue;
     }
 
     const headContent = headFiles.get(file.path);
     if (headContent !== null && headContent !== undefined) {
-      resultFiles.push({ path: file.path, content: headContent });
+      resultFiles.push({ path: file.path, content: headContent, mode: file.mode });
     }
   }
 

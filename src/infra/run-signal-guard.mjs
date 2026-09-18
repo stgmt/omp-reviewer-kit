@@ -18,13 +18,13 @@
 export function createSignalHandler({
   telemetry,
   runId,
+  cleanup,
   exit = process.exit,
   timeoutMs = 500,
 } = {}) {
   return async function handler(signal) {
     const error = `interrupted by signal ${signal}`;
     const code = signal === 'SIGTERM' ? 143 : 130;
-
     const telemetryWork = (async () => {
       try {
         await telemetry?.record?.('run_failed', { error });
@@ -41,6 +41,13 @@ export function createSignalHandler({
         }, { force: true });
       } catch {
         // Telemetry calls must never throw out of the handler
+      }
+      // Snapshot dirs are removed here because exit() below never returns,
+      // so the normal finally cleanup cannot run.
+      try {
+        await cleanup?.();
+      } catch {
+        // Cleanup must never throw out of the handler
       }
     })();
 
@@ -82,12 +89,12 @@ export function createSignalHandler({
 export function installRunSignalGuard({
   telemetry,
   runId,
+  cleanup,
   exit = process.exit,
   timeoutMs = 500,
 } = {}) {
   // Accepted E10 race: OS pid reuse can theoretically misattribute liveness — safety-neutral, verdict path untouched.
-  const handler = createSignalHandler({ telemetry, runId, exit, timeoutMs });
-
+  const handler = createSignalHandler({ telemetry, runId, cleanup, exit, timeoutMs });
   process.once('SIGINT', handler);
   process.once('SIGTERM', handler);
 

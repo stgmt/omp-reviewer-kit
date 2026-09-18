@@ -19,7 +19,11 @@ export class StagedSnapshot {
       if (!file || typeof file.path !== 'string' || !Buffer.isBuffer(file.content)) {
         throw new TypeError('StagedSnapshot files require a string path and Buffer content');
       }
-      return Object.freeze({ path: file.path, content: Buffer.from(file.content) });
+      const normalized = { path: file.path, content: Buffer.from(file.content) };
+      if (typeof file.mode === 'string' && file.mode.length > 0) {
+        normalized.mode = file.mode;
+      }
+      return Object.freeze(normalized);
     });
 
     const hash = createHash('sha256');

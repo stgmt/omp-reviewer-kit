@@ -75,8 +75,16 @@ export class SubprocessGitAdapter extends GitPort {
     try {
       const buffer = await this.#runner(['cat-file', 'blob', `HEAD:${filePath}`], repoRoot);
       return Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer ?? '');
-    } catch {
-      return null;
+    } catch (error) {
+      // Only a genuinely absent blob means "new file at HEAD": every other
+      // failure (corrupt object store, missing HEAD, unreadable repo) must
+      // propagate so the reverted snapshot is skipped rather than silently
+      // dropping the file.
+      const message = String(error?.message ?? error);
+      if (/Not a valid object name|does not exist|exists on disk, but not in/i.test(message)) {
+        return null;
+      }
+      throw error;
     }
   }
 
@@ -96,7 +104,7 @@ export class SubprocessGitAdapter extends GitPort {
       const objectId = metadata[1];
       const stagedPath = entry.slice(separator + 1);
       const content = await this.#runner(['cat-file', 'blob', objectId], repoRoot);
-      files.push({ path: stagedPath, content });
+      files.push({ path: stagedPath, content, mode });
     }
 
     files.sort((left, right) => left.path.localeCompare(right.path));

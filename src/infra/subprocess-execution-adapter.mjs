@@ -115,9 +115,10 @@ export class SubprocessExecutionAdapter extends ExecutionPort {
         const durationMs = Date.now() - startedAt;
         resolve({
           ok: true,
-          exitCode: exitCode ?? (timedOut ? 1 : 0),
+          // A signal-killed child reports exitCode null; surface it as a
+          // failure, never as exit 0.
+          exitCode: exitCode ?? 1,
           timedOut,
-          durationMs,
           stdout: stdoutLines.join('\n'),
           stderr: stderrLines.join('\n'),
         });

@@ -151,8 +151,13 @@ export function isModelProviderFailure(result) {
 
   // A provider-side refusal can be wrapped in a synthetic BLOCK marker by
   // the orchestrator when dispatch fails. Detect it before treating BLOCK as
-  // a completed review.
-  if (ReviewVerdict.fromOutput(combined).reason !== 'missing_verdict_marker') return false;
+  // a completed review — but only when the envelope declares review_failure;
+  // a confirmed_findings BLOCK that quotes refusal text is a real verdict.
+  const verdict = ReviewVerdict.fromOutput(combined);
+  if (verdict.reason !== 'missing_verdict_marker') {
+    const failureBlock = /"kind"\s*:\s*"review_failure"/.test(combined);
+    return failureBlock && containsProviderRefusal(combined);
+  }
 
   if (containsProviderRefusal(combined)) return true;
 
@@ -618,7 +623,11 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
         }
       };
       const armQuotaStall = () => {
-        if (!(quotaStallMs > 0) || stallTimer || stdout.trim() !== '') return;
+        // No stdout guard here: the stall timer itself is cleared by each
+        // stdout chunk, so arming while stdout flows is harmless — the next
+        // chunk cancels it. The guard made the log poller's arm call a no-op
+        // after any banner, leaving mid-run stalls unbounded.
+        if (!(quotaStallMs > 0) || stallTimer) return;
         stallTimer = setTimeout(async () => {
           stopQuotaPoller();
           // Mark BEFORE terminating: terminateProcessTree awaits the kill, and

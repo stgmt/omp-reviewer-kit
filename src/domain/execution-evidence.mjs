@@ -65,7 +65,8 @@ export class ExecutionEvidence {
       lines.push(`- Staged snapshot: unavailable (${this.#staged.error})`);
     } else {
       const durationSec = (this.#staged.durationMs / 1000).toFixed(1);
-      lines.push(`- Staged snapshot: exit ${this.#staged.exitCode} in ${durationSec}s`);
+      const timeoutNote = this.#staged.timedOut ? ' (timed out)' : '';
+      lines.push(`- Staged snapshot: exit ${this.#staged.exitCode}${timeoutNote} in ${durationSec}s`);
       const combined = `${this.#staged.stdout ?? ''}\n${this.#staged.stderr ?? ''}`.trim();
       const tail = ExecutionEvidence.tail(combined);
       if (tail) {
@@ -78,7 +79,8 @@ export class ExecutionEvidence {
         lines.push(`- Reverted snapshot: unavailable (${this.#reverted.error})`);
       } else {
         const durationSec = (this.#reverted.durationMs / 1000).toFixed(1);
-        lines.push(`- Reverted snapshot (non-test staged changes reverted to HEAD): exit ${this.#reverted.exitCode} in ${durationSec}s`);
+        const timeoutNote = this.#reverted.timedOut ? ' (timed out)' : '';
+        lines.push(`- Reverted snapshot (non-test staged changes reverted to HEAD): exit ${this.#reverted.exitCode}${timeoutNote} in ${durationSec}s`);
         const combined = `${this.#reverted.stdout ?? ''}\n${this.#reverted.stderr ?? ''}`.trim();
         const tail = ExecutionEvidence.tail(combined);
         if (tail) {

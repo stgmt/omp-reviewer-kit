@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { SnapshotStorePort } from '../application/ports.mjs';
@@ -73,6 +73,11 @@ export class FileSystemSnapshotAdapter extends SnapshotStorePort {
       }
       await mkdir(path.dirname(destination), { recursive: true });
       await writeFile(destination, file.content);
+      // Preserve the staged executable bit so test commands that exec
+      // staged scripts behave like the real index (POSIX; no-op on Windows).
+      if (file.mode === '100755') {
+        await chmod(destination, 0o755).catch(() => {});
+      }
     }
   }
 

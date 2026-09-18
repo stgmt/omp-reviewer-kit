@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { appendFile, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { appendFile, chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
@@ -346,13 +346,13 @@ export function buildRevertedFiles({
   for (const file of files) {
     processedPaths.add(file.path);
     if (!changedSet.has(file.path) || isTestPath(file.path, testPathPatterns)) {
-      resultFiles.push({ path: file.path, content: file.content });
+      resultFiles.push({ path: file.path, content: file.content, mode: file.mode });
       continue;
     }
 
     const headContent = headFiles.get(file.path);
     if (headContent !== null && headContent !== undefined) {
-      resultFiles.push({ path: file.path, content: headContent });
+      resultFiles.push({ path: file.path, content: headContent, mode: file.mode });
     }
   }
 
@@ -432,7 +432,8 @@ export class ExecutionEvidence {
       lines.push(`- Staged snapshot: unavailable (${this.#staged.error})`);
     } else {
       const durationSec = (this.#staged.durationMs / 1000).toFixed(1);
-      lines.push(`- Staged snapshot: exit ${this.#staged.exitCode} in ${durationSec}s`);
+      const timeoutNote = this.#staged.timedOut ? ' (timed out)' : '';
+      lines.push(`- Staged snapshot: exit ${this.#staged.exitCode}${timeoutNote} in ${durationSec}s`);
       const combined = `${this.#staged.stdout ?? ''}\n${this.#staged.stderr ?? ''}`.trim();
       const tail = ExecutionEvidence.tail(combined);
       if (tail) {
@@ -445,7 +446,8 @@ export class ExecutionEvidence {
         lines.push(`- Reverted snapshot: unavailable (${this.#reverted.error})`);
       } else {
         const durationSec = (this.#reverted.durationMs / 1000).toFixed(1);
-        lines.push(`- Reverted snapshot (non-test staged changes reverted to HEAD): exit ${this.#reverted.exitCode} in ${durationSec}s`);
+        const timeoutNote = this.#reverted.timedOut ? ' (timed out)' : '';
+        lines.push(`- Reverted snapshot (non-test staged changes reverted to HEAD): exit ${this.#reverted.exitCode}${timeoutNote} in ${durationSec}s`);
         const combined = `${this.#reverted.stdout ?? ''}\n${this.#reverted.stderr ?? ''}`.trim();
         const tail = ExecutionEvidence.tail(combined);
         if (tail) {
@@ -486,7 +488,11 @@ export class StagedSnapshot {
       if (!file || typeof file.path !== 'string' || !Buffer.isBuffer(file.content)) {
         throw new TypeError('StagedSnapshot files require a string path and Buffer content');
       }
-      return Object.freeze({ path: file.path, content: Buffer.from(file.content) });
+      const normalized = { path: file.path, content: Buffer.from(file.content) };
+      if (typeof file.mode === 'string' && file.mode.length > 0) {
+        normalized.mode = file.mode;
+      }
+      return Object.freeze(normalized);
     });
 
     const hash = createHash('sha256');
@@ -514,7 +520,7 @@ export class StagedSnapshot {
   }
 }
 
-const RESULT_LINE_RE = /^REVIEW_RESULT=(PASS|BLOCK)$/gm;
+const RESULT_LINE_RE = /^REVIEW_RESULT=(PASS|BLOCK)\r?$/gm;
 
 /**
  * Domain Value Object encapsulating the review verdict and fail-closed validation rules.
@@ -1406,6 +1412,7 @@ export class TelemetryPort {
 export function createSignalHandler({
   telemetry,
   runId,
+  cleanup,
   exit = process.exit,
   timeoutMs = 500,
 } = {}) {
@@ -1429,6 +1436,13 @@ export function createSignalHandler({
         }, { force: true });
       } catch {
         // Telemetry calls must never throw out of the handler
+      }
+      // Snapshot dirs are removed here because exit() below never returns,
+      // so the normal finally cleanup cannot run.
+      try {
+        await cleanup?.();
+      } catch {
+        // Cleanup must never throw out of the handler
       }
     })();
 
@@ -1470,11 +1484,12 @@ export function createSignalHandler({
 export function installRunSignalGuard({
   telemetry,
   runId,
+  cleanup,
   exit = process.exit,
   timeoutMs = 500,
 } = {}) {
   // Accepted E10 race: OS pid reuse can theoretically misattribute liveness — safety-neutral, verdict path untouched.
-  const handler = createSignalHandler({ telemetry, runId, exit, timeoutMs });
+  const handler = createSignalHandler({ telemetry, runId, cleanup, exit, timeoutMs });
 
   process.once('SIGINT', handler);
   process.once('SIGTERM', handler);
@@ -1578,7 +1593,15 @@ export class ReviewWorkflowService {
       startedAt: new Date(startedAt).toISOString(),
     }, { force: true });
 
-    const uninstall = installRunSignalGuard({ telemetry, runId });
+    // Snapshot dirs created during this run; the signal guard removes them
+    // before exit() since the finally blocks below never run on SIGINT/SIGTERM.
+    const liveSnapshotDirs = new Set();
+    const cleanupSnapshots = async () => {
+      for (const dir of liveSnapshotDirs) {
+        await this.#snapshotStorePort.remove(dir).catch(() => {});
+      }
+    };
+    const uninstall = installRunSignalGuard({ telemetry, runId, cleanup: cleanupSnapshots });
 
     try {
       await telemetry.record('run_started', {
@@ -1625,6 +1648,7 @@ export class ReviewWorkflowService {
         diffBytes: diff.bytes,
         changedPaths: diff.changedPaths,
       });
+      liveSnapshotDirs.add(snapshotDir);
       await telemetry.record('snapshot_materialized', {
         files: snapshot.files.length,
         bytes: snapshot.files.reduce((total, file) => total + file.content.length, 0),
@@ -1697,6 +1721,7 @@ export class ReviewWorkflowService {
                 const revertedDir = await this.#snapshotStorePort.create(revertedSnapshot, {
                   artifacts: false,
                 });
+                liveSnapshotDirs.add(revertedDir);
 
                 try {
                   await telemetry.updateLastRun({
@@ -1730,6 +1755,7 @@ export class ReviewWorkflowService {
                   });
                 } finally {
                   await this.#snapshotStorePort.remove(revertedDir);
+                  liveSnapshotDirs.delete(revertedDir);
                 }
               } else {
                 revertedSkipReason = !hasTest ? 'no test changes staged' : 'no non-test changes staged';
@@ -1772,6 +1798,7 @@ export class ReviewWorkflowService {
         });
       } finally {
         await this.#snapshotStorePort.remove(snapshotDir);
+        liveSnapshotDirs.delete(snapshotDir);
       }
 
       let combinedOutput = execResult.combined ?? `${execResult.stdout ?? ''}\n${execResult.stderr ?? ''}`;
@@ -1963,8 +1990,16 @@ export class SubprocessGitAdapter extends GitPort {
     try {
       const buffer = await this.#runner(['cat-file', 'blob', `HEAD:${filePath}`], repoRoot);
       return Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer ?? '');
-    } catch {
-      return null;
+    } catch (error) {
+      // Only a genuinely absent blob means "new file at HEAD": every other
+      // failure (corrupt object store, missing HEAD, unreadable repo) must
+      // propagate so the reverted snapshot is skipped rather than silently
+      // dropping the file.
+      const message = String(error?.message ?? error);
+      if (/Not a valid object name|does not exist|exists on disk, but not in/i.test(message)) {
+        return null;
+      }
+      throw error;
     }
   }
 
@@ -1984,7 +2019,7 @@ export class SubprocessGitAdapter extends GitPort {
       const objectId = metadata[1];
       const stagedPath = entry.slice(separator + 1);
       const content = await this.#runner(['cat-file', 'blob', objectId], repoRoot);
-      files.push({ path: stagedPath, content });
+      files.push({ path: stagedPath, content, mode });
     }
 
     files.sort((left, right) => left.path.localeCompare(right.path));
@@ -2139,8 +2174,13 @@ export function isModelProviderFailure(result) {
 
   // A provider-side refusal can be wrapped in a synthetic BLOCK marker by
   // the orchestrator when dispatch fails. Detect it before treating BLOCK as
-  // a completed review.
-  if (ReviewVerdict.fromOutput(combined).reason !== 'missing_verdict_marker') return false;
+  // a completed review — but only when the envelope declares review_failure;
+  // a confirmed_findings BLOCK that quotes refusal text is a real verdict.
+  const verdict = ReviewVerdict.fromOutput(combined);
+  if (verdict.reason !== 'missing_verdict_marker') {
+    const failureBlock = /"kind"\s*:\s*"review_failure"/.test(combined);
+    return failureBlock && containsProviderRefusal(combined);
+  }
 
   if (containsProviderRefusal(combined)) return true;
 
@@ -2606,7 +2646,11 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
         }
       };
       const armQuotaStall = () => {
-        if (!(quotaStallMs > 0) || stallTimer || stdout.trim() !== '') return;
+        // No stdout guard here: the stall timer itself is cleared by each
+        // stdout chunk, so arming while stdout flows is harmless — the next
+        // chunk cancels it. The guard made the log poller's arm call a no-op
+        // after any banner, leaving mid-run stalls unbounded.
+        if (!(quotaStallMs > 0) || stallTimer) return;
         stallTimer = setTimeout(async () => {
           stopQuotaPoller();
           // Mark BEFORE terminating: terminateProcessTree awaits the kill, and
@@ -3025,7 +3069,9 @@ export class SubprocessExecutionAdapter extends ExecutionPort {
         const durationMs = Date.now() - startedAt;
         resolve({
           ok: true,
-          exitCode: exitCode ?? (timedOut ? 1 : 0),
+          // A signal-killed child reports exitCode null; surface it as a
+          // failure, never as exit 0.
+          exitCode: exitCode ?? 1,
           timedOut,
           durationMs,
           stdout: stdoutLines.join('\n'),
@@ -3071,6 +3117,11 @@ export class FileSystemSnapshotAdapter extends SnapshotStorePort {
       }
       await mkdir(path.dirname(destination), { recursive: true });
       await writeFile(destination, file.content);
+      // Preserve the staged executable bit so test commands that exec
+      // staged scripts behave like the real index (POSIX; no-op on Windows).
+      if (file.mode === '100755') {
+        await chmod(destination, 0o755).catch(() => {});
+      }
     }
 
   }

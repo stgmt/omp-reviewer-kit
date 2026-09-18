@@ -1,4 +1,4 @@
-const RESULT_LINE_RE = /^REVIEW_RESULT=(PASS|BLOCK)$/gm;
+const RESULT_LINE_RE = /^REVIEW_RESULT=(PASS|BLOCK)\r?$/gm;
 
 /**
  * Domain Value Object encapsulating the review verdict and fail-closed validation rules.

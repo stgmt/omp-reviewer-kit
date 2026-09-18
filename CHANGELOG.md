@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.5] - 2026-09-18
+
+### Fixed
+- **Quota-stall watchdog never armed after first stdout**: `armQuotaStall` refused to arm once any stdout existed, so a mid-run provider refusal (detected via the child OMP log poller) after any banner left the commit hook hanging forever. The guard is removed; the stall timer is cleared by each stdout chunk, so arming while stdout flows is harmless.
+- **Provider-refusal BLOCK never retried**: `isModelProviderFailure` returned `false` on any verdict marker before checking for a provider refusal, so a dispatch failure wrapped in a synthetic `review_failure` BLOCK was treated as a completed review and never fell back. Now a `review_failure` envelope carrying refusal text retries; a `confirmed_findings` BLOCK quoting refusal text still counts as a real verdict.
+- **CRLF verdict lines rejected**: `REVIEW_RESULT=(PASS|BLOCK)$` did not match `\r\n` endings, so a reviewer printing CRLF produced `missing_verdict_marker` instead of a verdict.
+- **`getHeadFile` swallowed real git errors**: every `cat-file` failure returned `null` ("new file"), silently dropping files from the red-proof reverted snapshot. Only absent-blob errors return `null` now; other failures propagate and skip the reverted run.
+- **Signal-killed test commands reported exit 0**: `exitCode ?? (timedOut ? 1 : 0)` mapped a signal death to success. Now `exitCode ?? 1`.
+- **Timed-out executions unmarked in the prompt**: staged/reverted evidence lines now carry ` (timed out)` so the reviewer does not read a killed run as a clean pass/fail.
+- **Staged executable bit lost in snapshots**: `materialize` now `chmod 0o755`s files staged with mode `100755` (POSIX; no-op on Windows), so test commands that exec staged scripts behave like the real index.
+- **Snapshot dirs leaked on SIGINT/SIGTERM**: the signal guard exited before the `finally` cleanup ran. It now accepts a `cleanup` callback raced with the telemetry timeout; the workflow service registers live snapshot dirs for removal.
+
 ## [0.11.4] - 2026-09-18
 
 ### Fixed
