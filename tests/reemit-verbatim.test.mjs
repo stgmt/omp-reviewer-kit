@@ -259,7 +259,10 @@ describe('Feature: Verbatim Re-emit Recovery (missing verdict marker)', () => {
       review: { status: 0, stdout: VERDICT_VOCABULARY_OUTPUT, stderr: '' },
       reemit: {
         status: 0,
-        stdout: VERDICT_VOCABULARY_OUTPUT.replace('VERDICT=PASS', 'REVIEW_RESULT=PASS'),
+        // The re-emitted report keeps the invented vocabulary verbatim and
+        // appends the canonical marker as the last non-empty line, per the
+        // verdict contract.
+        stdout: VERDICT_VOCABULARY_OUTPUT + 'REVIEW_RESULT=PASS\n',
         stderr: '',
       },
     });

@@ -297,7 +297,7 @@ export class ReviewRejectionEnvelope {
       }
     }
 
-    const blockIndex = lines.indexOf('REVIEW_RESULT=BLOCK');
+    const blockIndex = lines.lastIndexOf('REVIEW_RESULT=BLOCK');
     for (const [beginIndex, endIndex] of pairs) {
       if (endIndex >= blockIndex || blockIndex !== endIndex + 1) continue;
       try {

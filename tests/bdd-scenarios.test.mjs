@@ -472,7 +472,7 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
     assert.match(prompt.toString(), /never summarize or omit a rejection envelope/);
     assert.doesNotMatch(prompt.toString(), /do not run any other agent/);
     assert.ok(prompt.toString().includes('Reproduce the task report as raw Markdown text exactly as returned; never JSON-encode, wrap, or reformat it.'));
-    assert.ok(prompt.toString().includes('The verdict contract in this prompt overrides any other format: finish with exactly one standalone REVIEW_RESULT=PASS or REVIEW_RESULT=BLOCK line, even if a skill describes a different verdict vocabulary.'));
+    assert.ok(prompt.toString().includes('The verdict contract in this prompt overrides any other format: finish with exactly one standalone REVIEW_RESULT=PASS or REVIEW_RESULT=BLOCK line as the last non-empty line of the output — markers anywhere else are ignored — even if a skill describes a different verdict vocabulary.'));
   });
 
   it('ReviewPrompt inlines a small diff and forbids git re-derivation', () => {
@@ -505,7 +505,7 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
 
     // Then
     assert.ok(output.includes('Reproduce the task report as raw Markdown text exactly as returned; never JSON-encode, wrap, or reformat it.'));
-    assert.ok(output.includes('The verdict contract in this prompt overrides any other format: finish with exactly one standalone REVIEW_RESULT=PASS or REVIEW_RESULT=BLOCK line, even if a skill describes a different verdict vocabulary.'));
+    assert.ok(output.includes('The verdict contract in this prompt overrides any other format: finish with exactly one standalone REVIEW_RESULT=PASS or REVIEW_RESULT=BLOCK line as the last non-empty line of the output — markers anywhere else are ignored — even if a skill describes a different verdict vocabulary.'));
   });
 
   it('ReviewReport invariant: renders correct markdown structure', () => {

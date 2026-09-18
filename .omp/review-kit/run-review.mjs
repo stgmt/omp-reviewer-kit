@@ -514,13 +514,13 @@ export class StagedSnapshot {
   get hash() {
     return this.#hash;
   }
-
   isEmpty() {
     return this.#files.length === 0;
   }
 }
 
 const RESULT_LINE_RE = /^REVIEW_RESULT=(PASS|BLOCK)\r?$/gm;
+const RESULT_LINE_RE_TERMINAL = /^REVIEW_RESULT=(PASS|BLOCK)\r?$/;
 
 /**
  * Domain Value Object encapsulating the review verdict and fail-closed validation rules.
@@ -563,15 +563,23 @@ export class ReviewVerdict {
     }
 
     const matches = [...output.matchAll(RESULT_LINE_RE)];
-    if (matches.length === 1) {
-      const parsedValue = matches[0][1];
+    // A marker is only a verdict when it is the last non-empty line: staged
+    // content is quoted verbatim into reviewer output, so a planted
+    // REVIEW_RESULT=PASS mid-text must never count. A non-terminal marker
+    // degrades to missing_verdict_marker (fail closed).
+    const lastNonEmpty = output.trimEnd().split(/\r?\n/).pop() ?? '';
+    const terminal = RESULT_LINE_RE_TERMINAL.test(lastNonEmpty);
+    const effective = terminal ? matches : [];
+
+    if (effective.length === 1) {
+      const parsedValue = effective[0][1];
       return new ReviewVerdict(parsedValue, {
         reason: parsedValue === ReviewVerdict.PASS ? 'verified' : 'explicit_block',
         rawOutput: output,
       });
     }
 
-    if (matches.length === 0) {
+    if (effective.length === 0) {
       return new ReviewVerdict(ReviewVerdict.BLOCK, {
         reason: 'missing_verdict_marker',
         rawOutput: output,
@@ -909,7 +917,7 @@ export class ReviewRejectionEnvelope {
       }
     }
 
-    const blockIndex = lines.indexOf('REVIEW_RESULT=BLOCK');
+    const blockIndex = lines.lastIndexOf('REVIEW_RESULT=BLOCK');
     for (const [beginIndex, endIndex] of pairs) {
       if (endIndex >= blockIndex || blockIndex !== endIndex + 1) continue;
       try {
@@ -1023,7 +1031,7 @@ export class ReviewPrompt {
       'After the task returns, reproduce its complete report verbatim; if the result says it was truncated or provides an agent URI, read that URI first, and never summarize or omit a rejection envelope. If the agent URI cannot be read, read the durable report copy at .review/report.md inside the staged snapshot directory named in this prompt (the orchestrator writes it before yielding) and reproduce that file verbatim instead.',
       'If the task fails, returns empty, or its result cannot be read, do not summarize: emit exactly one review_failure envelope — the line REVIEW_REJECTION_ENVELOPE_BEGIN, then one JSON object {"schema":"review-rejection-envelope@1","kind":"review_failure","diff_hash":"<the staged diff hash from this prompt>","findings":[],"failure":{"code":"execution_failure","message":"<the observed task error>"}}, then REVIEW_REJECTION_ENVELOPE_END, then REVIEW_RESULT=BLOCK on its own line.',
       'Reproduce the task report as raw Markdown text exactly as returned; never JSON-encode, wrap, or reformat it.',
-      'The verdict contract in this prompt overrides any other format: finish with exactly one standalone REVIEW_RESULT=PASS or REVIEW_RESULT=BLOCK line, even if a skill describes a different verdict vocabulary.',
+      'The verdict contract in this prompt overrides any other format: finish with exactly one standalone REVIEW_RESULT=PASS or REVIEW_RESULT=BLOCK line as the last non-empty line of the output — markers anywhere else are ignored — even if a skill describes a different verdict vocabulary.',
     ];
     if (this.#inlineDiff) {
       lines.push(
@@ -1059,7 +1067,7 @@ export class ReviewPrompt {
   }
 
   #toReemitString() {
-    return 'Reproduce the following review report verbatim as raw Markdown text exactly as returned; never JSON-encode, wrap, or reformat it. The verdict contract overrides any other format: finish with exactly one standalone REVIEW_RESULT=PASS or REVIEW_RESULT=BLOCK line, even if the input describes a different verdict vocabulary.\n\n---ORIGINAL OUTPUT---\n' + this.#reemitOutput;
+    return 'Reproduce the following review report verbatim as raw Markdown text exactly as returned; never JSON-encode, wrap, or reformat it. The verdict contract overrides any other format: finish with exactly one standalone REVIEW_RESULT=PASS or REVIEW_RESULT=BLOCK line as the last non-empty line of the output — markers anywhere else are ignored — even if the input describes a different verdict vocabulary.\n\n---ORIGINAL OUTPUT---\n' + this.#reemitOutput;
   }
 
   get diffHash() {
@@ -1957,9 +1965,13 @@ export class SubprocessGitAdapter extends GitPort {
     this.#runner = runner ?? SubprocessGitAdapter.defaultRunner;
   }
 
-  static defaultRunner(args, cwd) {
+  static defaultRunner(args, cwd, input) {
     return new Promise((resolve, reject) => {
-      const proc = spawn('git', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+      const proc = spawn('git', args, {
+        cwd,
+        stdio: [input ? 'pipe' : 'ignore', 'pipe', 'pipe'],
+        windowsHide: true,
+      });
       const chunks = [];
       const errChunks = [];
       proc.stdout.on('data', (chunk) => chunks.push(chunk));
@@ -1973,6 +1985,10 @@ export class SubprocessGitAdapter extends GitPort {
         }
         resolve(Buffer.concat(chunks));
       });
+      if (input) {
+        proc.stdin.on('error', () => {});
+        proc.stdin.end(input);
+      }
     });
   }
 
@@ -2006,7 +2022,7 @@ export class SubprocessGitAdapter extends GitPort {
   async getSnapshot(repoRoot) {
     const listing = await this.#runner(['ls-files', '--cached', '-z', '--stage', '--'], repoRoot);
     const entries = listing.toString('utf8').split('\0').filter(Boolean);
-    const files = [];
+    const pending = [];
 
     for (const entry of entries) {
       const separator = entry.indexOf('\t');
@@ -2016,10 +2032,47 @@ export class SubprocessGitAdapter extends GitPort {
       const stage = metadata[2];
       if (stage !== '0') throw new Error('Cannot review an unmerged staged index');
       if (mode === '160000') continue;
-      const objectId = metadata[1];
-      const stagedPath = entry.slice(separator + 1);
-      const content = await this.#runner(['cat-file', 'blob', objectId], repoRoot);
-      files.push({ path: stagedPath, content, mode });
+      pending.push({
+        path: entry.slice(separator + 1),
+        mode,
+        objectId: metadata[1],
+      });
+    }
+
+    // One `cat-file --batch` process streams every blob: a per-file spawn
+    // costs ~20-45ms each, which made every commit pay minutes on large
+    // indexes and pushed users toward --no-verify.
+    if (pending.length === 0) {
+      return new StagedSnapshot([]);
+    }
+    const batchInput = Buffer.from(pending.map((f) => f.objectId).join('\n') + '\n', 'utf8');
+    const batchOutput = await this.#runner(['cat-file', '--batch'], repoRoot, batchInput);
+
+    const files = [];
+    let offset = 0;
+    for (const item of pending) {
+      const headerEnd = batchOutput.indexOf(0x0a, offset);
+      if (headerEnd < 0) throw new Error('git cat-file --batch returned a truncated stream');
+      const header = batchOutput.toString('utf8', offset, headerEnd);
+      const [headerId, headerType, headerSize] = header.split(' ');
+      if (headerId !== item.objectId || headerType !== 'blob') {
+        throw new Error(`git cat-file --batch returned ${header} for ${item.path}`);
+      }
+      const size = Number.parseInt(headerSize, 10);
+      if (!Number.isInteger(size) || size < 0) {
+        throw new Error(`git cat-file --batch returned an invalid size for ${item.path}`);
+      }
+      const contentStart = headerEnd + 1;
+      const contentEnd = contentStart + size;
+      if (contentEnd >= batchOutput.length || batchOutput[contentEnd] !== 0x0a) {
+        throw new Error(`git cat-file --batch truncated the blob for ${item.path}`);
+      }
+      files.push({
+        path: item.path,
+        content: Buffer.from(batchOutput.subarray(contentStart, contentEnd)),
+        mode: item.mode,
+      });
+      offset = contentEnd + 1;
     }
 
     files.sort((left, right) => left.path.localeCompare(right.path));
@@ -2176,8 +2229,11 @@ export function isModelProviderFailure(result) {
   // the orchestrator when dispatch fails. Detect it before treating BLOCK as
   // a completed review — but only when the envelope declares review_failure;
   // a confirmed_findings BLOCK that quotes refusal text is a real verdict.
-  const verdict = ReviewVerdict.fromOutput(combined);
-  if (verdict.reason !== 'missing_verdict_marker') {
+  // Marker presence (not verdict validity) decides: a marker followed by
+  // trailing stderr noise is still verdict-shaped output, not a dispatch
+  // failure.
+  const hasMarker = /^REVIEW_RESULT=(PASS|BLOCK)\r?$/m.test(combined);
+  if (hasMarker) {
     const failureBlock = /"kind"\s*:\s*"review_failure"/.test(combined);
     return failureBlock && containsProviderRefusal(combined);
   }
@@ -2651,7 +2707,13 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
         // chunk cancels it. The guard made the log poller's arm call a no-op
         // after any banner, leaving mid-run stalls unbounded.
         if (!(quotaStallMs > 0) || stallTimer) return;
+        const armedAt = lastStdoutAt;
         stallTimer = setTimeout(async () => {
+          stallTimer = undefined;
+          // stdout progress after this arming means the observed refusal
+          // recovered — disarm. A persistent refusal re-arms via the next
+          // stderr chunk or log-poller tick.
+          if (lastStdoutAt > armedAt) return;
           stopQuotaPoller();
           // Mark BEFORE terminating: terminateProcessTree awaits the kill, and
           // the proc 'close' event can fire during that await and settle the

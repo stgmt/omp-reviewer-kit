@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.6] - 2026-09-18
+
+### Fixed
+- **O(N) git spawns per commit**: `getSnapshot` ran one `git cat-file` child per tracked file (~20-45ms each — minutes on large indexes, pushing users to `--no-verify`). Now a single `git cat-file --batch` stream reads every blob; `defaultRunner` accepts an optional stdin buffer.
+- **Forged verdict markers**: `ReviewVerdict.fromOutput` accepted a `REVIEW_RESULT=PASS` line anywhere in output, and staged content is quoted verbatim into the reviewer report — a planted marker could pass the gate. The marker must now be the last non-empty line; non-terminal markers degrade to `missing_verdict_marker` (fail closed). Envelope pairing uses `lastIndexOf` for the BLOCK line. Prompt and agent contracts updated to require the terminal marker.
+- **Provider-refusal retry after marker+stderr noise**: `isModelProviderFailure` now keys on marker *presence* (not verdict validity) before consulting refusal text, so a BLOCK followed by trailing stderr noise is still verdict-shaped and never retried; a `review_failure` envelope with refusal text still retries.
+
 ## [0.11.5] - 2026-09-18
 
 ### Fixed

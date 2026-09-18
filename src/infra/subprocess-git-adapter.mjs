@@ -25,11 +25,16 @@ export class SubprocessGitAdapter extends GitPort {
    *
    * @param {string[]} args
    * @param {string} cwd
+   * @param {Buffer} [input] - when provided, piped to the child's stdin
    * @returns {Promise<Buffer>}
    */
-  static defaultRunner(args, cwd) {
+  static defaultRunner(args, cwd, input) {
     return new Promise((resolve, reject) => {
-      const proc = spawn('git', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+      const proc = spawn('git', args, {
+        cwd,
+        stdio: [input ? 'pipe' : 'ignore', 'pipe', 'pipe'],
+        windowsHide: true,
+      });
       const chunks = [];
       const errChunks = [];
       proc.stdout.on('data', (chunk) => chunks.push(chunk));
@@ -43,6 +48,10 @@ export class SubprocessGitAdapter extends GitPort {
         }
         resolve(Buffer.concat(chunks));
       });
+      if (input) {
+        proc.stdin.on('error', () => {});
+        proc.stdin.end(input);
+      }
     });
   }
 
@@ -91,7 +100,7 @@ export class SubprocessGitAdapter extends GitPort {
   async getSnapshot(repoRoot) {
     const listing = await this.#runner(['ls-files', '--cached', '-z', '--stage', '--'], repoRoot);
     const entries = listing.toString('utf8').split('\0').filter(Boolean);
-    const files = [];
+    const pending = [];
 
     for (const entry of entries) {
       const separator = entry.indexOf('\t');
@@ -101,10 +110,46 @@ export class SubprocessGitAdapter extends GitPort {
       const stage = metadata[2];
       if (stage !== '0') throw new Error('Cannot review an unmerged staged index');
       if (mode === '160000') continue;
-      const objectId = metadata[1];
-      const stagedPath = entry.slice(separator + 1);
-      const content = await this.#runner(['cat-file', 'blob', objectId], repoRoot);
-      files.push({ path: stagedPath, content, mode });
+      pending.push({
+        path: entry.slice(separator + 1),
+        mode,
+        objectId: metadata[1],
+      });
+    }
+
+    // One `cat-file --batch` process streams every blob: a per-file spawn
+    // costs ~20-45ms each, which made every commit pay minutes on large
+    // indexes and pushed users toward --no-verify.
+    if (pending.length === 0) {
+      return new StagedSnapshot([]);
+    }
+    const batchInput = Buffer.from(pending.map((f) => f.objectId).join('\n') + '\n', 'utf8');
+    const batchOutput = await this.#runner(['cat-file', '--batch'], repoRoot, batchInput);
+    const files = [];
+    let offset = 0;
+    for (const item of pending) {
+      const headerEnd = batchOutput.indexOf(0x0a, offset);
+      if (headerEnd < 0) throw new Error('git cat-file --batch returned a truncated stream');
+      const header = batchOutput.toString('utf8', offset, headerEnd);
+      const [headerId, headerType, headerSize] = header.split(' ');
+      if (headerId !== item.objectId || headerType !== 'blob') {
+        throw new Error(`git cat-file --batch returned ${header} for ${item.path}`);
+      }
+      const size = Number.parseInt(headerSize, 10);
+      if (!Number.isInteger(size) || size < 0) {
+        throw new Error(`git cat-file --batch returned an invalid size for ${item.path}`);
+      }
+      const contentStart = headerEnd + 1;
+      const contentEnd = contentStart + size;
+      if (contentEnd >= batchOutput.length || batchOutput[contentEnd] !== 0x0a) {
+        throw new Error(`git cat-file --batch truncated the blob for ${item.path}`);
+      }
+      files.push({
+        path: item.path,
+        content: Buffer.from(batchOutput.subarray(contentStart, contentEnd)),
+        mode: item.mode,
+      });
+      offset = contentEnd + 1;
     }
 
     files.sort((left, right) => left.path.localeCompare(right.path));

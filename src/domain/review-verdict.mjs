@@ -1,4 +1,5 @@
 const RESULT_LINE_RE = /^REVIEW_RESULT=(PASS|BLOCK)\r?$/gm;
+const RESULT_LINE_RE_TERMINAL = /^REVIEW_RESULT=(PASS|BLOCK)\r?$/;
 
 /**
  * Domain Value Object encapsulating the review verdict and fail-closed validation rules.
@@ -41,15 +42,23 @@ export class ReviewVerdict {
     }
 
     const matches = [...output.matchAll(RESULT_LINE_RE)];
-    if (matches.length === 1) {
-      const parsedValue = matches[0][1];
+    // A marker is only a verdict when it is the last non-empty line: staged
+    // content is quoted verbatim into reviewer output, so a planted
+    // REVIEW_RESULT=PASS mid-text must never count. A non-terminal marker
+    // degrades to missing_verdict_marker (fail closed).
+    const lastNonEmpty = output.trimEnd().split(/\r?\n/).pop() ?? '';
+    const terminal = RESULT_LINE_RE_TERMINAL.test(lastNonEmpty);
+    const effective = terminal ? matches : [];
+
+    if (effective.length === 1) {
+      const parsedValue = effective[0][1];
       return new ReviewVerdict(parsedValue, {
         reason: parsedValue === ReviewVerdict.PASS ? 'verified' : 'explicit_block',
         rawOutput: output,
       });
     }
 
-    if (matches.length === 0) {
+    if (effective.length === 0) {
       return new ReviewVerdict(ReviewVerdict.BLOCK, {
         reason: 'missing_verdict_marker',
         rawOutput: output,
