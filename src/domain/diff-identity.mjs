@@ -33,20 +33,38 @@ export function unquoteGitPath(quoted) {
 }
 
 /**
- * Splits a `diff --git a/<old> b/<new>` header into its two path sides.
- * Git quotes a side only when it needs C-style escaping; space-only paths
- * arrive unquoted, so tokenizing on whitespace corrupts them. The split
- * anchor is the first ` b/` boundary: quoted sides are matched as whole
- * `"..."` tokens, unquoted sides run up to the next ` b/` or end of line.
- * @param {string} headerText - text after `diff --git ` on the header line
- * @returns {string[]|null} [oldPath, newPath] or null when unparseable
+ * Extracts the old/new paths of one `diff --git` block. The
+ * `diff --git a/<old> b/<new>` header is ambiguous for unquoted paths
+ * containing ` b/`, so paths are read from single-path lines first:
+ * `rename from/to`, `copy from/to`, then `---`/`+++`. The header is the
+ * last resort for mode-only blocks that carry none of those lines.
+ * `/dev/null` sides yield null.
+ * @param {string} blockText - one diff block starting at `diff --git`
+ * @returns {{ oldPath: string|null, newPath: string|null }}
  */
-export function splitDiffGitHeader(headerText) {
-  const match = /^(?:"((?:[^"\\]|\\.)*)"|(a\/.*?)) (?:"((?:[^"\\]|\\.)*)"|(b\/.*))$/.exec(headerText.trimEnd());
-  if (!match) return null;
-  const oldSide = match[1] !== undefined ? `"${match[1]}"` : match[2];
-  const newSide = match[3] !== undefined ? `"${match[3]}"` : match[4];
-  return [oldSide, newSide];
+export function diffBlockPaths(blockText) {
+  const decode = (side, stripPrefix) => {
+    if (!side || side === '/dev/null') return null;
+    const raw = side.startsWith('"') ? unquoteGitPath(side) : side;
+    return stripPrefix ? raw.replace(/^[ab]\//, '') : raw;
+  };
+  const line = (re, stripPrefix) => {
+    const match = re.exec(blockText);
+    return match ? decode(match[1].trimEnd(), stripPrefix) : null;
+  };
+  // rename/copy lines carry bare paths; ---/+++ carry a//b/ prefixes.
+  let oldPath = line(/^rename from (.+)$/m, false) ?? line(/^copy from (.+)$/m, false) ?? line(/^--- (.+)$/m, true);
+  let newPath = line(/^rename to (.+)$/m, false) ?? line(/^copy to (.+)$/m, false) ?? line(/^\+\+\+ (.+)$/m, true);
+  if (oldPath === null && newPath === null) {
+    // blockText starts right after `diff --git ` — its first line is the header.
+    const header = blockText.slice(0, blockText.indexOf('\n') === -1 ? undefined : blockText.indexOf('\n'));
+    const sides = /^(?:"((?:[^"\\]|\\.)*)"|(a\/.*?)) (?:"((?:[^"\\]|\\.)*)"|(b\/.*))$/.exec(header.trimEnd());
+    if (sides) {
+      oldPath = decode(sides[1] !== undefined ? `"${sides[1]}"` : sides[2], true);
+      newPath = decode(sides[3] !== undefined ? `"${sides[3]}"` : sides[4], true);
+    }
+  }
+  return { oldPath, newPath };
 }
 
 /**
@@ -113,19 +131,16 @@ export class DiffIdentity {
 
   /**
    * Unique repository-relative paths touched by this diff, parsed from
-   * `diff --git a/<old> b/<new>` headers (both sides for renames).
+   * each block's `---`/`+++` lines (both sides for renames).
    * @returns {string[]}
    */
   get changedPaths() {
     const text = this.#bytes.toString('utf8');
     const seen = new Set();
-    for (const header of text.matchAll(/^diff --git (.+)$/gm)) {
-      const sides = splitDiffGitHeader(header[1]);
-      if (!sides) continue;
-      for (const side of sides) {
-        const raw = side.startsWith('"') ? unquoteGitPath(side) : side;
-        seen.add(raw.replace(/^[ab]\//, ''));
-      }
+    for (const blockText of text.split(/^diff --git /m).slice(1)) {
+      const { oldPath, newPath } = diffBlockPaths(blockText);
+      if (oldPath) seen.add(oldPath);
+      if (newPath) seen.add(newPath);
     }
     return [...seen];
   }

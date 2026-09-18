@@ -1,4 +1,4 @@
-import { splitDiffGitHeader, unquoteGitPath } from './diff-identity.mjs';
+import { diffBlockPaths } from './diff-identity.mjs';
 
 export const DEFAULT_ASSERT_PATTERNS = [
   '\\bassert\\b',
@@ -49,14 +49,9 @@ export function parseDiffBlocks(diffText) {
       continue;
     }
 
-    const firstLineEnd = blockText.indexOf('\n');
-    const headerLine = firstLineEnd === -1 ? blockText : blockText.slice(0, firstLineEnd);
-    const sides = splitDiffGitHeader(headerLine);
-    if (!sides) continue;
-
-    const bSide = sides[1];
-    const raw = bSide.startsWith('"') ? unquoteGitPath(bSide) : bSide;
-    const path = raw.replace(/^b\//, '');
+    const { oldPath, newPath } = diffBlockPaths(blockText);
+    const path = newPath ?? oldPath;
+    if (!path) continue;
 
     const deleted = /^deleted file mode \d+/m.test(blockText);
 

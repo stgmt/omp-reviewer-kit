@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.4] - 2026-09-18
+
+### Fixed
+- **Diff path extraction rewritten**: paths now come from each block's `rename from/to`, `copy from/to`, and `---`/`+++` lines (single-path, unambiguous), with the `diff --git` header as last resort for mode-only blocks. The previous header split corrupted paths containing spaces or the literal ` b/` substring.
+
 ## [0.11.3] - 2026-09-18
 
 ### Fixed
