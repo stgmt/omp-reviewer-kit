@@ -222,6 +222,7 @@ describe('Feature: Native OMP Extension & Installer Service', () => {
       const foreignHook = '#!/bin/sh\nset -eu\nhook_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\n"$hook_dir/pre-commit.d/00-omp-reviewer-kit.chain"\n';
       const hookPath = path.join(githooksDir, 'pre-commit');
       await writeFile(hookPath, foreignHook, 'utf8');
+      if (process.platform !== 'win32') await chmod(hookPath, 0o755);
 
       const harness = createExtensionHarness();
       const ctx = harness.makeCtx(repoDir);
@@ -257,6 +258,7 @@ describe('Feature: Native OMP Extension & Installer Service', () => {
       const foreignHook = '#!/bin/sh\nset -eu\nhook_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\n"$hook_dir/pre-commit.d/00-omp-reviewer-kit.chain"\n';
       const hookPath = path.join(githooksDir, 'pre-commit');
       await writeFile(hookPath, foreignHook, 'utf8');
+      if (process.platform !== 'win32') await chmod(hookPath, 0o755);
 
       const installer = new PluginInstallerService();
       const before = await installer.status(repoDir);
@@ -285,6 +287,7 @@ describe('Feature: Native OMP Extension & Installer Service', () => {
       const foreignHook = '#!/bin/sh\nset -eu\nhook_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\n"$hook_dir/pre-commit.d/00-omp-reviewer-kit.chain"\n';
       const hookPath = path.join(githooksDir, 'pre-commit');
       await writeFile(hookPath, foreignHook, 'utf8');
+      if (process.platform !== 'win32') await chmod(hookPath, 0o755);
       const chainedPath = path.join(chainDir, '00-omp-reviewer-kit.chain');
       await writeFile(chainedPath, '#!/bin/sh\n# stale chain entry\nexit 0\n', 'utf8');
 
@@ -351,6 +354,7 @@ describe('Feature: Native OMP Extension & Installer Service', () => {
       const foreignHook = '#!/bin/sh\nset -eu\nhook_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nfor h in "$hook_dir/pre-commit.d"/*.chain; do "$h"; done\n';
       const hookPath = path.join(githooksDir, 'pre-commit');
       await writeFile(hookPath, foreignHook, 'utf8');
+      if (process.platform !== 'win32') await chmod(hookPath, 0o755);
 
       const installer = new PluginInstallerService();
       const status = await installer.status(repoDir);
@@ -361,6 +365,32 @@ describe('Feature: Native OMP Extension & Installer Service', () => {
       assert.equal(await readFile(hookPath, 'utf8'), foreignHook, 'foreign hook must stay byte-identical');
       assert.match(await readFile(path.join(githooksDir, 'pre-commit.d', '00-omp-reviewer-kit.chain'), 'utf8'), /run-review\.mjs/);
       assert.equal((await installer.status(repoDir)).state, 'active');
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  it('Scenario 4i: non-executable foreign chained hook reports conflict, not false active', async (t) => {
+    if (process.platform === 'win32') {
+      t.skip('POSIX mode bits are not enforced on Windows');
+      return;
+    }
+    const { baseDir, repoDir } = await createTempRepo();
+    try {
+      const githooksDir = path.join(repoDir, '.githooks');
+      await mkdir(githooksDir, { recursive: true });
+      const foreignHook = '#!/bin/sh\nset -eu\nhook_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\n"$hook_dir/pre-commit.d/00-omp-reviewer-kit.chain"\n';
+      const hookPath = path.join(githooksDir, 'pre-commit');
+      await writeFile(hookPath, foreignHook, 'utf8');
+      await chmod(hookPath, 0o644);
+
+      const installer = new PluginInstallerService();
+      const status = await installer.status(repoDir);
+      assert.equal(status.state, 'conflict');
+      assert.match(status.conflictReason, /not executable/);
+
+      const result = await installer.setup(repoDir);
+      assert.equal(result.success, false, 'must not claim success on a hook git cannot run');
     } finally {
       await rm(baseDir, { recursive: true, force: true });
     }
