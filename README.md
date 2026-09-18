@@ -83,13 +83,15 @@ The plugin also observes `session_start`: opening any Git repository in OMP auto
 
 ### Coexisting with an existing `.githooks/pre-commit`
 
-The installer never overwrites a foreign hook. If your repository already ships a `.githooks/pre-commit` that delegates into a chain directory, adopt the review stage by adding one line to that hook:
+The installer never overwrites a foreign hook. If your repository already ships a `.githooks/pre-commit`, adopt the review stage by adding one bare invocation line to that hook:
 
 ```sh
 "$hook_dir/pre-commit.d/00-omp-reviewer-kit.chain"
 ```
 
-When `session_start` or `/reviewer-kit:setup` sees that marker, it deploys the owned chain entry `.githooks/pre-commit.d/00-omp-reviewer-kit.chain` (which execs the review runner) and repairs it on drift — the foreign hook file stays byte-identical. A foreign hook without the marker still reports `conflict` and is left untouched.
+The line must invoke exactly that entry name — no arguments, no `&&`/`;` chaining, no other `*.chain` basename. A hook that enumerates the directory (`for h in "$hook_dir/pre-commit.d"/*.chain; do "$h"; done`) is also adopted, since it picks up the entry once deployed.
+
+When `session_start` or `/reviewer-kit:setup` sees either shape, it deploys the owned chain entry `.githooks/pre-commit.d/00-omp-reviewer-kit.chain` (which execs the review runner) and repairs it on drift — the foreign hook file stays byte-identical. A foreign hook that calls a different entry name, or has no chain marker at all, still reports `conflict` and is left untouched.
 
 ## Standalone / CI Installation (Fallback)
 

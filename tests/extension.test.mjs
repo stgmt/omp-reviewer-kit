@@ -276,7 +276,7 @@ describe('Feature: Native OMP Extension & Installer Service', () => {
     }
   });
 
-  it('Scenario 4e: chained hook with stale chain entry is updated in place', async () => {
+  it('Scenario 4e: chained hook with stale chain entry is repaired and repo configured', async () => {
     const { baseDir, repoDir } = await createTempRepo();
     try {
       const githooksDir = path.join(repoDir, '.githooks');
@@ -313,6 +313,54 @@ describe('Feature: Native OMP Extension & Installer Service', () => {
       assert.equal(status.state, 'conflict');
       assert.equal(status.hookChained, false);
       assert.match(status.conflictReason, /does not match omp-reviewer-kit template/);
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  it('Scenario 4g: foreign hook calling a different chain entry name stays conflict', async () => {
+    const { baseDir, repoDir } = await createTempRepo();
+    try {
+      const githooksDir = path.join(repoDir, '.githooks');
+      await mkdir(githooksDir, { recursive: true });
+      // Calls a DIFFERENT entry — our review stage would never run.
+      const foreignHook = '#!/bin/sh\nset -eu\nhook_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\n"$hook_dir/pre-commit.d/10-lint.chain"\n';
+      const hookPath = path.join(githooksDir, 'pre-commit');
+      await writeFile(hookPath, foreignHook, 'utf8');
+
+      const installer = new PluginInstallerService();
+      const status = await installer.status(repoDir);
+      assert.equal(status.state, 'conflict');
+      assert.equal(status.hookChained, false);
+
+      const result = await installer.setup(repoDir);
+      assert.equal(result.success, false);
+      assert.equal(result.state, 'conflict');
+      assert.equal(await readFile(hookPath, 'utf8'), foreignHook, 'foreign hook must stay byte-identical');
+      await assert.rejects(readFile(path.join(githooksDir, 'pre-commit.d', '00-omp-reviewer-kit.chain'), 'utf8'), { code: 'ENOENT' });
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  it('Scenario 4h: foreign hook enumerating pre-commit.d/*.chain is adopted', async () => {
+    const { baseDir, repoDir } = await createTempRepo();
+    try {
+      const githooksDir = path.join(repoDir, '.githooks');
+      await mkdir(githooksDir, { recursive: true });
+      const foreignHook = '#!/bin/sh\nset -eu\nhook_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nfor h in "$hook_dir/pre-commit.d"/*.chain; do "$h"; done\n';
+      const hookPath = path.join(githooksDir, 'pre-commit');
+      await writeFile(hookPath, foreignHook, 'utf8');
+
+      const installer = new PluginInstallerService();
+      const status = await installer.status(repoDir);
+      assert.equal(status.hookChained, true);
+
+      const result = await installer.setup(repoDir);
+      assert.equal(result.success, true);
+      assert.equal(await readFile(hookPath, 'utf8'), foreignHook, 'foreign hook must stay byte-identical');
+      assert.match(await readFile(path.join(githooksDir, 'pre-commit.d', '00-omp-reviewer-kit.chain'), 'utf8'), /run-review\.mjs/);
+      assert.equal((await installer.status(repoDir)).state, 'active');
     } finally {
       await rm(baseDir, { recursive: true, force: true });
     }
