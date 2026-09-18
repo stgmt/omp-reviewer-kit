@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.11.0] - 2026-09-18
 
 ### Added
 - **Chained pre-commit hook adoption**: when `.githooks/pre-commit` is a foreign hook that invokes the owned entry `.githooks/pre-commit.d/00-omp-reviewer-kit.chain` (literal call or `for`-loop over `pre-commit.d/*`), the installer no longer reports a conflict. It deploys the owned chain entry (execs the review runner) and repairs it on drift, leaving the foreign hook byte-identical. Foreign hooks calling a different entry name or lacking the marker still fail closed as `conflict`. Status reports `hookChained`/`chainedHookPresent`/`chainedHookCurrent`/`chainedHookExecutable` and the status command shows `OK (chained)` only when the entry is present and current.
