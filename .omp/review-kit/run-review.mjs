@@ -2552,6 +2552,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       let stdout = '';
       let stderr = '';
       let timedOut = false;
+      let stallKilled = false;
       let settled = false;
       const finish = (result) => {
         if (settled) return;
@@ -2580,6 +2581,11 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
         if (!(quotaStallMs > 0) || stallTimer || stdout.trim() !== '') return;
         stallTimer = setTimeout(async () => {
           stopQuotaPoller();
+          // Mark BEFORE terminating: terminateProcessTree awaits the kill, and
+          // the proc 'close' event can fire during that await and settle the
+          // promise first — dropping the stall marker. The close handler checks
+          // this flag and prepends the marker itself.
+          stallKilled = true;
           await terminateProcessTree(proc);
           finish({
             status: 1,
@@ -2633,7 +2639,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
         finish({
           status: code ?? 1,
           stdout,
-          stderr,
+          stderr: stallKilled ? `${QUOTA_STALL_PREFIX}${quotaStallMs}ms\n` + stderr : stderr,
         });
       });
 
@@ -2642,7 +2648,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
         finish({
           status: 1,
           stdout,
-          stderr: `${err.message || err}\n${stderr}`,
+          stderr: `${stallKilled ? QUOTA_STALL_PREFIX + quotaStallMs + 'ms\n' : ''}${err.message || err}\n${stderr}`,
         });
       });
 
