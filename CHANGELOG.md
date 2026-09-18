@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.1] - 2026-09-18
+
+### Fixed
+- **Chained hook root resolution**: the deployed `.githooks/pre-commit.d/00-omp-reviewer-kit.chain` resolved the repo root as `$hook_dir/..` (= `.githooks`), so `node $root/.omp/review-kit/run-review.mjs` failed with MODULE_NOT_FOUND and fail-closed blocked every commit on adopted repos. Now resolves `$hook_dir/../..`. Covered by a functional test that executes the deployed chain script under a real POSIX shell.
+
 ## [0.11.0] - 2026-09-18
 
 ### Added

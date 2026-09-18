@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -19,6 +20,22 @@ async function createTempRepo() {
   git(['config', 'user.email', 'ext@test.local']);
 
   return { baseDir, repoDir, git };
+}
+
+function resolveShExecutable() {
+  if (process.platform !== 'win32') {
+    return 'sh';
+  }
+  const gitWhere = spawnSync('where.exe', ['git.exe'], { encoding: 'utf8', windowsHide: true });
+  const gitPaths = (gitWhere.stdout ?? '').trim().split(/\r?\n/).filter(Boolean);
+  for (const gitPath of gitPaths) {
+    const candidate = path.resolve(path.dirname(gitPath), '..', 'bin', 'sh.exe');
+    try {
+      if (existsSync(candidate)) return candidate;
+    } catch { /* keep looking */ }
+  }
+  const fallback = 'C:\\Program Files\\Git\\bin\\sh.exe';
+  return existsSync(fallback) ? fallback : null;
 }
 
 function createExtensionHarness() {
@@ -391,6 +408,43 @@ describe('Feature: Native OMP Extension & Installer Service', () => {
 
       const result = await installer.setup(repoDir);
       assert.equal(result.success, false, 'must not claim success on a hook git cannot run');
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  it('Scenario 4j: deployed chain entry resolves the repo root and execs the runner', async (t) => {
+    const sh = resolveShExecutable();
+    if (!sh) {
+      t.skip('no POSIX shell available to execute the chain script');
+      return;
+    }
+    const { baseDir, repoDir } = await createTempRepo();
+    try {
+      const githooksDir = path.join(repoDir, '.githooks');
+      await mkdir(githooksDir, { recursive: true });
+      const foreignHook = '#!/bin/sh\nset -eu\nhook_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\n"$hook_dir/pre-commit.d/00-omp-reviewer-kit.chain"\n';
+      const hookPath = path.join(githooksDir, 'pre-commit');
+      await writeFile(hookPath, foreignHook, 'utf8');
+      if (process.platform !== 'win32') await chmod(hookPath, 0o755);
+
+      const installer = new PluginInstallerService();
+      const result = await installer.setup(repoDir);
+      assert.equal(result.success, true);
+
+      // Replace the deployed runner with a stub that proves which path node resolved.
+      const markerPath = path.join(repoDir, 'chain-marker.txt');
+      const runnerPath = path.join(repoDir, '.omp', 'review-kit', 'run-review.mjs');
+      await writeFile(
+        runnerPath,
+        `import { writeFileSync } from 'node:fs';\nwriteFileSync(${JSON.stringify(markerPath)}, process.argv[1]);\n`,
+        'utf8'
+      );
+
+      const chainPath = path.join(githooksDir, 'pre-commit.d', '00-omp-reviewer-kit.chain');
+      const run = spawnSync(sh, [chainPath], { cwd: repoDir, encoding: 'utf8', windowsHide: true });
+      assert.equal(run.status, 0, `chain script failed: ${run.stderr}`);
+      assert.equal(await readFile(markerPath, 'utf8'), runnerPath);
     } finally {
       await rm(baseDir, { recursive: true, force: true });
     }

@@ -44,7 +44,7 @@ const CHAINED_HOOK_DIR = 'pre-commit.d';
 const CHAINED_HOOK_PREFIX = '00-';
 const CHAINED_HOOK_SUFFIX = '.chain';
 const CHAINED_HOOK_MARKER = 'omp-reviewer-kit chained hook';
-const CHAINED_HOOK_TEMPLATE = '#!/bin/sh\n# ' + CHAINED_HOOK_MARKER + '\nset -eu\nhook_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nroot=$(CDPATH= cd -- "$hook_dir/.." && pwd)\nexec node "$root/.omp/review-kit/run-review.mjs"\n';
+const CHAINED_HOOK_TEMPLATE = '#!/bin/sh\n# ' + CHAINED_HOOK_MARKER + '\nset -eu\nhook_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nroot=$(CDPATH= cd -- "$hook_dir/../.." && pwd)\nexec node "$root/.omp/review-kit/run-review.mjs"\n';
 const CHAINED_HOOK_NAME = CHAINED_HOOK_PREFIX + 'omp-reviewer-kit' + CHAINED_HOOK_SUFFIX;
 const CHAINED_HOOK_PATH = CHAINED_HOOK_DIR + '/' + CHAINED_HOOK_NAME;
 const CHAINED_HOOK_NAME_RE = CHAINED_HOOK_NAME.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
