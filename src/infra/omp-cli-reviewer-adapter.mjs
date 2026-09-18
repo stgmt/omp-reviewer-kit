@@ -161,7 +161,7 @@ export function isModelProviderFailure(result) {
   return false;
 }
 
-function configuredInteger(value, fallback, minimum) {
+export function configuredInteger(value, fallback, minimum) {
   const parsed = Number.parseInt(value, 10);
   return Number.isInteger(parsed) && parsed >= minimum ? parsed : fallback;
 }
@@ -647,8 +647,10 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
         }, timeout);
       }
 
+      let lastStdoutAt = 0;
       proc.stdout.on('data', (chunk) => {
         stdout += chunk.toString('utf8');
+        lastStdoutAt = Date.now();
         if (stdout.trim() !== '') clearStallTimer();
         onOutput?.(chunk, 'stdout');
       });
@@ -661,7 +663,11 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       if (quotaStallMs > 0 && Number.isInteger(pid) && pid > 0) {
         let pollRunning = false;
         quotaPoller = setInterval(() => {
-          if (pollRunning || settled || stallTimer || stdout.trim() !== '') return;
+          // stdout progress cancels the armed watchdog, but the log poller
+          // stays live: mid-run 429s go to the child log, not stderr, so a
+          // child that printed a banner then stalled must still be caught.
+          if (pollRunning || settled || stallTimer) return;
+          if (stdout.trim() !== '' && Date.now() - lastStdoutAt < quotaStallMs) return;
           pollRunning = true;
           void childLogHasQuotaSignal({ logDir: quotaLogDir, pid })
             .then((signalled) => {
@@ -673,6 +679,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
             });
         }, quotaPollMs > 0 ? quotaPollMs : 10_000);
       }
+
 
       proc.on('close', (code) => {
         if (timedOut) return;

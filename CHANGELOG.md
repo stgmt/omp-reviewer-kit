@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.3] - 2026-09-18
+
+### Fixed
+- **Space-containing paths in diff headers**: `diff --git a/<old> b/<new>` headers are now split on the first ` b/` boundary instead of whitespace tokens, so staged paths with spaces no longer corrupt `changed-files.txt`, the dispatcher path list, and the red-proof reverted snapshot.
+- **Quota-stall log poller disabled by any stdout**: the poller skipped every tick once the child printed anything, so a mid-run provider 429 (logged only to the child OMP log) after a banner left the commit hook hanging forever. The poller now stays live and only defers while stdout was seen within the last `quotaStallMs` window.
+- **`OMP_REVIEW_KIT_EXECUTE_TIMEOUT_MS` parsing**: `Number(...) || 600000` mapped `0`/invalid to the 10-minute default and let negatives arm an unbounded run. Now uses `configuredInteger(..., 0)`: `0` disables, negatives/invalid fall back to 600000.
+
 ## [0.11.2] - 2026-09-18
 
 ### Fixed

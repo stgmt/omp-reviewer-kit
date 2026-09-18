@@ -32,6 +32,23 @@ function unquoteGitPath(quoted) {
 }
 
 /**
+ * Splits a `diff --git a/<old> b/<new>` header into its two path sides.
+ * Git quotes a side only when it needs C-style escaping; space-only paths
+ * arrive unquoted, so tokenizing on whitespace corrupts them. The split
+ * anchor is the first ` b/` boundary: quoted sides are matched as whole
+ * `"..."` tokens, unquoted sides run up to the next ` b/` or end of line.
+ * @param {string} headerText - text after `diff --git ` on the header line
+ * @returns {string[]|null} [oldPath, newPath] or null when unparseable
+ */
+function splitDiffGitHeader(headerText) {
+  const match = /^(?:"((?:[^"\\]|\\.)*)"|(a\/.*?)) (?:"((?:[^"\\]|\\.)*)"|(b\/.*))$/.exec(headerText.trimEnd());
+  if (!match) return null;
+  const oldSide = match[1] !== undefined ? `"${match[1]}"` : match[2];
+  const newSide = match[3] !== undefined ? `"${match[3]}"` : match[4];
+  return [oldSide, newSide];
+}
+
+/**
  * ============================================================================
  * Domain Layer (DDD / OOP)
  * ============================================================================
@@ -88,7 +105,9 @@ export class DiffIdentity {
     const text = this.#bytes.toString('utf8');
     const seen = new Set();
     for (const header of text.matchAll(/^diff --git (.+)$/gm)) {
-      for (const side of header[1].match(/"[^"]*"|\S+/g) ?? []) {
+      const sides = splitDiffGitHeader(header[1]);
+      if (!sides) continue;
+      for (const side of sides) {
         const raw = side.startsWith('"') ? unquoteGitPath(side) : side;
         seen.add(raw.replace(/^[ab]\//, ''));
       }
@@ -145,8 +164,8 @@ export function parseDiffBlocks(diffText) {
 
     const firstLineEnd = blockText.indexOf('\n');
     const headerLine = firstLineEnd === -1 ? blockText : blockText.slice(0, firstLineEnd);
-    const sides = headerLine.match(/"[^"]*"|\S+/g) ?? [];
-    if (sides.length < 2) continue;
+    const sides = splitDiffGitHeader(headerLine);
+    if (!sides) continue;
 
     const bSide = sides[1];
     const raw = bSide.startsWith('"') ? unquoteGitPath(bSide) : bSide;
@@ -1511,7 +1530,7 @@ export class ReviewWorkflowService {
 
     const envExecute = process.env.OMP_REVIEW_KIT_EXECUTE === '1';
     const envCommand = process.env.OMP_REVIEW_KIT_EXECUTE_COMMAND?.trim() ?? '';
-    const envTimeout = Number(process.env.OMP_REVIEW_KIT_EXECUTE_TIMEOUT_MS) || 600000;
+    const envTimeout = configuredInteger(process.env.OMP_REVIEW_KIT_EXECUTE_TIMEOUT_MS, 600000, 0);
     const envLinkDirs = process.env.OMP_REVIEW_KIT_EXECUTE_LINK_DIRS
       ? process.env.OMP_REVIEW_KIT_EXECUTE_LINK_DIRS.split(',').map((s) => s.trim()).filter(Boolean)
       : ['node_modules', '.venv', 'venv'];
@@ -2607,8 +2626,10 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
         }, timeout);
       }
 
+      let lastStdoutAt = 0;
       proc.stdout.on('data', (chunk) => {
         stdout += chunk.toString('utf8');
+        lastStdoutAt = Date.now();
         if (stdout.trim() !== '') clearStallTimer();
         onOutput?.(chunk, 'stdout');
       });
@@ -2621,7 +2642,11 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       if (quotaStallMs > 0 && Number.isInteger(pid) && pid > 0) {
         let pollRunning = false;
         quotaPoller = setInterval(() => {
-          if (pollRunning || settled || stallTimer || stdout.trim() !== '') return;
+          // stdout progress cancels the armed watchdog, but the log poller
+          // stays live: mid-run 429s go to the child log, not stderr, so a
+          // child that printed a banner then stalled must still be caught.
+          if (pollRunning || settled || stallTimer) return;
+          if (stdout.trim() !== '' && Date.now() - lastStdoutAt < quotaStallMs) return;
           pollRunning = true;
           void childLogHasQuotaSignal({ logDir: quotaLogDir, pid })
             .then((signalled) => {

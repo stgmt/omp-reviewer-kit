@@ -33,6 +33,23 @@ export function unquoteGitPath(quoted) {
 }
 
 /**
+ * Splits a `diff --git a/<old> b/<new>` header into its two path sides.
+ * Git quotes a side only when it needs C-style escaping; space-only paths
+ * arrive unquoted, so tokenizing on whitespace corrupts them. The split
+ * anchor is the first ` b/` boundary: quoted sides are matched as whole
+ * `"..."` tokens, unquoted sides run up to the next ` b/` or end of line.
+ * @param {string} headerText - text after `diff --git ` on the header line
+ * @returns {string[]|null} [oldPath, newPath] or null when unparseable
+ */
+export function splitDiffGitHeader(headerText) {
+  const match = /^(?:"((?:[^"\\]|\\.)*)"|(a\/.*?)) (?:"((?:[^"\\]|\\.)*)"|(b\/.*))$/.exec(headerText.trimEnd());
+  if (!match) return null;
+  const oldSide = match[1] !== undefined ? `"${match[1]}"` : match[2];
+  const newSide = match[3] !== undefined ? `"${match[3]}"` : match[4];
+  return [oldSide, newSide];
+}
+
+/**
  * Value Object representing a staged Git diff and its deterministic cryptographic identity.
  */
 export class DiffIdentity {
@@ -103,7 +120,9 @@ export class DiffIdentity {
     const text = this.#bytes.toString('utf8');
     const seen = new Set();
     for (const header of text.matchAll(/^diff --git (.+)$/gm)) {
-      for (const side of header[1].match(/"[^"]*"|\S+/g) ?? []) {
+      const sides = splitDiffGitHeader(header[1]);
+      if (!sides) continue;
+      for (const side of sides) {
         const raw = side.startsWith('"') ? unquoteGitPath(side) : side;
         seen.add(raw.replace(/^[ab]\//, ''));
       }

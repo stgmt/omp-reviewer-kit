@@ -7,6 +7,7 @@ import { ExecutionEvidence } from '../domain/execution-evidence.mjs';
 import { buildRevertedFiles } from '../domain/reverted-snapshot.mjs';
 import { StagedSnapshot } from '../domain/staged-snapshot.mjs';
 import { SubprocessExecutionAdapter, linkDependencyDirs } from '../infra/subprocess-execution-adapter.mjs';
+import { configuredInteger } from '../infra/omp-cli-reviewer-adapter.mjs';
 import { GitPort, ReviewerPort, ReportStorePort, SnapshotStorePort, TelemetryPort } from './ports.mjs';
 import { FileSystemTelemetryAdapter, NULL_RUN_TELEMETRY, safeRunTelemetry } from '../infra/filesystem-telemetry-adapter.mjs';
 import { installRunSignalGuard } from '../infra/run-signal-guard.mjs';
@@ -76,7 +77,7 @@ export class ReviewWorkflowService {
 
     const envExecute = process.env.OMP_REVIEW_KIT_EXECUTE === '1';
     const envCommand = process.env.OMP_REVIEW_KIT_EXECUTE_COMMAND?.trim() ?? '';
-    const envTimeout = Number(process.env.OMP_REVIEW_KIT_EXECUTE_TIMEOUT_MS) || 600000;
+    const envTimeout = configuredInteger(process.env.OMP_REVIEW_KIT_EXECUTE_TIMEOUT_MS, 600000, 0);
     const envLinkDirs = process.env.OMP_REVIEW_KIT_EXECUTE_LINK_DIRS
       ? process.env.OMP_REVIEW_KIT_EXECUTE_LINK_DIRS.split(',').map((s) => s.trim()).filter(Boolean)
       : ['node_modules', '.venv', 'venv'];
