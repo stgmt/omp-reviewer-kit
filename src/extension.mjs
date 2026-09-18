@@ -358,7 +358,7 @@ export default function initExtension(pi) {
         const lines = [
           `Repository: ${info.repoRoot}`,
           `Git core.hooksPath: ${info.configuredHooksPath ?? 'unset'}${info.hooksPathConfigured ? ' (OK)' : ''}`,
-          `Pre-commit Hook: ${info.hookFilePresent ? (info.hookOwned ? 'OK (owned)' : 'CONFLICT (unowned)') : 'MISSING'}`,
+          `Pre-commit Hook: ${info.hookFilePresent ? (info.hookOwned ? 'OK (owned)' : info.hookChained ? (info.chainedHookPresent && info.chainedHookCurrent ? 'OK (chained)' : 'CHAINED (entry ' + (info.chainedHookPresent ? 'stale' : 'missing') + ')') : 'CONFLICT (unowned)') : 'MISSING'}`,
           `Runner Script: ${info.runnerPresent ? (info.runnerCurrent ? 'OK (current)' : 'STALE') : 'MISSING'}`,
         ];
 

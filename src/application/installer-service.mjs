@@ -40,6 +40,27 @@ const GIT_HOOK_NAMES = new Set([
 const LEGACY_HOOK_TEMPLATES = Object.freeze([
   '#!/bin/sh\nset -eu\n\nroot=$(git rev-parse --show-toplevel)\nexec node "$root/.omp/review-kit/run-review.mjs"',
 ]);
+const CHAINED_HOOK_DIR = 'pre-commit.d';
+const CHAINED_HOOK_PREFIX = '00-';
+const CHAINED_HOOK_SUFFIX = '.chain';
+const CHAINED_HOOK_MARKER = 'omp-reviewer-kit chained hook';
+const CHAINED_HOOK_TEMPLATE = '#!/bin/sh\n# ' + CHAINED_HOOK_MARKER + '\nset -eu\nhook_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nroot=$(CDPATH= cd -- "$hook_dir/.." && pwd)\nexec node "$root/.omp/review-kit/run-review.mjs"\n';
+const CHAINED_HOOK_NAME = CHAINED_HOOK_PREFIX + 'omp-reviewer-kit' + CHAINED_HOOK_SUFFIX;
+const CHAINED_HOOK_PATH = CHAINED_HOOK_DIR + '/' + CHAINED_HOOK_NAME;
+const CHAINED_HOOK_NAME_RE = CHAINED_HOOK_NAME.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const CHAINED_HOOK_DIR_RE = CHAINED_HOOK_DIR.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const CHAINED_HOOK_SUFFIX_RE = CHAINED_HOOK_SUFFIX.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// Adoption gate: the foreign hook must actually invoke our owned entry —
+// either a literal call of pre-commit.d/00-omp-reviewer-kit.chain, or a
+// directory-enumerating loop over pre-commit.d/*.chain (which picks up our
+// entry once deployed). Anything else stays a fail-closed conflict.
+const CHAINED_HOOK_RE = new RegExp(
+  '(?:^|\\n)[ \\t]*(?:exec[ \\t]+)?(?:"?\\$\\{?hook_dir\\}?"?|"\\$0-dir"|\\$\\(dirname[^)]*\\))/' +
+  CHAINED_HOOK_DIR_RE + '/' + CHAINED_HOOK_NAME_RE + '"?[ \\t]*(?:\\n|$)' +
+  '|' +
+  'for[ \\t]+\\w+[ \\t]+in[ \\t]+"?(?:\\$\\{?hook_dir\\}?|\\$0-dir|\\$\\(dirname[^)]*\\))(?:/' +
+  CHAINED_HOOK_DIR_RE + ')?"?/\\*' + '(?:' + CHAINED_HOOK_SUFFIX_RE + ')?"?'
+);
 
 function normalizePath(p) {
   const resolved = path.resolve(p);
@@ -462,9 +483,13 @@ export class PluginInstallerService {
         hookFilePresent: false,
         hookOwned: false,
         hookCurrent: false,
+        hookChained: false,
+        chainedHookPresent: false,
+        chainedHookCurrent: false,
+        chainedHookExecutable: false,
         runnerPresent: false,
         runnerCurrent: false,
-        isFullyActive: false,
+        hookExecutable: false,
         conflictReason: null,
       };
     }
@@ -526,6 +551,7 @@ export class PluginInstallerService {
     let hookFilePresent = false;
     let hookOwned = false;
     let hookCurrent = false;
+    let hookChained = false;
     let hookExecutable = process.platform === 'win32';
     const hookSymlinkPath = await this.#findSymlinkComponent(repoRoot, hookPath);
 
@@ -550,14 +576,48 @@ export class PluginInstallerService {
           hookOwned = hookCurrent || LEGACY_HOOK_TEMPLATES.some(
             (template) => normalizedHook === normalizeLineEndings(template),
           );
-          if (!hookOwned && !conflictReason) {
-            conflictReason = 'Existing .githooks/pre-commit does not match omp-reviewer-kit template';
+          if (!hookOwned) {
+            hookChained = CHAINED_HOOK_RE.test(normalizedHook);
+            if (!hookChained && !conflictReason) {
+              conflictReason = 'Existing .githooks/pre-commit does not match omp-reviewer-kit template';
+            }
           }
         }
       } catch (error) {
         hookOwned = false;
         if (error?.code !== 'ENOENT' && !conflictReason) {
           conflictReason = 'Unable to inspect existing .githooks/pre-commit: ' + (error?.message ?? error);
+        }
+      }
+    }
+
+    const chainedHookPath = path.join(expectedGithooksDir, CHAINED_HOOK_PATH);
+    let chainedHookPresent = false;
+    let chainedHookCurrent = false;
+    let chainedHookExecutable = process.platform === 'win32';
+    const chainedSymlinkPath = await this.#findSymlinkComponent(repoRoot, chainedHookPath);
+
+    if (chainedSymlinkPath) {
+      chainedHookPresent = true;
+      if (!conflictReason) {
+        conflictReason = 'Existing .githooks/' + CHAINED_HOOK_PATH + ' path contains symlink component: ' + chainedSymlinkPath;
+      }
+    } else {
+      try {
+        const chainedStat = await lstat(chainedHookPath);
+        chainedHookPresent = true;
+        chainedHookExecutable = process.platform === 'win32' || (chainedStat.mode & 0o111) !== 0;
+        if (!chainedStat.isFile()) {
+          if (!conflictReason) {
+            conflictReason = 'Unable to inspect existing .githooks/' + CHAINED_HOOK_PATH + ': path is not a regular file';
+          }
+        } else {
+          const chainedContent = await readFile(chainedHookPath, 'utf8');
+          chainedHookCurrent = normalizeLineEndings(chainedContent) === normalizeLineEndings(CHAINED_HOOK_TEMPLATE);
+        }
+      } catch (error) {
+        if (error?.code !== 'ENOENT' && !conflictReason) {
+          conflictReason = 'Unable to inspect existing .githooks/' + CHAINED_HOOK_PATH + ': ' + (error?.message ?? error);
         }
       }
     }
@@ -590,14 +650,22 @@ export class PluginInstallerService {
         }
       }
     }
-
     let state;
     const hookUsable = hookFilePresent && hookOwned && hookCurrent && hookExecutable;
+    const chainUsable = hookChained && chainedHookPresent && chainedHookCurrent
+        && chainedHookExecutable && hookExecutable;
     if (conflictReason) {
       state = 'conflict';
-    } else if (hooksPathConfigured && hookUsable && runnerPresent && runnerCurrent) {
+    } else if (hookChained && !hookExecutable) {
+      // Foreign hook is not executable: git cannot run it, and we cannot chmod
+      // a file we do not own. Report conflict instead of a false 'active'.
+      state = 'conflict';
+      conflictReason = 'Existing .githooks/pre-commit chains into ' + CHAINED_HOOK_PATH
+        + ' but is not executable; fix its mode manually (chmod +x)';
+    } else if (hooksPathConfigured && (hookUsable || chainUsable) && runnerPresent && runnerCurrent) {
       state = 'active';
-    } else if (hooksPathConfigured && hookOwned && runnerPresent && (!hookCurrent || !runnerCurrent || !hookExecutable)) {
+    } else if (hooksPathConfigured && (hookOwned || hookChained) && runnerPresent
+        && ((!hookUsable && !chainUsable) || !runnerCurrent)) {
       state = 'stale';
     } else {
       state = 'inactive';
@@ -612,6 +680,10 @@ export class PluginInstallerService {
       hookFilePresent,
       hookOwned,
       hookCurrent,
+      hookChained,
+      chainedHookPresent,
+      chainedHookCurrent,
+      chainedHookExecutable,
       runnerPresent,
       runnerCurrent,
       hookExecutable,
@@ -670,12 +742,27 @@ export class PluginInstallerService {
     const canonicalHookPath = path.join(this.#pluginRoot, 'templates', 'githooks', 'pre-commit');
     const canonicalHookTemplate = await readFile(canonicalHookPath, 'utf8');
     const hookPath = path.join(gitHooksDir, 'pre-commit');
-    const hookWritten = await this.#writeIfChanged(repoRoot, hookPath, canonicalHookTemplate, 0o755);
-    if (hookWritten) {
-      if (!inspection.hookFilePresent) {
-        installed = true;
-      } else {
-        updated = true;
+    let hookWritten = false;
+    if (inspection.hookChained) {
+      // Existing foreign hook already chains into .githooks/pre-commit.d/:
+      // repair the owned chain entry only, never touch the foreign hook file.
+      const chainedPath = path.join(gitHooksDir, CHAINED_HOOK_PATH);
+      const chainedWritten = await this.#writeIfChanged(repoRoot, chainedPath, CHAINED_HOOK_TEMPLATE, 0o755);
+      if (chainedWritten) {
+        if (!inspection.chainedHookPresent) {
+          installed = true;
+        } else {
+          updated = true;
+        }
+      }
+    } else {
+      hookWritten = await this.#writeIfChanged(repoRoot, hookPath, canonicalHookTemplate, 0o755);
+      if (hookWritten) {
+        if (!inspection.hookFilePresent) {
+          installed = true;
+        } else {
+          updated = true;
+        }
       }
     }
 
@@ -729,6 +816,10 @@ export class PluginInstallerService {
    *   hookFilePresent: boolean,
    *   hookOwned: boolean,
    *   hookCurrent: boolean,
+   *   hookChained: boolean,
+   *   chainedHookPresent: boolean,
+   *   chainedHookCurrent: boolean,
+   *   chainedHookExecutable: boolean,
    *   runnerPresent: boolean,
    *   runnerCurrent: boolean,
    *   isFullyActive: boolean,
