@@ -69,7 +69,7 @@ Use exactly those finding fields; map `candidate_id` to `finding_id` and `lane` 
 The envelope payload is exactly one JSON object in the shown shape — never YAML, never prose, never an abbreviated field set.
 The fenced blocks in this contract are illustrative only: `REVIEW_REJECTION_ENVELOPE_BEGIN`, `REVIEW_REJECTION_ENVELOPE_END`, and `REVIEW_RESULT=...` must appear as raw standalone lines in the output, never inside a code fence, and exactly once each.
 
-Deliver the complete response through the `yield` tool's data payload: all report sections, the envelope when BLOCKing, and the final verdict marker. Never call `yield` with empty or null data and never end the turn with only a text message — the yielded payload is the only result the dispatcher receives, so a bare message loses the entire report.
+Before yielding, write the complete final report — every section, the rejection envelope when BLOCKing, and the verdict marker — verbatim to `<snapshot>/.review/report.md` via bash (heredoc). This file is the durable copy the dispatcher falls back to when the task result is truncated or its agent URI is unreadable; it is the single allowed exception to the no-edit rule, and no other path may be written. Deliver the complete response through the `yield` tool's data payload: all report sections, the envelope when BLOCKing, and the final verdict marker. Never call `yield` with empty or null data and never end the turn with only a text message — the yielded payload is the only result the dispatcher receives, so a bare message loses the entire report.
 
 At the very end of your yielded response, emit exactly one machine-readable verdict marker:
 
