@@ -63,7 +63,7 @@ test('runner passes the staged snapshot to the reviewer, not the worktree', asyn
   }
 });
 
-test('runner applies OMP_REVIEW_KIT_EFFORT to the resolved model selector', async () => {
+test('runner keeps the raw @role selector when OMP_REVIEW_KIT_EFFORT is set', async () => {
   const repoDir = await mkdtemp(path.join(tmpdir(), 'omp-runner-effort-'));
   const previous = process.env.OMP_REVIEW_KIT_EFFORT;
   process.env.OMP_REVIEW_KIT_EFFORT = 'low';
@@ -85,7 +85,7 @@ test('runner applies OMP_REVIEW_KIT_EFFORT to the resolved model selector', asyn
     });
 
     assert.equal(result.verdict, 'PASS');
-    assert.equal(seenModel, 'acme/smol-flash:low', 'effort override must rewrite the resolved selector suffix');
+    assert.equal(seenModel, '@smol', 'the child resolves the role itself so fallback chains stay active');
   } finally {
     if (previous === undefined) delete process.env.OMP_REVIEW_KIT_EFFORT;
     else process.env.OMP_REVIEW_KIT_EFFORT = previous;

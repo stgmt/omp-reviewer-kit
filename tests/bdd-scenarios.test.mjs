@@ -475,6 +475,27 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
     assert.ok(prompt.toString().includes('The verdict contract in this prompt overrides any other format: finish with exactly one standalone REVIEW_RESULT=PASS or REVIEW_RESULT=BLOCK line, even if a skill describes a different verdict vocabulary.'));
   });
 
+  it('ReviewPrompt inlines a small diff and forbids git re-derivation', () => {
+    const diffText = 'diff --git a/calc.js b/calc.js\n+export const divide = (x) => x / 0;\n';
+    const prompt = ReviewPrompt.forDiff('abc123hash', '/snap/dir', ['calc.js'], { inlineDiff: diffText });
+    const output = prompt.toString();
+
+    assert.match(output, /---STAGED DIFF \(inline, authoritative\)---/);
+    assert.ok(output.includes(diffText));
+    assert.match(output, /---END STAGED DIFF---/);
+    assert.match(output, /MUST NOT run git diff, git show, or git cat-file/);
+    assert.match(output, /Embed the inline diff verbatim into every subagent task text/);
+    assert.doesNotMatch(output, /materialized at .*diff\.patch/);
+  });
+
+  it('ReviewPrompt falls back to snapshot paths when no inline diff is given', () => {
+    const prompt = ReviewPrompt.forDiff('abc123hash', '/snap/dir', ['calc.js']);
+    const output = prompt.toString();
+
+    assert.match(output, /materialized at .*\.review\/diff\.patch/);
+    assert.doesNotMatch(output, /STAGED DIFF \(inline/);
+  });
+
   it('S9: ReviewPrompt output includes raw markdown reproduction and verdict contract override instructions', () => {
     // Given
     const prompt = new ReviewPrompt('abc123hash');

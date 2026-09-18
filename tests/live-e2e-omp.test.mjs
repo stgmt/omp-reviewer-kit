@@ -4,8 +4,8 @@
  * Live-Run Convention:
  * - Environment Variables:
  *     OMP_REVIEW_KIT_LIVE_E2E=1     Enable live test execution (otherwise skipped).
- *     OMP_REVIEW_KIT_MODEL=<model>  Primary model (e.g. @slow, google-antigravity/gemini-3.8-flash:high).
- *     OMP_REVIEW_KIT_EFFORT=<effort> Optional effort level override (e.g. low, medium, high).
+ *     OMP_REVIEW_KIT_MODEL=<@role>  Primary model role (e.g. @smol, @slow; concrete selectors are rejected).
+ *     OMP_REVIEW_KIT_EFFORT=<effort> Optional thinking-level override mapped to omp --thinking (e.g. low, medium, high).
  * - Logging Convention:
  *     Live test output and traces MUST be directed to %TEMP% or a system temp directory,
  *     using tee if console streaming is desired:

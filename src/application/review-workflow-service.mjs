@@ -304,6 +304,8 @@ export class ReviewWorkflowService {
         const prompt = ReviewPrompt.forDiff(diff, snapshotDir, diff.changedPaths, {
           suspicionMapText: suspicionMap.toPromptText(),
           executionEvidenceText: executionEvidence ? executionEvidence.toPromptText() : '',
+          // ~50KB ≈ 12K tokens — cheaper than four read round-trips per subagent.
+          inlineDiff: diff.length <= 50_000 ? diff.bytes.toString('utf8') : '',
         });
         execResult = await this.#reviewerPort.executeReview({
           prompt,

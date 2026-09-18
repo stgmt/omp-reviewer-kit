@@ -251,7 +251,7 @@ test('provider outage on every model blocks the run with actionable stderr detai
 
   assert.equal(result.exitCode, 1);
   assert.equal(result.verdict, 'BLOCK');
-  assert.deepEqual(calls, ['acme/smol-flash:low']);
+  assert.deepEqual(calls, ['@smol']);
   assert.match(result.details, /infrastructure failure/);
   assert.match(result.details, /@smol -> @task/);
 
