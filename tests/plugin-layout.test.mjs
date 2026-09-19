@@ -100,6 +100,9 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(reviewerKitAgent, /### Confirmed findings/);
     assert.match(reviewerKitAgent, /### Unproven\/rejected summary/);
     assert.match(reviewerKitAgent, /### Verified-OK/);
+    assert.match(reviewerKitAgent, /### Required test coverage/);
+    assert.match(reviewerKitAgent, /coverage_required/);
+    assert.match(reviewerKitAgent, /coverage_items/);
     assert.match(reviewerKitAgent, /### Notes/);
     assert.match(reviewerKitAgent, /suspicion map/i);
     assert.match(reviewerKitAgent, /execution evidence/i);
@@ -160,6 +163,9 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(scoutAgent, /`unknowns`/);
     assert.match(scoutAgent, /staged snapshot/i);
     assert.match(scoutAgent, /test evidence/i);
+    assert.match(scoutAgent, /"coverage_map"/);
+    assert.match(scoutAgent, /"test_harness"/);
+    assert.match(scoutAgent, /"covering_test"/);
     assert.doesNotMatch(scoutAgent, /platform_primitives/);
   });
 
@@ -186,6 +192,9 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(hunterAgent, /adds no product capability/);
     assert.match(hunterAgent, /correctness lane.*test|test.*correctness lane/i);
     assert.match(hunterAgent, /YAGNI|unnecessary/i);
+    assert.match(hunterAgent, /"coverage_gaps"/);
+    assert.match(hunterAgent, /"required_tests"/);
+    assert.match(hunterAgent, /"mutant"/);
     assert.match(hunterAgent, /staged snapshot/i);
     assert.match(hunterAgent, /Do not flag a Port\/Adapter or Template Method that adds a real capability/);
     assert.doesNotMatch(hunterAgent, /lane: \"architecture\"/);
@@ -203,6 +212,9 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(verifierAgent, /Adversarial Verification Checks/);
     assert.match(verifierAgent, /Upstream Defenses/);
     assert.match(verifierAgent, /must NOT suggest replacement patches or emit verdict markers/i);
+    assert.match(verifierAgent, /staged snapshot/i);
+    assert.match(verifierAgent, /"confirmed_coverage_gaps"/);
+    assert.match(verifierAgent, /Coverage gaps/);
     assert.match(verifierAgent, /proves both an existing mechanism/);
     assert.match(verifierAgent, /zero new product capability/);
     assert.match(verifierAgent, /public user-facing CLIs/);
@@ -227,7 +239,12 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(multiStageSkill, /red_proof/);
     assert.match(multiStageSkill, /declared_checks/);
     assert.match(multiStageSkill, /### Notes/);
+    assert.match(multiStageSkill, /### Required test coverage/);
+    assert.match(multiStageSkill, /coverage_required/);
+    assert.match(multiStageSkill, /coverage_map/);
+    assert.match(multiStageSkill, /confirmed_coverage_gaps/);
     assert.match(multiStageSkill, /triage/);
+    assert.match(multiStageSkill, /coverage_gaps/);
     assert.doesNotMatch(multiStageSkill, /lane: \"architecture\"/);
     assert.doesNotMatch(multiStageSkill, /platform_primitives/);
   });

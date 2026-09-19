@@ -45,6 +45,13 @@ Describe ownership cost or blast radius only as impact. If either condition is m
 
 In `lane: "correctness"`, read source files from the staged snapshot and inspect the focused tests covering each changed behavior. A missing or weak test is review evidence, not an automatic defect: emit a candidate only when the unprotected reachable behavior has concrete P1/P2 impact. Apply YAGNI as a reachability check: question staged code that duplicates an existing responsibility without product capability, but do not flag capability-adding code or create a new defect class.
 
+## Correctness Lane: Coverage Gaps
+
+In `lane: "correctness"`, walk the scout `coverage_map`. For every entry whose `covering_test` is `null`, emit a `coverage_gaps` item — this is a coverage directive, not a defect candidate, and it does not need P1/P2 impact proof. Skip entries that are not changed executable behavior: pure renames, comment/docstring edits, test-only or docs-only diffs, and unreachable code. Each gap must name the concrete tests the author must add before this change may land:
+- at least one `edge` test per new or altered boundary, absence/default, or error path introduced by the behavior;
+- at least one `mutation` test whose `mutant` field names a concrete mutation of the staged lines (e.g. "remove the `attempts < max` guard", "invert the null check") that the required test would kill — a test that cannot name the mutant it kills does not count.
+Do not emit vague directives like "add tests"; every `required_tests` entry must be a runnable scenario a reviewer could verify.
+
 ## Neuroslop Pass
 
 In `lane: "correctness"`, execute an explicit pass across every staged assertion, check, status claim, and recorded number:
@@ -65,6 +72,22 @@ Return your findings as structured JSON:
 ```json
 {
   "coverage_summary": "Factual description of paths, checks, and invariants evaluated",
+  "coverage_gaps": [
+    {
+      "coverage_id": "coverage-1",
+      "file_path": "path/to/touched/file.ext",
+      "line_start": 42,
+      "line_end": 45,
+      "behavior": "Changed executable behavior with no covering test",
+      "required_tests": [
+        {
+          "kind": "edge | mutation",
+          "scenario": "Concrete runnable test scenario the author must add",
+          "mutant": "Concrete mutation of the staged lines this test kills; required for kind=mutation, empty otherwise"
+        }
+      ]
+    }
+  ],
   "candidates": [
     {
       "candidate_id": "<lane>-1",
@@ -87,5 +110,5 @@ Return your findings as structured JSON:
 }
 ```
 
-Invariant: `line_start` and `line_end` must overlap lines added or modified in the staged diff. Do not emit verdict markers (`REVIEW_RESULT=...`). If no genuine defect candidates exist, return `"candidates": []`.
+Invariant: `line_start` and `line_end` must overlap lines added or modified in the staged diff. Do not emit verdict markers (`REVIEW_RESULT=...`). If no genuine defect candidates exist, return `"candidates": []`; if every changed behavior has a covering test, return `"coverage_gaps": []`.
 Return the report through the `yield` tool's data payload; never call `yield` with empty or null data.

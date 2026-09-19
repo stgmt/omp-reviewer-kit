@@ -64,7 +64,7 @@ Staged Diff (git diff --cached --binary --no-ext-diff --)
                     ▼
 [Stage 1: Context Scout] (review-context-scout)
   - Inspects staged diff, modified files, consumers via LSP/grep, tests.
-  - Outputs: change_goal, changed_paths, relevant_consumers, invariants, test_evidence, unknowns.
+  - Outputs: change_goal, changed_paths, relevant_consumers, invariants, test_evidence, test_harness, coverage_map, unknowns.
   - Invariant: No findings, no verdict markers.
                     │
                     ▼
@@ -72,13 +72,13 @@ Staged Diff (git diff --cached --binary --no-ext-diff --)
   - Lane 1: Correctness (boundary conditions, null/default states, resource leaks, breaking consumer assumptions).
   - Lane 2: Security (attacker input source, dangerous sink, missing controls).
   - Anti-Noise: Zero style/naming/comment/refactoring suggestions. Every candidate requires concrete trigger scenario.
-  - Outputs: candidates[] with candidate_id, lane, priority (P1/P2), line ranges, observed, expected, trigger, impact, evidence.
+  - Outputs: candidates[] with candidate_id, lane, priority (P1/P2), line ranges, observed, expected, trigger, impact, evidence; correctness lane also emits coverage_gaps[] (coverage_id, file_path, line range, behavior, required_tests).
                     │
                     ▼
 [Stage 3: Adversarial Verification] (review-finding-verifier)
   - Defense lawyer mindset: assumes code is correct until proven broken.
   - Verifies upstream sanitization, caller constraints, test protections.
-  - Outputs: decisions[] (confirmed, rejected, not_proven) and confirmed_findings[].
+  - Outputs: decisions[] (confirmed, rejected, not_proven), confirmed_findings[], and confirmed_coverage_gaps[].
   - Invariant: No verdict markers.
                     │
                     ▼
@@ -86,8 +86,9 @@ Staged Diff (git diff --cached --binary --no-ext-diff --)
   - Synthesizes coverage and confirmed findings.
   - Formats markdown audit report under audit-reports/commit-reviews/.
   - Emits solitary verdict marker:
-    - Zero confirmed findings -> REVIEW_RESULT=PASS
+    - Zero confirmed findings and zero blocking coverage gaps -> REVIEW_RESULT=PASS
     - Any confirmed P1 or P2 finding -> REVIEW_RESULT=BLOCK
+    - Any confirmed coverage gap with a runnable test harness -> REVIEW_RESULT=BLOCK (coverage_required envelope)
     - Missing/failed mandatory stage -> REVIEW_RESULT=BLOCK
 ```
 

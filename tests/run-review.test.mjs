@@ -48,13 +48,34 @@ function rejectionOutput(diffText, { kind = 'confirmed_findings', envelope = {},
         },
         ...envelope,
       }
-    : {
-        schema: 'review-rejection-envelope@1',
-        kind,
-        diff_hash: diffHash,
-        findings: [{ ...defaultFinding, ...finding }],
-        ...envelope,
-      };
+    : kind === 'coverage_required'
+      ? {
+          schema: 'review-rejection-envelope@1',
+          kind,
+          diff_hash: diffHash,
+          findings: [],
+          coverage_items: [
+            {
+              coverage_id: 'coverage-1',
+              file_path: 'src/example.mjs',
+              line_start: 1,
+              line_end: 3,
+              behavior: 'New retry branch on provider 429 has no covering test.',
+              required_tests: [
+                { kind: 'edge', scenario: '429 on the final attempt exhausts retries.', mutant: '' },
+                { kind: 'mutation', scenario: 'Test fails when the attempts guard is removed.', mutant: 'remove the attempts < max guard' },
+              ],
+            },
+          ],
+          ...envelope,
+        }
+      : {
+          schema: 'review-rejection-envelope@1',
+          kind,
+          diff_hash: diffHash,
+          findings: [{ ...defaultFinding, ...finding }],
+          ...envelope,
+        };
   return [
     'REVIEW_REJECTION_ENVELOPE_BEGIN',
     JSON.stringify(value),
@@ -114,6 +135,94 @@ test('blocks a staged change after reviewer-kit BLOCK', async () => {
   assert.equal(result.envelope.kind, 'confirmed_findings');
   const report = await readFile(result.reportPath, 'utf8');
   assert.match(report, /## Normalized rejection envelope/);
+});
+
+test('blocks a staged change with a coverage_required envelope', async () => {
+  const { result } = await runFixture('uncovered diff', {
+    status: 0,
+    stdout: rejectionOutput('uncovered diff', { kind: 'coverage_required' }),
+    stderr: '',
+  });
+
+  assert.equal(result.exitCode, 1);
+  assert.equal(result.verdict, 'BLOCK');
+  assert.equal(result.envelope.kind, 'coverage_required');
+  assert.equal(result.envelope.findings.length, 0);
+  assert.equal(result.envelope.coverage_items.length, 1);
+  assert.equal(result.envelope.coverage_items[0].coverage_id, 'coverage-1');
+  const report = await readFile(result.reportPath, 'utf8');
+  assert.match(report, /## Normalized rejection envelope/);
+  assert.match(report, /coverage_required/);
+});
+
+test('rejects a coverage_required envelope whose mutation test names no mutant', async () => {
+  const { result } = await runFixture('diff', {
+    status: 0,
+    stdout: rejectionOutput('diff', {
+      kind: 'coverage_required',
+      envelope: {
+        coverage_items: [
+          {
+            coverage_id: 'coverage-1',
+            file_path: 'src/example.mjs',
+            line_start: 1,
+            line_end: 3,
+            behavior: 'Uncovered branch.',
+            required_tests: [{ kind: 'mutation', scenario: 'fails on mutant', mutant: '' }],
+          },
+        ],
+      },
+    }),
+    stderr: '',
+  });
+
+  assert.equal(result.exitCode, 1);
+  assert.equal(result.envelope.kind, 'review_failure');
+  assert.equal(result.envelope.failure.code, 'malformed_rejection_envelope');
+});
+
+test('rejects a coverage_required envelope with empty coverage_items', async () => {
+  const { result } = await runFixture('diff', {
+    status: 0,
+    stdout: rejectionOutput('diff', { kind: 'coverage_required', envelope: { coverage_items: [] } }),
+    stderr: '',
+  });
+
+  assert.equal(result.exitCode, 1);
+  assert.equal(result.envelope.kind, 'review_failure');
+  assert.equal(result.envelope.failure.code, 'malformed_rejection_envelope');
+});
+
+test('blocks a PASS verdict carrying a coverage envelope as contradictory', async () => {
+  const diffText = 'diff';
+  const diffHash = createHash('sha256').update(diffText).digest('hex');
+  const stdout = [
+    'REVIEW_REJECTION_ENVELOPE_BEGIN',
+    JSON.stringify({
+      schema: 'review-rejection-envelope@1',
+      kind: 'coverage_required',
+      diff_hash: diffHash,
+      findings: [],
+      coverage_items: [
+        {
+          coverage_id: 'coverage-1',
+          file_path: 'src/example.mjs',
+          line_start: 1,
+          line_end: 3,
+          behavior: 'Uncovered branch.',
+          required_tests: [{ kind: 'edge', scenario: 'edge case', mutant: '' }],
+        },
+      ],
+    }),
+    'REVIEW_REJECTION_ENVELOPE_END',
+    'REVIEW_RESULT=PASS',
+    '',
+  ].join('\n');
+  const { result } = await runFixture(diffText, { status: 0, stdout, stderr: '' });
+
+  assert.equal(result.exitCode, 1);
+  assert.equal(result.envelope.kind, 'review_failure');
+  assert.equal(result.envelope.failure.code, 'contradictory_rejection_envelope');
 });
 
 

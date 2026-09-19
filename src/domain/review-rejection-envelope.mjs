@@ -26,6 +26,16 @@ const FINDING_KEYS = Object.freeze([
   'verifier_argument',
 ]);
 const FAILURE_KEYS = Object.freeze(['code', 'message']);
+const COVERAGE_TOP_LEVEL_KEYS = Object.freeze(['coverage_items', 'diff_hash', 'findings', 'kind', 'schema']);
+const COVERAGE_ITEM_KEYS = Object.freeze([
+  'behavior',
+  'coverage_id',
+  'file_path',
+  'line_end',
+  'line_start',
+  'required_tests',
+]);
+const REQUIRED_TEST_KEYS = Object.freeze(['kind', 'mutant', 'scenario']);
 const SHA256_RE = /^[a-f0-9]{64}$/;
 const WINDOWS_ABSOLUTE_RE = /^[A-Za-z]:\//;
 
@@ -187,12 +197,41 @@ function validateFinding(finding, identifiers) {
   return true;
 }
 
+function validateRequiredTest(test) {
+  if (!hasExactKeys(test, REQUIRED_TEST_KEYS)) return false;
+  if (test.kind !== 'edge' && test.kind !== 'mutation') return false;
+  if (!isNonEmptyString(test.scenario)) return false;
+  if (test.kind === 'mutation' && !isNonEmptyString(test.mutant)) return false;
+  if (test.kind === 'edge' && typeof test.mutant !== 'string') return false;
+  return true;
+}
+
+function validateCoverageItem(item, identifiers) {
+  if (!hasExactKeys(item, COVERAGE_ITEM_KEYS)) return false;
+  if (!isNonEmptyString(item.coverage_id) || identifiers.has(item.coverage_id)) return false;
+  if (!isRelativeRepositoryPath(item.file_path)) return false;
+  if (!Number.isInteger(item.line_start) || item.line_start < 1) return false;
+  if (!Number.isInteger(item.line_end) || item.line_end < item.line_start) return false;
+  if (!isNonEmptyString(item.behavior)) return false;
+  if (!Array.isArray(item.required_tests) || item.required_tests.length === 0) return false;
+  if (!item.required_tests.every(validateRequiredTest)) return false;
+  identifiers.add(item.coverage_id);
+  return true;
+}
+
 function validateEnvelope(value, diffHash) {
   if (!isRecord(value) || value.schema !== ENVELOPE_SCHEMA || value.diff_hash !== diffHash) return false;
   if (value.kind === 'confirmed_findings') {
     if (!hasExactKeys(value, TOP_LEVEL_KEYS) || !Array.isArray(value.findings) || value.findings.length === 0) return false;
     const identifiers = new Set();
     return value.findings.every((finding) => validateFinding(finding, identifiers));
+  }
+  if (value.kind === 'coverage_required') {
+    if (!hasExactKeys(value, COVERAGE_TOP_LEVEL_KEYS)) return false;
+    if (!Array.isArray(value.findings) || value.findings.length !== 0) return false;
+    if (!Array.isArray(value.coverage_items) || value.coverage_items.length === 0) return false;
+    const identifiers = new Set();
+    return value.coverage_items.every((item) => validateCoverageItem(item, identifiers));
   }
   if (value.kind === 'review_failure') {
     return hasExactKeys(value, FAILURE_TOP_LEVEL_KEYS)
@@ -244,6 +283,18 @@ export class ReviewRejectionEnvelope {
     this.#value = Object.freeze({
       ...value,
       findings: Object.freeze(value.findings.map((finding) => Object.freeze({ ...finding }))),
+      ...(value.coverage_items
+        ? {
+            coverage_items: Object.freeze(
+              value.coverage_items.map((item) =>
+                Object.freeze({
+                  ...item,
+                  required_tests: Object.freeze(item.required_tests.map((test) => Object.freeze({ ...test }))),
+                }),
+              ),
+            ),
+          }
+        : {}),
       ...(value.failure ? { failure: Object.freeze({ ...value.failure }) } : {}),
     });
   }
@@ -332,12 +383,24 @@ export class ReviewRejectionEnvelope {
     return this.#value.failure;
   }
 
+  get coverageItems() {
+    return this.#value.coverage_items ?? [];
+  }
+
   toJSON() {
     return {
       schema: this.#value.schema,
       kind: this.#value.kind,
       diff_hash: this.#value.diff_hash,
       findings: this.#value.findings.map((finding) => ({ ...finding })),
+      ...(this.#value.coverage_items
+        ? {
+            coverage_items: this.#value.coverage_items.map((item) => ({
+              ...item,
+              required_tests: item.required_tests.map((test) => ({ ...test })),
+            })),
+          }
+        : {}),
       ...(this.#value.failure ? { failure: { ...this.#value.failure } } : {}),
     };
   }

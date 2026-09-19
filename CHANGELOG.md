@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
+## [Unreleased]
+
+### Added
+- **Coverage-required gate**: changed executable behavior without a covering test now blocks the commit via a new `coverage_required` envelope kind (`review-rejection-envelope@1`) carrying `coverage_items` — each gap names the concrete tests the committer must add: at least one `edge` test per new boundary/default/error path and at least one `mutation` test naming the staged-lines mutant it kills. The scout emits `coverage_map` + `test_harness`, the correctness hunter emits `coverage_gaps`, the verifier confirms `confirmed_coverage_gaps`, and the orchestrator reports them under `### Required test coverage`. Gaps never block when the repository has no runnable test harness (recorded under `### Notes`); confirmed findings take precedence over coverage items when both exist.
+
 ## [0.11.6] - 2026-09-18
 
 ### Fixed

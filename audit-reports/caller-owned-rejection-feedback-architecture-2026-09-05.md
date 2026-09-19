@@ -102,3 +102,7 @@ No code path in this design may perform any of the following as a response to BL
 5. Add contract tests for PASS/no envelope, confirmed findings, every failure code, malformed JSON, duplicate/unknown fields, path traversal, invalid ranges, hash mismatch, marker ordering, and exactly-two-line BLOCK stderr. Add no auto-remediation behavior tests.
 
 This is a protocol and planning change only. It does not add publication automation, npm distribution, or a replacement review subsystem.
+
+## Amendment 2026-09-19: `coverage_required` kind
+
+Grammar rule 6 now reads: `kind` is exactly `confirmed_findings`, `coverage_required`, or `review_failure`. For `kind: coverage_required`, `findings` is `[]` and `coverage_items` is a non-empty array; each item has exactly the fields `coverage_id` (nonempty, unique), `file_path` (repository-relative `/` path), `line_start`/`line_end` (positive inclusive integers), `behavior` (nonempty), and `required_tests` — a non-empty array of `{kind: "edge" | "mutation", scenario, mutant}` where `scenario` is always nonempty and `mutant` is required nonempty for `kind: "mutation"`. The kind blocks the commit when changed executable behavior lacks a covering test in a repository with a runnable test harness; confirmed findings take precedence when both exist.

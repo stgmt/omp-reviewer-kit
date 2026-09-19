@@ -53,6 +53,8 @@ The snapshot also carries the review inputs under `.review/`: `diff.patch` holds
   - `relevant_consumers`: Direct callers, consumers, or downstream dependencies affected.
   - `invariants`: Domain invariants, contracts, or assumptions in the touched code.
   - `test_evidence`: Existing automated tests exercising the touched areas.
+  - `test_harness`: `"present" | "absent"` — whether the repository has a runnable test harness (test script, test directory, or runner config).
+  - `coverage_map`: Array of `{behavior, file_path, line_start, line_end, covering_test}` — every changed executable behavior (new or altered control-flow branch, boundary, default, side effect, or error path reachable from a caller); `covering_test` names the focused test that fails if the behavior is reverted, or `null` when none exists.
   - `claims`: Array of `{claim, source_path, source_line, kind}` (`kind` in `"number" | "status" | "check_output" | "verified_claim"`) — verifiable claims found in staged content.
   - `declared_checks`: Array of `{selector, source_path, source_line}` — check commands or test selectors declared in staged content.
   - `unknowns`: Areas with insufficient visibility or ungrounded assumptions.
@@ -65,6 +67,7 @@ The snapshot also carries the review inputs under `.review/`: `diff.patch` holds
   - `lane: "security"`: Attacker-controlled input source, dangerous sink, missing/bypassed controls, credential leakage, permission bypass.
 - **Tools**: `read`, `grep`, `glob`, `lsp`, `bash` (read-only git commands only). No `task`, no mutating tools. Budget: roughly 30 tool calls per lane — analyze `.review/diff.patch`, read each changed file once, verify only deciding callers.
 - **Correctness test/YAGNI boundary**: Inspect focused tests for changed behavior and record concrete test evidence. Missing or weak tests and unnecessary code are not independent defect classes; raise them only when a reachable P1/P2 correctness impact is proven, and keep the existing `correctness`/`security` candidate schema.
+- **Coverage Gaps**: In lane `correctness`, walk the scout `coverage_map`. Every entry with `covering_test: null` produces a `coverage_gaps` item — a coverage directive, not a defect candidate, requiring no P1/P2 impact proof. Skip non-behavioral changes (pure renames, comments, docs-only or test-only diffs, unreachable code). Each gap carries `required_tests`: at least one `edge` test per new boundary/default/error path and at least one `mutation` test whose `mutant` field names the concrete staged-lines mutation it kills. Vague directives like "add tests" are prohibited.
 - **Neuroslop Pass**: In lane `correctness`, execute an explicit pass across every staged assertion, check, status claim, and number:
   - Ask the red question: "what would have to break in the tree for this check to fail?"
   - Apply the vacuum checklist: count inspected units with your own query, find a positive control outside the checked zone, verify missing/renamed behavior.
@@ -99,7 +102,11 @@ The snapshot also carries the review inputs under `.review/`: `diff.patch` holds
   - `impact`: Concrete failure consequence.
   - `red_proof`: Concrete tree breakage that would make this check fail; empty string means the check cannot fail.
   - `evidence`: Array of repository citations (files, lines, callers).
-- **Constraint**: Must NOT emit verdict markers (`REVIEW_RESULT=...`).
+- **Coverage Gap Schema** (correctness lane only, emitted alongside `candidates`):
+  - `coverage_id`: `coverage-<ordinal>`.
+  - `file_path`, `line_start`, `line_end`: Location overlapping added diff lines.
+  - `behavior`: The changed executable behavior lacking a covering test.
+  - `required_tests`: Array of `{kind: "edge" | "mutation", scenario, mutant}` — concrete runnable scenarios; `mutant` is required and non-empty for `kind: "mutation"`.
 
 ### Stage 3: Adversarial Verifier (`review-finding-verifier`)
 - **Role**: Defense attorney. Challenges every candidate against repository reality to eliminate false positives. Budget: roughly 20 tool calls — one verification pass per candidate against the snapshot and deciding callers.
@@ -112,6 +119,7 @@ The snapshot also carries the review inputs under `.review/`: `diff.patch` holds
   6. **Neuroslop confirmation**: Confirm candidate about dead, vacuous, or tautological checks only with own unit count, positive control, and empty `red_proof`.
   7. **Self-tool audit**: Reject or mark not-proven any candidate whose proof relies on zero matches without positive control.
   8. **Triage**: Classify decision into triage categories (`lie`, `stale_record`, `disclosed_gap`, or `not_applicable`).
+  9. **Coverage gaps**: Verify each `coverage_gaps` item is real: reject when the behavior already has a covering test the scout missed (cite it), when the lines are not changed executable behavior (rename, comment, docs-only, test-only), or when unreachable. Confirm surviving gaps into `confirmed_coverage_gaps`; never weaken `required_tests`, but add a missing edge or mutation requirement when the behavior obviously needs it.
 - **Output Contract**:
   - `coverage_summary`: Summary of verified candidates.
   - `decisions`: Array of per-candidate decisions with fields:
@@ -121,6 +129,7 @@ The snapshot also carries the review inputs under `.review/`: `diff.patch` holds
     - `reason`: Factual justification citing repository evidence.
     - `evidence`: File and line citations supporting the decision.
   - `confirmed_findings`: Array of validated findings with normalized priority (`P1` | `P2`), file_path, line range, observed, expected, trigger, impact, and evidence.
+  - `confirmed_coverage_gaps`: Array of verified coverage gaps with `coverage_id`, file_path, line range, `behavior`, and `required_tests` (`{kind, scenario, mutant}`).
 - **Constraint**: Must NOT invent replacement patches or emit verdict markers (`REVIEW_RESULT=...`).
 
 ### Stage 4: Orchestrator Synthesis (`reviewer-kit`)
@@ -128,15 +137,18 @@ The snapshot also carries the review inputs under `.review/`: `diff.patch` holds
 - **Report Structure**:
   - `### Review coverage`: Summary of inspected diff, changed files, active skills, and stages executed.
   - `### Confirmed findings`: Detailed list of confirmed findings (priority, path, range, trigger, impact, evidence).
+  - `### Required test coverage`: Mandatory directive to the committer — every confirmed coverage gap with file path, line range, changed behavior, and the concrete tests that must be added (edge tests per new boundary/default/error path, mutation tests naming the killed mutant). "None required" when every changed behavior is covered. Non-blocking only when the scout reported `test_harness: absent`; then the gaps are mirrored into `### Notes`.
   - `### Unproven/rejected summary`: Terse summary of rejected or unproven candidates with rationale.
   - `### Notes`: Non-blocking observations (stale records with intact code, check commands suppressing output, showcase stub tests, disclosed gaps with named owners); never part of rejection envelope and never blocks PASS.
   - `### Verified-OK`: Explicit paths, tests, caller checks, and invariants actually verified, each carrying a concrete measure (unit count, path, positive control). Bare "looks correct" is prohibited; never use this section to hide unresolved candidates.
 - **Rejection Envelope Rule**:
   - A confirmed-finding BLOCK emits one strict `review-rejection-envelope@1` with the current diff hash and only normalized `correctness` or `security` findings.
+  - A coverage-only BLOCK (zero confirmed findings, at least one confirmed coverage gap, `test_harness: present`) emits one `coverage_required` envelope: `findings: []` plus `coverage_items` mirroring `confirmed_coverage_gaps` one-to-one (`coverage_id`, `file_path`, `line_start`, `line_end`, `behavior`, `required_tests`). Confirmed findings take precedence: when both exist, emit the `confirmed_findings` envelope and keep the coverage directive in the report section only.
   - A mandatory-stage failure emits a `review_failure` envelope with `execution_failure` and a non-empty diagnostic message.
   - The envelope occurs between standalone begin/end lines before the solitary BLOCK marker. PASS emits no envelope.
 - **Verdict Rule**:
-  - Exactly zero confirmed findings -> emit `REVIEW_RESULT=PASS`.
+  - Exactly zero confirmed findings and zero blocking coverage gaps -> emit `REVIEW_RESULT=PASS`.
   - At least one confirmed `P1` or `P2` finding -> emit `REVIEW_RESULT=BLOCK`.
-  - `not_proven` or `rejected` candidates NEVER block.
+  - At least one confirmed coverage gap with `test_harness: present` -> emit `REVIEW_RESULT=BLOCK`.
+  - `not_proven` or `rejected` candidates NEVER block; coverage gaps with `test_harness: absent` NEVER block.
   - If any mandatory stage fails, times out, or produces invalid output -> emit stage-specific explanation and `REVIEW_RESULT=BLOCK`.

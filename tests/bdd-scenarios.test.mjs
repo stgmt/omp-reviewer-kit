@@ -457,6 +457,131 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
     assert.equal(adjacentMalformed.envelope.failure.code, 'malformed_rejection_envelope');
   });
 
+  it('ReviewRejectionEnvelope coverage_required: accepts strict coverage items and deep-freezes them', () => {
+    const diff = DiffIdentity.fromString('coverage diff');
+    const diffHash = diff.hash;
+    const item = {
+      coverage_id: 'coverage-1',
+      file_path: 'src/example.mjs',
+      line_start: 10,
+      line_end: 24,
+      behavior: 'New retry branch on provider 429 has no covering test.',
+      required_tests: [
+        { kind: 'edge', scenario: '429 on the final attempt exhausts retries.', mutant: '' },
+        { kind: 'mutation', scenario: 'Test fails when the attempts guard is removed.', mutant: 'remove the attempts < max guard' },
+      ],
+    };
+    const output = [
+      'REVIEW_REJECTION_ENVELOPE_BEGIN',
+      JSON.stringify({
+        schema: 'review-rejection-envelope@1',
+        kind: 'coverage_required',
+        diff_hash: diffHash,
+        findings: [],
+        coverage_items: [item],
+      }),
+      'REVIEW_REJECTION_ENVELOPE_END',
+      'REVIEW_RESULT=BLOCK',
+    ].join('\n');
+
+    const evaluated = ReviewRejectionEnvelope.evaluate({ output, diffIdentity: diff, processStatus: 0 });
+    assert.equal(evaluated.verdict.value, 'BLOCK');
+    assert.equal(evaluated.envelope.kind, 'coverage_required');
+    assert.equal(evaluated.envelope.findings.length, 0);
+    assert.equal(evaluated.envelope.coverageItems.length, 1);
+    assert.equal(evaluated.envelope.coverageItems[0].coverage_id, 'coverage-1');
+
+    // Deep-freeze: mutating the source object after evaluation must not alter the envelope.
+    item.behavior = 'tampered';
+    item.required_tests.push({ kind: 'edge', scenario: 'injected', mutant: '' });
+    assert.equal(evaluated.envelope.coverageItems[0].behavior, 'New retry branch on provider 429 has no covering test.');
+    assert.equal(evaluated.envelope.coverageItems[0].required_tests.length, 2);
+    assert.throws(() => evaluated.envelope.coverageItems[0].required_tests.push({ kind: 'edge', scenario: 'x', mutant: '' }), TypeError);
+    assert.throws(() => { evaluated.envelope.coverageItems[0].behavior = 'tampered'; }, TypeError);
+
+    // Getter fallback: a confirmed_findings envelope exposes an empty coverageItems list.
+    const findingsEvaluated = ReviewRejectionEnvelope.evaluate({
+      output: rejectionOutput('coverage diff'),
+      diffIdentity: diff,
+      processStatus: 0,
+    });
+    assert.equal(findingsEvaluated.envelope.kind, 'confirmed_findings');
+    assert.deepEqual(findingsEvaluated.envelope.coverageItems, []);
+
+    // Reject paths through the domain copy.
+    const malformedCoverage = [
+      { ...item, required_tests: [{ kind: 'mutation', scenario: 's', mutant: '' }] },
+      { ...item, required_tests: [{ kind: 'edge', scenario: 's' }] },
+      { ...item, coverage_id: '' },
+      { ...item, file_path: '../escape.mjs' },
+      { ...item, line_start: 5, line_end: 4 },
+      { ...item, required_tests: [] },
+    ];
+    for (const bad of malformedCoverage) {
+      const badOutput = [
+        'REVIEW_REJECTION_ENVELOPE_BEGIN',
+        JSON.stringify({
+          schema: 'review-rejection-envelope@1',
+          kind: 'coverage_required',
+          diff_hash: diffHash,
+          findings: [],
+          coverage_items: [bad],
+        }),
+        'REVIEW_REJECTION_ENVELOPE_END',
+        'REVIEW_RESULT=BLOCK',
+      ].join('\n');
+      const rejected = ReviewRejectionEnvelope.evaluate({ output: badOutput, diffIdentity: diff, processStatus: 0 });
+      assert.equal(rejected.envelope.kind, 'review_failure');
+      assert.equal(rejected.envelope.failure.code, 'malformed_rejection_envelope');
+    }
+
+    // Duplicate coverage_id rejected.
+    const dupOutput = [
+      'REVIEW_REJECTION_ENVELOPE_BEGIN',
+      JSON.stringify({
+        schema: 'review-rejection-envelope@1',
+        kind: 'coverage_required',
+        diff_hash: diffHash,
+        findings: [],
+        coverage_items: [item, { ...item, behavior: 'other' }],
+      }),
+      'REVIEW_REJECTION_ENVELOPE_END',
+      'REVIEW_RESULT=BLOCK',
+    ].join('\n');
+    const dup = ReviewRejectionEnvelope.evaluate({ output: dupOutput, diffIdentity: diff, processStatus: 0 });
+    assert.equal(dup.envelope.failure.code, 'malformed_rejection_envelope');
+
+    // Additional rejection boundaries: non-empty findings, non-string edge mutant,
+    // zero line_start, unknown top-level key, findings-must-be-empty guard.
+    const boundaryCases = [
+      { findings: [item], coverage_items: [item] },
+      { findings: [], coverage_items: [{ ...item, required_tests: [{ kind: 'edge', scenario: 's', mutant: 5 }] }] },
+      { findings: [], coverage_items: [{ ...item, line_start: 0 }] },
+      { findings: [], coverage_items: [item], unexpected: true },
+      { findings: [], coverage_items: [{ ...item, required_tests: [{ kind: 'boundary', scenario: 's', mutant: '' }] }] },
+      { findings: [], coverage_items: 'x' },
+      { findings: [], coverage_items: [null] },
+      { findings: [], coverage_items: [42] },
+      { findings: [], coverage_items: [{ ...item, required_tests: [null] }] },
+    ];
+    for (const overrides of boundaryCases) {
+      const badOutput = [
+        'REVIEW_REJECTION_ENVELOPE_BEGIN',
+        JSON.stringify({
+          schema: 'review-rejection-envelope@1',
+          kind: 'coverage_required',
+          diff_hash: diffHash,
+          ...overrides,
+        }),
+        'REVIEW_REJECTION_ENVELOPE_END',
+        'REVIEW_RESULT=BLOCK',
+      ].join('\n');
+      const rejected = ReviewRejectionEnvelope.evaluate({ output: badOutput, diffIdentity: diff, processStatus: 0 });
+      assert.equal(rejected.envelope.kind, 'review_failure');
+      assert.equal(rejected.envelope.failure.code, 'malformed_rejection_envelope');
+    }
+  });
+
   it('ReviewPrompt invariant: requires non-empty diff hash, mandates multi-stage-review, and embeds required agent name', () => {
     assert.throws(() => new ReviewPrompt(''), TypeError);
     const prompt = new ReviewPrompt('abc123hash');

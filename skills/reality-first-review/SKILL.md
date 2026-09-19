@@ -23,7 +23,7 @@ Execution of review stages follows the `multi-stage-review` protocol: context di
 8. Check every caller and consumer at the boundary.
 9. Check the new success path, not only the new rejection path.
 10. Require a test that would fail without the change when behavior changed.
-For correctness review, inspect focused tests and record concrete test evidence. Missing tests or unnecessary code are not separate defect classes; report them only when a reachable P1/P2 correctness impact is proven, using the existing `correctness` or `security` envelope categories.
+For correctness review, inspect focused tests and record concrete test evidence. Missing tests or unnecessary code are not separate defect classes; report them only when a reachable P1/P2 correctness impact is proven, using the existing `correctness` or `security` envelope categories. Independently, every changed executable behavior without a covering test is a coverage gap: it travels the coverage pipeline (`coverage_map` -> `coverage_gaps` -> `confirmed_coverage_gaps`) and blocks via the `coverage_required` envelope when the repository has a runnable test harness.
 
 ## The sixteen review rules
 
@@ -76,7 +76,8 @@ Separate three things and never merge them:
 
 ### Blocking and non-blocking
 Blocking (confirmed finding, `correctness` or `security`): a check closing a task that no longer runs; green reproducible only in an undeclared environment; an assertion weakened or deleted to go green; an acceptance criterion with no executable coverage while marked closed; a measurement replaced by a verdict where the protocol requires a number.
-Non-blocking (report under `### Notes`): a stale record with intact code; a check command that suppresses its own output; a showcase test on a stub when the same contract is proven on a real object elsewhere; a disclosed gap with a named owner.
+Blocking (coverage directive, `coverage_required` envelope): a changed executable behavior — new or altered control-flow branch, boundary, default, side effect, or error path reachable from a caller — with no focused test that would fail if the behavior were reverted, in a repository that has a runnable test harness. The directive must name the required tests: at least one edge test per new boundary/default/error path and at least one mutation test naming the concrete staged-lines mutant it kills.
+Non-blocking (report under `### Notes`): a stale record with intact code; a check command that suppresses its own output; a showcase test on a stub when the same contract is proven on a real object elsewhere; a disclosed gap with a named owner; a coverage gap in a repository without a runnable test harness.
 
 ### Reviewer anti-patterns
 - Reading a diff and writing "looks correct" — a diff carries no information about execution.
@@ -139,7 +140,7 @@ Do not report guesses as defects. If evidence is missing, say `not proven` and k
 
 The report also contains `### Verified-OK`, listing paths, tests, caller checks, and invariants actually verified; it does not convert unresolved findings into approval.
 
-The `reviewer-kit` orchestrator synthesizes the verified findings from the multi-stage pipeline. A BLOCK must carry exactly one `review-rejection-envelope@1` between standalone `REVIEW_REJECTION_ENVELOPE_BEGIN` and `REVIEW_REJECTION_ENVELOPE_END` lines immediately before the verdict. Confirmed findings use only `correctness` or `security`; a stage failure uses the `execution_failure` code and a non-empty diagnostic message. PASS carries no envelope. The response finishes with exactly one machine-readable line:
+The `reviewer-kit` orchestrator synthesizes the verified findings from the multi-stage pipeline. A BLOCK must carry exactly one `review-rejection-envelope@1` between standalone `REVIEW_REJECTION_ENVELOPE_BEGIN` and `REVIEW_REJECTION_ENVELOPE_END` lines immediately before the verdict. Confirmed findings use only `correctness` or `security`; a coverage-only block uses `coverage_required` with `coverage_items` mirroring the confirmed gaps; a stage failure uses the `execution_failure` code and a non-empty diagnostic message. PASS carries no envelope. The response finishes with exactly one machine-readable line:
 
 ```text
 REVIEW_RESULT=PASS
