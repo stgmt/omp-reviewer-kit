@@ -42,6 +42,7 @@ function createExtensionHarness() {
   const registeredCommands = new Map();
   const registeredEvents = new Map();
   const logs = [];
+  const sentUserMessages = [];
 
   const fakePi = {
     registerCommand(name, options) {
@@ -49,6 +50,9 @@ function createExtensionHarness() {
     },
     on(event, handler) {
       registeredEvents.set(event, handler);
+    },
+    sendUserMessage(content, options) {
+      sentUserMessages.push({ content, options });
     },
     logger: {
       warn(msg) {
@@ -86,6 +90,7 @@ function createExtensionHarness() {
     commands: registeredCommands,
     events: registeredEvents,
     logs,
+    sentUserMessages,
     makeCtx,
   };
 }
@@ -929,15 +934,17 @@ describe('Feature: Native OMP Extension & Installer Service', () => {
       await rm(baseDir, { recursive: true, force: true });
     }
   });
-
-  it('/slop is registered and its handler returns a non-empty dispatcher prompt carrying target and focus', async () => {
-    const { commands, makeCtx } = createExtensionHarness();
+  it('/slop is registered and its handler sends a non-empty dispatcher prompt carrying target and focus', async () => {
+    const { commands, makeCtx, sentUserMessages } = createExtensionHarness();
     const slop = commands.get('slop');
     assert.ok(slop, 'slop command must be registered');
     assert.match(slop.description, /slop|adversarial|audit/i);
 
     const ctx = makeCtx(process.cwd());
-    const prompt = await slop.handler('src/foo --focus=architecture', ctx);
+    const result = await slop.handler('src/foo --focus=architecture', ctx);
+    assert.equal(result, undefined, 'handler must return void (prompt goes through pi.sendUserMessage)');
+    assert.equal(sentUserMessages.length, 1, 'handler must call pi.sendUserMessage exactly once');
+    const prompt = sentUserMessages[0].content;
     assert.equal(typeof prompt, 'string');
     assert.ok(prompt.length > 0);
     assert.match(prompt, /agent "slop"/);
@@ -947,38 +954,43 @@ describe('Feature: Native OMP Extension & Installer Service', () => {
   });
 
   it('/slop handler defaults to the current git status target when args are empty', async () => {
-    const { commands, makeCtx } = createExtensionHarness();
+    const { commands, makeCtx, sentUserMessages } = createExtensionHarness();
     const slop = commands.get('slop');
     const ctx = makeCtx(process.cwd());
-    const prompt = await slop.handler('', ctx);
+    await slop.handler('', ctx);
+    assert.equal(sentUserMessages.length, 1);
+    const prompt = sentUserMessages[0].content;
     assert.match(prompt, /current git status|git diff/i);
     assert.match(prompt, /agent "slop"/);
   });
 
   it('/slop handler parses space-separated --focus value', async () => {
-    const { commands, makeCtx } = createExtensionHarness();
+    const { commands, makeCtx, sentUserMessages } = createExtensionHarness();
     const slop = commands.get('slop');
     const ctx = makeCtx(process.cwd());
-    const prompt = await slop.handler('src/x --focus architecture', ctx);
+    await slop.handler('src/x --focus architecture', ctx);
+    const prompt = sentUserMessages[0].content;
     assert.match(prompt, /The audit target is: src\/x\./);
     assert.match(prompt, /The audit focus is: architecture\./);
     assert.doesNotMatch(prompt, /target is: src\/x --focus/);
   });
 
   it('/slop handler accepts an args array', async () => {
-    const { commands, makeCtx } = createExtensionHarness();
+    const { commands, makeCtx, sentUserMessages } = createExtensionHarness();
     const slop = commands.get('slop');
     const ctx = makeCtx(process.cwd());
-    const prompt = await slop.handler(['src/x', '--focus=tests'], ctx);
+    await slop.handler(['src/x', '--focus=tests'], ctx);
+    const prompt = sentUserMessages[0].content;
     assert.match(prompt, /The audit target is: src\/x\./);
     assert.match(prompt, /The audit focus is: tests\./);
   });
 
   it('/slop handler consumes a trailing valueless --focus without corrupting the target', async () => {
-    const { commands, makeCtx } = createExtensionHarness();
+    const { commands, makeCtx, sentUserMessages } = createExtensionHarness();
     const slop = commands.get('slop');
     const ctx = makeCtx(process.cwd());
-    const prompt = await slop.handler('src/x --focus', ctx);
+    await slop.handler('src/x --focus', ctx);
+    const prompt = sentUserMessages[0].content;
     assert.match(prompt, /The audit target is: src\/x\./);
     assert.doesNotMatch(prompt, /--focus/);
   });

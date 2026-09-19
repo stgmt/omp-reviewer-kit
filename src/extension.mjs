@@ -463,7 +463,8 @@ export default function initExtension(pi) {
     description: 'Run the adversarial 2-in-1 slop audit (parasitic architecture, spec slop, dead checks) on a target',
     handler: async (args) => {
       const { target, focus } = parseSlopArgs(args);
-      return new SlopPrompt({ target, focus }).toString();
+      const prompt = new SlopPrompt({ target, focus }).toString();
+      pi.sendUserMessage(prompt);
     },
   });
 
