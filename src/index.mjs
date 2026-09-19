@@ -3,6 +3,8 @@ export { StagedSnapshot } from './domain/staged-snapshot.mjs';
 export { ReviewVerdict } from './domain/review-verdict.mjs';
 export { ReviewRejectionEnvelope } from './domain/review-rejection-envelope.mjs';
 export { ReviewPrompt } from './domain/review-prompt.mjs';
+export { SlopPrompt } from './domain/slop-prompt.mjs';
+export { SlopReport } from './domain/slop-report.mjs';
 export { ExecutionEvidence } from './domain/execution-evidence.mjs';
 export { buildRevertedFiles } from './domain/reverted-snapshot.mjs';
 export {

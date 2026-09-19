@@ -6,10 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [Unreleased]
+## [0.12.0] - 2026-09-19
 
 ### Added
 - **Coverage-required gate**: changed executable behavior without a covering test now blocks the commit via a new `coverage_required` envelope kind (`review-rejection-envelope@1`) carrying `coverage_items` — each gap names the concrete tests the committer must add: at least one `edge` test per new boundary/default/error path and at least one `mutation` test naming the staged-lines mutant it kills. The scout emits `coverage_map` + `test_harness`, the correctness hunter emits `coverage_gaps`, the verifier confirms `confirmed_coverage_gaps`, and the orchestrator reports them under `### Required test coverage`. Gaps never block when the repository has no runnable test harness (recorded under `### Notes`); confirmed findings take precedence over coverage items when both exist.
+- **Native `/slop` adversarial audit**: the slop 2-in-1 audit (parasitic architecture, spec slop, dead checks) is now a first-class review-kit command instead of a user-saved dynamic-workflows script. Three declared agents — `slop` orchestrator (`@slow`, spawns allowlist) → `slop-scout` candidate discovery (`@smol`) → `slop-verifier` adversarial challenge (`@slow`, Anti-Noise Gate + "can it turn red" + grounding filters) — run on the native task tool with `autoloadSkills: [slop]`; `SlopPrompt` builds the `/slop` dispatcher prompt and `SlopReport` renders the `VERDICT:` report in the skill://slop Part V format. Fail-closed: a failed scout/verifier stage emits `VERDICT: ERROR`, never `CLEAN`. Removes the omp-dynamic-workflows dependency and its `thinking.ts` disk-load failure mode.
 
 ## [0.11.6] - 2026-09-18
 

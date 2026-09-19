@@ -31,6 +31,11 @@ const required = [
   'skills/range-audit/SKILL.md',
   'agents/review-range-auditor.md',
   'skills/slop/SKILL.md',
+  'agents/slop.md',
+  'agents/slop-scout.md',
+  'agents/slop-verifier.md',
+  'src/domain/slop-prompt.mjs',
+  'src/domain/slop-report.mjs',
 ];
 
 for (const file of required) {

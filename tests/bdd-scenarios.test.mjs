@@ -9,6 +9,7 @@ import {
   ReviewVerdict,
   ReviewRejectionEnvelope,
   ReviewPrompt,
+  SlopReport,
   ReviewReport,
   ReviewExecutionResult,
   SubprocessGitAdapter,
@@ -851,4 +852,104 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
     await rm(repoRoot, { recursive: true, force: true }).catch(() => {});
   });
 
+});
+
+describe('Feature: Slop Adversarial Audit (BDD Scenarios)', () => {
+  // Simulates the slop orchestrator's mandatory stage chain: a fake task
+  // dispatch returns the slop-scout candidate list, then the slop-verifier
+  // verdict; stage 3 synthesizes the report via SlopReport (the single source
+  // for the VERDICT: contract the orchestrator emits).
+  function createFakeSlopDispatch({ scoutResult, verifierResult }) {
+    const calls = [];
+    return {
+      calls,
+      dispatch: async (agentName, taskText) => {
+        calls.push({ agentName, taskText });
+        if (agentName === 'slop-scout') return scoutResult;
+        if (agentName === 'slop-verifier') return verifierResult;
+        throw new Error(`unexpected agent ${agentName}`);
+      },
+    };
+  }
+
+  async function runSlopOrchestration(dispatch, { target = '', focus = '' } = {}) {
+    const scout = await dispatch('slop-scout', `target=${target} focus=${focus}`);
+    if (!scout || !Array.isArray(scout.candidates)) {
+      return SlopReport.failure('slop-scout failed or returned no candidates; nothing inspected; this is NOT a clean result').toString();
+    }
+    const verifier = await dispatch('slop-verifier', JSON.stringify(scout.candidates));
+    if (!verifier || !Array.isArray(verifier.verified)) {
+      return SlopReport.failure(`slop-verifier failed; ${scout.candidates.length} candidate finding(s) left unverified; this is NOT a clean result`).toString();
+    }
+    return new SlopReport(verifier).toString();
+  }
+
+  it('Scenario: Given a verified P1 candidate, When the slop orchestrator synthesizes, Then it emits VERDICT: BLOCKED', async () => {
+    // Given
+    const { calls, dispatch } = createFakeSlopDispatch({
+      scoutResult: {
+        candidates: [
+          { file: 'tests/calc.test.mjs', line: '4', claim: 'assert.ok(true) cannot fail', suspectedCategory: 'P1_BLOCKER', evidence: 'assert.ok(true)' },
+        ],
+        summary: 'one dead check',
+      },
+      verifierResult: {
+        verified: [
+          { file: 'tests/calc.test.mjs', line: '4', title: 'Vacuous check cannot turn red', category: 'P1', observation: 'assert.ok(true)', failureMechanism: 'No code change can fail this test', nativeAlternative: '' },
+        ],
+        rejectedCount: 0,
+        verdict: 'BLOCKED',
+        verdictReason: 'One dead check blocks the suite',
+      },
+    });
+
+    // When
+    const report = await runSlopOrchestration(dispatch, { target: 'tests/', focus: 'tests' });
+
+    // Then
+    assert.equal(calls[0].agentName, 'slop-scout');
+    assert.equal(calls[1].agentName, 'slop-verifier');
+    assert.match(calls[1].taskText, /calc\.test\.mjs/);
+    assert.match(report, /^VERDICT: BLOCKED — One dead check blocks the suite/);
+    assert.match(report, /### 🔴 P1: Блокеры \(1\)/);
+    assert.match(report, /calc\.test\.mjs:4/);
+  });
+
+  it('Scenario: Given the scout returns empty, When the slop orchestrator synthesizes, Then it emits VERDICT: ERROR and never CLEAN', async () => {
+    // Given
+    const { calls, dispatch } = createFakeSlopDispatch({
+      scoutResult: null,
+      verifierResult: { verified: [], rejectedCount: 0, verdict: 'CLEAN', verdictReason: 'unused' },
+    });
+
+    // When
+    const report = await runSlopOrchestration(dispatch);
+
+    // Then
+    assert.equal(calls.length, 1, 'verifier must not run when the scout failed');
+    assert.match(report, /^VERDICT: ERROR — slop-scout failed/);
+    assert.match(report, /NOT a clean result/);
+    assert.doesNotMatch(report, /VERDICT: CLEAN/);
+  });
+
+  it('Scenario: Given the verifier fails after candidates, When the slop orchestrator synthesizes, Then it emits VERDICT: ERROR naming the unverified count', async () => {
+    // Given
+    const { dispatch } = createFakeSlopDispatch({
+      scoutResult: {
+        candidates: [
+          { file: 'src/x.mjs', line: '1', claim: 'c', suspectedCategory: 'P2_PARASITIC_OR_SLOP', evidence: 'e' },
+          { file: 'src/y.mjs', line: '2', claim: 'c2', suspectedCategory: 'P3_DRIFT', evidence: 'e2' },
+        ],
+        summary: 'two candidates',
+      },
+      verifierResult: null,
+    });
+
+    // When
+    const report = await runSlopOrchestration(dispatch);
+
+    // Then
+    assert.match(report, /^VERDICT: ERROR — slop-verifier failed; 2 candidate finding\(s\) left unverified/);
+    assert.doesNotMatch(report, /VERDICT: CLEAN/);
+  });
 });

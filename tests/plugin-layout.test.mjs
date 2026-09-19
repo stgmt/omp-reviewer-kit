@@ -40,13 +40,16 @@ const multiStageSkill = await readFile('skills/multi-stage-review/SKILL.md', 'ut
 const rangeAuditorAgent = await readFile('agents/review-range-auditor.md', 'utf8');
 const rangeAuditSkill = await readFile('skills/range-audit/SKILL.md', 'utf8');
 const slopSkill = await readFile('skills/slop/SKILL.md', 'utf8');
+const slopAgent = await readFile('agents/slop.md', 'utf8');
+const slopScoutAgent = await readFile('agents/slop-scout.md', 'utf8');
+const slopVerifierAgent = await readFile('agents/slop-verifier.md', 'utf8');
 const hookTemplate = await readFile('templates/githooks/pre-commit', 'utf8');
 const manifest = JSON.parse(await readFile('package.json', 'utf8'));
 
 describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
   it('manifest and skills declare fixed reviewer identities', () => {
     assert.equal(manifest.name, 'omp-reviewer-kit');
-    assert.equal(manifest.version, '0.11.6');
+    assert.equal(manifest.version, '0.12.0');
     assert.match(realitySkill, /name: reality-first-review/);
     assert.match(multiStageSkill, /name: multi-stage-review/);
     assert.match(rangeAuditSkill, /name: range-audit/);
@@ -258,5 +261,71 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(slopSkill, /REVIEW_RESULT=PASS/);
     assert.match(slopSkill, /REVIEW_RESULT=BLOCK/);
     assert.match(slopSkill, /VERDICT:\s*\[BLOCKED\s*\|\s*CLEAN\s*\|\s*ACCEPTABLE_WITH_NOTES\]/);
+  });
+
+  it('slop orchestrator is a blocking agent spawning exactly slop-scout and slop-verifier with the VERDICT contract', () => {
+    const fm = parseFrontmatter(slopAgent);
+    assert.equal(fm.name, 'slop');
+    assert.equal(fm.model, '@slow');
+    assert.equal(fm.blocking, 'true');
+
+    const tools = fm.tools.split(',').map(t => t.trim());
+    assert.ok(tools.includes('task'));
+    assert.ok(!tools.includes('edit'));
+    assert.ok(!tools.includes('write'));
+
+    const spawns = fm.spawns.split(',').map(s => s.trim());
+    assert.deepEqual(spawns.sort(), ['slop-scout', 'slop-verifier'].sort());
+
+    assert.ok(Array.isArray(fm.autoloadSkills));
+    assert.ok(fm.autoloadSkills.includes('slop'));
+    assert.ok(fm.autoloadSkills.includes('reality-first-review'));
+
+    assert.match(slopAgent, /Stage 1: Candidate Scout/);
+    assert.match(slopAgent, /Stage 2: Adversarial Verification/);
+    assert.match(slopAgent, /Stage 3: Orchestrator Synthesis/);
+    assert.match(slopAgent, /agent `slop-scout`/);
+    assert.match(slopAgent, /agent `slop-verifier`/);
+    assert.match(slopAgent, /VERDICT: \[BLOCKED \| CLEAN \| ACCEPTABLE_WITH_NOTES\]/);
+    assert.match(slopAgent, /VERDICT: ERROR/);
+    assert.match(slopAgent, /NOT a clean result/);
+    assert.match(slopAgent, /omit `model`, `outputSchema`, `schemaMode`, and `isolated`/);
+    assert.match(slopAgent, /yield/);
+    assert.doesNotMatch(slopAgent, /REVIEW_RESULT=/);
+  });
+
+  it('slop-scout and slop-verifier are read-only specialists without task spawning', () => {
+    const subagents = [
+      { name: 'slop-scout', content: slopScoutAgent, model: '@smol' },
+      { name: 'slop-verifier', content: slopVerifierAgent, model: '@slow' },
+    ];
+
+    for (const { name, content, model } of subagents) {
+      const fm = parseFrontmatter(content);
+      assert.equal(fm.name, name);
+      assert.equal(fm.model, model, `${name} must use ${model}`);
+      assert.equal(fm.blocking, 'true', `${name} must declare blocking: true`);
+      const tools = fm.tools.split(',').map(t => t.trim());
+      assert.ok(!tools.includes('edit'), `${name} must not contain edit tool`);
+      assert.ok(!tools.includes('write'), `${name} must not contain write tool`);
+      assert.ok(!tools.includes('task'), `${name} must not contain task spawning tool`);
+      assert.ok(!fm.spawns, `${name} must not declare spawns`);
+      assert.ok(fm.autoloadSkills.includes('slop'), `${name} must autoload the slop skill`);
+      assert.match(content, /yield/);
+    }
+
+    assert.match(slopScoutAgent, /"candidates"/);
+    assert.match(slopScoutAgent, /"suspectedCategory": "P1_BLOCKER \| P2_PARASITIC_OR_SLOP \| P3_DRIFT"/);
+    assert.match(slopScoutAgent, /"summary"/);
+    assert.match(slopScoutAgent, /do not emit verdict markers/i);
+
+    assert.match(slopVerifierAgent, /"verified"/);
+    assert.match(slopVerifierAgent, /"rejectedCount"/);
+    assert.match(slopVerifierAgent, /"verdict": "BLOCKED \| CLEAN \| ACCEPTABLE_WITH_NOTES"/);
+    assert.match(slopVerifierAgent, /"verdictReason"/);
+    assert.match(slopVerifierAgent, /Anti-Noise Gate/);
+    assert.match(slopVerifierAgent, /Can it turn red/);
+    assert.match(slopVerifierAgent, /Grounding/);
+    assert.match(slopVerifierAgent, /must NOT suggest replacement patches or emit verdict markers/i);
   });
 });

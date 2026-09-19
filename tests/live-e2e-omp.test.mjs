@@ -49,7 +49,7 @@ function ompInvocation(commandArgs, ompCommand = process.env.OMP_REVIEW_KIT_OMP 
   return { executable: ompCommand, args: commandArgs };
 }
 
-function spawnOmpSync(commandArgs, options = {}) {
+export function spawnOmpSync(commandArgs, options = {}) {
   const invocation = ompInvocation(commandArgs);
   return spawnSync(invocation.executable, invocation.args, options);
 }
@@ -177,7 +177,7 @@ export async function runLiveOmp(prompt, cwd, timeoutMs = 600_000, extraEnv = {}
 }
 
 
-function resolveAgentDir(profile) {
+export function resolveAgentDir(profile) {
   const args = [...(profile ? ['--profile', profile] : []), 'config', 'path'];
   const result = spawnOmpSync(args, {
     encoding: 'utf8',
@@ -187,7 +187,7 @@ function resolveAgentDir(profile) {
   return result.stdout.trim();
 }
 
-async function copyDefaultProfileConfig(targetAgentDir) {
+export async function copyDefaultProfileConfig(targetAgentDir) {
   const defaultAgentDir = resolveAgentDir();
   await mkdir(targetAgentDir, { recursive: true });
   for (const filename of ['models.yml', 'config.yml', 'agent.db', 'models.db']) {
@@ -258,7 +258,7 @@ export async function writeSessionedOmpWrapper(dir, targetOverride = undefined, 
   return wrapper;
 }
 
-function gitAt(repoDir) {
+export function gitAt(repoDir) {
   return (args, options = {}) => spawnSync('git', args, {
     cwd: repoDir,
     encoding: 'utf8',
@@ -267,7 +267,7 @@ function gitAt(repoDir) {
   });
 }
 
-async function writeTree(root, files) {
+export async function writeTree(root, files) {
   for (const [relativePath, content] of Object.entries(files)) {
     const target = path.join(root, relativePath);
     await mkdir(path.dirname(target), { recursive: true });

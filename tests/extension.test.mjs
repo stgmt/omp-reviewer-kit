@@ -929,4 +929,57 @@ describe('Feature: Native OMP Extension & Installer Service', () => {
       await rm(baseDir, { recursive: true, force: true });
     }
   });
+
+  it('/slop is registered and its handler returns a non-empty dispatcher prompt carrying target and focus', async () => {
+    const { commands, makeCtx } = createExtensionHarness();
+    const slop = commands.get('slop');
+    assert.ok(slop, 'slop command must be registered');
+    assert.match(slop.description, /slop|adversarial|audit/i);
+
+    const ctx = makeCtx(process.cwd());
+    const prompt = await slop.handler('src/foo --focus=architecture', ctx);
+    assert.equal(typeof prompt, 'string');
+    assert.ok(prompt.length > 0);
+    assert.match(prompt, /agent "slop"/);
+    assert.match(prompt, /src\/foo/);
+    assert.match(prompt, /architecture/);
+    assert.match(prompt, /VERDICT:/);
+  });
+
+  it('/slop handler defaults to the current git status target when args are empty', async () => {
+    const { commands, makeCtx } = createExtensionHarness();
+    const slop = commands.get('slop');
+    const ctx = makeCtx(process.cwd());
+    const prompt = await slop.handler('', ctx);
+    assert.match(prompt, /current git status|git diff/i);
+    assert.match(prompt, /agent "slop"/);
+  });
+
+  it('/slop handler parses space-separated --focus value', async () => {
+    const { commands, makeCtx } = createExtensionHarness();
+    const slop = commands.get('slop');
+    const ctx = makeCtx(process.cwd());
+    const prompt = await slop.handler('src/x --focus architecture', ctx);
+    assert.match(prompt, /The audit target is: src\/x\./);
+    assert.match(prompt, /The audit focus is: architecture\./);
+    assert.doesNotMatch(prompt, /target is: src\/x --focus/);
+  });
+
+  it('/slop handler accepts an args array', async () => {
+    const { commands, makeCtx } = createExtensionHarness();
+    const slop = commands.get('slop');
+    const ctx = makeCtx(process.cwd());
+    const prompt = await slop.handler(['src/x', '--focus=tests'], ctx);
+    assert.match(prompt, /The audit target is: src\/x\./);
+    assert.match(prompt, /The audit focus is: tests\./);
+  });
+
+  it('/slop handler consumes a trailing valueless --focus without corrupting the target', async () => {
+    const { commands, makeCtx } = createExtensionHarness();
+    const slop = commands.get('slop');
+    const ctx = makeCtx(process.cwd());
+    const prompt = await slop.handler('src/x --focus', ctx);
+    assert.match(prompt, /The audit target is: src\/x\./);
+    assert.doesNotMatch(prompt, /--focus/);
+  });
 });

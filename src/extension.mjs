@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { PluginInstallerService } from './application/installer-service.mjs';
+import { SlopPrompt } from './domain/slop-prompt.mjs';
 import { parseReviewProgress } from './infra/omp-cli-reviewer-adapter.mjs';
 
 const REVIEW_STATUS_KEY = 'reviewer-kit';
@@ -35,6 +36,36 @@ function bashCommand(args) {
   if (!args || typeof args !== 'object') return '';
   return typeof args.command === 'string' ? args.command : '';
 }
+
+/**
+ * Parses /slop command arguments into { target, focus }.
+ * Accepts a string ("src/x --focus=architecture") or an args array.
+ * `--focus=X` / `--focus X` set the focus; remaining tokens form the target.
+ */
+function parseSlopArgs(args) {
+  const tokens = Array.isArray(args)
+    ? args.map(String)
+    : String(args ?? '').split(/\s+/).filter(Boolean);
+  let focus = '';
+  const rest = [];
+  for (let i = 0; i < tokens.length; i += 1) {
+    const token = tokens[i];
+    if (token === '--focus') {
+      // Consume the flag even without a value: a trailing '--focus' yields
+      // empty focus, never positional target text.
+      if (i + 1 < tokens.length && !tokens[i + 1].startsWith('--')) {
+        focus = tokens[i + 1];
+        i += 1;
+      }
+    } else if (token.startsWith('--focus=')) {
+      focus = token.slice('--focus='.length);
+    } else {
+      rest.push(token);
+    }
+  }
+  return { target: rest.join(' '), focus };
+}
+
 
 function shellCommandSegments(command) {
   const segments = [];
@@ -428,6 +459,14 @@ export default function initExtension(pi) {
       }
     },
   });
+  pi.registerCommand('slop', {
+    description: 'Run the adversarial 2-in-1 slop audit (parasitic architecture, spec slop, dead checks) on a target',
+    handler: async (args) => {
+      const { target, focus } = parseSlopArgs(args);
+      return new SlopPrompt({ target, focus }).toString();
+    },
+  });
+
 
   // =========================================================================
   // Lifecycle Events
