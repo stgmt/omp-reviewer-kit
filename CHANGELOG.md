@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.12.1] - 2026-09-19
+
+### Fixed
+- **`/slop` command never reached the LLM**: `pi.registerCommand` handlers return `void` — OMP discards the return value, so the `SlopPrompt` string built by the handler was silently dropped. The handler now calls `pi.sendUserMessage(prompt)`, which routes through `AgentSession.prompt()` and starts a real turn. Tests updated to assert the `sendUserMessage` contract.
+
 ## [0.12.0] - 2026-09-19
 
 ### Added
