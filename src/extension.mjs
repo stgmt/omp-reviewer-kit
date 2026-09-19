@@ -461,10 +461,23 @@ export default function initExtension(pi) {
   });
   pi.registerCommand('slop', {
     description: 'Run the adversarial 2-in-1 slop audit (parasitic architecture, spec slop, dead checks) on a target',
-    handler: async (args) => {
+    handler: async (args, ctx) => {
       const { target, focus } = parseSlopArgs(args);
       const prompt = new SlopPrompt({ target, focus }).toString();
+      // pi.sendUserMessage is fire-and-forget in the ExtensionAPI contract
+      // (returns void, wraps session.sendUserMessage asynchronously). The turn
+      // starts on the next microtask/tick; calling waitForIdle() synchronously
+      // at 0ms would see an empty #runningPrompt and resolve immediately, causing
+      // print-mode callers to dispose() before the model begins streaming.
+      // Wait for the turn to acquire the streaming state, then block until idle.
       pi.sendUserMessage(prompt);
+      if (ctx?.isIdle && ctx?.waitForIdle) {
+        const start = Date.now();
+        while (ctx.isIdle() && Date.now() - start < 5000) {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        await ctx.waitForIdle();
+      }
     },
   });
 

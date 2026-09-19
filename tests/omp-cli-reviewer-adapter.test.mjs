@@ -1303,8 +1303,8 @@ test('default subprocess runner lets stdout progress cancel the stall watchdog',
   const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-quota-progress-'));
   const commandPath = path.join(baseDir, isWindows ? 'fake-omp.cmd' : 'fake-omp.sh');
   const command = isWindows
-    ? '@echo off\necho Cloud Code Assist API error (429): quota reached 1>&2\necho REVIEW_RESULT=PASS\nping -n 3 127.0.0.1 >nul\nexit /b 0\n'
-    : '#!/bin/sh\necho "Cloud Code Assist API error (429): quota reached" >&2\nprintf "REVIEW_RESULT=PASS\\n"\nsleep 2\n';
+    ? '@echo off\necho Cloud Code Assist API error (429): quota reached 1>&2\nping -n 1 127.0.0.1 >nul\necho REVIEW_RESULT=PASS\nping -n 3 127.0.0.1 >nul\nexit /b 0\n'
+    : '#!/bin/sh\necho "Cloud Code Assist API error (429): quota reached" >&2\nsleep 0.1\nprintf "REVIEW_RESULT=PASS\\n"\nsleep 2\n';
   const previousCommand = process.env.OMP_REVIEW_KIT_OMP;
   process.env.OMP_REVIEW_KIT_OMP = commandPath;
   try {

@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.12.2] - 2026-09-19
+
+### Fixed
+- **`/slop` turn prematurely aborted by session dispose**: `pi.sendUserMessage` is fire-and-forget in the `ExtensionAPI` contract (returns `void`, wraps `session.sendUserMessage` asynchronously). Calling `waitForIdle()` immediately at 0ms saw an empty `#runningPrompt` and resolved instantly, causing print-mode callers to call `session.dispose()` before the turn started streaming. The handler now polls until `!ctx.isIdle()` (streaming acquired) before awaiting `ctx.waitForIdle()`, ensuring the complete multi-stage audit runs and prints its verdict.
+
 ## [0.12.1] - 2026-09-19
 
 ### Fixed

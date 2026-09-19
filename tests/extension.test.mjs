@@ -43,6 +43,7 @@ function createExtensionHarness() {
   const registeredEvents = new Map();
   const logs = [];
   const sentUserMessages = [];
+  let agentIdle = true;
 
   const fakePi = {
     registerCommand(name, options) {
@@ -51,8 +52,9 @@ function createExtensionHarness() {
     on(event, handler) {
       registeredEvents.set(event, handler);
     },
-    sendUserMessage(content, options) {
+    async sendUserMessage(content, options) {
       sentUserMessages.push({ content, options });
+      agentIdle = false;
     },
     logger: {
       warn(msg) {
@@ -69,10 +71,16 @@ function createExtensionHarness() {
   const makeCtx = (cwd) => {
     const notifications = [];
     let status = null;
+    let ctxIdleOverride;
     return {
       cwd,
       notifications,
       getStatus: () => status,
+      isIdle: () => (ctxIdleOverride !== undefined ? ctxIdleOverride : agentIdle),
+      waitForIdle: async () => {
+        agentIdle = true;
+        ctxIdleOverride = true;
+      },
       ui: {
         notify(msg, type) {
           notifications.push({ msg, type });
@@ -934,16 +942,20 @@ describe('Feature: Native OMP Extension & Installer Service', () => {
       await rm(baseDir, { recursive: true, force: true });
     }
   });
-  it('/slop is registered and its handler sends a non-empty dispatcher prompt carrying target and focus', async () => {
+
+  it('/slop is registered and its handler sends a dispatcher prompt then blocks until the turn completes', async () => {
     const { commands, makeCtx, sentUserMessages } = createExtensionHarness();
     const slop = commands.get('slop');
     assert.ok(slop, 'slop command must be registered');
     assert.match(slop.description, /slop|adversarial|audit/i);
 
     const ctx = makeCtx(process.cwd());
+    let idleWaited = false;
+    ctx.waitForIdle = async () => { idleWaited = true; };
     const result = await slop.handler('src/foo --focus=architecture', ctx);
     assert.equal(result, undefined, 'handler must return void (prompt goes through pi.sendUserMessage)');
     assert.equal(sentUserMessages.length, 1, 'handler must call pi.sendUserMessage exactly once');
+    assert.equal(idleWaited, true, 'handler must await ctx.waitForIdle() so the turn completes before returning');
     const prompt = sentUserMessages[0].content;
     assert.equal(typeof prompt, 'string');
     assert.ok(prompt.length > 0);
