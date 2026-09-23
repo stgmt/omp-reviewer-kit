@@ -49,7 +49,7 @@ const manifest = JSON.parse(await readFile('package.json', 'utf8'));
 describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
   it('manifest and skills declare fixed reviewer identities', () => {
     assert.equal(manifest.name, 'omp-reviewer-kit');
-    assert.equal(manifest.version, '0.12.2');
+    assert.equal(manifest.version, '0.12.3');
     assert.match(realitySkill, /name: reality-first-review/);
     assert.match(multiStageSkill, /name: multi-stage-review/);
     assert.match(rangeAuditSkill, /name: range-audit/);

@@ -100,6 +100,17 @@ const QUOTA_STALL_PREFIX = 'Review stalled on provider quota after ';
 export function isQuotaStallStderr(stderr) {
   return typeof stderr === 'string' && stderr.includes(QUOTA_STALL_PREFIX);
 }
+/**
+ * Title-generator lines are auxiliary session-name requests, not the review
+ * flow: they run through a different provider chain and fail with 403/429
+ * while the main review keeps streaming. Counting them as a quota signal
+ * kills healthy reviews (observed 2026-09-23: pids 46340/79756/27104/58628
+ * stall-killed on title-generator 403 FreeTierError with zero main-flow
+ * provider errors).
+ */
+function stripTitleGeneratorLines(text) {
+  return String(text ?? '').split('\n').filter((line) => !line.includes('title-generator')).join('\n');
+}
 
 /**
  * Best-effort child-log lookup: OMP names per-process logs
@@ -118,7 +129,7 @@ export async function childLogHasQuotaSignal({ logDir, pid, maxTailBytes = 65_53
     if (matches.length === 0) return false;
     matches.sort().reverse();
     const content = await readFile(path.join(dir, matches[0]), 'utf8');
-    return containsQuotaStallSignal(content.slice(-maxTailBytes));
+    return containsQuotaStallSignal(stripTitleGeneratorLines(content.slice(-maxTailBytes)));
   } catch {
     return false;
   }
