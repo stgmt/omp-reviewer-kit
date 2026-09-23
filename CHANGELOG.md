@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.12.3] - 2026-09-23
+
+### Fixed
+- **Quota-stall watchdog killed healthy reviews on title-generator noise**: `childLogHasQuotaSignal` scanned the whole child-log tail, so `title-generator` 403 `FreeTierError` / 429 `FreeUsageLimitError` lines armed the watchdog even while the main review flow streamed normally (observed 2026-09-23: pids 46340/79756/27104/58628 stall-killed with zero main-flow provider errors). Child-log lines containing `title-generator` are now stripped before the quota-signal test; main-flow provider errors still arm the watchdog.
+
 ## [0.12.2] - 2026-09-19
 
 ### Fixed

@@ -1367,6 +1367,38 @@ test('childLogHasQuotaSignal reads only the matching pid log tail', async () => 
     await rm(baseDir, { recursive: true, force: true });
   }
 });
+test('childLogHasQuotaSignal ignores title-generator noise while the main flow is healthy', async () => {
+  const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-quota-title-'));
+  try {
+    const healthy =
+      '{"timestamp":"2026-09-23T11:43:56.806+03:00","level":"debug","message":"devin: sending chat request","model":"swe-2","tools":10}\n'
+      + '{"timestamp":"2026-09-23T11:44:04.078+03:00","level":"warn","message":"title-generator: response error","sessionId":"ReviewerKit","provider":"devin","id":"swe-2","model":"devin/swe-2","reason":"provider-response-error","stopReason":"error","errorMessage":"Devin stream error invalid_argument: an internal error occurred (trace ID: 618a59218544da21b158049dfe7be97c)"}\n'
+      + '{"timestamp":"2026-09-23T11:44:05.108+03:00","level":"warn","message":"title-generator: response error","sessionId":"ReviewerKit","provider":"zenproxy","id":"muse-spark-1.3-contributor-free","model":"zenproxy/muse-spark-1.3-contributor-free","reason":"provider-response-error","stopReason":"error","errorMessage":"403 OpenCode\'s free tier can only be used from within OpenCode\\nOpenCode\'s free tier can only be used from within OpenCode (type=FreeTierError)"}\n'
+      + '{"timestamp":"2026-09-23T11:46:30.160+03:00","level":"debug","message":"devin: sending chat request","model":"swe-2","tools":10}\n';
+    await writeFile(path.join(baseDir, 'omp.2026-09-23.46340.log'), healthy, 'utf8');
+    // Observed 2026-09-23: five review attempts (pids 46340/79756/27104/58628/12380)
+    // were stall-killed on this exact line shape while the main swe-2 flow
+    // kept sending requests with zero provider errors.
+    assert.equal(await childLogHasQuotaSignal({ logDir: baseDir, pid: 46340 }), false);
+  } finally {
+    await rm(baseDir, { recursive: true, force: true });
+  }
+});
+
+test('childLogHasQuotaSignal still fires on main-flow provider errors beside title noise', async () => {
+  const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-quota-title-mixed-'));
+  try {
+    const mixed =
+      '{"level":"debug","message":"devin: sending chat request","model":"swe-2","tools":10}\n'
+      + '{"level":"warn","message":"title-generator: response error","sessionId":"ReviewerKit","provider":"zenproxy","reason":"provider-response-error","stopReason":"error","errorMessage":"403 OpenCode\'s free tier can only be used from within OpenCode (type=FreeTierError)"}\n'
+      + '{"level":"warn","message":"agent turn ended with provider error","provider":"zenproxy","model":"muse-spark-1.3-contributor-free","errorMessage":"429 Rate limit exceeded. Please try again later. (type=FreeUsageLimitError)"}\n';
+    await writeFile(path.join(baseDir, 'omp.2026-09-23.777001.log'), mixed, 'utf8');
+    assert.equal(await childLogHasQuotaSignal({ logDir: baseDir, pid: 777001 }), true);
+  } finally {
+    await rm(baseDir, { recursive: true, force: true });
+  }
+});
+
 
 test('default subprocess runner kills on a quota signal in the child log', async () => {
   const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-quota-log-e2e-'));
