@@ -3299,6 +3299,39 @@ const REVIEW_LAST_RUN_SCHEMA = 'review-last-run@1';
 const LAST_RUN_THROTTLE_MS = 2_000;
 
 /**
+ * Non-terminal last-run states: a live run must keep the recorded pid alive.
+ * Kept in sync with LIVE_LAST_RUN_STATES in
+ * src/application/installer-service.mjs.
+ */
+const LIVE_LAST_RUN_STATES = new Set([
+  'started',
+  'executing',
+  'reviewing',
+  'working',
+  'response',
+  'probe',
+]);
+
+/**
+ * Signal-0 liveness probe used by the stale last-run sweep. Mirrors
+ * checkProcessLiveness in the application layer.
+ *
+ * @param {number} pid
+ * @returns {'alive'|'dead'|'unknown'}
+ */
+function pidLiveness(pid) {
+  if (!Number.isInteger(pid)) return 'unknown';
+  try {
+    process.kill(pid, 0);
+    return 'alive';
+  } catch (err) {
+    if (err?.code === 'ESRCH') return 'dead';
+    if (err?.code === 'EPERM') return 'alive';
+    return 'unknown';
+  }
+}
+
+/**
  * Builds the user-facing message emitted when every model in the chain failed
  * with a provider/availability error. The review produced no verdict; the
  * commit is blocked by infrastructure, not by findings.
@@ -3376,6 +3409,13 @@ class RunTelemetry {
     this.#lastRunFile = path.join(reportDir, 'last-run.json');
     this.#runId = runId;
     this.#base = base;
+    // A previous run that died without a finish event leaves last-run.json
+    // stuck in a live state forever — readers then keep showing "reviewing".
+    // Tombstone it before this run's own writes land (state:'started' would
+    // otherwise clobber the evidence).
+    this.#pendingWrite = this.#pendingWrite
+      .then(() => this.#sweepStaleLastRun())
+      .catch(() => {});
   }
 
   record(type, payload = {}) {
@@ -3391,6 +3431,43 @@ class RunTelemetry {
       await appendFile(this.#eventsFile, `${JSON.stringify(event)}\n`, 'utf8');
     });
   }
+
+  async #sweepStaleLastRun() {
+    let previous;
+    try {
+      previous = JSON.parse(await readFile(this.#lastRunFile, 'utf8'));
+    } catch {
+      return; // Missing or corrupt: nothing to tombstone.
+    }
+    if (
+      !previous ||
+      typeof previous !== 'object' ||
+      previous.runId === this.#runId ||
+      !LIVE_LAST_RUN_STATES.has(previous.state) ||
+      pidLiveness(previous.pid) !== 'dead'
+    ) {
+      return;
+    }
+    const detail = 'review process gone; no finish event recorded';
+    await mkdir(path.dirname(this.#eventsFile), { recursive: true });
+    await appendFile(this.#eventsFile, `${JSON.stringify({
+      schema: REVIEW_EVENT_SCHEMA,
+      runId: previous.runId,
+      type: 'run_abandoned',
+      at: new Date().toISOString(),
+      pid: previous.pid,
+      state: previous.state,
+      error: detail,
+    })}\n`, 'utf8');
+    await writeFile(this.#lastRunFile, `${JSON.stringify({
+      ...previous,
+      state: 'interrupted',
+      error: previous.error ?? detail,
+      message: previous.message ?? detail,
+      abandonedAt: new Date().toISOString(),
+    }, null, 2)}\n`, 'utf8');
+  }
+
 
   updateLastRun(state, { force = false } = {}) {
     const now = Date.now();

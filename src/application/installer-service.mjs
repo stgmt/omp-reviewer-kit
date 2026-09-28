@@ -266,8 +266,22 @@ export function checkProcessLiveness(pid, killFn = process.kill) {
 }
 
 /**
+ * Live (non-terminal) last-run states that must be reconciled against process
+ * liveness. Anything else is a terminal state and is returned untouched.
+ */
+export const LIVE_LAST_RUN_STATES = Object.freeze([
+  'started',
+  'executing',
+  'reviewing',
+  'working',
+  'response',
+  'probe',
+]);
+
+/**
  * Reconciles a persisted last-run object against live process state.
- * When the state is 'reviewing', checks whether the recorded process is alive.
+ * When the state is live (review is in flight), checks whether the recorded
+ * process is still alive; a dead pid marks the run interrupted.
  *
  * @param {object|undefined} lastRun
  * @param {((pid: number, signal: number) => void)} [killFn]
@@ -277,7 +291,7 @@ export function reconcileLastRun(lastRun, killFn = process.kill) {
   if (!lastRun || typeof lastRun !== 'object') {
     return lastRun;
   }
-  if (lastRun.state === 'reviewing') {
+  if (LIVE_LAST_RUN_STATES.includes(lastRun.state)) {
     if (Number.isInteger(lastRun.pid)) {
       const liveness = checkProcessLiveness(lastRun.pid, killFn);
       if (liveness === 'dead') {
@@ -297,10 +311,15 @@ export function reconcileLastRun(lastRun, killFn = process.kill) {
       }
       return lastRun;
     }
-    return {
-      ...lastRun,
-      state: 'unknown',
-    };
+    if (lastRun.state === 'reviewing') {
+      // 'reviewing' implies an attempt pid was already recorded; a missing or
+      // malformed pid cannot be reconciled.
+      return {
+        ...lastRun,
+        state: 'unknown',
+      };
+    }
+    return lastRun;
   }
   return lastRun;
 }

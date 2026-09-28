@@ -102,6 +102,44 @@ test('a BLOCK run is recorded with verdict and failure detail', async () => {
   assert.equal(lastRun.verdict, 'BLOCK');
 });
 
+test('a new run tombstones a stale live last-run.json left by a killed review', async () => {
+  const root = await makeRoot();
+  const reportsDir = path.join(root, 'audit-reports', 'commit-reviews');
+  const { mkdir, writeFile } = await import('node:fs/promises');
+  await mkdir(reportsDir, { recursive: true });
+  // A killed previous run left a live 'reviewing' state pointing at a dead pid.
+  await writeFile(path.join(reportsDir, 'last-run.json'), `${JSON.stringify({
+    schema: 'review-last-run@1',
+    runId: '2026-09-28T00-00-00-000Z-deadbeef',
+    repoRoot: root,
+    updatedAt: '2026-09-28T00:10:00.000Z',
+    state: 'reviewing',
+    model: '@smol',
+    pid: 2 ** 31 - 1,
+  })}\n`, 'utf8');
+
+  const result = await runReview({
+    cwd: root,
+    git: fakeGit(root, 'diff --staged-content'),
+    omp: async () => ({ status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' }),
+    ompOptions: { roleResolver: testRoleResolver },
+    now: new Date('2026-09-28T12:00:00.000Z'),
+  });
+
+  assert.equal(result.exitCode, 0);
+  const events = await readJsonl(path.join(reportsDir, 'runs.jsonl'));
+  const abandoned = events.find((event) => event.type === 'run_abandoned');
+  assert.ok(abandoned, 'stale run must be tombstoned');
+  assert.equal(abandoned.runId, '2026-09-28T00-00-00-000Z-deadbeef');
+  assert.equal(abandoned.pid, 2 ** 31 - 1);
+  assert.equal(abandoned.state, 'reviewing');
+  assert.match(abandoned.error, /no finish event/i);
+  // The new run still records its own trace and ends in a terminal state.
+  const lastRun = JSON.parse(await readFile(path.join(reportsDir, 'last-run.json'), 'utf8'));
+  assert.equal(lastRun.state, 'passed');
+  assert.equal(lastRun.runId, events.find((event) => event.type === 'run_started').runId);
+});
+
 test('a skipped run is recorded without a diff hash', async () => {
   const root = await makeRoot();
   const result = await runReview({
