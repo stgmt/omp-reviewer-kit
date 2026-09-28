@@ -58,7 +58,18 @@ Root cause: `test_harness` was repo-global, so any changed executable line in a 
 
 - [ ] **Per-Item Harness Scoping**: Change the scout `coverage_map` contract so `test_harness` is recorded per entry (which runnable harness can execute this file's runtime), not once per repository; `absent` for an item demotes the gap to `### Notes` and never blocks. Requires schema changes in `agents/review-context-scout.md`, `agents/review-risk-hunter.md`, `agents/review-finding-verifier.md`, `agents/reviewer-kit.md`, `skills/multi-stage-review/SKILL.md`, and runner validation of `coverage_items`.
 - [x] **Reject-Grounds Extension (done)**: hunter skips + verifier rejection grounds now cover harness-runtime mismatch and byte-identical copies of already-committed untested code (document-viewer chrome incident, `audit-reports/coverage-gate-docs-html-incident-2026-09-27.md`).
-- [x] **Suppressed-Gap Observability (done)**: `### Notes` now mandates mirroring every suppressed coverage item — scout-excluded (`test_evidence`), hunter-skipped, or verifier-rejected — with file, line range, and the ground applied (`agents/reviewer-kit.md`, `skills/multi-stage-review/SKILL.md`).
+- [x] **Suppressed-Gap Observability (done)**: `### Notes` now mandates mirroring every suppressed coverage item with file, line range, and ground, sourced from structured producer records — scout `non_coverable_items`, hunter `suppressed_coverage_items`, verifier `rejected_coverage_gaps` (`agents/reviewer-kit.md`, `skills/multi-stage-review/SKILL.md`).
+
+## Phase 4b: Review Latency & Iteration Cost (incident 2026-09-28)
+
+Measured on the v0.12.4 release round: a 40-file / ~2700-line spec+contract diff took 8 sequential full reviews at ~14-40 min each (~2.5h wall) before converging, each attempt re-running all 4 stages and ~30+ model requests from scratch on near-identical input. Historical baselines: small diffs 3.6-16m, today's large spec diffs 18-40m. Levers ranked by cost/quality, no model downgrades or effort cuts:
+
+- [ ] **Content-aware scoping**: route review depth by staged file class. A diff that is doc/spec/prompt-only (`.specs/`, `*.md`, `agents/`, `skills/`) should run a reduced lane (contract-consistency + no P1/P2 defect claims) instead of the full executable-code pipeline; coverage machinery applies only to harness-executable classes anyway post-0.12.4.
+- [ ] **Per-diff-hash stage reuse**: `DiffIdentity` already hashes the staged bytes — cache the scout report and hunter candidates keyed by diff hash and rehydrate when a re-commit stages the same or a small-superset diff (BLOCK → fix → re-commit re-runs the whole pipeline on the same ~95% unchanged bytes today).
+- [ ] **Snapshot reuse**: `snapshot_materialized` re-materializes the staged tree per attempt; key it by diff hash so a retry can link the same snapshot.
+- [ ] **File-class lane partition**: hunters currently walk every staged file; partition correctness lane by file class (executable / prompt / spec / docs) so each hunter lane bounds its reads to its class.
+- [ ] **Verifier batching**: verifier evaluates per-candidate; batch independent findings in fewer model calls when the candidate list is long.
+- [ ] **Doc/spec review profile**: spec corpus reviews should not pay the executable-code price — spec changes have no coverage pipeline work and bounded defect classes (stale counters, naming drift, schema holes); a dedicated lighter reviewer profile for spec-only commits cuts the dominant cost case.
 
 ## Phase 4: Holistic Project Audit & Agent Usability ([Issue #1](https://github.com/stgmt/omp-reviewer-kit/issues/1))
 
