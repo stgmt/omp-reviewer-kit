@@ -48,6 +48,7 @@ In `lane: "correctness"`, read source files from the staged snapshot and inspect
 ## Correctness Lane: Coverage Gaps
 
 In `lane: "correctness"`, walk the scout `coverage_map`. For every entry whose `covering_test` is `null`, emit a `coverage_gaps` item — this is a coverage directive, not a defect candidate, and it does not need P1/P2 impact proof. Skip entries that are not changed executable behavior: pure renames, comment/docstring edits, test-only or docs-only diffs, and unreachable code. Each gap must name the concrete tests the author must add before this change may land:
+Skip also entries whose code no runnable harness in this repository can execute for that file's runtime — a repo-global harness that does not cover the file class (e.g. a Go/vitest suite while the changed file is standalone document HTML with an inline browser script) counts as absent for that entry. Skip byte-identical copies of untested code already committed elsewhere in the repository **only when the staged file's class/runtime is equally non-coverable** (e.g. document-viewer chrome duplicated across spec pages) — a byte-identical copy into a harness-coverable file class is still a real coverage gap; cite the existing file:line as evidence. For every skipped entry, emit one `suppressed_coverage_items` record (`file_path`, `line_start`, `line_end`, `ground`) — the orchestrator mirrors them into ### Notes, and a skip without a record is a protocol violation. These skips apply to coverage gaps only: if the same code carries a genuine defect, still emit a normal P1/P2 candidate.
 - at least one `edge` test per new or altered boundary, absence/default, or error path introduced by the behavior;
 - at least one `mutation` test whose `mutant` field names a concrete mutation of the staged lines (e.g. "remove the `attempts < max` guard", "invert the null check") that the required test would kill — a test that cannot name the mutant it kills does not count.
 Do not emit vague directives like "add tests"; every `required_tests` entry must be a runnable scenario a reviewer could verify.
@@ -86,6 +87,14 @@ Return your findings as structured JSON:
           "mutant": "Concrete mutation of the staged lines this test kills; required for kind=mutation, empty otherwise"
         }
       ]
+    }
+  ],
+  "suppressed_coverage_items": [
+    {
+      "file_path": "path/to/touched/file.ext",
+      "line_start": 42,
+      "line_end": 45,
+      "ground": "harness-mismatch | byte-identical-non-coverable"
     }
   ],
   "candidates": [

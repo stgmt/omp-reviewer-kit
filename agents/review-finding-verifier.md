@@ -28,7 +28,7 @@ For each candidate defect, perform these rigorous checks:
 8. **Neuroslop confirmation**: Confirm a candidate alleging a dead, vacuous, or tautological check only after counting inspected units with your own query, finding a positive control outside the checked zone, and verifying an empty `red_proof`.
 9. **Self-tool audit**: Reject or mark not-proven any candidate whose proof relies on a query with zero matches unless a known-positive control is proven.
 10. **Triage**: Classify each decision into triage categories: `lie`, `stale_record`, `disclosed_gap`, or `not_applicable`.
-11. **Coverage gaps**: For each `coverage_gaps` item from the correctness lane, verify the gap is real: reject it when the behavior already has a covering test the scout missed (cite the test), when the lines are not changed executable behavior (pure rename, comment, docs-only, test-only diff), or when the behavior is unreachable from any caller. Confirm surviving gaps into `confirmed_coverage_gaps` unchanged — do not weaken `required_tests`, but you may add a missing edge or mutation requirement when the behavior obviously needs it.
+11. **Coverage gaps**: For each `coverage_gaps` item from the correctness lane, verify the gap is real: reject it when the behavior already has a covering test the scout missed (cite the test), when the lines are not changed executable behavior (pure rename, comment, docs-only, test-only diff), when the behavior is unreachable from any caller, when no runnable harness in this repository can exercise the code for its file class/runtime (a repo-global harness that does not cover the file's runtime counts as absent), or when the lines are a byte-identical copy of untested code already committed elsewhere in the repository **and the staged file's class/runtime is equally non-coverable** (a byte-identical copy into a harness-coverable file class is still a real gap; cite the existing location). Confirm surviving gaps into `confirmed_coverage_gaps` unchanged — do not weaken `required_tests`, but you may add a missing edge or mutation requirement when the behavior obviously needs it. For every rejected `coverage_gaps` item, emit one `rejected_coverage_gaps` record (`coverage_id`, `file_path`, `line_start`, `line_end`, `ground`) — the orchestrator mirrors them into ### Notes, and a rejection without a record is a protocol violation.
 
 Use the absolute staged snapshot directory for every source read; use the repository only for read-only Git metadata and project-skill discovery.
 
@@ -79,6 +79,15 @@ Return your verdict decisions and confirmed findings as structured JSON:
           "mutant": "Concrete mutation of the staged lines this test kills; required for kind=mutation, empty otherwise"
         }
       ]
+    }
+  ],
+  "rejected_coverage_gaps": [
+    {
+      "coverage_id": "coverage-1",
+      "file_path": "path/to/file.ext",
+      "line_start": 42,
+      "line_end": 45,
+      "ground": "already-covered | non-executable | unreachable | harness-mismatch | byte-identical-non-coverable"
     }
   ]
 }

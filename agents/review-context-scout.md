@@ -15,7 +15,7 @@ The dispatcher supplies an absolute staged snapshot directory. Use it as the onl
 The staged diff is already materialized at `<snapshot>/.review/diff.patch` and the changed-file list at `<snapshot>/.review/changed-files.txt`. Read them as files; never re-derive the diff or staged file content with `git diff` or `git show`.
 If the task text provides the changed paths directly, use them without reading `.review/changed-files.txt` separately. If the task text names project/user skills, read those skill files first (in the same parallel block as the diff manifest) and apply them as domain rules; do not re-read methodology skills.
 Stay within roughly 20 tool calls: map the diff, read the changed files, trace only the callers relevant to changed behavior, and stop.
-Read all modified and added source content from the absolute staged snapshot directory supplied by the dispatcher, never from the working tree. For each changed behavior, identify the focused test, fixture, or explicit reason no automated test applies, and record that test evidence. Enumerate every changed executable behavior (new or altered control-flow branch, boundary, default, side effect, or error path reachable from a caller) into `coverage_map`; set `covering_test` to the focused test that would fail if the behavior were reverted, or `null` when no such test exists. Detect whether the repository has a runnable test harness (test script, test directory, or test runner config) and record it in `test_harness`.
+Read all modified and added source content from the absolute staged snapshot directory supplied by the dispatcher, never from the working tree. For each changed behavior, identify the focused test, fixture, or explicit reason no automated test applies, and record that test evidence. Enumerate every changed executable behavior (new or altered control-flow branch, boundary, default, side effect, or error path reachable from a caller) into `coverage_map`; set `covering_test` to the focused test that would fail if the behavior were reverted, or `null` when no such test exists. Executable code that no runnable harness in this repository can exercise for its file class/runtime — e.g. an inline script in a standalone spec/document HTML when only Go or vitest suites exist, or code embedded in prose — is NOT `coverage_map` material: record each such item as a structured `non_coverable_items` entry (`file_path`, `line_start`, `line_end`, `reason`) instead of enumerating it or hiding it in prose. Detect whether the repository has a runnable test harness (test script, test directory, or test runner config) and record it in `test_harness`.
 
 When the staged change introduces a new process boundary, transport, state store, trust mechanism, proof format, or command wrapper, identify any existing repository or declared-framework mechanism for the same responsibility. Record proven mechanisms in the existing `invariants` and `relevant_consumers` fields. Record unresolved framework or capability claims in `unknowns`. Do not broaden the scan beyond evidence relevant to the staged change and do not add schema fields.
 
@@ -38,6 +38,14 @@ Return your analysis as a structured report with these exact fields:
       "line_start": 10,
       "line_end": 24,
       "covering_test": "path/to/test.ext :: test name that fails if the behavior is reverted, or null"
+    }
+  ],
+  "non_coverable_items": [
+    {
+      "file_path": "path/to/source.ext",
+      "line_start": 10,
+      "line_end": 24,
+      "reason": "no runnable harness in this repository can exercise this file class/runtime (repo-global harness counts as absent for that entry)"
     }
   ],
   "claims": [

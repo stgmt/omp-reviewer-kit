@@ -49,7 +49,7 @@ const manifest = JSON.parse(await readFile('package.json', 'utf8'));
 describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
   it('manifest and skills declare fixed reviewer identities', () => {
     assert.equal(manifest.name, 'omp-reviewer-kit');
-    assert.equal(manifest.version, '0.12.3');
+    assert.equal(manifest.version, '0.12.4');
     assert.match(realitySkill, /name: reality-first-review/);
     assert.match(multiStageSkill, /name: multi-stage-review/);
     assert.match(rangeAuditSkill, /name: range-audit/);
@@ -62,6 +62,10 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(realitySkill, /Self-tool rule/);
     assert.match(realitySkill, /Vacuum checklist/);
     assert.match(realitySkill, /Triage/);
+    // Coverage-blocking rule must be bound to harness-exercisable code, same as the agent contracts.
+    assert.match(realitySkill, /can exercise for its file class\/runtime/i);
+    assert.match(realitySkill, /suppressed_coverage_items/);
+    assert.match(realitySkill, /rejected_coverage_gaps/);
     assert.match(realitySkill, /Blocking and non-blocking/);
   });
 
@@ -107,6 +111,34 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(reviewerKitAgent, /coverage_required/);
     assert.match(reviewerKitAgent, /coverage_items/);
     assert.match(reviewerKitAgent, /### Notes/);
+    // Suppressed coverage items must leave a durable record in ### Notes —
+    // sourced from the three producer records on every surface.
+    assert.match(reviewerKitAgent, /MUST be mirrored/i);
+    assert.match(multiStageSkill, /MUST be mirrored/i);
+    // The same commit's three other suppression surfaces must be pinned too,
+    // or deleting the clause regresses the coverage-gate fix with no test signal.
+    assert.match(scoutAgent, /no runnable harness in this repository can exercise for its file class/i);
+    assert.match(hunterAgent, /no runnable harness in this repository can execute for that file's runtime/i);
+    assert.match(hunterAgent, /byte-identical copies of untested code already committed elsewhere/i);
+    assert.match(verifierAgent, /byte-identical copy of untested code already committed elsewhere/i);
+    assert.match(multiStageSkill, /that a runnable test harness in this repository can exercise for its file class\/runtime/i);
+    assert.match(verifierAgent, /no runnable harness in this repository can exercise the code for its file class\/runtime/i);
+    assert.match(multiStageSkill, /no runnable harness in this repository can execute for that file's runtime/i);
+    assert.match(multiStageSkill, /no runnable harness in this repository covers the file's class\/runtime/i);
+    // Producer records making suppressed items mirroring structurally possible.
+    assert.match(scoutAgent, /non_coverable_items/);
+    assert.match(hunterAgent, /suppressed_coverage_items/);
+    assert.match(verifierAgent, /rejected_coverage_gaps/);
+    assert.match(reviewerKitAgent, /non_coverable_items/);
+    assert.match(reviewerKitAgent, /suppressed_coverage_items/);
+    assert.match(reviewerKitAgent, /rejected_coverage_gaps/);
+    assert.match(multiStageSkill, /non_coverable_items/);
+    assert.match(multiStageSkill, /suppressed_coverage_items/);
+    assert.match(multiStageSkill, /rejected_coverage_gaps/);
+    // Byte-identical exemption bounded to equally non-coverable destinations.
+    assert.match(hunterAgent, /equally non-coverable/i);
+    assert.match(verifierAgent, /equally non-coverable/i);
+    assert.match(multiStageSkill, /equally non-coverable/i);
     assert.match(reviewerKitAgent, /suspicion map/i);
     assert.match(reviewerKitAgent, /execution evidence/i);
 

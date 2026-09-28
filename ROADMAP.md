@@ -52,6 +52,14 @@ Give the triggering AI agent a strict, machine-readable rejection signal while k
 
 ---
 
+## Phase 4a: Coverage Gate Precision (incident 2026-09-27)
+
+Root cause: `test_harness` was repo-global, so any changed executable line in a harnessless file class (standalone spec HTML with an inline viewer script) produced a blocking `coverage_required`, and the verifier had no contractual ground to reject it. Prompt-level grounds landed in the agent contracts; the schema fix is pending.
+
+- [ ] **Per-Item Harness Scoping**: Change the scout `coverage_map` contract so `test_harness` is recorded per entry (which runnable harness can execute this file's runtime), not once per repository; `absent` for an item demotes the gap to `### Notes` and never blocks. Requires schema changes in `agents/review-context-scout.md`, `agents/review-risk-hunter.md`, `agents/review-finding-verifier.md`, `agents/reviewer-kit.md`, `skills/multi-stage-review/SKILL.md`, and runner validation of `coverage_items`.
+- [x] **Reject-Grounds Extension (done)**: hunter skips + verifier rejection grounds now cover harness-runtime mismatch and byte-identical copies of already-committed untested code (document-viewer chrome incident, `audit-reports/coverage-gate-docs-html-incident-2026-09-27.md`).
+- [x] **Suppressed-Gap Observability (done)**: `### Notes` now mandates mirroring every suppressed coverage item — scout-excluded (`test_evidence`), hunter-skipped, or verifier-rejected — with file, line range, and the ground applied (`agents/reviewer-kit.md`, `skills/multi-stage-review/SKILL.md`).
+
 ## Phase 4: Holistic Project Audit & Agent Usability ([Issue #1](https://github.com/stgmt/omp-reviewer-kit/issues/1))
 
 Define and implement a context-neutral deep-audit capability that evaluates a system as a product, implementation, operational surface, and tool for human and AI-agent users.
