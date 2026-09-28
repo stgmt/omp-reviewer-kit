@@ -33,7 +33,7 @@
 
 `scripts/run-review.mjs` is the self-contained distributable runner; `.omp/review-kit/run-review.mjs` is the repository's self-hosted copy. `scripts/check-layout.mjs` enforces zero-drift equality between both files. `src/` provides modular OOP and DDD exports (`DiffIdentity`, `ReviewVerdict`, `ReviewPrompt`, `ReviewReport`, `ReviewExecutionResult`, `PluginInstallerService`, ports, adapters, telemetry adapters, and `ReviewWorkflowService`).
 
-`scripts/analyze-review-run.mjs` (`npm run analyze-review`) correlates `runs.jsonl` with OMP process logs (`~/.omp/logs/omp.<date>.<pid>.log`) by child PID — or by time window when `OMP_REVIEW_KIT_OMP` is a `.cmd` wrapper — and reports per-attempt timings, request counts, context growth, per-stage subagent timing, and provider-error classes. `.devin/skills/omp-review-incidents/SKILL.md` documents the incident-investigation playbook.
+`scripts/analyze-review-run.mjs` (`npm run analyze-review`) correlates `runs.jsonl` with OMP process logs (`~/.omp/logs/omp.<date>.<pid>.log`) by child PID — or by time window when `OMP_REVIEW_KIT_OMP` is a `.cmd` wrapper — and reports per-attempt timings, request counts, context growth, per-stage subagent timing (dispatch `Configured subagent …` → finish `subagent launch timing`; `Session exit recorded` is deferred cleanup, not stage duration), per-agent model/thinking/message spans from `%TEMP%/omp-task-*` transcripts, and provider-error classes. `.devin/skills/omp-review-incidents/SKILL.md` documents the incident-investigation playbook.
 
 ## Key Directories
 

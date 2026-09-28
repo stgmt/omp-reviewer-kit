@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+
+## [0.12.4] - 2026-09-28
+
+### Fixed
+- **Coverage gate blocked document HTML for untested viewer chrome**: the `coverage_required` gate (v0.12.0) treated `test_harness` as repo-global, so an inline TOC scroll-spy `<script>` in a standalone spec HTML produced a blocking gap even though no runnable harness covers repo-root spec pages, and the verifier had no contractual ground to reject it (incident: tokenplan `telegram-bot-spec.html`, 2026-09-27; identical script already shipped untested in `index.html` and `billing-spec.html`). The scout now excludes harness-uncoverable code from `coverage_map`, and the hunter skip list plus verifier rejection grounds cover two new cases: no runnable harness exercising the file's class/runtime (a repo-global harness that cannot reach it counts as absent) and byte-identical copies of already-committed untested code (citation required). Genuine defects in the same code still produce P1/P2 candidates — only the coverage directive is suppressed. ROADMAP Phase 4a tracks the pending per-item harness-schema revision.
+- **Killed reviews left `last-run.json` stuck in a live state**: a review process terminated mid-attempt (SIGKILL/crash) left `last-run.json` at `state:'reviewing'` forever, so status surfaces kept reporting a live review. `RunTelemetry` now tombstones the previous live doc at construction — appending a `run_abandoned` event to `runs.jsonl` and rewriting the stale doc to `state:'interrupted'` — before the new run's own writes land; `reconcileLastRun` covers every live state (`started`/`executing`/`reviewing`/`working`/`response`/`probe`), not only `reviewing`.
+- **Analyzer stage rows showed phantom uniform ~7.0m durations**: `analyze-review-run.mjs` paired each `subagent launch timing` record (which is emitted at task finish, not dispatch) with a *deferred* `Session exit recorded` cleanup that fires ~420s later, producing identical 7.0-minute rows that look like timeouts. Stages are now paired dispatch → finish via `Configured subagent runtime model fallback chain` → `subagent launch timing`; per-agent model/thinking-level/message spans are read from `%TEMP%/omp-task-*` transcripts attributed by attempt window, repo cwd, and diff hash; `run_abandoned` runs render as `ABANDONED` in `--all`.
+
 ## [0.12.3] - 2026-09-23
 
 ### Fixed
