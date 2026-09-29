@@ -410,6 +410,46 @@ const MUTANTS = [
     replacement: '// deleted file ignored',
     description: 'Audit range ignores deleted test files in aggregate flags',
   },
+  {
+    id: "modular-skills-invalid-list-forwarded",
+    file: "src/infra/omp-cli-reviewer-adapter.mjs",
+    testFile: 'tests/review-skills.test.mjs',
+    original: "const extra = valid ? requested : DEFAULT_REVIEW_SKILL_PATTERNS.split(',');",
+    replacement: "const extra = requested;",
+    description: "Review child receives an unvalidated OMP_REVIEW_KIT_SKILLS list instead of the default patterns",
+  },
+  {
+    id: "modular-skills-plugin-skills-dropped",
+    file: "src/infra/omp-cli-reviewer-adapter.mjs",
+    testFile: 'tests/review-skills.test.mjs',
+    original: "const value = [...new Set([...REVIEW_PLUGIN_SKILLS, ...extra])].join(',');",
+    replacement: "const value = [...new Set([...extra])].join(',');",
+    description: "A custom OMP_REVIEW_KIT_SKILLS list can hide the plugin protocol skills and empty the review catalog",
+  },
+  {
+    id: "modular-skills-all-case-sensitive",
+    file: "src/infra/omp-cli-reviewer-adapter.mjs",
+    testFile: 'tests/review-skills.test.mjs',
+    original: "pattern.toLowerCase() === 'all'",
+    replacement: "pattern === 'all'",
+    description: "The all sentinel stops matching case variants and forwards them as literal globs",
+  },
+  {
+    id: "modular-skills-args-dropped",
+    file: "src/infra/omp-cli-reviewer-adapter.mjs",
+    testFile: 'tests/review-skills.test.mjs',
+    original: "commandArgs.push(...reviewSkillsSelection().args);",
+    replacement: "// skills args dropped",
+    description: "Review child loses the skill catalog trim and pays the full catalog on every request",
+  },
+  {
+    id: "runner-skills-default-drifted",
+    file: "scripts/run-review.mjs",
+    testFile: 'tests/review-skills.test.mjs',
+    original: "const DEFAULT_REVIEW_SKILL_PATTERNS = '*reviewer-kit*,*review-kit*';",
+    replacement: "const DEFAULT_REVIEW_SKILL_PATTERNS = '*';",
+    description: "Distributable runner default skill patterns drift from the adapter",
+  },
 ];
 
 const DIRECTORIES_TO_COPY = ['src', 'scripts', 'agents', 'skills', 'tests', 'templates', '.omp-plugin'];
