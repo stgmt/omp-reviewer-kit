@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.12.6] - 2026-09-29
+
+### Fixed
+- **Quota-stall watchdog could be starved by retry chatter** (found by the commit review of the v0.12.5 runner): a persistent refusal whose retries each logged a request line counted as "progress" and disarmed the watchdog forever. Recovery now requires new main-flow log lines to outnumber new refusal lines within the stall window (`childLogActivity` replaces `childLogProgressCount`); a request+refusal retry storm is killed.
+- **Stale-run sweep missed pid-less live states**: `started`/`executing` carry no attempt pid and `probing`/`reemitting` were absent from the live-state set, so a killed run in those phases left `last-run.json` permanently live. `RunTelemetry` now stamps `runnerPid` (the hook runner's pid) on every last-run doc; the sweep and `reconcileLastRun` check it (falling back to `pid`), and `probing`/`reemitting` are live states.
+
 ## [0.12.5] - 2026-09-29
 
 ### Fixed

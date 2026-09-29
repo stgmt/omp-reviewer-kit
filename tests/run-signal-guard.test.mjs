@@ -325,3 +325,16 @@ describe('Feature: Stale Reviewing Status Liveness Reconciler (S8 & E11)', () =>
     }
   });
 });
+
+describe('Feature: Reconciler uses the runner pid for pid-less live states', () => {
+  for (const state of ['started', 'executing', 'probing', 'reemitting']) {
+    it(`'${state}' with a dead runnerPid reconciles to interrupted`, () => {
+      const result = reconcileLastRun({ runId: 'r', state, runnerPid: 2 ** 31 - 1 });
+      assert.equal(result.state, 'interrupted');
+    });
+  }
+  it('a live runnerPid keeps the state live even when the attempt pid is dead', () => {
+    const result = reconcileLastRun({ runId: 'r', state: 'reviewing', pid: 2 ** 31 - 1, runnerPid: process.pid });
+    assert.equal(result.state, 'reviewing');
+  });
+});
