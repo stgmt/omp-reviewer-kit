@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.12.5] - 2026-09-29
+
+### Fixed
+- **Quota-stall watchdog killed healthy reviews after one recovered provider error**: a single warn line such as `agent turn ended with provider error` (e.g. a socket error) armed the watchdog, and with no stdout for `OMP_REVIEW_KIT_QUOTA_STALL_MS` the whole review was killed even though the child log showed sub-agents still working (incident: tokenplan run 2026-09-29T05-10-19, devin/swe-2, killed while the Verifier sub-agent was starting). The kill now also requires that the child log showed no new main-flow lines (neither title-generator nor refusal lines) since arming; a recovered error followed by progress disarms, while refusals with no progress still kill. New `childLogProgressCount`; regression tests use a fake child log.
+
 ## [0.12.4] - 2026-09-28
 
 ### Fixed
