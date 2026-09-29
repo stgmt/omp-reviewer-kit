@@ -276,6 +276,8 @@ export const LIVE_LAST_RUN_STATES = Object.freeze([
   'working',
   'response',
   'probe',
+  'probing',
+  'reemitting',
 ]);
 
 /**
@@ -292,8 +294,11 @@ export function reconcileLastRun(lastRun, killFn = process.kill) {
     return lastRun;
   }
   if (LIVE_LAST_RUN_STATES.includes(lastRun.state)) {
-    if (Number.isInteger(lastRun.pid)) {
-      const liveness = checkProcessLiveness(lastRun.pid, killFn);
+    // The hook runner owns every live state; the attempt pid only covers the
+    // child and is absent from 'started'/'executing'/'probing'/'reemitting'.
+    const ownerPid = Number.isInteger(lastRun.runnerPid) ? lastRun.runnerPid : lastRun.pid;
+    if (Number.isInteger(ownerPid)) {
+      const liveness = checkProcessLiveness(ownerPid, killFn);
       if (liveness === 'dead') {
         const detail = 'review process gone; no finish event recorded';
         return {

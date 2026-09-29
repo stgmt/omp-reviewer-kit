@@ -1490,3 +1490,11 @@ test('default subprocess runner kills when refusals keep coming with no other lo
   assert.match(review.stderr, /Review stalled on provider quota after 800ms/);
   assert.equal(review.stdout, '');
 });
+
+test('default subprocess runner kills a retry storm where every request line is followed by a refusal', async () => {
+  // Given each retry logs a request line plus a refusal line: progress never outpaces refusals
+  const review = await runWithFakeChildLog({ initialLog: PROGRESS_LINE + SOCKET_ERROR_LINE, tick: PROGRESS_LINE + SOCKET_ERROR_LINE });
+  // Then the watchdog kills it despite the growing log
+  assert.equal(review.status, 1);
+  assert.match(review.stderr, /Review stalled on provider quota after 800ms/);
+});

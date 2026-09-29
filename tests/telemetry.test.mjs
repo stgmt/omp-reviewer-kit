@@ -313,3 +313,38 @@ test('provider outage message is actionable and marker-free', () => {
   assert.match(message, /OMP_REVIEW_KIT_FALLBACK_MODELS/);
   assert.match(message, /429 quota/);
 });
+
+for (const state of ['started', 'executing', 'probing', 'reemitting']) {
+  test(`a new run tombstones a stale '${state}' last-run.json identified by its dead runnerPid`, async () => {
+    // Given a killed run whose live state carries no attempt pid, only the runner pid
+    const root = await makeRoot();
+    const reportsDir = path.join(root, 'audit-reports', 'commit-reviews');
+    const { mkdir, writeFile } = await import('node:fs/promises');
+    await mkdir(reportsDir, { recursive: true });
+    await writeFile(path.join(reportsDir, 'last-run.json'), `${JSON.stringify({
+      schema: 'review-last-run@1',
+      runId: '2026-09-28T00-00-00-000Z-cafe',
+      repoRoot: root,
+      runnerPid: 2 ** 31 - 1,
+      state,
+    })}\n`, 'utf8');
+
+    // When a new run starts
+    const result = await runReview({
+      cwd: root,
+      git: fakeGit(root, 'diff --staged-content'),
+      omp: async () => ({ status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' }),
+      ompOptions: { roleResolver: testRoleResolver },
+      now: new Date('2026-09-28T12:00:00.000Z'),
+    });
+
+    // Then the stale run is tombstoned and the new run stamps its own runnerPid
+    assert.equal(result.exitCode, 0);
+    const events = await readJsonl(path.join(reportsDir, 'runs.jsonl'));
+    const abandoned = events.find((event) => event.type === 'run_abandoned');
+    assert.ok(abandoned, `stale '${state}' run must be tombstoned`);
+    assert.equal(abandoned.state, state);
+    const lastRun = JSON.parse(await readFile(path.join(reportsDir, 'last-run.json'), 'utf8'));
+    assert.equal(lastRun.runnerPid, process.pid);
+  });
+}

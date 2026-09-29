@@ -2280,20 +2280,23 @@ export async function childLogHasQuotaSignal({ logDir, pid, maxTailBytes = 65_53
 }
 
 /**
- * Child-log progress marker: count of main-flow lines that are neither
- * title-generator noise nor provider-refusal lines. A recovered refusal
- * followed by new request/response lines raises it; a log that only keeps
- * appending refusals does not. Returns null when the log is unresolvable.
+ * Child-log activity marker: `progress` counts main-flow lines that are
+ * neither title-generator noise nor provider-refusal lines; `refusals` counts
+ * refusal lines. A recovered refusal followed by new request/response lines
+ * raises only `progress`; a retry storm raises both. Returns null when the
+ * log is unresolvable.
  */
-export async function childLogProgressCount({ logDir, pid } = {}) {
+export async function childLogActivity({ logDir, pid } = {}) {
   const content = await readChildLog({ logDir, pid });
   if (content === null) return null;
-  let count = 0;
+  let progress = 0;
+  let refusals = 0;
   for (const line of content.split('\n')) {
-    if (line.trim() === '' || line.includes('title-generator') || containsQuotaStallSignal(line)) continue;
-    count += 1;
+    if (line.trim() === '' || line.includes('title-generator')) continue;
+    if (containsQuotaStallSignal(line)) refusals += 1;
+    else progress += 1;
   }
-  return count;
+  return { progress, refusals };
 }
 
 /**
@@ -2804,7 +2807,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
         // after any banner, leaving mid-run stalls unbounded.
         if (!(quotaStallMs > 0) || stallTimer) return;
         const armedAt = lastStdoutAt;
-        const baseline = childLogProgressCount({ logDir: quotaLogDir, pid });
+        const baseline = childLogActivity({ logDir: quotaLogDir, pid });
         stallTimer = setTimeout(async () => {
           stallTimer = undefined;
           // stdout progress after this arming means the observed refusal
@@ -2814,8 +2817,14 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
           // The child logs, not stdout, during a review: new main-flow log
           // lines since arming mean the refusal recovered (fallback/retry).
           const before = await baseline;
-          const now = await childLogProgressCount({ logDir: quotaLogDir, pid });
-          if (before !== null && now !== null && now > before) return;
+          const now = await childLogActivity({ logDir: quotaLogDir, pid });
+          if (before && now) {
+            // Recovered = new main-flow lines outnumber new refusal lines. A
+            // retry storm (request + refusal per attempt) is not recovery.
+            const progress = now.progress - before.progress;
+            const refusals = now.refusals - before.refusals;
+            if (progress > 0 && refusals < progress) return;
+          }
           if (lastStdoutAt > armedAt || settled) return;
           stopQuotaPoller();
           // Mark BEFORE terminating: terminateProcessTree awaits the kill, and
@@ -3339,6 +3348,8 @@ const LIVE_LAST_RUN_STATES = new Set([
   'working',
   'response',
   'probe',
+  'probing',
+  'reemitting',
 ]);
 
 /**
@@ -3473,7 +3484,7 @@ class RunTelemetry {
       typeof previous !== 'object' ||
       previous.runId === this.#runId ||
       !LIVE_LAST_RUN_STATES.has(previous.state) ||
-      pidLiveness(previous.pid) !== 'dead'
+      pidLiveness(Number.isInteger(previous.runnerPid) ? previous.runnerPid : previous.pid) !== 'dead'
     ) {
       return;
     }
@@ -3542,7 +3553,7 @@ export class FileSystemTelemetryAdapter extends TelemetryPort {
     return new RunTelemetry({
       reportDir,
       runId,
-      base: { repoRoot },
+      base: { repoRoot, runnerPid: process.pid },
     });
   }
 }

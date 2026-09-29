@@ -17,6 +17,8 @@ const LIVE_LAST_RUN_STATES = new Set([
   'working',
   'response',
   'probe',
+  'probing',
+  'reemitting',
 ]);
 
 /**
@@ -158,7 +160,7 @@ export class RunTelemetry {
       typeof previous !== 'object' ||
       previous.runId === this.#runId ||
       !LIVE_LAST_RUN_STATES.has(previous.state) ||
-      pidLiveness(previous.pid) !== 'dead'
+      pidLiveness(Number.isInteger(previous.runnerPid) ? previous.runnerPid : previous.pid) !== 'dead'
     ) {
       return;
     }
@@ -226,7 +228,7 @@ export class FileSystemTelemetryAdapter extends TelemetryPort {
     return new RunTelemetry({
       reportDir,
       runId,
-      base: { repoRoot },
+      base: { repoRoot, runnerPid: process.pid },
     });
   }
 }
