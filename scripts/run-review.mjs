@@ -2258,20 +2258,42 @@ function stripTitleGeneratorLines(text) {
  * unresolvable log simply yields no signal and the watchdog degrades to
  * stderr-only.
  */
-export async function childLogHasQuotaSignal({ logDir, pid, maxTailBytes = 65_536 } = {}) {
-  if (!Number.isInteger(pid) || pid <= 0) return false;
+async function readChildLog({ logDir, pid }) {
+  if (!Number.isInteger(pid) || pid <= 0) return null;
   try {
     const dir = logDir ?? path.join(homedir(), '.omp', 'logs');
     const suffix = `.${pid}.log`;
     const entries = await readdir(dir);
     const matches = entries.filter((name) => name.startsWith('omp.') && name.endsWith(suffix));
-    if (matches.length === 0) return false;
+    if (matches.length === 0) return null;
     matches.sort().reverse();
-    const content = await readFile(path.join(dir, matches[0]), 'utf8');
-    return containsQuotaStallSignal(stripTitleGeneratorLines(content.slice(-maxTailBytes)));
+    return await readFile(path.join(dir, matches[0]), 'utf8');
   } catch {
-    return false;
+    return null;
   }
+}
+
+export async function childLogHasQuotaSignal({ logDir, pid, maxTailBytes = 65_536 } = {}) {
+  const content = await readChildLog({ logDir, pid });
+  if (content === null) return false;
+  return containsQuotaStallSignal(stripTitleGeneratorLines(content.slice(-maxTailBytes)));
+}
+
+/**
+ * Child-log progress marker: count of main-flow lines that are neither
+ * title-generator noise nor provider-refusal lines. A recovered refusal
+ * followed by new request/response lines raises it; a log that only keeps
+ * appending refusals does not. Returns null when the log is unresolvable.
+ */
+export async function childLogProgressCount({ logDir, pid } = {}) {
+  const content = await readChildLog({ logDir, pid });
+  if (content === null) return null;
+  let count = 0;
+  for (const line of content.split('\n')) {
+    if (line.trim() === '' || line.includes('title-generator') || containsQuotaStallSignal(line)) continue;
+    count += 1;
+  }
+  return count;
 }
 
 /**
@@ -2782,12 +2804,19 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
         // after any banner, leaving mid-run stalls unbounded.
         if (!(quotaStallMs > 0) || stallTimer) return;
         const armedAt = lastStdoutAt;
+        const baseline = childLogProgressCount({ logDir: quotaLogDir, pid });
         stallTimer = setTimeout(async () => {
           stallTimer = undefined;
           // stdout progress after this arming means the observed refusal
           // recovered — disarm. A persistent refusal re-arms via the next
           // stderr chunk or log-poller tick.
           if (lastStdoutAt > armedAt) return;
+          // The child logs, not stdout, during a review: new main-flow log
+          // lines since arming mean the refusal recovered (fallback/retry).
+          const before = await baseline;
+          const now = await childLogProgressCount({ logDir: quotaLogDir, pid });
+          if (before !== null && now !== null && now > before) return;
+          if (lastStdoutAt > armedAt || settled) return;
           stopQuotaPoller();
           // Mark BEFORE terminating: terminateProcessTree awaits the kill, and
           // the proc 'close' event can fire during that await and settle the
