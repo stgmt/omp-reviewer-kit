@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { appendFile, chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import test from 'node:test';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -1433,4 +1433,60 @@ test('default subprocess runner kills on a quota signal in the child log', async
     else process.env.OMP_REVIEW_KIT_OMP = previousCommand;
     await rm(baseDir, { recursive: true, force: true });
   }
+});
+
+const SOCKET_ERROR_LINE = '{"level":"warn","message":"agent turn ended with provider error","provider":"devin","model":"swe-2","errorMessage":"The socket connection was closed unexpectedly."}\n';
+const PROGRESS_LINE = '{"level":"debug","message":"devin: sending chat request","model":"swe-2","tools":10}\n';
+
+async function runWithFakeChildLog({ initialLog, tick, stallMs = 800 }) {
+  const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-quota-progress-'));
+  const commandPath = path.join(baseDir, isWindows ? 'fake-omp.cmd' : 'fake-omp.sh');
+  const logDir = path.join(baseDir, 'logs');
+  const command = isWindows
+    ? '@echo off\nping -n 5 127.0.0.1 >nul\necho REVIEW_RESULT=PASS\nexit /b 0\n'
+    : '#!/bin/sh\nsleep 4\nprintf "REVIEW_RESULT=PASS\\n"\n';
+  const previousCommand = process.env.OMP_REVIEW_KIT_OMP;
+  process.env.OMP_REVIEW_KIT_OMP = commandPath;
+  let interval;
+  try {
+    await writeFile(commandPath, command, 'utf8');
+    if (!isWindows) await chmod(commandPath, 0o755);
+    return await OmpCliReviewerAdapter.defaultRunner('probe', cwd, 0, '@smol', {
+      quotaStallMs: stallMs,
+      quotaPollMs: 50,
+      quotaLogDir: logDir,
+      onSpawn: (pid) => {
+        void (async () => {
+          await mkdir(logDir, { recursive: true });
+          const logPath = path.join(logDir, `omp.2026-09-29.${pid}.log`);
+          await writeFile(logPath, initialLog, 'utf8');
+          interval = setInterval(() => { void appendFile(logPath, tick, 'utf8').catch(() => {}); }, 200);
+        })();
+      },
+    });
+  } finally {
+    clearInterval(interval);
+    if (previousCommand === undefined) delete process.env.OMP_REVIEW_KIT_OMP;
+    else process.env.OMP_REVIEW_KIT_OMP = previousCommand;
+    await rm(baseDir, { recursive: true, force: true });
+  }
+}
+
+test('default subprocess runner does not kill a review after one recovered provider error followed by log progress', async () => {
+  // Given a child log with one recovered socket error and requests that keep flowing
+  // When no stdout appears for longer than the stall window
+  const review = await runWithFakeChildLog({ initialLog: PROGRESS_LINE + SOCKET_ERROR_LINE, tick: PROGRESS_LINE });
+  // Then the review is not stall-killed and its verdict arrives
+  assert.equal(review.status, 0);
+  assert.doesNotMatch(review.stderr, /Review stalled on provider quota/);
+  assert.match(review.stdout, /REVIEW_RESULT=PASS/);
+});
+
+test('default subprocess runner kills when refusals keep coming with no other log progress', async () => {
+  // Given a healthy line, then a refusal that repeats with no further progress
+  const review = await runWithFakeChildLog({ initialLog: PROGRESS_LINE + SOCKET_ERROR_LINE, tick: SOCKET_ERROR_LINE });
+  // Then the watchdog still fires after the window
+  assert.equal(review.status, 1);
+  assert.match(review.stderr, /Review stalled on provider quota after 800ms/);
+  assert.equal(review.stdout, '');
 });
