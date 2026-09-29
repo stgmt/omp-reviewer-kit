@@ -121,7 +121,9 @@ test('review_chain telemetry records the effective skills selection', async () =
 });
 
 test('the distributable runner mirrors the adapter skills selection verbatim', async () => {
-  const blockOf = (source) => source.match(/const REVIEW_PLUGIN_SKILLS[\s\S]*?\nfunction reviewSkillsSelection\(\) \{[\s\S]*?\n\}\n/)?.[0];
+  const blockOf = (source) => source
+    .replace(/\r\n/g, '\n')
+    .match(/const REVIEW_PLUGIN_SKILLS[\s\S]*?\nfunction reviewSkillsSelection\(\) \{[\s\S]*?\n\}\n/)?.[0];
   const adapterBlock = blockOf(await readFile('src/infra/omp-cli-reviewer-adapter.mjs', 'utf8'));
   const runnerBlock = blockOf(await readFile('scripts/run-review.mjs', 'utf8'));
 
