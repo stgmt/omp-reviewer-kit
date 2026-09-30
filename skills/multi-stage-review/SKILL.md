@@ -83,9 +83,10 @@ The snapshot also carries the review inputs under `.review/`: `diff.patch` holds
 - **Constraint**: Must NOT generate defect findings or verdict markers (`REVIEW_RESULT=...`).
 
 ### Stage 2: Parallel Risk Hunters (`review-risk-hunter`)
-- **Role**: Generates focused defect candidates in two parallel lanes using the scout context:
+- **Role**: Generates focused defect candidates — ONE blocking task per lane named in the dispatcher's `Risk lanes for this diff:` list (default: `correctness` only; the `security` lane is opt-in via `OMP_REVIEW_KIT_LANES`; `spec-docs` profile names `content-risk` and nothing else). Lane semantics:
   - `lane: "correctness"`: Boundary conditions, absence/default/failure values, side effects, determinism, resource/handle leaks, behavior-test gaps, and control infrastructure that duplicates an existing mechanism without adding product capability.
   - `lane: "security"`: Attacker-controlled input source, dangerous sink, missing/bypassed controls, credential leakage, permission bypass.
+  - `lane: "content-risk"` (spec-docs only): spec/prose claims that contradict repository facts, anchors, or stated contracts — not executable defects.
 - **Tools**: `read`, `grep`, `glob`, `lsp`, `bash` (read-only git commands only). No `task`, no mutating tools. Budget: roughly 30 tool calls per lane — analyze `.review/diff.patch`, read each changed file once, verify only deciding callers.
 - **Correctness test/YAGNI boundary**: Inspect focused tests for changed behavior and record concrete test evidence. Missing or weak tests and unnecessary code are not independent defect classes; raise them only when a reachable P1/P2 correctness impact is proven, and keep the existing `correctness`/`security` candidate schema.
 - **Coverage Gaps**: In lane `correctness`, walk the scout `coverage_map`. Every entry with `covering_test: null` produces a `coverage_gaps` item — a coverage directive, not a defect candidate, requiring no P1/P2 impact proof. Skip non-behavioral changes (pure renames, comments, docs-only or test-only diffs, unreachable code). Skip also entries whose code no runnable harness in this repository can execute for that file's runtime (a repo-global harness that does not cover the file class counts as absent for the entry; e.g. an inline browser script in a standalone spec HTML when only Go/vitest harnesses exist), and byte-identical copies of untested code already committed elsewhere **only when the staged file's class/runtime is equally non-coverable** (a byte-identical copy into a harness-coverable file class is still a real gap; cite the existing location). Every skipped entry MUST emit one `suppressed_coverage_items` record (`file_path`, `line_start`, `line_end`, `ground`) — a skip without a record is a protocol violation. Each gap carries `required_tests`: at least one `edge` test per new boundary/default/error path and at least one `mutation` test whose `mutant` field names the concrete staged-lines mutation it kills. Vague directives like "add tests" are prohibited.
@@ -112,7 +113,7 @@ The snapshot also carries the review inputs under `.review/`: `diff.patch` holds
   - Protect capability-adding Port/Adapter and Template Method designs, public user-facing CLIs, and cryptography for remote untrusted payloads from false positives.
 - **Candidate Schema**:
   - `candidate_id`: `<lane>-<ordinal>` (e.g. `correctness-1`, `security-1`).
-  - `lane`: `"correctness"` | `"security"`.
+  - `lane`: the lane name this task was spawned under (`"correctness"` | `"security"` | `"content-risk"`).
   - `priority`: `"P1"` (critical/fatal defect) | `"P2"` (functional defect/vulnerability).
   - `title`: Terse summary of the defect.
   - `file_path`: Repository-relative path to the touched file.

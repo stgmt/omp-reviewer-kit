@@ -668,3 +668,154 @@ test('lease destroyed between claim stamp and post-claim assert rejects create()
     await rm(reuseDir, { recursive: true, force: true }).catch(() => {});
   }
 });
+
+test('overlapping create() calls on one adapter serialize and stamp distinct leases (r8 correctness-2)', async () => {
+  // Two concurrent create()s on the same adapter used to re-roll #leaseName
+  // mid-flight: the earlier marker inside the shared reuseDir was orphaned —
+  // unreadable by #ownMarkerIn and counted as a foreign live lease for every
+  // other process for up to the TTL. The create() gate serializes the calls.
+  const { FileSystemSnapshotAdapter, StagedSnapshot } = await import('../scripts/run-review.mjs');
+  const { readdirSync } = await import('node:fs');
+  const reuseDir = await mkdtemp(path.join(tmpdir(), 'omp-gate-'));
+  const adapter = new FileSystemSnapshotAdapter();
+  const diffBytes = Buffer.from('d');
+  try {
+    const [d1, d2] = await Promise.all([
+      adapter.create(new StagedSnapshot([{ path: 'a.txt', content: Buffer.from('x') }]), { diffBytes, changedPaths: ['a.txt'], reuseDir }),
+      adapter.create(new StagedSnapshot([{ path: 'a.txt', content: Buffer.from('x') }]), { diffBytes, changedPaths: ['a.txt'], reuseDir }),
+    ]);
+    assert.equal(d1, reuseDir, 'first create claims the shared reuseDir');
+    assert.equal(d2, reuseDir, 'second create reuses the same reuseDir');
+    // Exactly ONE live marker inside: no orphan from a torn map binding.
+    const live = readdirSync(reuseDir).filter((n) => /^\.live-\d+-[0-9a-f]+$/.test(n));
+    assert.equal(live.length, 1, `expected one marker, got ${JSON.stringify(live)}`);
+    // And it is OUR recorded lease for this dir.
+    assert.equal(live[0], adapter.leaseName);
+  } finally {
+    await adapter.release?.(reuseDir).catch(() => {});
+    await rm(reuseDir, { recursive: true, force: true }).catch(() => {});
+  }
+});
+
+test('foreign same-PID markers survive release/refreshLease across ALL adapter copies (r11 coverage)', async () => {
+  // #ownMarkerIn must return null when neither the per-dir mapped lease nor
+  // #leaseName exists — never fall back to a same-PID scan: a foreign
+  // adapter instance's .live-<pid>-<hex> is not ours to unlink. Pin on every
+  // runnable copy (src module + distributable runner + deployed .omp copy).
+  const modules = [
+    ['src', '../src/infra/filesystem-snapshot-adapter.mjs'],
+    ['runner', '../scripts/run-review.mjs'],
+    ['omp-copy', '../.omp/review-kit/run-review.mjs'],
+  ];
+  const { writeFile } = await import('node:fs/promises');
+  const { existsSync } = await import('node:fs');
+  for (const [label, spec] of modules) {
+    const { FileSystemSnapshotAdapter } = await import(spec);
+    const dir = await mkdtemp(path.join(tmpdir(), `omp-foreign-${label}-`));
+    const adapter = new FileSystemSnapshotAdapter();
+    const foreign = path.join(dir, `.live-${process.pid}-0000`);
+    try {
+      await writeFile(foreign, `${process.pid}\n`, 'utf8');
+      await adapter.release(dir);
+      await adapter.refreshLease(dir);
+      assert.equal(existsSync(foreign), true,
+        `${label}: foreign same-PID marker must survive release+refreshLease`);
+    } finally {
+      await rm(dir, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+});
+
+test('sequential create()s on one adapter reclaim the recorded lease; foreign same-PID survives (r11 coverage)', async () => {
+  // #markLive reclaims ONLY the lease this instance previously recorded for
+  // the dir: a second create() must remove the earlier own marker, while a
+  // same-PID marker stamped by a foreign adapter instance survives.
+  // src adapter + deployed .omp copy both exercised via the public surface.
+  const modules = [
+    ['src', '../src/infra/filesystem-snapshot-adapter.mjs', '../src/domain/staged-snapshot.mjs'],
+    ['omp', '../.omp/review-kit/run-review.mjs', '../.omp/review-kit/run-review.mjs'],
+  ];
+  const { writeFile } = await import('node:fs/promises');
+  const { existsSync, readdirSync } = await import('node:fs');
+  for (const [label, adapterSpec, snapSpec] of modules) {
+    const { FileSystemSnapshotAdapter } = await import(adapterSpec);
+    const { StagedSnapshot } = await import(snapSpec);
+    const reuseDir = await mkdtemp(path.join(tmpdir(), `omp-claim-${label}-`));
+    const adapter = new FileSystemSnapshotAdapter();
+    const foreign = `.live-${process.pid}-0000`;
+    const diffBytes = Buffer.from('d');
+    const snap = () => new StagedSnapshot([{ path: 'a.txt', content: Buffer.from('x') }]);
+    try {
+      // First create stamps lease A in reuseDir; plant a foreign marker too.
+      const d1 = await adapter.create(snap(), { diffBytes, changedPaths: ['a.txt'], reuseDir });
+      assert.equal(d1, reuseDir);
+      const first = adapter.leaseName;
+      assert.ok(existsSync(path.join(reuseDir, first)), `${label}: first lease stamped`);
+      await writeFile(path.join(reuseDir, foreign), `${process.pid}\n`, 'utf8');
+      // Sequential create() re-rolls the lease: the old recorded marker is
+      // reclaimed; the foreign same-PID marker survives.
+      const d2 = await adapter.create(snap(), { diffBytes, changedPaths: ['a.txt'], reuseDir });
+      assert.equal(d2, reuseDir);
+      const live = readdirSync(reuseDir).filter((n) => /^\.live-\d+-[0-9a-f]+$/.test(n));
+      assert.equal(existsSync(path.join(reuseDir, foreign)), true,
+        `${label}: foreign marker must survive sequential creates`);
+      assert.ok(!live.includes(first), `${label}: superseded recorded lease was reclaimed, got ${JSON.stringify(live)}`);
+      // release() then drops exactly OUR current recorded marker.
+      await adapter.release(reuseDir);
+      const after = readdirSync(reuseDir).filter((n) => /^\.live-\d+-[0-9a-f]+$/.test(n));
+      assert.deepEqual(after, [foreign], `${label}: release drops only our recorded marker`);
+    } finally {
+      await rm(reuseDir, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+});
+
+test('create() gate serializes across src + .omp copies; deferred binding on src adapter (r12 coverage)', async () => {
+  // src adapter: #createGate survives a rejected run and serializes; the
+  // deferred #leaseByDir binding makes release() on an unstamped dir a
+  // no-op. .omp copy gets its own create-serialization pin (importable
+  // module, not covered by the runner import above).
+  const { existsSync, readdirSync } = await import('node:fs');
+  const { FileSystemSnapshotAdapter: SrcAdapter } =
+    await import('../src/infra/filesystem-snapshot-adapter.mjs');
+  const { StagedSnapshot: SrcSnap } =
+    await import('../src/domain/staged-snapshot.mjs');
+  const { FileSystemSnapshotAdapter: OmpAdapter, StagedSnapshot: OmpSnap } =
+    await import('../.omp/review-kit/run-review.mjs');
+
+  // src: serialized create()s + deferred binding
+  const reuseDir = await mkdtemp(path.join(tmpdir(), 'omp-srcgate-'));
+  const adapter = new SrcAdapter();
+  const diffBytes = Buffer.from('d');
+  try {
+    const [d1, d2] = await Promise.all([
+      adapter.create(new SrcSnap([{ path: 'a.txt', content: Buffer.from('x') }]), { diffBytes, changedPaths: ['a.txt'], reuseDir }),
+      adapter.create(new SrcSnap([{ path: 'a.txt', content: Buffer.from('x') }]), { diffBytes, changedPaths: ['a.txt'], reuseDir }),
+    ]);
+    assert.equal(d1, reuseDir);
+    assert.equal(d2, reuseDir);
+    const live = readdirSync(reuseDir).filter((n) => /^\.live-\d+-[0-9a-f]+$/.test(n));
+    assert.equal(live.length, 1, `src adapter: one marker, got ${JSON.stringify(live)}`);
+  } finally {
+    await adapter.release?.(reuseDir).catch(() => {});
+    await rm(reuseDir, { recursive: true, force: true }).catch(() => {});
+  }
+
+  // .omp copy: same serialization contract
+  const ompDir = await mkdtemp(path.join(tmpdir(), 'omp-ompgate-'));
+  const ompAdapter = new OmpAdapter();
+  try {
+    const [d1, d2] = await Promise.all([
+      ompAdapter.create(new OmpSnap([{ path: 'a.txt', content: Buffer.from('x') }]), { diffBytes, changedPaths: ['a.txt'], reuseDir: ompDir }),
+      ompAdapter.create(new OmpSnap([{ path: 'a.txt', content: Buffer.from('x') }]), { diffBytes, changedPaths: ['a.txt'], reuseDir: ompDir }),
+    ]);
+    assert.equal(d1, ompDir);
+    assert.equal(d2, ompDir);
+    const live = readdirSync(ompDir).filter((n) => /^\.live-\d+-[0-9a-f]+$/.test(n));
+    assert.equal(live.length, 1, `.omp adapter: one marker, got ${JSON.stringify(live)}`);
+  } finally {
+    await ompAdapter.release?.(ompDir).catch(() => {});
+    await rm(ompDir, { recursive: true, force: true }).catch(() => {});
+  }
+});
+

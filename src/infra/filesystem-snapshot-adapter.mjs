@@ -99,6 +99,11 @@ export class FileSystemSnapshotAdapter extends SnapshotStorePort {
    *  #leaseName re-rolls per create() so ops on earlier dirs must resolve
    *  through this map, not the current field (r29 correctness-1). */
   #leaseByDir = new Map();
+  /** Serializes create() on this adapter: overlapping calls re-roll
+   *  #leaseName mid-flight, orphaning the earlier marker inside the shared
+   *  reuseDir (it then reads as a foreign live lease and blocks sweeps).
+   *  Queued create() calls run one-at-a-time on this promise chain. */
+  #createGate = Promise.resolve();
   /** Lease marker name for the current run (test/introspection surface). */
   get leaseName() {
     return this.#leaseName;
@@ -116,7 +121,13 @@ export class FileSystemSnapshotAdapter extends SnapshotStorePort {
    * @param {{ diffBytes?: Buffer, changedPaths?: string[], fileClasses?: { path: string, fileClass: string, sha256?: string|null }[], reuseDir?: string }} [artifacts]
    * @returns {Promise<string>}
    */
-  async create(snapshot, artifacts) {
+  create(snapshot, artifacts) {
+    const run = this.#createGate.then(() => this.#createInner(snapshot, artifacts));
+    this.#createGate = run.catch(() => {});
+    return run;
+  }
+
+  async #createInner(snapshot, artifacts) {
     this.lastReused = null;
     // Fresh run → fresh lease name, so sequential create() calls on this
     // adapter also carry distinct markers.
@@ -219,8 +230,10 @@ export class FileSystemSnapshotAdapter extends SnapshotStorePort {
     const mapped = this.#leaseByDir.get(dir);
     if (mapped && names.includes(mapped)) return mapped;
     if (names.includes(this.#leaseName)) return this.#leaseName;
-    const ownPid = new RegExp(`^\\.live-${process.pid}-[0-9a-f]+$`);
-    return names.find((name) => ownPid.test(name)) ?? null;
+    // NO same-PID scan: `.live-<pid>-<hex>` with a hex other than our recorded
+    // lease is a FOREIGN adapter instance's marker — picking it here made
+    // #dropOwnMarker unlink a sibling's lease mid-review (r41 correctness-1).
+    return null;
   }
 
   /** Removes only OUR lease marker(s); a foreign takeover owns a different PID. */
@@ -550,11 +563,24 @@ export class FileSystemSnapshotAdapter extends SnapshotStorePort {
    * served without sweep protection.
    */
   async #markLive(dir) {
-    this.#leaseByDir.set(dir, this.#leaseName);
-    const marker = path.join(dir, this.#leaseName);
+    // Capture the lease name BEFORE any await: a concurrent create() on this
+    // shared adapter re-rolls this.#leaseName, and a post-await re-read would
+    // bind the dir to a name we never wrote (r7 correctness-1 torn entry).
+    const lease = this.#leaseName;
+    const marker = path.join(dir, lease);
+    // Reclaim only the lease THIS instance previously recorded for this dir:
+    // the per-dir map keeps just the last name, so the old marker would
+    // orphan and count as a foreign live lease for other processes. Same-PID
+    // markers with a different name may belong to a FOREIGN adapter instance
+    // (sibling OMP review) — they are NEVER removed here.
+    const prevLease = this.#leaseByDir.get(dir);
+    if (prevLease && prevLease !== lease) {
+      await rm(path.join(dir, prevLease), { force: true }).catch(() => {});
+    }
     await writeFile(marker, `${process.pid}\n`, 'utf8');
     const now = new Date();
     await utimes(marker, now, now).catch(() => {});
+    this.#leaseByDir.set(dir, lease);
   }
 
   /**

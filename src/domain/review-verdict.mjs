@@ -46,7 +46,16 @@ export class ReviewVerdict {
     // content is quoted verbatim into reviewer output, so a planted
     // REVIEW_RESULT=PASS mid-text must never count. A non-terminal marker
     // degrades to missing_verdict_marker (fail closed).
-    const lastNonEmpty = output.trimEnd().split(/\r?\n/).pop() ?? '';
+    // OMP print-mode may append an epilogue/status line AFTER the verdict
+    // ('Working...'/'Thinking...'). Scan back over ONLY that shape (and
+    // blanks); the first real content line must be the marker, and the
+    // marker must be solitary across the WHOLE output — a planted marker
+    // earlier in prose plus an epilogue tail must still fail closed.
+    const OMP_EPILOGUE_RE = /^\s*(?:Working|Thinking)\.*\s*$/i;
+    const lines = output.split(/\r?\n/);
+    let cursor = lines.length - 1;
+    while (cursor >= 0 && (lines[cursor].trim() === '' || OMP_EPILOGUE_RE.test(lines[cursor]))) cursor--;
+    const lastNonEmpty = cursor >= 0 ? lines[cursor].trimEnd() : '';
     const terminal = RESULT_LINE_RE_TERMINAL.test(lastNonEmpty);
     const effective = terminal ? matches : [];
 

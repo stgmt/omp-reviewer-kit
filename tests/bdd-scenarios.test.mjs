@@ -371,6 +371,30 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
     assert.equal(ReviewVerdict.fromOutput('REVIEW_RESULT=BLOCK').isBlock(), true);
     assert.equal(ReviewVerdict.fromOutput('REVIEW_RESULT=PASS\nREVIEW_RESULT=PASS').isBlock(), true);
     assert.equal(ReviewVerdict.fromOutput('REVIEW_RESULT=PASS\nREVIEW_RESULT=BLOCK').isBlock(), true);
+    // OMP print-mode appends an epilogue/status line after the verdict —
+    // case-insensitive, whitespace-tolerant, matching the stderr sanitizer's
+    // own noise class. Discriminating on `reason`, not isBlock (missing
+    // marker also BLOCKs): epilogue must yield explicit_block, not
+    // missing_verdict_marker. A planted marker elsewhere in the output
+    // (even with an epilogue tail) still fails closed as non-solitary.
+    assert.equal(ReviewVerdict.fromOutput('report\nREVIEW_RESULT=BLOCK\n\nWorking...\n\n').reason, 'explicit_block');
+    assert.equal(ReviewVerdict.fromOutput('report\nREVIEW_RESULT=BLOCK\n\n  working...  \n\n').reason, 'explicit_block');
+    assert.equal(ReviewVerdict.fromOutput('report\nREVIEW_RESULT=PASS\nThinking...\n').isPass(), true);
+    assert.equal(ReviewVerdict.fromOutput('REVIEW_RESULT=PASS\nreport\nREVIEW_RESULT=BLOCK\nWorking...\n').reason, 'multiple_verdict_markers');
+    assert.equal(ReviewVerdict.fromOutput('report\nREVIEW_RESULT=PASS\nconclusion text\n').reason, 'missing_verdict_marker');
+    // Same contract in the distributable runner + deployed .omp copies —
+    // independent modules, not covered by the src import above.
+  });
+
+  it('ReviewVerdict epilogue back-scan holds in runner + .omp copies (r12 coverage)', async () => {
+    const { ReviewVerdict: RVrunner } = await import('../scripts/run-review.mjs');
+    const { ReviewVerdict: RVomp } = await import('../.omp/review-kit/run-review.mjs');
+    for (const [label, RV] of [['runner', RVrunner], ['omp', RVomp]]) {
+      assert.equal(RV.fromOutput('r\nREVIEW_RESULT=BLOCK\nWorking...\n').reason, 'explicit_block', label);
+      assert.equal(RV.fromOutput('r\nREVIEW_RESULT=PASS\n  thinking...  \n').isPass(), true, label);
+      assert.equal(RV.fromOutput('REVIEW_RESULT=PASS\nr\nREVIEW_RESULT=BLOCK\nWorking...\n').reason, 'multiple_verdict_markers', label);
+      assert.equal(RV.fromOutput('r\nREVIEW_RESULT=PASS\nreal text\n').reason, 'missing_verdict_marker', label);
+    }
   });
 
 
