@@ -1,4 +1,5 @@
 import { diffBlockPaths } from './diff-identity.mjs';
+import { sanitizePromptToken } from './review-prompt.mjs';
 
 export const DEFAULT_ASSERT_PATTERNS = [
   '\\bassert\\b',
@@ -194,11 +195,11 @@ export class SuspicionMap {
     for (const entry of this.#entries) {
       if (entry.kind === 'assert_delta') {
         const netStr = entry.net > 0 ? `+${entry.net}` : `${entry.net}`;
-        lines.push(`- ${entry.path}: assert lines +${entry.added}/-${entry.removed} (net ${netStr})`);
+        lines.push(`- ${sanitizePromptToken(entry.path)}: assert lines +${entry.added}/-${entry.removed} (net ${netStr})`);
       } else if (entry.kind === 'deleted_test_file') {
-        lines.push(`- ${entry.path}: deleted test file (${entry.removed} removed lines)`);
+        lines.push(`- ${sanitizePromptToken(entry.path)}: deleted test file (${entry.removed} removed lines)`);
       } else if (entry.kind === 'removed_test_declarations') {
-        lines.push(`- ${entry.path}: ${entry.removed} test declaration${entry.removed === 1 ? '' : 's'} removed`);
+        lines.push(`- ${sanitizePromptToken(entry.path)}: ${entry.removed} test declaration${entry.removed === 1 ? '' : 's'} removed`);
       }
     }
 

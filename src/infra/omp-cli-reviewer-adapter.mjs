@@ -1,10 +1,79 @@
-import { spawn } from 'node:child_process';
-import { readdir, readFile } from 'node:fs/promises';
+import { spawn, spawnSync } from 'node:child_process';
+import { open, readdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { ReviewerPort } from '../application/ports.mjs';
 import { ReviewVerdict } from '../domain/review-verdict.mjs';
 import { NULL_RUN_TELEMETRY, formatProviderOutageError, safeRunTelemetry } from './filesystem-telemetry-adapter.mjs';
+
+/**
+ * Reads only the last `maxTailBytes` of a (possibly multi-MB) log file via a
+ * positioned read — the stage/quota pollers run every ~10s for the whole
+ * review, so a whole-file readFile+slice per tick was O(log size) memory and
+ * I/O per poll. A mid-UTF-8 start byte yields a truncated first line that
+ * never parses — same semantics as the old string slice.
+ *
+ * @param {string} filePath
+ * @param {number} maxTailBytes
+ * @returns {Promise<string>}
+ */
+async function readLogTail(filePath, maxTailBytes) {
+  const handle = await open(filePath, 'r');
+  try {
+    const { size } = await handle.stat();
+    const start = Math.max(0, size - maxTailBytes);
+    const length = size - start;
+    if (length <= 0) return '';
+    const { buffer } = await handle.read(Buffer.alloc(length), 0, length, start);
+    return buffer.toString('utf8');
+  } finally {
+    await handle.close();
+  }
+}
+
+// Provider-proxy env vars that MUST reach every spawned `omp` child. On the
+// primary dev box google-antigravity OAuth refresh dies with a TLS cert error
+// when the request leaves the box without 127.0.0.1:3128, and children spawned
+// from a stale parent (started before the user-scope vars existed) inherit
+// nothing — reviewers die with "Use /login". Merge the user registry's
+// PI_PROXY_* into the child env when the inherited env lacks them; never
+// overwrite values the parent did set (scoped-off runs keep full control).
+const REGISTRY_PROXY_VARS = /^PI_(?:PROXY|CA_BUNDLE)_/;
+const REG_SZ_ROW_RE = /^\s+(\S+)\s+REG_SZ\s+(.+)$/;
+
+export function mergeRegistryProxyEnv(env = process.env, registryOut = readUserEnvironmentBlock()) {
+  const merged = { ...env };
+  const parentKeys = Object.keys(merged);
+  for (const line of String(registryOut ?? '').split(/\r?\n/)) {
+    const row = line.match(REG_SZ_ROW_RE);
+    if (!row) continue;
+    const [, name, value] = row;
+    if (!REGISTRY_PROXY_VARS.test(name)) continue;
+    if (merged[name] !== undefined) continue;
+    // Windows env lookup is case-insensitive but Node preserves the
+    // inherited spelling in enumeration: a parent-set `pi_proxy_meta`
+    // must still suppress the registry PI_PROXY_META row, else both
+    // spellings reach the child env block with unpredictable resolution.
+    if (process.platform === 'win32'
+      && parentKeys.some((k) => k.toUpperCase() === name.toUpperCase())) continue;
+    merged[name] = value.trim();
+  }
+  return merged;
+}
+
+function readUserEnvironmentBlock() {
+  if (process.platform !== 'win32') return '';
+  try {
+    const result = spawnSync('reg.exe', ['query', 'HKCU\\Environment'], {
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 5000,
+    });
+    return result.status === 0 ? result.stdout : '';
+  } catch {
+    return '';
+  }
+}
 
 export const REVIEW_PROGRESS_PREFIX = 'reviewer-kit progress: ';
 
@@ -128,10 +197,147 @@ export async function childLogHasQuotaSignal({ logDir, pid, maxTailBytes = 65_53
     const matches = entries.filter((name) => name.startsWith('omp.') && name.endsWith(suffix));
     if (matches.length === 0) return false;
     matches.sort().reverse();
-    const content = await readFile(path.join(dir, matches[0]), 'utf8');
-    return containsQuotaStallSignal(stripTitleGeneratorLines(content.slice(-maxTailBytes)));
+    const tail = await readLogTail(path.join(dir, matches[0]), maxTailBytes);
+    return containsQuotaStallSignal(stripTitleGeneratorLines(tail));
   } catch {
     return false;
+  }
+}
+
+const STAGE_AGENT_IDS = Object.freeze({
+  'review-context-scout': 'scout',
+  'review-risk-hunter': 'risk',
+  'review-finding-verifier': 'verifier',
+});
+
+// `Configured subagent …` events carry DISPLAY names (`role: "subagent:<Parent>.<Display>"`),
+// never the agent-type id — only `subagent launch timing` events do. Map the
+// observed display suffixes to stages and, as a positional fallback, pair
+// Configured events with launch-timing events in chronological order.
+const STAGE_ROLE_DISPLAYS = Object.freeze({
+  ContextScout: 'scout',
+  CorrectnessHunter: 'risk',
+  SecurityHunter: 'risk',
+  ContentRiskHunter: 'risk',
+  FindingVerifier: 'verifier',
+});
+
+/**
+ * Best-effort stage derivation from the child OMP log. Reads the newest
+ * `omp.<date>.<pid>.log`, scans for `Configured subagent` (stage start) and
+ * `subagent launch timing` (stage end) JSON entries, and returns the current
+ * stage label for `last-run.json`. Never throws: an unreadable or absent log
+ * yields `undefined`, leaving the caller to keep the prior stage value.
+ *
+ * @param {{ logDir?: string, pid?: number, maxTailBytes?: number }} [opts]
+ * @returns {Promise<{stage: string, completed: number}|undefined>}
+ */
+export async function childLogReadStage({ logDir, pid, maxTailBytes = 262_144 } = {}) {
+  if (!Number.isInteger(pid) || pid <= 0) return undefined;
+  try {
+    const dir = logDir ?? path.join(homedir(), '.omp', 'logs');
+    const suffix = `.${pid}.log`;
+    const entries = await readdir(dir);
+    const matches = entries.filter((name) => name.startsWith('omp.') && name.endsWith(suffix));
+    if (matches.length === 0) return undefined;
+    matches.sort().reverse();
+    const tail = await readLogTail(path.join(dir, matches[0]), maxTailBytes);
+    const configuredRoles = [];
+    const launchedAgents = [];
+    for (const line of tail.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('{')) continue;
+      let entry;
+      try { entry = JSON.parse(trimmed); } catch { continue; }
+      const message = String(entry.message ?? '');
+      if (message === 'Configured subagent runtime model fallback chain') {
+        configuredRoles.push(String(entry.role ?? ''));
+      } else if (message === 'subagent launch timing') {
+        launchedAgents.push(String(entry.agent ?? ''));
+      }
+    }
+    // Stage-matched pairing, launch-side ground truth: a Configured dispatch
+    // only pairs with a launch event when their stages agree. The outer
+    // orchestrator's own Configured (role "subagent:<Parent>.ReviewerKit",
+    // no stage) and non-stage dispatches pair with NOTHING and cannot shift
+    // positional indices into wrong labels. A duplicated/retried/cancelled
+    // Configured for a stage that already launched is a phantom: it must
+    // not create an unfinished agent that pins the reported stage forever.
+    const dispatchQueueByStage = new Map();
+    for (const role of configuredRoles) {
+      const display = (role ?? '').split('.').pop() ?? '';
+      const stage = STAGE_ROLE_DISPLAYS[display];
+      if (!stage) continue;
+      const queue = dispatchQueueByStage.get(stage) ?? [];
+      queue.push(role);
+      dispatchQueueByStage.set(stage, queue);
+    }
+    const started = [];
+    for (const agent of launchedAgents) {
+      const agentStage = STAGE_AGENT_IDS[agent];
+      const queue = agentStage ? (dispatchQueueByStage.get(agentStage) ?? []) : [];
+      const dispatch = queue.length > 0 ? queue.shift() : undefined;
+      const display = (dispatch ?? '').split('.').pop() ?? '';
+      const stage = STAGE_ROLE_DISPLAYS[display] ?? agentStage;
+      if (stage) started.push(stage);
+    }
+    // Configured-but-never-launched stages (dispatch issued, launch event
+    // not yet in the tail): the stage is started only while it owns ZERO
+    // launches — a launch for that stage consumes its dispatch, so a
+    // surplus Configured for an already-launched stage is ignored.
+    for (const [stage, queue] of dispatchQueueByStage) {
+      const hadLaunches = launchedAgents.some((agent) => STAGE_AGENT_IDS[agent] === stage);
+      if (!hadLaunches && queue.length > 0) started.push(stage);
+    }
+    // Per-agent completion: the two parallel risk hunters must BOTH finish
+    // before the risk stage counts as complete; a Set of stage labels would
+    // collapse them into one 'risk' entry and falsely conclude `allDone`
+    // (regressing the reported stage back to 'scout').
+    const finishedAgents = launchedAgents
+      .map((agent) => STAGE_AGENT_IDS[agent])
+      .filter(Boolean);
+    const finishedCounts = new Map();
+    for (const stage of finishedAgents) {
+      finishedCounts.set(stage, (finishedCounts.get(stage) ?? 0) + 1);
+    }
+    const startedCounts = new Map();
+    for (const stage of started) {
+      startedCounts.set(stage, (startedCounts.get(stage) ?? 0) + 1);
+    }
+    // Current stage = the first observed stage whose agents are unfinished;
+    // when every observed agent finished, the review sits in the gap before
+    // the NEXT stage's Configured line — report the last completed stage
+    // (never 'synthesis', which only begins after the verifier completes).
+    let stage = 'scouting';
+    let lastCompleted;
+    for (let i = 0; i < started.length; i += 1) {
+      const s = started[i];
+      if ((finishedCounts.get(s) ?? 0) < (startedCounts.get(s) ?? 0)) {
+        stage = s;
+        lastCompleted = null;
+        break;
+      }
+      lastCompleted = s;
+    }
+    if (lastCompleted) stage = lastCompleted === 'verifier' ? 'synthesis' : lastCompleted;
+    // `completed` counts fully-finished STAGES: a stage is done when every
+    // agent dispatched for it (Configured rows by stage) has launched and
+    // finished. Configured-but-unlaunched dispatches count against the stage,
+    // so hunter#2 pending keeps risk out of the finished set.
+    const expectedByStage = new Map();
+    for (const role of configuredRoles) {
+      const disp = (role ?? '').split('.').pop() ?? '';
+      const st = STAGE_ROLE_DISPLAYS[disp];
+      if (st) expectedByStage.set(st, (expectedByStage.get(st) ?? 0) + 1);
+    }
+    const completedStages = new Set();
+    for (const [s, n] of finishedCounts) {
+      const expected = Math.max(expectedByStage.get(s) ?? 0, startedCounts.get(s) ?? 0);
+      if (n >= expected && expected > 0) completedStages.add(s);
+    }
+    return { stage, completed: completedStages.size };
+  } catch {
+    return undefined;
   }
 }
 
@@ -399,6 +605,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
   async #runReviewAttempt(promptText, cwd, model, telemetry, attempts, attemptIndex) {
     const startedAt = Date.now();
     const record = { model, attemptIndex, startedAt: new Date(startedAt).toISOString() };
+    const stageHistory = [];
     attempts.push(record);
     let resolvedModel;
     try {
@@ -475,6 +682,25 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
             });
           }
         },
+        onStage: ({ stage, completed }) => {
+          if (!stage) return;
+          stageHistory.push({ stage, completed, at: new Date().toISOString(), elapsedMs: Date.now() - startedAt });
+          this.#emitProgress({
+            state: 'reviewing',
+            message: `review stage ${stage}${completed > 0 ? ` (${completed} done)` : ''}`,
+            model,
+            elapsedMs: Date.now() - startedAt,
+          });
+          void telemetry.updateLastRun({
+            state: 'reviewing',
+            model,
+            pid: record.pid,
+            stage,
+            stagesCompleted: completed,
+            stageHistory,
+            elapsedMs: Date.now() - startedAt,
+          });
+        },
       });
       record.status = result?.status;
       record.durationMs = Date.now() - startedAt;
@@ -486,6 +712,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       });
       record.stalledOnQuota = isQuotaStallStderr(result?.stderr);
       record.stdoutBytes = typeof result?.stdout === 'string' ? Buffer.byteLength(result.stdout) : 0;
+      if (stageHistory.length > 0) record.stageHistory = stageHistory;
       record.stderrBytes = typeof result?.stderr === 'string' ? Buffer.byteLength(result.stderr) : 0;
       await telemetry.record('review_attempt_finished', { ...record });
       return result;
@@ -565,10 +792,10 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
    * @param {string} cwd
    * @param {number} [timeout]
    * @param {string} [model]
-   * @param {{ noTools?: boolean, maxTime?: string|null, quotaStallMs?: number, quotaPollMs?: number, quotaLogDir?: string|null, onOutput?: (chunk: unknown, stream: 'stdout'|'stderr') => void, onSpawn?: (pid: number|undefined) => void }} [options]
+   * @param {{ noTools?: boolean, maxTime?: string|null, quotaStallMs?: number, quotaPollMs?: number, quotaLogDir?: string|null, onOutput?: (chunk: unknown, stream: 'stdout'|'stderr') => void, onSpawn?: (pid: number|undefined) => void, registryEnv?: string|null }} [options]
    * @returns {Promise<{ status: number, stdout: string, stderr: string, pid?: number }>}
    */
-  static defaultRunner(prompt, cwd, timeout, model, { noTools = false, maxTime, quotaStallMs, quotaPollMs = 10_000, quotaLogDir = null, onOutput, onSpawn } = {}) {
+  static defaultRunner(prompt, cwd, timeout, model, { noTools = false, maxTime, quotaStallMs, quotaPollMs = 10_000, quotaLogDir = null, onOutput, onSpawn, onStage, registryEnv } = {}) {
     return new Promise((resolve) => {
       const command = process.env.OMP_REVIEW_KIT_OMP ?? 'omp';
       const selectedModel = model ?? process.env.OMP_REVIEW_KIT_MODEL ?? '@smol';
@@ -598,6 +825,9 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       const proc = spawn(executable, args, {
         cwd,
         stdio: ['pipe', 'pipe', 'pipe'],
+        // Stale-parent guard: pull PI_PROXY_* from the user registry when the
+        // inherited env lacks them — children otherwise die at OAuth refresh.
+        env: mergeRegistryProxyEnv(process.env, registryEnv ?? undefined),
         windowsHide: true,
         detached: process.platform !== 'win32',
       });
@@ -689,18 +919,49 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
         onOutput?.(chunk, 'stderr');
       });
 
-      if (quotaStallMs > 0 && Number.isInteger(pid) && pid > 0) {
+      if (Number.isInteger(pid) && pid > 0) {
         let pollRunning = false;
+        let lastStage;
         quotaPoller = setInterval(() => {
-          // stdout progress cancels the armed watchdog, but the log poller
-          // stays live: mid-run 429s go to the child log, not stderr, so a
-          // child that printed a banner then stalled must still be caught.
           if (pollRunning || settled || stallTimer) return;
-          if (stdout.trim() !== '' && Date.now() - lastStdoutAt < quotaStallMs) return;
           pollRunning = true;
-          void childLogHasQuotaSignal({ logDir: quotaLogDir, pid })
-            .then((signalled) => {
+          // Stage progress is read unconditionally so last-run.json tracks the
+          // child continuously; the quota-stall log check only matters once
+          // stdout has gone quiet (mid-run 429s land in the child log anyway).
+          const checkQuota = quotaStallMs > 0
+            && (stdout.trim() === '' || Date.now() - lastStdoutAt >= quotaStallMs);
+          void Promise.all([
+            checkQuota ? childLogHasQuotaSignal({ logDir: quotaLogDir, pid }) : Promise.resolve(false),
+            typeof onStage === 'function' ? childLogReadStage({ logDir: quotaLogDir, pid }) : Promise.resolve(undefined),
+          ])
+            .then(([signalled, stageInfo]) => {
+              // Post-settle guard: an in-flight tick resolving after close()
+              // must not deliver stage updates — updateLastRun would regress
+              // the terminal state back to 'reviewing'.
+              if (settled) return;
               if (signalled) armQuotaStall();
+              if (stageInfo) {
+                // Monotonic progress: a truncated tail can make the log look
+                // earlier than it is; never report a regression — neither the
+                // stage label nor the completed count may move backward.
+                const rank = (s) => ['scouting', 'scout', 'risk', 'verifier', 'synthesis'].indexOf(s);
+                if (lastStage && rank(stageInfo.stage) >= 0 && rank(stageInfo.stage) < rank(lastStage.stage)) {
+                  stageInfo = { ...stageInfo, stage: lastStage.stage };
+                }
+                const prevCompleted = lastStage?.completed ?? -1;
+                // r28 correctness-1: tail-window eviction can shrink the
+                // recomputed count while the stage still advances — clamp
+                // completed to monotonic before reporting/tracking.
+                if ((stageInfo.completed ?? 0) < prevCompleted) {
+                  stageInfo = { ...stageInfo, completed: prevCompleted };
+                }
+                const advanced = stageInfo.stage !== lastStage?.stage
+                  || (stageInfo.completed ?? 0) > prevCompleted;
+                if (advanced) {
+                  lastStage = { stage: stageInfo.stage, completed: stageInfo.completed };
+                  try { onStage?.(stageInfo); } catch {}
+                }
+              }
             })
             .catch(() => {})
             .finally(() => {
@@ -780,6 +1041,9 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
         proc = spawn(executable, args, {
           cwd,
           stdio: ['ignore', 'pipe', 'pipe'],
+          // Same stale-parent guard as the review attempt: role resolution
+          // must not die on a missing PI_PROXY_* env slice.
+          env: mergeRegistryProxyEnv(),
           windowsHide: true,
         });
       } catch {

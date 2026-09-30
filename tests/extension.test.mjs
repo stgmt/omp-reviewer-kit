@@ -878,6 +878,13 @@ describe('Feature: Native OMP Extension & Installer Service', () => {
         verdict: 'BLOCK',
         model: '@smol',
         modelsTried: ['@smol', '@task'],
+        stage: 'verify',
+        stagesCompleted: 2,
+        stageHistory: [
+          { stage: 'scout', completed: 0 },
+          { stage: 'risk', completed: 1 },
+          { stage: 'verify', completed: 2 },
+        ],
         durationMs: 61_000,
         reportPath: 'x.md',
         updatedAt: '2026-09-13T10:00:00.000Z',
@@ -888,9 +895,9 @@ describe('Feature: Native OMP Extension & Installer Service', () => {
       const statusCmd = harness.commands.get('reviewer-kit:status');
       assert.ok(statusCmd);
       await statusCmd.handler('', ctx);
-
       const text = ctx.notifications.map((n) => n.msg).join('\n');
-      assert.match(text, /Last Run: blocked · verdict BLOCK · model @smol · 61s/);
+      assert.match(text, /Last Run: blocked · verdict BLOCK · model @smol · stage verify · 2 stages done · 61s/);
+      assert.match(text, /stages: scout → risk → verify/);
       assert.match(text, /models tried: @smol -> @task/);
       assert.match(text, /report: x\.md/);
     } finally {

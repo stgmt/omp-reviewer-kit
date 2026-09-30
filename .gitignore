@@ -3,3 +3,6 @@ node_modules/
 audit-reports/commit-reviews/
 .omp/plugins/
 .github/context-mode/
+
+# Review-session commit-message scratch files
+Temp/

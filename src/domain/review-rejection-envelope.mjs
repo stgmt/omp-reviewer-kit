@@ -13,9 +13,11 @@ const FAILURE_MESSAGES = Object.freeze({
   contradictory_rejection_envelope: 'The rejection envelope contradicted the review verdict.',
 });
 
-const TOP_LEVEL_KEYS = Object.freeze(['diff_hash', 'findings', 'kind', 'schema']);
+const TOP_LEVEL_KEYS = Object.freeze(['diff_hash', 'findings', 'kind', 'non_coverable_items', 'schema']);
 const FAILURE_TOP_LEVEL_KEYS = Object.freeze([...TOP_LEVEL_KEYS, 'failure'].sort());
 const FINDING_KEYS = Object.freeze([
+  'blocking',
+  'category_kind',
   'counterexample',
   'defect_class',
   'file_path',
@@ -23,19 +25,37 @@ const FINDING_KEYS = Object.freeze([
   'line_end',
   'line_start',
   'priority',
+  'severity',
+  'source',
   'verifier_argument',
 ]);
 const FAILURE_KEYS = Object.freeze(['code', 'message']);
-const COVERAGE_TOP_LEVEL_KEYS = Object.freeze(['coverage_items', 'diff_hash', 'findings', 'kind', 'schema']);
+const COVERAGE_TOP_LEVEL_KEYS = Object.freeze(['coverage_items', 'diff_hash', 'findings', 'kind', 'non_coverable_items', 'schema']);
 const COVERAGE_ITEM_KEYS = Object.freeze([
   'behavior',
+  'blocking',
+  'category_kind',
   'coverage_id',
   'file_path',
   'line_end',
   'line_start',
   'required_tests',
+  'severity',
+  'source',
 ]);
 const REQUIRED_TEST_KEYS = Object.freeze(['kind', 'mutant', 'scenario']);
+// Non-coverable items travel inside the envelope (blocking: false) so the
+// report's ### Notes section stays machine-readable; they never block PASS.
+const NON_COVERABLE_ITEM_KEYS = Object.freeze([
+  'blocking',
+  'category_kind',
+  'file_path',
+  'line_end',
+  'line_start',
+  'reason',
+  'severity',
+  'source',
+]);
 const SHA256_RE = /^[a-f0-9]{64}$/;
 const WINDOWS_ABSOLUTE_RE = /^[A-Za-z]:\//;
 
@@ -184,11 +204,102 @@ function diffHashOf(diffIdentity) {
   return hash;
 }
 
+
+/**
+ * Model-emitted envelopes repeatedly drop fields the contract derives
+ * deterministically (severity=priority, category_kind, blocking, source
+ * mirroring). Filling contract-fixed derivable fields before strict
+ * validation is NOT leniency: nothing content-bearing is invented, and
+ * without it a schema drop turns a valid BLOCK into
+ * malformed_rejection_envelope, discarding every confirmed finding.
+ * Prototype-pollution keys (__proto__/constructor/prototype) are NEVER
+ * normalized: the item is returned verbatim so strict validation rejects.
+ */
+const DANGEROUS_KEYS = Object.freeze(['__proto__', 'constructor', 'prototype']);
+function hasDangerousKey(item) {
+  return DANGEROUS_KEYS.some((k) => Object.hasOwn(item, k));
+}
+function normalizeFinding(finding) {
+  if (!isRecord(finding)) return finding;
+  if (hasDangerousKey(finding)) return finding;
+  // Whitelist output: verbose model keys (impact, observed, evidence, ...)
+  // are not envelope fields — keeping them would fail hasExactKeys.
+  return {
+    finding_id: isNonEmptyString(finding.finding_id) ? finding.finding_id : finding.candidate_id,
+    priority: finding.priority,
+    severity: finding.severity === undefined ? finding.priority : finding.severity,
+    defect_class: isNonEmptyString(finding.defect_class) ? finding.defect_class : finding.lane,
+    category_kind: finding.category_kind === undefined ? 'finding' : finding.category_kind,
+    blocking: finding.blocking !== undefined ? finding.blocking : true,
+    source: finding.source !== undefined
+      ? finding.source
+      : (isNonEmptyString(finding.defect_class) ? finding.defect_class : finding.lane),
+    file_path: finding.file_path,
+    line_start: finding.line_start,
+    line_end: finding.line_end,
+    verifier_argument: finding.verifier_argument,
+    counterexample: finding.counterexample,
+  };
+}
+
+function normalizeCoverageItem(item) {
+  if (!isRecord(item)) return item;
+  if (hasDangerousKey(item)) return item;
+  // Whitelist output — see normalizeFinding.
+  return {
+    coverage_id: isNonEmptyString(item.coverage_id) ? item.coverage_id : item.candidate_id,
+    category_kind: item.category_kind === undefined ? 'coverage' : item.category_kind,
+    // Mandatory coverage gaps are contract-fixed P2 (blockers) — derive.
+    severity: item.severity === undefined ? 'P2' : item.severity,
+    blocking: item.blocking !== undefined ? item.blocking : true,
+    source: item.source !== undefined ? item.source : 'correctness',
+    file_path: item.file_path,
+    line_start: item.line_start,
+    line_end: item.line_end,
+    behavior: item.behavior,
+    required_tests: item.required_tests,
+  };
+}
+
+function normalizeNonCoverableItem(item) {
+  if (!isRecord(item)) return item;
+  if (hasDangerousKey(item)) return item;
+  // r34: producers emit different vocabularies — scout records carry
+  // `reason`, hunter `ground`, verifier `coverage_id`+`ground`. Map aliases
+  // onto the envelope contract and emit ONLY the 8 contract keys: producer
+  // bookkeeping ids (coverage_id, candidate_id, ...) are not envelope
+  // fields and must be stripped, else hasExactKeys rejects the whole
+  // envelope. `source` defaults by producer shape: coverage_id → verifier,
+  // ground → hunter, else scout (reason-bearing records).
+  const reason = item.reason !== undefined ? item.reason
+    : (item.ground !== undefined ? item.ground : item.rejection_ground);
+  const source = item.source !== undefined ? item.source
+    : (isNonEmptyString(item.producer) ? item.producer
+      : (isNonEmptyString(item.stage) ? item.stage
+        : (isNonEmptyString(item.lane) ? item.lane
+          : (isNonEmptyString(item.coverage_id) ? 'verifier'
+            : (isNonEmptyString(item.ground) ? 'hunter' : 'scout')))));
+  return {
+    category_kind: item.category_kind === undefined ? 'non_coverable' : item.category_kind,
+    severity: item.severity === undefined ? 'none' : item.severity,
+    blocking: item.blocking !== undefined ? item.blocking : false,
+    source,
+    file_path: item.file_path,
+    line_start: item.line_start,
+    line_end: item.line_end,
+    reason,
+  };
+}
+
 function validateFinding(finding, identifiers) {
   if (!hasExactKeys(finding, FINDING_KEYS)) return false;
   if (!isNonEmptyString(finding.finding_id) || identifiers.has(finding.finding_id)) return false;
   if (finding.priority !== 'P1' && finding.priority !== 'P2') return false;
-  if (finding.defect_class !== 'correctness' && finding.defect_class !== 'security') return false;
+  if (!['correctness', 'security', 'content-risk'].includes(finding.defect_class)) return false;
+  if (finding.category_kind !== 'finding') return false;
+  if (finding.severity !== finding.priority) return false;
+  if (finding.blocking !== true) return false;
+  if (!isNonEmptyString(finding.source)) return false;
   if (!isRelativeRepositoryPath(finding.file_path)) return false;
   if (!Number.isInteger(finding.line_start) || finding.line_start < 1) return false;
   if (!Number.isInteger(finding.line_end) || finding.line_end < finding.line_start) return false;
@@ -209,6 +320,10 @@ function validateRequiredTest(test) {
 function validateCoverageItem(item, identifiers) {
   if (!hasExactKeys(item, COVERAGE_ITEM_KEYS)) return false;
   if (!isNonEmptyString(item.coverage_id) || identifiers.has(item.coverage_id)) return false;
+  if (item.category_kind !== 'coverage') return false;
+  if (item.severity !== 'P1' && item.severity !== 'P2') return false;
+  if (item.blocking !== true) return false;
+  if (!isNonEmptyString(item.source)) return false;
   if (!isRelativeRepositoryPath(item.file_path)) return false;
   if (!Number.isInteger(item.line_start) || item.line_start < 1) return false;
   if (!Number.isInteger(item.line_end) || item.line_end < item.line_start) return false;
@@ -219,10 +334,45 @@ function validateCoverageItem(item, identifiers) {
   return true;
 }
 
+function validateNonCoverableItem(item, identifiers) {
+  if (!hasExactKeys(item, NON_COVERABLE_ITEM_KEYS)) return false;
+  if (item.category_kind !== 'non_coverable') return false;
+  if (item.severity !== 'none') return false;
+  if (item.blocking !== false) return false;
+  if (!isNonEmptyString(item.source)) return false;
+  if (!isRelativeRepositoryPath(item.file_path)) return false;
+  if (!Number.isInteger(item.line_start) || item.line_start < 1) return false;
+  if (!Number.isInteger(item.line_end) || item.line_end < item.line_start) return false;
+  if (!isNonEmptyString(item.reason)) return false;
+  const identity = `${item.file_path}:${item.line_start}:${item.line_end}:${item.reason}:${item.source}`;
+  if (identifiers.has(identity)) return false;
+  identifiers.add(identity);
+  return true;
+}
+
+function validateNonCoverableItems(value) {
+  if (!Array.isArray(value)) return false;
+  const identifiers = new Set();
+  return value.every((item) => validateNonCoverableItem(item, identifiers));
+}
+
 function validateEnvelope(value, diffHash) {
   if (!isRecord(value) || value.schema !== ENVELOPE_SCHEMA || value.diff_hash !== diffHash) return false;
+  // Contract-fixed absent-means-empty: models repeatedly drop the field
+  // wholesale; [] is the only legal meaning, so default before the
+  // strict top-level key check rather than discarding the envelope.
+  if (value.non_coverable_items === undefined) value.non_coverable_items = [];
+  // r32 correctness-2: normalize ONCE at the top so all three kinds —
+  // including review_failure — share the same derivable-field contract.
+  if (Array.isArray(value.non_coverable_items)) {
+    value.non_coverable_items = value.non_coverable_items.map(normalizeNonCoverableItem);
+  } else {
+    value.non_coverable_items = [];
+  }
   if (value.kind === 'confirmed_findings') {
     if (!hasExactKeys(value, TOP_LEVEL_KEYS) || !Array.isArray(value.findings) || value.findings.length === 0) return false;
+    value.findings = value.findings.map(normalizeFinding);
+    if (!validateNonCoverableItems(value.non_coverable_items)) return false;
     const identifiers = new Set();
     return value.findings.every((finding) => validateFinding(finding, identifiers));
   }
@@ -230,6 +380,8 @@ function validateEnvelope(value, diffHash) {
     if (!hasExactKeys(value, COVERAGE_TOP_LEVEL_KEYS)) return false;
     if (!Array.isArray(value.findings) || value.findings.length !== 0) return false;
     if (!Array.isArray(value.coverage_items) || value.coverage_items.length === 0) return false;
+    value.coverage_items = value.coverage_items.map(normalizeCoverageItem);
+    if (!validateNonCoverableItems(value.non_coverable_items)) return false;
     const identifiers = new Set();
     return value.coverage_items.every((item) => validateCoverageItem(item, identifiers));
   }
@@ -237,6 +389,7 @@ function validateEnvelope(value, diffHash) {
     return hasExactKeys(value, FAILURE_TOP_LEVEL_KEYS)
       && Array.isArray(value.findings)
       && value.findings.length === 0
+      && validateNonCoverableItems(value.non_coverable_items)
       && hasExactKeys(value.failure, FAILURE_KEYS)
       && Object.hasOwn(FAILURE_MESSAGES, value.failure.code)
       && isNonEmptyString(value.failure.message);
@@ -250,6 +403,7 @@ function failureValue(diffHash, code) {
     kind: 'review_failure',
     diff_hash: diffHash,
     findings: [],
+    non_coverable_items: [],
     failure: {
       code,
       message: FAILURE_MESSAGES[code],
@@ -283,6 +437,9 @@ export class ReviewRejectionEnvelope {
     this.#value = Object.freeze({
       ...value,
       findings: Object.freeze(value.findings.map((finding) => Object.freeze({ ...finding }))),
+      non_coverable_items: Object.freeze(
+        value.non_coverable_items.map((item) => Object.freeze({ ...item })),
+      ),
       ...(value.coverage_items
         ? {
             coverage_items: Object.freeze(
@@ -387,12 +544,17 @@ export class ReviewRejectionEnvelope {
     return this.#value.coverage_items ?? [];
   }
 
+  get nonCoverableItems() {
+    return this.#value.non_coverable_items;
+  }
+
   toJSON() {
     return {
       schema: this.#value.schema,
       kind: this.#value.kind,
       diff_hash: this.#value.diff_hash,
       findings: this.#value.findings.map((finding) => ({ ...finding })),
+      non_coverable_items: this.#value.non_coverable_items.map((item) => ({ ...item })),
       ...(this.#value.coverage_items
         ? {
             coverage_items: this.#value.coverage_items.map((item) => ({

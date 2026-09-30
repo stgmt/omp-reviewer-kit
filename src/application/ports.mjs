@@ -81,6 +81,24 @@ export class SnapshotStorePort {
   remove(snapshotDir) {
     throw new Error('SnapshotStorePort.remove must be implemented');
   }
+  /**
+   * Optional: releases an in-use marker without deleting the directory.
+   * Implementations that retain created dirs as cache entries may override;
+   * callers feature-detect the method.
+   *
+   * @param {string} snapshotDir
+   * @returns {Promise<void>|void}
+   */
+  async release(snapshotDir) {}
+  /**
+   * Optional: refreshes this process's in-use lease on a retained dir so a
+   * review outliving the marker TTL keeps sweep protection. Callers
+   * feature-detect the method and swallow refresh failures per tick.
+   *
+   * @param {string} snapshotDir
+   * @returns {Promise<void>|void}
+   */
+  async refreshLease(snapshotDir) {}
 }
 
 /**

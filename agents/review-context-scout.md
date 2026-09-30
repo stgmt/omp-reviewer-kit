@@ -19,6 +19,8 @@ Read all modified and added source content from the absolute staged snapshot dir
 
 When the staged change introduces a new process boundary, transport, state store, trust mechanism, proof format, or command wrapper, identify any existing repository or declared-framework mechanism for the same responsibility. Record proven mechanisms in the existing `invariants` and `relevant_consumers` fields. Record unresolved framework or capability claims in `unknowns`. Do not broaden the scan beyond evidence relevant to the staged change and do not add schema fields.
 
+When the review profile stated in the dispatcher prompt is `spec-docs` (no executable/test changes), scope the scouting: skip caller tracing and LSP work entirely, do not enumerate `coverage_map` (emit `[]`), and set `test_harness` to `"absent"` unless the staged files themselves are runnable under the repo harness. Spend the budget on change_goal, claims, declared_checks, and contradictions across staged prompt/spec/docs files. The file-class manifest at `.review/file-classes.json` is a deterministic input — do not re-classify; flag a manifest row that contradicts file content in `unknowns`.
+
 Extract verifiable claims from staged content (recorded numbers, done/closed status markers, recorded command outputs) into `claims` with their exact `source_path` and `source_line`. Extract check commands or test selectors declared in staged content into `declared_checks` with their `source_path` and `source_line`. Do not invent claims or checks: extract them strictly from staged content.
 
 Return your analysis as a structured report with these exact fields:

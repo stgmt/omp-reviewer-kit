@@ -126,7 +126,11 @@ function envelopeBlockOutput(diffText, { kind = 'confirmed_findings' } = {}) {
       {
         finding_id: 'correctness-1',
         priority: 'P2',
+        severity: 'P2',
         defect_class: 'correctness',
+        category_kind: 'finding',
+        blocking: true,
+        source: 'correctness',
         file_path: 'src/example.mjs',
         line_start: 1,
         line_end: 1,
@@ -134,6 +138,7 @@ function envelopeBlockOutput(diffText, { kind = 'confirmed_findings' } = {}) {
         counterexample: 'The staged wrapper only calls the existing mechanism.',
       },
     ],
+    non_coverable_items: [],
   };
   return [
     '### Review coverage',
@@ -409,5 +414,42 @@ describe('Feature: Verbatim Re-emit Recovery (missing verdict marker)', () => {
       if (previous === undefined) delete process.env.OMP_REVIEW_KIT_REEMIT;
       else process.env.OMP_REVIEW_KIT_REEMIT = previous;
     }
+  });
+});
+
+describe('Re-emit failure attempt records', () => {
+  it('pins status/stderrBytes/error on attempts[0] when the runner rejects', async () => {
+    const { OmpCliReviewerAdapter } = await import('../src/infra/omp-cli-reviewer-adapter.mjs');
+    const telemetry = { record: async () => {}, updateLastRun: async () => {} };
+    const adapter = new OmpCliReviewerAdapter({
+      runner: async () => { throw new Error('runner exploded'); },
+      roleResolver: () => TEST_ROLES,
+      primaryModel: '@smol',
+    });
+    const { status, attempts } = await adapter.reemitVerbatim({ prompt: 'x', cwd: '/tmp', telemetry });
+    assert.equal(status, 1);
+    assert.equal(attempts.length, 1);
+    // Mutation pin: deleting `record.stderrBytes = 0` in the catch must fail this.
+    assert.equal(attempts[0].status, 1);
+    assert.equal(attempts[0].stderrBytes, 0);
+    assert.equal(attempts[0].error, 'runner exploded');
+    assert.equal(typeof attempts[0].durationMs, 'number');
+  });
+
+  it('pins status/stderrBytes/error on attempts[0] when selector resolution fails', async () => {
+    const { OmpCliReviewerAdapter } = await import('../src/infra/omp-cli-reviewer-adapter.mjs');
+    const telemetry = { record: async () => {}, updateLastRun: async () => {} };
+    const adapter = new OmpCliReviewerAdapter({
+      runner: async () => ({ status: 0, stdout: 'x', stderr: '' }),
+      roleResolver: () => ({}), // no roles → resolveSelector rejects
+      primaryModel: '@smol',
+    });
+    const { status, attempts } = await adapter.reemitVerbatim({ prompt: 'x', cwd: '/tmp', telemetry });
+    assert.equal(status, 1);
+    assert.equal(attempts.length, 1);
+    assert.equal(attempts[0].status, 1);
+    assert.equal(attempts[0].stderrBytes, 0);
+    assert.match(attempts[0].error, /not found in OMP configuration/);
+    assert.equal(attempts[0].stdoutBytes, undefined);
   });
 });

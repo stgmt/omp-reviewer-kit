@@ -845,7 +845,8 @@ export class PluginInstallerService {
    *   conflictReason: string|null,
    *   latestReview?: { date: string, verdict: string, file: string },
    *   lastRun?: { runId?: string, state?: string, verdict?: string, model?: string,
-   *     modelsTried?: string[], durationMs?: number, elapsedMs?: number, pid?: number,
+   *     modelsTried?: string[], stage?: string, stagesCompleted?: number, stageHistory?: Array<object>,
+   *     durationMs?: number, elapsedMs?: number, pid?: number,
    *     updatedAt?: string, startedAt?: string, reportPath?: string, error?: string }
    * }>}
    */
@@ -888,6 +889,9 @@ export class PluginInstallerService {
           verdict: parsed.verdict,
           model: parsed.model,
           modelsTried: Array.isArray(parsed.modelsTried) ? parsed.modelsTried : undefined,
+          stage: typeof parsed.stage === 'string' ? parsed.stage : undefined,
+          stagesCompleted: Number.isFinite(parsed.stagesCompleted) ? parsed.stagesCompleted : undefined,
+          stageHistory: Array.isArray(parsed.stageHistory) ? parsed.stageHistory : undefined,
           durationMs: Number.isFinite(parsed.durationMs) ? parsed.durationMs : undefined,
           elapsedMs: Number.isFinite(parsed.elapsedMs) ? parsed.elapsedMs : undefined,
           pid: Number.isInteger(parsed.pid) ? parsed.pid : undefined,

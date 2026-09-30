@@ -45,7 +45,11 @@ function rejectionOutput(diffText, { kind = 'confirmed_findings', envelope = {},
   const defaultFinding = {
     finding_id: 'correctness-1',
     priority: 'P2',
+    severity: 'P2',
     defect_class: 'correctness',
+    category_kind: 'finding',
+    blocking: true,
+    source: 'correctness',
     file_path: 'src/example.mjs',
     line_start: 1,
     line_end: 1,
@@ -58,6 +62,7 @@ function rejectionOutput(diffText, { kind = 'confirmed_findings', envelope = {},
         kind,
         diff_hash: diffHash,
         findings: [],
+        non_coverable_items: [],
         failure: failure ?? {
           code: 'execution_failure',
           message: 'The reviewer process did not complete successfully.',
@@ -69,6 +74,7 @@ function rejectionOutput(diffText, { kind = 'confirmed_findings', envelope = {},
         kind,
         diff_hash: diffHash,
         findings: [{ ...defaultFinding, ...finding }],
+        non_coverable_items: [],
         ...envelope,
       };
   return [
@@ -339,7 +345,7 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
     assert.match(capturedPrompt, /relevant project or user review skills discovered by OMP/);
     assert.match(capturedPrompt, /staged snapshot directory/);
     assert.match(capturedPrompt, /never from the working tree/);
-    assert.match(capturedPrompt, /correctness and security risk lanes/);
+    assert.match(capturedPrompt, /exactly the risk lanes named below/);
     assert.match(capturedPrompt, /focused tests.*YAGNI|YAGNI.*focused tests/i);
     assert.match(capturedPrompt, /supported name, agent, and task fields/);
     assert.match(capturedPrompt, /omit model, outputSchema, schemaMode, and isolated/);
@@ -435,6 +441,7 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
         kind: 'review_failure',
         diff_hash: diff.hash,
         findings: [],
+        non_coverable_items: [],
         failure: { code: 'execution_failure', message: 'inner failure' },
       }),
       'REVIEW_REJECTION_ENVELOPE_END',
@@ -458,11 +465,171 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
     assert.equal(adjacentMalformed.envelope.failure.code, 'malformed_rejection_envelope');
   });
 
+  it('ReviewRejectionEnvelope non_coverable_items: accepts valid mirrored records and rejects every rule violation', () => {
+    // r26 coverage-1: the whole non-empty validation path was unexercised
+    // (all staged envelopes used []). Exercises accept + each rule + the
+    // source-scoped dedup.
+    const diff = DiffIdentity.fromString('envelope diff');
+    const item = (over = {}) => ({
+      category_kind: 'non_coverable',
+      severity: 'none',
+      blocking: false,
+      source: 'scout',
+      file_path: 'src/x.mjs',
+      line_start: 3,
+      line_end: 9,
+      reason: 'line-level probe is not coverable by unit tests',
+      ...over,
+    });
+    const outputWith = (items) => rejectionOutput('envelope diff', {
+      envelope: { non_coverable_items: items },
+    });
+
+    const valid = ReviewRejectionEnvelope.evaluate({ output: outputWith([item()]), diffIdentity: diff, processStatus: 0 });
+    assert.equal(valid.verdict.value, 'BLOCK');
+    assert.equal(valid.envelope.kind, 'confirmed_findings');
+    assert.equal(valid.envelope.nonCoverableItems.length, 1);
+    assert.equal(valid.envelope.nonCoverableItems[0].source, 'scout');
+
+    // r26 correctness-1: records differing ONLY in `source` are legitimate
+    // (scout + hunter + verifier can mirror the same range) — dedup is
+    // source-scoped, must NOT reject.
+    const multiSource = ReviewRejectionEnvelope.evaluate({
+      output: outputWith([item(), item({ source: 'verifier' }), item({ source: 'hunter' })]),
+      diffIdentity: diff,
+      processStatus: 0,
+    });
+    assert.equal(multiSource.envelope.kind, 'confirmed_findings',
+      'same-range records from different producers must coexist');
+    assert.equal(multiSource.envelope.nonCoverableItems.length, 3);
+
+    const malformedCases = [
+      ['severity upgraded', item({ severity: 'P2' })],
+      ['blocking upgraded', item({ blocking: true })],
+      ['missing key', (() => { const { reason: _r, ...rest } = item(); return rest; })()],
+      ['empty reason', item({ reason: '' })],
+      ['empty source', item({ source: '' })],
+      ['abs path', item({ file_path: 'C:/abs/x.mjs' })],
+      ['bad range', item({ line_start: 9, line_end: 3 })],
+    ];
+    for (const [label, bad] of malformedCases) {
+      const evaluated = ReviewRejectionEnvelope.evaluate({ output: outputWith([bad]), diffIdentity: diff, processStatus: 0 });
+      assert.equal(evaluated.envelope.failure.code, 'malformed_rejection_envelope', label);
+    }
+
+    // Benign producer bookkeeping keys are stripped, not rejected — only
+    // contract-key violations and dangerous keys invalidate.
+    const withBookkeeping = ReviewRejectionEnvelope.evaluate({
+      output: outputWith([item({ coverage_id: 'v-1', extra: 1 })]),
+      diffIdentity: diff,
+      processStatus: 0,
+    });
+    assert.equal(withBookkeeping.envelope.kind, 'confirmed_findings',
+      'extra producer bookkeeping keys must be stripped, not rejected');
+    assert.equal(Object.hasOwn(withBookkeeping.envelope.nonCoverableItems[0], 'extra'), false);
+    const protoPoisoned = JSON.parse(JSON.stringify(item()));
+    Object.defineProperty(protoPoisoned, '__proto__', { value: { poisoned: true }, enumerable: true });
+    const dangerous = ReviewRejectionEnvelope.evaluate({
+      output: outputWith([protoPoisoned]),
+      diffIdentity: diff,
+      processStatus: 0,
+    });
+    assert.equal(dangerous.envelope.failure.code, 'malformed_rejection_envelope',
+      'prototype-pollution keys must never be normalized');
+
+    const dupSameSource = ReviewRejectionEnvelope.evaluate({
+      output: outputWith([item(), item()]),
+      diffIdentity: diff,
+      processStatus: 0,
+    });
+    assert.equal(dupSameSource.envelope.failure.code, 'malformed_rejection_envelope',
+      'byte-identical record twice (same source) is still a dedup violation');
+  });
+
+  it('ReviewRejectionEnvelope normalizes contract-derivable finding fields instead of discarding the envelope', () => {
+    // r27 structural fix: the model repeatedly drops fields the contract
+    // derives deterministically (severity=priority, category_kind,
+    // blocking, source=lane, finding_id=candidate_id). Filling them before
+    // validation prevents a valid BLOCK from becoming
+    // malformed_rejection_envelope. Explicit values are never overwritten.
+    const diff = DiffIdentity.fromString('envelope diff');
+    const sparse = rejectionOutput('envelope diff', {
+      finding: { severity: undefined, category_kind: undefined, blocking: undefined, source: undefined },
+    });
+    const sparseObj = JSON.parse(sparse.split('\n')[1]);
+    delete sparseObj.findings[0].severity;
+    delete sparseObj.findings[0].category_kind;
+    delete sparseObj.findings[0].blocking;
+    delete sparseObj.findings[0].source;
+    const out = [
+      'REVIEW_REJECTION_ENVELOPE_BEGIN',
+      JSON.stringify(sparseObj),
+      'REVIEW_REJECTION_ENVELOPE_END',
+      'REVIEW_RESULT=BLOCK',
+    ].join('\n');
+    const evaluated = ReviewRejectionEnvelope.evaluate({ output: out, diffIdentity: diff, processStatus: 0 });
+    assert.equal(evaluated.envelope.kind, 'confirmed_findings',
+      'derivable-field drops must not discard the envelope');
+    const f = evaluated.envelope.findings[0];
+    assert.equal(f.severity, 'P2');
+    assert.equal(f.category_kind, 'finding');
+    assert.equal(f.blocking, true);
+    assert.equal(f.source, 'correctness');
+
+    // candidate_id maps to finding_id when the latter is absent.
+    const cand = JSON.parse(JSON.stringify(sparseObj));
+    cand.findings[0].candidate_id = cand.findings[0].finding_id;
+    delete cand.findings[0].finding_id;
+    const candOut = [
+      'REVIEW_REJECTION_ENVELOPE_BEGIN',
+      JSON.stringify(cand),
+      'REVIEW_REJECTION_ENVELOPE_END',
+      'REVIEW_RESULT=BLOCK',
+    ].join('\n');
+    const evaluated2 = ReviewRejectionEnvelope.evaluate({ output: candOut, diffIdentity: diff, processStatus: 0 });
+    assert.equal(evaluated2.envelope.kind, 'confirmed_findings');
+    assert.equal(evaluated2.envelope.findings[0].finding_id, 'correctness-1');
+
+    // Explicit wrong values still fail — normalization is not leniency.
+    const bad = JSON.parse(JSON.stringify(sparseObj));
+    bad.findings[0].severity = 'P1';
+    const badOut = [
+      'REVIEW_REJECTION_ENVELOPE_BEGIN',
+      JSON.stringify(bad),
+      'REVIEW_REJECTION_ENVELOPE_END',
+      'REVIEW_RESULT=BLOCK',
+    ].join('\n');
+    const evaluated3 = ReviewRejectionEnvelope.evaluate({ output: badOut, diffIdentity: diff, processStatus: 0 });
+    assert.equal(evaluated3.envelope.failure.code, 'malformed_rejection_envelope',
+      'an explicit severity/priority mismatch must still be rejected');
+  });
+
+  it('ReviewRejectionEnvelope: dropped non_coverable_items field defaults to [] (contract fixed)', () => {
+    // r28: models omit the field wholesale when empty — identical legal
+    // meaning. Missing field must not invalidate the envelope.
+    const diff = DiffIdentity.fromString('envelope diff');
+    const raw = JSON.parse(rejectionOutput('envelope diff').split('\n')[1]);
+    delete raw.non_coverable_items;
+    const out = [
+      'REVIEW_REJECTION_ENVELOPE_BEGIN',
+      JSON.stringify(raw),
+      'REVIEW_REJECTION_ENVELOPE_END',
+      'REVIEW_RESULT=BLOCK',
+    ].join('\n');
+    const evaluated = ReviewRejectionEnvelope.evaluate({ output: out, diffIdentity: diff, processStatus: 0 });
+    assert.equal(evaluated.envelope.kind, 'confirmed_findings',
+      'absent non_coverable_items must default to []');
+  });
+
   it('ReviewRejectionEnvelope coverage_required: accepts strict coverage items and deep-freezes them', () => {
     const diff = DiffIdentity.fromString('coverage diff');
     const diffHash = diff.hash;
     const item = {
       coverage_id: 'coverage-1',
+      category_kind: 'coverage',
+      severity: 'P2',
+      blocking: true,
+      source: 'correctness',
       file_path: 'src/example.mjs',
       line_start: 10,
       line_end: 24,
@@ -479,6 +646,7 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
         kind: 'coverage_required',
         diff_hash: diffHash,
         findings: [],
+        non_coverable_items: [],
         coverage_items: [item],
       }),
       'REVIEW_REJECTION_ENVELOPE_END',
@@ -526,6 +694,7 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
           kind: 'coverage_required',
           diff_hash: diffHash,
           findings: [],
+          non_coverable_items: [],
           coverage_items: [bad],
         }),
         'REVIEW_REJECTION_ENVELOPE_END',
@@ -544,6 +713,7 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
         kind: 'coverage_required',
         diff_hash: diffHash,
         findings: [],
+        non_coverable_items: [],
         coverage_items: [item, { ...item, behavior: 'other' }],
       }),
       'REVIEW_REJECTION_ENVELOPE_END',
@@ -591,7 +761,7 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
     assert.match(prompt.toString(), /multi-stage-review/);
     assert.match(prompt.toString(), /reality-first-review/);
     assert.match(prompt.toString(), /relevant project or user review skills discovered by OMP/);
-    assert.match(prompt.toString(), /correctness and security risk lanes/);
+    assert.match(prompt.toString(), /exactly the risk lanes named below/);
     assert.match(prompt.toString(), /focused tests.*YAGNI|YAGNI.*focused tests/i);
     assert.match(prompt.toString(), /reproduce its complete report verbatim/);
     assert.match(prompt.toString(), /read that URI first/);

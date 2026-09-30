@@ -55,6 +55,7 @@ function rejectionOutputForHash(diffHash, { kind = 'confirmed_findings', filePat
         kind,
         diff_hash: diffHash,
         findings: [],
+        non_coverable_items: [],
         failure: {
           code: 'execution_failure',
           message: 'The reviewer process did not complete successfully.',
@@ -67,13 +68,18 @@ function rejectionOutputForHash(diffHash, { kind = 'confirmed_findings', filePat
         findings: [{
           finding_id: 'correctness-1',
           priority: 'P2',
+          severity: 'P2',
           defect_class: 'correctness',
+          category_kind: 'finding',
+          blocking: true,
+          source: 'correctness',
           file_path: filePath,
           line_start: 1,
           line_end: 1,
           verifier_argument: 'The repository already provides the same responsibility.',
           counterexample: 'The staged layer only re-wraps the existing mechanism.',
         }],
+        non_coverable_items: [],
       };
   return ['REVIEW_REJECTION_ENVELOPE_BEGIN', JSON.stringify(value), 'REVIEW_REJECTION_ENVELOPE_END', 'REVIEW_RESULT=BLOCK', ''].join('\n');
 }
@@ -467,5 +473,59 @@ describe('Feature: Real Git Pre-commit Hook E2E Integration', () => {
     const captured = await readFile(stdinCapturePath, 'utf8');
     assert.match(captured, /Execution evidence \(opt-in, produced by the dispatcher before this review\):/);
     assert.match(captured, /checks ran fine/);
+  });
+
+
+  it('kit-gated self-sync: diverged .omp runner is replaced by the canonical scripts copy before exec (r36 coverage)', async () => {
+    // The session-start plugin installer overwrites .omp/review-kit/ with a
+    // possibly-stale installed copy mid-review; the hook must resync from
+    // scripts/run-review.mjs when package.json names omp-reviewer-kit.
+    const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-hook-sync-'));
+    const repoDir = path.join(baseDir, 'repo');
+    await mkdir(repoDir, { recursive: true });
+    const git = (args, options = {}) => spawnSync('git', args, { cwd: repoDir, encoding: 'utf8', windowsHide: true, ...options });
+    try {
+      assert.equal(git(['init']).status, 0);
+      git(['config', 'user.name', 'E2E Test']);
+      git(['config', 'user.email', 'e2e@test.local']);
+      // Hook: the repo template (kit-gated self-sync version).
+      await mkdir(path.join(repoDir, '.githooks'), { recursive: true });
+      const hook = await readFile('templates/githooks/pre-commit', 'utf8');
+      await writeFile(path.join(repoDir, '.githooks', 'pre-commit'), hook, 'utf8');
+      if (!isWindows) await chmod(path.join(repoDir, '.githooks', 'pre-commit'), 0o755);
+      git(['config', 'core.hooksPath', '.githooks']);
+      // Kit identity + canonical runner + STALE .omp copy that exits 42
+      // (proves the stale copy was NOT exec'd once sync replaces it).
+      await writeFile(path.join(repoDir, 'package.json'), '{"name":"omp-reviewer-kit"}', 'utf8');
+      await mkdir(path.join(repoDir, 'scripts'), { recursive: true });
+      await writeFile(path.join(repoDir, 'scripts', 'run-review.mjs'),
+        'process.stdout.write("canonical runner ran\\n");\n', 'utf8');
+      await mkdir(path.join(repoDir, '.omp', 'review-kit'), { recursive: true });
+      await writeFile(path.join(repoDir, '.omp', 'review-kit', 'run-review.mjs'),
+        'process.exit(42);\n', 'utf8');
+      await writeFile(path.join(repoDir, 'x.txt'), 'x\n', 'utf8');
+      git(['add', 'x.txt']);
+      const res = git(['commit', '-m', 'self-sync test']);
+      assert.equal(res.status, 0, `synced canonical runner exits 0: ${res.stderr}`);
+      const synced = await readFile(path.join(repoDir, '.omp', 'review-kit', 'run-review.mjs'), 'utf8');
+      assert.match(synced, /canonical runner ran/, 'hook must overwrite the stale .omp copy');
+
+      // Negative: a consumer repo (different package name) never syncs —
+      // the stale .omp copy must run as-is (exit 42).
+      await writeFile(path.join(repoDir, 'package.json'), '{"name":"consumer-app"}', 'utf8');
+      await writeFile(path.join(repoDir, '.omp', 'review-kit', 'run-review.mjs'),
+        'process.exit(42);\n', 'utf8');
+      await writeFile(path.join(repoDir, 'y.txt'), 'y\n', 'utf8');
+      git(['add', 'y.txt']);
+      const res2 = git(['commit', '-m', 'consumer repo no-sync']);
+      // git maps any hook failure to exit 1; a wrong sync would have run the
+      // canonical exit-0 copy and committed — non-zero proves the stale .omp
+      // copy ran, and the byte check below proves it was never overwritten.
+      assert.notEqual(res2.status, 0, `consumer repo keeps installed copy: ${res2.stderr}`);
+      const stillStale = await readFile(path.join(repoDir, '.omp', 'review-kit', 'run-review.mjs'), 'utf8');
+      assert.match(stillStale, /process\.exit\(42\)/, 'consumer repo .omp copy untouched');
+    } finally {
+      await rm(baseDir, { recursive: true, force: true }).catch(() => {});
+    }
   });
 });

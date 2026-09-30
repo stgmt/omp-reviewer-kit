@@ -29,7 +29,11 @@ function rejectionOutput(diffText, { kind = 'confirmed_findings', envelope = {},
   const defaultFinding = {
     finding_id: 'correctness-1',
     priority: 'P2',
+    severity: 'P2',
     defect_class: 'correctness',
+    category_kind: 'finding',
+    blocking: true,
+    source: 'correctness',
     file_path: 'src/example.mjs',
     line_start: 1,
     line_end: 1,
@@ -42,6 +46,7 @@ function rejectionOutput(diffText, { kind = 'confirmed_findings', envelope = {},
         kind,
         diff_hash: diffHash,
         findings: [],
+        non_coverable_items: [],
         failure: failure ?? {
           code: 'execution_failure',
           message: 'The reviewer process did not complete successfully.',
@@ -54,9 +59,14 @@ function rejectionOutput(diffText, { kind = 'confirmed_findings', envelope = {},
           kind,
           diff_hash: diffHash,
           findings: [],
+          non_coverable_items: [],
           coverage_items: [
             {
               coverage_id: 'coverage-1',
+              category_kind: 'coverage',
+              severity: 'P2',
+              blocking: true,
+              source: 'correctness',
               file_path: 'src/example.mjs',
               line_start: 1,
               line_end: 3,
@@ -74,6 +84,7 @@ function rejectionOutput(diffText, { kind = 'confirmed_findings', envelope = {},
           kind,
           diff_hash: diffHash,
           findings: [{ ...defaultFinding, ...finding }],
+          non_coverable_items: [],
           ...envelope,
         };
   return [
@@ -252,6 +263,7 @@ test('keeps the reviewer review_failure envelope when the verdict marker ends wi
     kind: 'review_failure',
     diff_hash: diffHash,
     findings: [],
+    non_coverable_items: [],
     failure: {
       code: 'execution_failure',
       message: "reviewer-kit task completed but its report was truncated in the result preview and the full payload could not be read: agent://ReviewerKit, agent://ReviewerKit/report, and agent://ReviewerKit?q=.report all returned 'No artifacts directory found'; history://ReviewerKit confirmed the yield payload was also truncated.",
@@ -498,3 +510,54 @@ test('runner fails open and includes unavailable in prompt when execution throws
   assert.equal(result.verdict, 'PASS');
   assert.match(prompt, /- Staged snapshot: unavailable \(runner execution crashed\)/);
 });
+
+test('mergeRegistryProxyEnv injects PI_PROXY_* from registry when env lacks them', async () => {
+  const { mergeRegistryProxyEnv } = await import('../scripts/run-review.mjs');
+  const registryOut = [
+    'HKEY_CURRENT_USER\\Environment',
+    '    PI_PROXY_GOOGLE_ANTIGRAVITY    REG_SZ    http://127.0.0.1:3128',
+    '    PI_PROXY_META    REG_SZ    http://127.0.0.1:3128',
+    '    SOME_OTHER    REG_SZ    ignored',
+    '    PI_PROXY_EXPANDED    REG_EXPAND_SZ    %SystemRoot%\\skipped',
+  ].join('\n');
+  const env = { PATH: '/x', PI_PROXY_GOOGLE_ANTIGRAVITY: 'http://127.0.0.1:3129' };
+  const merged = mergeRegistryProxyEnv(env, registryOut);
+  // Missing PI_PROXY_* merged from REG_SZ rows.
+  assert.equal(merged.PI_PROXY_META, 'http://127.0.0.1:3128');
+  // Existing env value never overwritten by registry.
+  assert.equal(merged.PI_PROXY_GOOGLE_ANTIGRAVITY, 'http://127.0.0.1:3129');
+  // Non-PI_PROXY and REG_EXPAND_SZ rows are skipped.
+  assert.equal(merged.SOME_OTHER, undefined);
+  assert.equal(merged.PI_PROXY_EXPANDED, undefined);
+  // Original object untouched.
+  assert.equal(env.PI_PROXY_META, undefined);
+});
+
+// Mutation-gate manifest anchors must match live source verbatim — a drifted
+// `original` makes the mutant a no-op and the suite green for the wrong reason.
+test('mutation manifest: every original string is present verbatim in its target file', async () => {
+  const spec = await readFile('scripts/run-mutation-tests.mjs', 'utf8');
+  const arrMatch = spec.match(/const MUTANTS = \[([\s\S]*?)\n\];/);
+  assert.ok(arrMatch, 'MUTANTS array literal not found');
+  const mutants = new Function(`return [${arrMatch[1]}]`)();
+  assert.ok(mutants.length >= 20, `expected >=20 mutant anchors, got ${mutants.length}`);
+  const failures = [];
+  for (const mu of mutants) {
+    const content = await readFile(mu.file, 'utf8');
+    if (!content.includes(mu.original)) failures.push(`${mu.id} ${mu.file}: anchor not found (${mu.original.slice(0, 60)}...)`);
+  }
+  assert.deepEqual(failures, [], `drifted mutant anchors:\n${failures.join('\n')}`);
+});
+
+// Port defaults must be async so `.catch` chains on optional overrides are safe.
+test('SnapshotStorePort default release/refreshLease return a thenable (contract)', async () => {
+  const { SnapshotStorePort } = await import('../src/application/ports.mjs');
+  const port = new SnapshotStorePort();
+  for (const name of ['release', 'refreshLease']) {
+    const v = port[name]('some/dir');
+    assert.ok(v && typeof v.then === 'function' && typeof v.catch === 'function',
+      `${name} default must return a Promise so .catch() chains do not TypeError`);
+    await v; // must resolve, not reject
+  }
+});
+
