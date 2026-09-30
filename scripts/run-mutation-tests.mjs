@@ -116,16 +116,16 @@ const MUTANTS = [
     id: 'envelope-unsupported-class-modular',
     file: 'src/domain/review-rejection-envelope.mjs',
     testFile: 'tests/bdd-scenarios.test.mjs',
-    original: "finding.defect_class !== 'correctness' && finding.defect_class !== 'security'",
-    replacement: "finding.defect_class !== 'correctness' && finding.defect_class !== 'security' && finding.defect_class !== 'maintainability'",
+    original: "['correctness', 'security', 'content-risk'].includes(finding.defect_class)",
+    replacement: "['correctness', 'security', 'content-risk', 'maintainability'].includes(finding.defect_class)",
     description: 'Allows an unsupported defect class outside the stable schema',
   },
   {
     id: 'envelope-unsupported-class-runner',
     file: 'scripts/run-review.mjs',
     testFile: 'tests/run-review.test.mjs',
-    original: "finding.defect_class !== 'correctness' && finding.defect_class !== 'security'",
-    replacement: "finding.defect_class !== 'correctness' && finding.defect_class !== 'security' && finding.defect_class !== 'maintainability'",
+    original: "['correctness', 'security', 'content-risk'].includes(finding.defect_class)",
+    replacement: "['correctness', 'security', 'content-risk', 'maintainability'].includes(finding.defect_class)",
     description: 'Distributable runner accepts an unsupported defect class',
   },
   {
@@ -148,17 +148,17 @@ const MUTANTS = [
     id: 'modular-dispatcher-lanes',
     file: 'src/domain/review-prompt.mjs',
     testFile: 'tests/bdd-scenarios.test.mjs',
-    original: "      'The task must run both correctness and security risk lanes; the correctness lane must inspect focused tests and YAGNI only when a concrete reachable P1/P2 impact is proven.',",
-    replacement: "      'The task must run only the correctness risk lane.',",
-    description: 'Dispatcher omits the mandatory security lane and bounded correctness review guidance',
+    original: "      'The task must run exactly the risk lanes named below under \"Risk lanes for this diff\" (each lane = one blocking review-risk-hunter task in a single batch). A lane list of [\"correctness\",\"security\"] restores both standard lanes; only the correctness lane inspects focused tests and YAGNI, and only when a concrete reachable P1/P2 impact is proven.',",
+    replacement: "      'The task must run the risk lanes for the stated review profile (\"full\" = correctness and security risk lanes; \"spec-docs\" = content-risk lane); the correctness lane must inspect focused tests and YAGNI only when a concrete reachable P1/P2 impact is proven.',",
+    description: 'Dispatcher reverts to hardcoded lanes and ignores the per-diff lane list',
   },
   {
     id: 'runner-dispatcher-lanes',
     file: 'scripts/run-review.mjs',
     testFile: 'tests/runner-snapshot.test.mjs',
-    original: "      'The task must run both correctness and security risk lanes; the correctness lane must inspect focused tests and YAGNI only when a concrete reachable P1/P2 impact is proven.',",
-    replacement: "      'The task must run only the correctness risk lane.',",
-    description: 'Distributable runner omits the mandatory security lane',
+    original: "      'The task must run exactly the risk lanes named below under \"Risk lanes for this diff\" (each lane = one blocking review-risk-hunter task in a single batch). A lane list of [\"correctness\",\"security\"] restores both standard lanes; only the correctness lane inspects focused tests and YAGNI, and only when a concrete reachable P1/P2 impact is proven.',",
+    replacement: "      'The task must run the risk lanes for the stated review profile (\"full\" = correctness and security risk lanes; \"spec-docs\" = content-risk lane); the correctness lane must inspect focused tests and YAGNI only when a concrete reachable P1/P2 impact is proven.',",
+    description: 'Distributable runner reverts to hardcoded lanes and ignores the per-diff lane list',
   },
   {
     id: 'modular-report-verified-ok',
@@ -475,17 +475,19 @@ async function runMutationGate() {
       await copyRepoTree(tempDir);
 
       const targetPath = path.join(tempDir, mutant.file);
-      const originalContent = await readFile(targetPath, 'utf8');
+      const originalContent = (await readFile(targetPath, 'utf8')).replace(/\r\n/g, '\n');
+      const normalizedOriginal = mutant.original.replace(/\r\n/g, '\n');
+      const normalizedReplacement = mutant.replacement.replace(/\r\n/g, '\n');
 
       // Guarded single replacement
-      const occurrences = originalContent.split(mutant.original).length - 1;
+      const occurrences = originalContent.split(normalizedOriginal).length - 1;
       if (occurrences !== 1) {
         throw new Error(
           `Mutation target guard failed for [${mutant.id}]: expected 1 occurrence of original string in ${mutant.file}, found ${occurrences}`
         );
       }
 
-      const mutatedContent = originalContent.replace(mutant.original, mutant.replacement);
+      const mutatedContent = originalContent.replace(normalizedOriginal, normalizedReplacement);
       await writeFile(targetPath, mutatedContent, 'utf8');
 
       // Run owning test suite in isolated directory

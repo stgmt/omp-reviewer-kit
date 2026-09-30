@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -20,7 +21,7 @@ function makePassReviewerFromSnapshot() {
   return async (prompt) => {
     const snapshotMatch = prompt.match(/snapshot directory is (.+?)\.\r?\n/);
     assert.ok(snapshotMatch, `prompt does not carry the staged snapshot directory: ${prompt}`);
-    assert.match(prompt, /correctness and security risk lanes/);
+    assert.match(prompt, /exactly the risk lanes named below/);
     assert.match(prompt, /focused tests.*YAGNI|YAGNI.*focused tests/i);
     const snapshotDir = snapshotMatch[1];
     const aContent = await readFile(path.join(snapshotDir, 'a.txt'), 'utf8');
@@ -44,6 +45,15 @@ test('runner passes the staged snapshot to the reviewer, not the worktree', asyn
     await writeFile(path.join(repoDir, 'a.txt'), 'v1', 'utf8');
     git(['add', 'a.txt'], repoDir);
     await writeFile(path.join(repoDir, 'a.txt'), 'v1-edit', 'utf8');
+
+    // The deterministic reuseDir survives prior runs; evict it so this test
+    // exercises the materialization path instead of the reuse path.
+    const diffBytes = git(['diff', '--cached', '--binary', '--no-ext-diff', '--'], repoDir);
+    const reuseDir = path.join(
+      tmpdir(),
+      `reviewer-kit-snapshot-${createHash('sha256').update(Buffer.from(diffBytes, 'utf8')).digest('hex').slice(0, 24)}`,
+    );
+    await rm(reuseDir, { recursive: true, force: true }).catch(() => {});
 
     // When the hook runner executes the review against a reviewer that reads only the snapshot
     const result = await runReview({

@@ -6,6 +6,7 @@ import path from 'node:path';
 
 import {
   OmpCliReviewerAdapter,
+  mergeRegistryProxyEnv,
   childLogHasQuotaSignal,
   containsProviderRefusal,
   containsQuotaStallSignal,
@@ -1278,7 +1279,7 @@ test('default subprocess runner kills a quota-grinding child and marks the stall
   const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-quota-stall-e2e-'));
   const commandPath = path.join(baseDir, isWindows ? 'fake-omp.cmd' : 'fake-omp.sh');
   const command = isWindows
-    ? '@echo off\necho Cloud Code Assist API error (429): quota reached 1>&2\nping -n 6 127.0.0.1 >nul\necho REVIEW_RESULT=PASS\nexit /b 0\n'
+    ? '@echo off\necho Cloud Code Assist API error (429): quota reached 1>&2\nnode -e "setTimeout(() => {}, 5000)"\necho REVIEW_RESULT=PASS\nexit /b 0\n'
     : '#!/bin/sh\necho "Cloud Code Assist API error (429): quota reached" >&2\nsleep 5\nprintf "REVIEW_RESULT=PASS\\n"\n';
   const previousCommand = process.env.OMP_REVIEW_KIT_OMP;
   process.env.OMP_REVIEW_KIT_OMP = commandPath;
@@ -1303,7 +1304,7 @@ test('default subprocess runner lets stdout progress cancel the stall watchdog',
   const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-quota-progress-'));
   const commandPath = path.join(baseDir, isWindows ? 'fake-omp.cmd' : 'fake-omp.sh');
   const command = isWindows
-    ? '@echo off\necho Cloud Code Assist API error (429): quota reached 1>&2\nping -n 1 127.0.0.1 >nul\necho REVIEW_RESULT=PASS\nping -n 3 127.0.0.1 >nul\nexit /b 0\n'
+    ? '@echo off\necho Cloud Code Assist API error (429): quota reached 1>&2\nnode -e "setTimeout(() => {}, 50)"\necho REVIEW_RESULT=PASS\nnode -e "setTimeout(() => {}, 2000)"\nexit /b 0\n'
     : '#!/bin/sh\necho "Cloud Code Assist API error (429): quota reached" >&2\nsleep 0.1\nprintf "REVIEW_RESULT=PASS\\n"\nsleep 2\n';
   const previousCommand = process.env.OMP_REVIEW_KIT_OMP;
   process.env.OMP_REVIEW_KIT_OMP = commandPath;
@@ -1327,7 +1328,7 @@ test('default subprocess runner never arms the watchdog without a refusal', asyn
   const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-quota-quiet-'));
   const commandPath = path.join(baseDir, isWindows ? 'fake-omp.cmd' : 'fake-omp.sh');
   const command = isWindows
-    ? '@echo off\nping -n 2 127.0.0.1 >nul\necho REVIEW_RESULT=PASS\nexit /b 0\n'
+    ? '@echo off\nnode -e "setTimeout(() => {}, 1000)"\necho REVIEW_RESULT=PASS\nexit /b 0\n'
     : '#!/bin/sh\nsleep 1\nprintf "REVIEW_RESULT=PASS\\n"\n';
   const previousCommand = process.env.OMP_REVIEW_KIT_OMP;
   process.env.OMP_REVIEW_KIT_OMP = commandPath;
@@ -1405,7 +1406,7 @@ test('default subprocess runner kills on a quota signal in the child log', async
   const commandPath = path.join(baseDir, isWindows ? 'fake-omp.cmd' : 'fake-omp.sh');
   const logDir = path.join(baseDir, 'logs');
   const command = isWindows
-    ? '@echo off\nping -n 6 127.0.0.1 >nul\necho REVIEW_RESULT=PASS\nexit /b 0\n'
+    ? '@echo off\nnode -e "setTimeout(() => {}, 5000)"\necho REVIEW_RESULT=PASS\nexit /b 0\n'
     : '#!/bin/sh\nsleep 5\nprintf "REVIEW_RESULT=PASS\\n"\n';
   const previousCommand = process.env.OMP_REVIEW_KIT_OMP;
   process.env.OMP_REVIEW_KIT_OMP = commandPath;
@@ -1443,7 +1444,7 @@ async function runWithFakeChildLog({ initialLog, tick, stallMs = 800 }) {
   const commandPath = path.join(baseDir, isWindows ? 'fake-omp.cmd' : 'fake-omp.sh');
   const logDir = path.join(baseDir, 'logs');
   const command = isWindows
-    ? '@echo off\nping -n 5 127.0.0.1 >nul\necho REVIEW_RESULT=PASS\nexit /b 0\n'
+    ? '@echo off\nnode -e "setTimeout(() => {}, 5000)"\necho REVIEW_RESULT=PASS\nexit /b 0\n'
     : '#!/bin/sh\nsleep 4\nprintf "REVIEW_RESULT=PASS\\n"\n';
   const previousCommand = process.env.OMP_REVIEW_KIT_OMP;
   process.env.OMP_REVIEW_KIT_OMP = commandPath;
@@ -1497,4 +1498,263 @@ test('default subprocess runner kills a retry storm where every request line is 
   // Then the watchdog kills it despite the growing log
   assert.equal(review.status, 1);
   assert.match(review.stderr, /Review stalled on provider quota after 800ms/);
+});
+
+test('onStage wiring accumulates stageHistory in call order into telemetry and attempt records', async () => {
+  // Coverage gap 1: the onStage handler (stageHistory.push, progress emit,
+  // updateLastRun with stage/stagesCompleted/stageHistory) had only
+  // source-text pins. Deleting the push must fail this test.
+  const updates = [];
+  const telemetry = {
+    record: async () => {},
+    updateLastRun: async (state) => { updates.push({ hasHistory: 'stageHistory' in state, ...state, stageHistory: (state.stageHistory ?? []).map((s) => ({ ...s })) }); },
+  };
+  const adapter = new OmpCliReviewerAdapter({
+    roleResolver: testRoleResolver,
+    primaryModel: '@smol',
+    runner: async (text, root, timeoutMs, model, options) => {
+      options.onSpawn?.(4242);
+      options.onStage?.({ stage: 'scout', completed: 1 });
+      options.onStage?.({ stage: 'verifier', completed: 2 });
+      return result(0, 'REVIEW_RESULT=PASS\n');
+    },
+  });
+
+  const review = await adapter.executeReview({ prompt, cwd, telemetry });
+
+  assert.equal(review.status, 0);
+  const stageUpdates = updates.filter((u) => u.hasHistory);
+  assert.equal(stageUpdates.length, 2, 'one updateLastRun per onStage call');
+  assert.equal(stageUpdates[0].stage, 'scout');
+  assert.equal(stageUpdates[0].stagesCompleted, 1);
+  assert.equal(stageUpdates[0].stageHistory.length, 1);
+  assert.equal(stageUpdates[0].stageHistory[0].stage, 'scout');
+  assert.equal(stageUpdates[1].stage, 'verifier');
+  assert.equal(stageUpdates[1].stagesCompleted, 2);
+  assert.equal(stageUpdates[1].stageHistory.length, 2);
+  assert.deepEqual(stageUpdates[1].stageHistory.map((s) => s.stage), ['scout', 'verifier']);
+  assert.equal(review.attempts.length, 1);
+  assert.deepEqual(review.attempts[0].stageHistory.map((s) => s.stage), ['scout', 'verifier']);
+});
+
+test('quota poller dedups repeated stages and never regresses on log truncation', async () => {
+  // Coverage gap 2: the restructured poller (unconditional childLogReadStage
+  // per tick, dedup, monotonic rank guard) was dead in tests. Removing the
+  // dedup or the rank guard must fail this test.
+  const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-stage-poller-'));
+  const logDir = path.join(baseDir, 'logs');
+  await mkdir(logDir, { recursive: true });
+  const commandPath = path.join(baseDir, isWindows ? 'fake-omp.cmd' : 'fake-omp.sh');
+  const command = isWindows
+    ? '@echo off\nnode -e "setTimeout(() => {}, 2000)"\necho REVIEW_RESULT=PASS\nexit /b 0\n'
+    : '#!/bin/sh\nsleep 1\nprintf "REVIEW_RESULT=PASS\\n"\n';
+  const previousCommand = process.env.OMP_REVIEW_KIT_OMP;
+  process.env.OMP_REVIEW_KIT_OMP = commandPath;
+  const synthesisLog = (entries) => `${entries.map((e) => JSON.stringify(e)).join('\n')}\n`;
+  const fullRun = synthesisLog([
+    { message: 'Configured subagent runtime model fallback chain', role: 'subagent:ReviewerKit.ContextScout' },
+    { message: 'subagent launch timing', agent: 'review-context-scout' },
+    { message: 'Configured subagent runtime model fallback chain', role: 'subagent:ReviewerKit.SecurityHunter' },
+    { message: 'subagent launch timing', agent: 'review-risk-hunter' },
+    { message: 'Configured subagent runtime model fallback chain', role: 'subagent:ReviewerKit.CorrectnessHunter' },
+    { message: 'subagent launch timing', agent: 'review-risk-hunter' },
+    { message: 'Configured subagent runtime model fallback chain', role: 'subagent:ReviewerKit.FindingVerifier' },
+    { message: 'subagent launch timing', agent: 'review-finding-verifier' },
+  ]);
+  const truncatedRun = synthesisLog([
+    { message: 'Configured subagent runtime model fallback chain', role: 'subagent:ReviewerKit.ContextScout' },
+  ]);
+  try {
+    await writeFile(commandPath, command, 'utf8');
+    if (!isWindows) await chmod(commandPath, 0o755);
+
+    const stages = [];
+    let childPid = 0;
+    const runPromise = OmpCliReviewerAdapter.defaultRunner('probe', cwd, 15000, '@smol', {
+      quotaStallMs: 0,
+      quotaPollMs: 50,
+      quotaLogDir: logDir,
+      onSpawn: (pid) => { childPid = pid; },
+      onStage: (info) => { stages.push({ ...info }); },
+    });
+    while (!childPid) await new Promise((r) => setTimeout(r, 10));
+    await writeFile(path.join(logDir, `omp.2099-01-01.${childPid}.log`), fullRun, 'utf8');
+    const deadline = Date.now() + 5000;
+    while (stages.length === 0 && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    assert.equal(stages.length, 1, 'first tick reports the finished run');
+    assert.equal(stages[0].stage, 'synthesis');
+    assert.equal(stages[0].completed, 3, 'scout + risk + verifier stages — 3 stages, not 4 agents');
+    // Truncate the tail back to scout-only: the monotonic guard must clamp
+    // instead of reporting a regression, and dedup must not re-emit.
+    await writeFile(path.join(logDir, `omp.2099-01-01.${childPid}.log`), truncatedRun, 'utf8');
+    const review = await runPromise;
+    assert.equal(review.status, 0, review.stderr);
+    assert.equal(stages.length, 1, 'no regression and no duplicate stage reports');
+    assert.equal(stages[0].stage, 'synthesis');
+    assert.equal(stages[0].completed, 3);
+  } finally {
+    if (previousCommand === undefined) delete process.env.OMP_REVIEW_KIT_OMP;
+    else process.env.OMP_REVIEW_KIT_OMP = previousCommand;
+    await rm(baseDir, { recursive: true, force: true });
+  }
+});
+test('quota poller: a tick resolving after child settle never emits onStage', async () => {
+  // coverage-2: the poller's Promise.all can still be in-flight when close()
+  // settles the child — without the post-settle guard its .then delivers a
+  // stage update that regresses last-run state to 'reviewing'. Timing:
+  // instant-exit child (~30-50ms spawn+echo) vs a fat 64MB log tail — the
+  // first 5ms tick starts while the child is alive and its log read resolves
+  // only after settle, deterministically crossing the boundary.
+  const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-stage-settle-'));
+  const logDir = path.join(baseDir, 'logs');
+  await mkdir(logDir, { recursive: true });
+  const commandPath = path.join(baseDir, isWindows ? 'fake-omp.cmd' : 'fake-omp.sh');
+  const command = isWindows
+    ? '@echo off\necho REVIEW_RESULT=PASS\nexit /b 0\n'
+    : '#!/bin/sh\nprintf "REVIEW_RESULT=PASS\\n"\n';
+  const previousCommand = process.env.OMP_REVIEW_KIT_OMP;
+  process.env.OMP_REVIEW_KIT_OMP = commandPath;
+  const stageLine = JSON.stringify({ message: 'Configured subagent runtime model fallback chain', role: 'subagent:ReviewerKit.ContextScout' });
+  try {
+    await writeFile(commandPath, command, 'utf8');
+    if (!isWindows) await chmod(commandPath, 0o755);
+
+    const stages = [];
+    let resolved = false;
+    let childPid = 0;
+    const runPromise = OmpCliReviewerAdapter.defaultRunner('probe', cwd, 15000, '@smol', {
+      quotaStallMs: 0,
+      quotaPollMs: 5,
+      quotaLogDir: logDir,
+      onSpawn: (pid) => { childPid = pid; },
+      onStage: (info) => { stages.push({ ...info, postResolve: resolved }); },
+    });
+    while (!childPid) await new Promise((r) => setTimeout(r, 10));
+    // 64MB tail: readLogTail's async read outlives the instant-exit child, so
+    // the in-flight tick resolves strictly after close()/settle.
+    const payload = stageLine + '\n' + 'x'.repeat(64 * 1024 * 1024);
+    await writeFile(path.join(logDir, `omp.2099-01-01.${childPid}.log`), payload, 'utf8');
+    const review = await runPromise;
+    resolved = true;
+    assert.equal(review.status, 0, review.stderr);
+    // Let every pending tick's Promise.all settle past the read.
+    await new Promise((r) => setTimeout(r, 1200));
+    const postResolve = stages.filter((s) => s.postResolve);
+    assert.deepEqual(postResolve, [], 'post-settle ticks must not deliver stage callbacks');
+  } finally {
+    if (previousCommand === undefined) delete process.env.OMP_REVIEW_KIT_OMP;
+    else process.env.OMP_REVIEW_KIT_OMP = previousCommand;
+    await rm(baseDir, { recursive: true, force: true });
+  }
+});
+
+test('roleResolver returning null/undefined yields the pinned role-not-found error identically in src and runner', async () => {
+  // Gate coverage (security-2 drift guard): a nullish roles map must NOT
+  // TypeError inside #resolveSelector, and the observable failure must be
+  // byte-identical across the src adapter and the shipped runner copy so
+  // one-sided normalization drift can never ship again.
+  const errors = [];
+  for (const mod of ['../src/infra/omp-cli-reviewer-adapter.mjs', '../scripts/run-review.mjs']) {
+    for (const resolver of [() => null, () => undefined]) {
+      const { OmpCliReviewerAdapter: Adapter } = await import(mod);
+      const adapter = new Adapter({
+        roleResolver: resolver,
+        runner: async () => result(0, 'should never spawn'),
+        modelsProvider: async () => [],
+        maxFallbacks: 0,
+      });
+      const res = await adapter.executeReview({ prompt, cwd });
+      errors.push(res.stderr);
+      assert.match(res.stderr, /Model role @smol not found in OMP configuration/, `${mod}: resolver=${resolver}`);
+      assert.equal(res.status, 1);
+    }
+  }
+  for (const err of errors) {
+    const line = err.split('\n').find((l) => l.startsWith('Last provider error:'));
+    assert.equal(line, 'Last provider error: Model role @smol not found in OMP configuration');
+  }
+});
+
+test('mergeRegistryProxyEnv (src): unindented forged rows and non-REG_SZ/non-PI_ never merge; parent env not mutated', () => {
+  const registryOut = [
+    'HKEY_CURRENT_USER\\Environment',
+    'PI_PROXY_X REG_SZ http://evil',          // no leading whitespace = forged/non-registry row
+    '    PI_PROXY_EXPAND    REG_EXPAND_SZ    %SystemRoot%\\skip',
+    '    NOT_PI    REG_SZ    also-skipped',
+    '    PI_PROXY_META    REG_SZ    http://127.0.0.1:3128',
+  ].join('\n');
+  const env = { PATH: '/x' };
+  const merged = mergeRegistryProxyEnv(env, registryOut);
+  assert.equal(merged.PI_PROXY_X, undefined, 'unindented row must not merge');
+  assert.equal(merged.PI_PROXY_EXPAND, undefined, 'REG_EXPAND_SZ must not merge');
+  assert.equal(merged.NOT_PI, undefined);
+  assert.equal(merged.PI_PROXY_META, 'http://127.0.0.1:3128');
+  assert.deepEqual(env, { PATH: '/x' }, 'input env must not be mutated');
+});
+
+test('mergeRegistryProxyEnv (src): parent-set value wins; case-variant spelling also suppresses on win32', () => {
+  const registryOut = '    PI_PROXY_META    REG_SZ    http://127.0.0.1:3128';
+  // Exact-case parent wins on every platform.
+  assert.equal(
+    mergeRegistryProxyEnv({ PI_PROXY_META: 'parent' }, registryOut).PI_PROXY_META,
+    'parent',
+  );
+  if (process.platform === 'win32') {
+    // A lowercase/variant inherited key must still suppress the registry row —
+    // else both spellings reach the child env with unpredictable resolution.
+    const merged = mergeRegistryProxyEnv({ pi_proxy_meta: 'parent' }, registryOut);
+    assert.equal(merged.PI_PROXY_META, undefined, 'registry row must not duplicate a case-variant parent key');
+    assert.equal(merged.pi_proxy_meta, 'parent');
+  } else {
+    // POSIX envs are case-sensitive: distinct names both survive by design.
+    const merged = mergeRegistryProxyEnv({ pi_proxy_meta: 'parent' }, registryOut);
+    assert.equal(merged.PI_PROXY_META, 'http://127.0.0.1:3128');
+  }
+});
+
+test('spawn env wiring: registry PI_PROXY_* reaches the child, parent-set value wins (r27 coverage-2)', { skip: !isWindows }, async () => {
+  // The merge function is tested in isolation; this pins the spawn-side
+  // wiring: env option must be mergeRegistryProxyEnv() output, not plain
+  // process.env. A fake .cmd echoes the env slice it actually receives.
+  const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-envwire-'));
+  const commandPath = path.join(baseDir, 'fake-omp.cmd');
+  const envDump = path.join(baseDir, 'envdump.txt');
+  const prevOmp = process.env.OMP_REVIEW_KIT_OMP;
+  const prevDump = process.env.OMP_REVIEW_TEST_ENVDUMP;
+  process.env.OMP_REVIEW_KIT_OMP = commandPath;
+  process.env.OMP_REVIEW_TEST_ENVDUMP = envDump;
+  const prevProbe = process.env.PI_PROXY_PROBE_REGONLY;
+  const prevParent = process.env.PI_PROXY_PARENT_SET;
+  try {
+    delete process.env.PI_PROXY_PROBE_REGONLY; // must come ONLY from the registry merge
+    process.env.PI_PROXY_PARENT_SET = 'parent-wins';
+    await writeFile(commandPath, [
+      '@echo off',
+      `> "%OMP_REVIEW_TEST_ENVDUMP%" set PI_PROXY_`,
+      'echo REVIEW_RESULT=PASS',
+      'exit /b 0',
+    ].join('\r\n'), 'utf8');
+    const review = await OmpCliReviewerAdapter.defaultRunner('env probe', cwd, 0, '@smol', {
+      registryEnv: '    PI_PROXY_PROBE_REGONLY    REG_SZ    http://127.0.0.1:3199\r\n    PI_PROXY_PARENT_SET    REG_SZ    registry-loses',
+    });
+    assert.equal(review.status, 0, review.stderr);
+    const dump = await readFile(envDump, 'utf8');
+    assert.match(dump, /PI_PROXY_PROBE_REGONLY=http:\/\/127\.0\.0\.1:3199/,
+      'registry-only PI_PROXY_* must reach the child env');
+    assert.match(dump, /PI_PROXY_PARENT_SET=parent-wins/,
+      'parent-set value must override the registry row');
+    assert.doesNotMatch(dump, /PI_PROXY_PARENT_SET=registry-loses/);
+  } finally {
+    if (prevOmp === undefined) delete process.env.OMP_REVIEW_KIT_OMP;
+    else process.env.OMP_REVIEW_KIT_OMP = prevOmp;
+    if (prevDump === undefined) delete process.env.OMP_REVIEW_TEST_ENVDUMP;
+    else process.env.OMP_REVIEW_TEST_ENVDUMP = prevDump;
+    if (prevProbe === undefined) delete process.env.PI_PROXY_PROBE_REGONLY;
+    else process.env.PI_PROXY_PROBE_REGONLY = prevProbe;
+    if (prevParent === undefined) delete process.env.PI_PROXY_PARENT_SET;
+    else process.env.PI_PROXY_PARENT_SET = prevParent;
+    await rm(baseDir, { recursive: true, force: true }).catch(() => {});
+  }
 });

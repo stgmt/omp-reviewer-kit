@@ -424,10 +424,15 @@ export default function initExtension(pi) {
             run.state ?? 'unknown',
             run.verdict ? `verdict ${run.verdict}` : null,
             run.model ? `model ${run.model}` : null,
+            run.stage ? `stage ${run.stage}` : null,
+            Number.isFinite(run.stagesCompleted) ? `${run.stagesCompleted} stages done` : null,
             duration,
             run.updatedAt ?? run.startedAt ?? null,
           ].filter(Boolean).join(' · ');
           lines.push(`Last Run: ${detail}`);
+          if (Array.isArray(run.stageHistory) && run.stageHistory.length > 0) {
+            lines.push(`  stages: ${run.stageHistory.map((s) => s?.stage).filter(Boolean).join(' → ')}`);
+          }
           if (Array.isArray(run.modelsTried) && run.modelsTried.length > 0) {
             lines.push(`  models tried: ${run.modelsTried.join(' -> ')}`);
           }

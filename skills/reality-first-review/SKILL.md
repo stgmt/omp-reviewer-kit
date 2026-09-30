@@ -11,7 +11,7 @@ The dispatcher provides an absolute staged snapshot directory. Read source files
 ## Review contract
 
 Review the current staged change, not an imagined implementation and not unrelated old work.
-Execution of review stages follows the `multi-stage-review` protocol: context discovery, parallel correctness and security risk hunting, adversarial verification, and orchestrator synthesis.
+Execution of review stages follows the `multi-stage-review` protocol: context discovery, parallel correctness and security risk hunting (or the dedicated `content-risk` lane under the `spec-docs` profile), adversarial verification, and orchestrator synthesis.
 
 1. Establish the actual input: repository, staged paths, staged diff, and relevant consumers.
 2. Find the owner of each changed rule or fact.
@@ -23,7 +23,7 @@ Execution of review stages follows the `multi-stage-review` protocol: context di
 8. Check every caller and consumer at the boundary.
 9. Check the new success path, not only the new rejection path.
 10. Require a test that would fail without the change when behavior changed.
-For correctness review, inspect focused tests and record concrete test evidence. Missing tests or unnecessary code are not separate defect classes; report them only when a reachable P1/P2 correctness impact is proven, using the existing `correctness` or `security` envelope categories. Independently, every changed executable behavior without a covering test **that a runnable test harness in this repository can exercise for its file class/runtime** is a coverage gap: it travels the coverage pipeline (`coverage_map` -> `coverage_gaps` -> `confirmed_coverage_gaps`) and blocks via the `coverage_required` envelope. Non-coverable items are recorded in `non_coverable_items` (scout), `suppressed_coverage_items` (hunter), `rejected_coverage_gaps` (verifier) and mirrored to `### Notes`; a byte-identical copy of untested committed code waives the directive only when the staged file's class/runtime is equally non-coverable.
+For correctness review, inspect focused tests and record concrete test evidence. Missing tests or unnecessary code are not separate defect classes; report them only when a reachable P1/P2 correctness impact is proven, using the `correctness` or `security` envelope categories — `content-risk` findings arrive only through the dedicated spec-docs/content lane in `multi-stage-review`, never through this skill's correctness/security lanes. Independently, every changed executable behavior without a covering test **that a runnable test harness in this repository can exercise for its file class/runtime** is a coverage gap: it travels the coverage pipeline (`coverage_map` -> `coverage_gaps` -> `confirmed_coverage_gaps`) and blocks via the `coverage_required` envelope. Non-coverable items are recorded in `non_coverable_items` (scout), `suppressed_coverage_items` (hunter), `rejected_coverage_gaps` (verifier) and mirrored to `### Notes`; a byte-identical copy of untested committed code waives the directive only when the staged file's class/runtime is equally non-coverable.
 
 ## The sixteen review rules
 
@@ -75,7 +75,7 @@ Separate three things and never merge them:
 - a disclosed gap — the author named it themselves. A disclosed gap is still a gap, but it raises trust in the report; never punish it harder than a hidden one.
 
 ### Blocking and non-blocking
-Blocking (confirmed finding, `correctness` or `security`): a check closing a task that no longer runs; green reproducible only in an undeclared environment; an assertion weakened or deleted to go green; an acceptance criterion with no executable coverage while marked closed; a measurement replaced by a verdict where the protocol requires a number.
+Blocking (confirmed finding, `correctness`, `security`, or the content lane's `content-risk`): a check closing a task that no longer runs; green reproducible only in an undeclared environment; an assertion weakened or deleted to go green; an acceptance criterion with no executable coverage while marked closed; a measurement replaced by a verdict where the protocol requires a number.
 Blocking (coverage directive, `coverage_required` envelope): a changed executable behavior — new or altered control-flow branch, boundary, default, side effect, or error path reachable from a caller — with no focused test that would fail if the behavior were reverted, **restricted to code a runnable test harness in this repository can exercise for its file class/runtime** (harness-mismatch and equally-non-coverable byte-identical copies are waived and mirrored to `### Notes`). The directive must name the required tests: at least one edge test per new boundary/default/error path and at least one mutation test naming the concrete staged-lines mutant it kills.
 Non-blocking (report under `### Notes`): a stale record with intact code; a check command that suppresses its own output; a showcase test on a stub when the same contract is proven on a real object elsewhere; a disclosed gap with a named owner; a coverage gap in a repository without a runnable test harness.
 
@@ -140,7 +140,7 @@ Do not report guesses as defects. If evidence is missing, say `not proven` and k
 
 The report also contains `### Verified-OK`, listing paths, tests, caller checks, and invariants actually verified; it does not convert unresolved findings into approval.
 
-The `reviewer-kit` orchestrator synthesizes the verified findings from the multi-stage pipeline. A BLOCK must carry exactly one `review-rejection-envelope@1` between standalone `REVIEW_REJECTION_ENVELOPE_BEGIN` and `REVIEW_REJECTION_ENVELOPE_END` lines immediately before the verdict. Confirmed findings use only `correctness` or `security`; a coverage-only block uses `coverage_required` with `coverage_items` mirroring the confirmed gaps; a stage failure uses the `execution_failure` code and a non-empty diagnostic message. PASS carries no envelope. The response finishes with exactly one machine-readable line:
+The `reviewer-kit` orchestrator synthesizes the verified findings from the multi-stage pipeline. A BLOCK must carry exactly one `review-rejection-envelope@1` between standalone `REVIEW_REJECTION_ENVELOPE_BEGIN` and `REVIEW_REJECTION_ENVELOPE_END` lines immediately before the verdict. Confirmed findings use `correctness`, `security`, or (content lane only) `content-risk`; a coverage-only block uses `coverage_required` with `coverage_items` mirroring the confirmed gaps; a stage failure uses the `execution_failure` code and a non-empty diagnostic message. PASS carries no envelope. The response finishes with exactly one machine-readable line:
 
 ```text
 REVIEW_RESULT=PASS

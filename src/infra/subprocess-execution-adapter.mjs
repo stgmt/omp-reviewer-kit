@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { stat, symlink } from 'node:fs/promises';
 import path from 'node:path';
 import { ExecutionPort } from '../application/ports.mjs';
+import { mergeRegistryProxyEnv } from './omp-cli-reviewer-adapter.mjs';
 
 function terminateProcessTree(pid) {
   if (!pid) return;
@@ -74,7 +75,9 @@ export class SubprocessExecutionAdapter extends ExecutionPort {
         child = spawn(command, {
           shell: true,
           cwd,
-          env: process.env,
+          // Same stale-parent guard as review spawns: execution children
+          // inherit registry PI_PROXY_* when the parent env lacks them.
+          env: mergeRegistryProxyEnv(),
           windowsHide: true,
         });
       } catch (err) {

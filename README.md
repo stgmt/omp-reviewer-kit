@@ -1,5 +1,7 @@
 # omp-reviewer-kit
 
+[![review-kit](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fstgmt%2Fomp-reviewer-kit%2Fmain%2Faudit-reports%2Freview-badge.json)](audit-reports/review-badge.full.json)
+
 Native Oh My Pi plugin for multi-stage, evidence-first code review of staged Git changes.
 
 ## Names

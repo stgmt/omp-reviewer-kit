@@ -20,9 +20,10 @@ Staged Diff (git diff --cached --binary --no-ext-diff --)
   - Produces structured context report.
                     │
                     ▼
-[Stage 2: Parallel Risk Hunting] (review-risk-hunter x 2 batch)
-  - Lane 1: Correctness (boundary conditions, null/default states, resource leaks, anti-parasitic correctness defects).
-  - Lane 2: Security (attacker input source, dangerous sink, missing controls).
+[Stage 2: Parallel Risk Hunting] (review-risk-hunter — one task per lane named in the dispatcher's `Risk lanes for this diff:` list)
+  - Lane "correctness" (boundary conditions, null/default states, resource leaks, anti-parasitic correctness defects).
+  - Lane "security" (attacker input source, dangerous sink, missing controls) — opt-in via `OMP_REVIEW_KIT_LANES`.
+  - Lane "content-risk" — spec-docs profile only.
   - Produces candidate findings under strict anti-noise rules.
                     │
                     ▼
@@ -36,6 +37,25 @@ Staged Diff (git diff --cached --binary --no-ext-diff --)
   - Emits a strict `review-rejection-envelope@1` before BLOCK and a solitary machine-readable verdict marker; PASS has no envelope.
 ```
 
+
+## Review profiles
+
+The dispatcher classifies every changed path deterministically into file classes (`executable`, `test`, `prompt`, `spec`, `docs`, `config`, `data`), materializes the manifest at `<snapshot>/.review/file-classes.json` (`file-classes@1`, one row per path with the staged-content SHA-256), and states the review profile on the `Review profile for this diff:` prompt line.
+
+- `full` — at least one `executable` or `test` file changed. Run the four stages exactly as specified below, spawning one hunter task per lane named in `Risk lanes for this diff:` (correctness only by default; the security lane is opt-in via `OMP_REVIEW_KIT_LANES`).
+- `spec-docs` — zero `executable`/`test` files changed (prompt/spec/docs/config/data only). Run a reduced review:
+
+```
+[Stage 1: Context Scout] — same role; no coverage_map is produced; test_harness may be reported absent for this diff.
+            │
+[Stage 2: Content-risk hunting] — ONE task, lane "content-risk" (secrets/credentials committed in text, documented-behavior contradictions with executable files, dead links/commands/steps in docs and specs, fabricated numbers, prompt-contract drift in agents/*.md and skills/, metadata staleness).
+            │
+[Stage 3: Adversarial Verification] — runs only when stage 2 produced at least one candidate; skipped otherwise.
+            │
+[Stage 4: Orchestrator Synthesis] — same report shape; `### Required test coverage` reads "None required" (no executable change exists to cover).
+```
+
+Under `spec-docs` the orchestrator MUST NOT run the correctness lane, the separate security lane, coverage-gap enumeration, or coverage-gap verification, and MUST NOT emit a `coverage_required` envelope. Confirmed content findings block normally with the `confirmed_findings` envelope (`defect_class` = the lane value `content-risk`). The file-class manifest is a deterministic input; agents must not re-classify paths. When the manifest contradicts what an agent observes (e.g. an `executable` row that is actually prose), it flags the row in `unknowns`/`### Notes` — it does not silently widen the profile.
 ## Snapshot and evidence boundary
 
 The dispatcher materializes an absolute staged snapshot directory from the Git index before invoking the reviewer. All source-file contents, tests, and fixtures must be read from that snapshot; use the repository working tree only for read-only Git metadata, caller discovery, and project-skill discovery. The snapshot is the authoritative review input and prevents unstaged worktree content from entering the decision.
@@ -55,7 +75,7 @@ The snapshot also carries the review inputs under `.review/`: `diff.patch` holds
   - `test_evidence`: Existing automated tests exercising the touched areas.
   - `test_harness`: `"present" | "absent"` — whether the repository has a runnable test harness (test script, test directory, or runner config).
   - `coverage_map`: Array of `{behavior, file_path, line_start, line_end, covering_test}` — every changed executable behavior (new or altered control-flow branch, boundary, default, side effect, or error path reachable from a caller) **that a runnable test harness in this repository can exercise for its file class/runtime**; `covering_test` names the focused test that fails if the behavior is reverted, or `null` when none exists. Non-coverable code (e.g. an inline browser script in a standalone spec/document HTML when only Go/vitest harnesses exist) is excluded here and recorded as a structured `non_coverable_items` entry (`file_path`, `line_start`, `line_end`, `reason`) — a repo-global harness that cannot execute the file class counts as absent for that entry.
-  - `non_coverable_items`: Array of `{file_path, line_start, line_end, reason}` — structured record for each changed executable item excluded from `coverage_map` because no runnable harness in this repository can exercise its file class/runtime; the orchestrator mirrors these into `### Notes`.
+  - `non_coverable_items`: Array of `{file_path, line_start, line_end, reason}` — structured record for each changed executable item excluded from `coverage_map` because no runnable harness in this repository can exercise its file class/runtime; the orchestrator normalizes each into an envelope `non_coverable_items` entry (`category_kind:"non_coverable"`, `severity:"none"`, `blocking:false`, `source:"scout"`) and mirrors it into `### Notes`.
   - `claims`: Array of `{claim, source_path, source_line, kind}` (`kind` in `"number" | "status" | "check_output" | "verified_claim"`) — verifiable claims found in staged content.
   - `declared_checks`: Array of `{selector, source_path, source_line}` — check commands or test selectors declared in staged content.
   - `unknowns`: Areas with insufficient visibility or ungrounded assumptions.
@@ -109,7 +129,7 @@ The snapshot also carries the review inputs under `.review/`: `diff.patch` holds
   - `behavior`: The changed executable behavior lacking a covering test.
   - `required_tests`: Array of `{kind: "edge" | "mutation", scenario, mutant}` — concrete runnable scenarios; `mutant` is required and non-empty for `kind: "mutation"`.
 - **Suppressed Coverage Schema** (correctness lane only, emitted alongside `coverage_gaps`):
-  - `suppressed_coverage_items`: Array of `{file_path, line_start, line_end, ground}` — one record per `coverage_map` entry skipped on the suppression grounds (`harness-mismatch` | `byte-identical-non-coverable`); required so the orchestrator can mirror waivers into `### Notes`.
+  - `suppressed_coverage_items`: Array of `{file_path, line_start, line_end, ground}` — one record per `coverage_map` entry skipped on the suppression grounds (`harness-mismatch` | `byte-identical-non-coverable`); required so the orchestrator can mirror waivers into `### Notes` and (when BLOCKing) into the envelope `non_coverable_items` with `source:"hunter"`.
 
 ### Stage 3: Adversarial Verifier (`review-finding-verifier`)
 - **Role**: Defense attorney. Challenges every candidate against repository reality to eliminate false positives. Budget: roughly 20 tool calls — one verification pass per candidate against the snapshot and deciding callers.
@@ -133,7 +153,7 @@ The snapshot also carries the review inputs under `.review/`: `diff.patch` holds
     - `evidence`: File and line citations supporting the decision.
   - `confirmed_findings`: Array of validated findings with normalized priority (`P1` | `P2`), file_path, line range, observed, expected, trigger, impact, and evidence.
   - `confirmed_coverage_gaps`: Array of verified coverage gaps with `coverage_id`, file_path, line range, `behavior`, and `required_tests` (`{kind, scenario, mutant}`).
-  - `rejected_coverage_gaps`: Array of `{coverage_id, file_path, line_start, line_end, ground}` — one record per `coverage_gaps` item rejected on any ground (`already-covered` | `non-executable` | `unreachable` | `harness-mismatch` | `byte-identical-non-coverable`); required so the orchestrator can mirror waived directives into `### Notes`.
+  - `rejected_coverage_gaps`: Array of `{coverage_id, file_path, line_start, line_end, ground}` — one record per `coverage_gaps` item rejected on any ground (`already-covered` | `non-executable` | `unreachable` | `harness-mismatch` | `byte-identical-non-coverable`); required so the orchestrator can mirror waived directives into `### Notes` and (when BLOCKing) into the envelope `non_coverable_items` with `source:"verifier"`.
 - **Constraint**: Must NOT invent replacement patches or emit verdict markers (`REVIEW_RESULT=...`).
 
 ### Stage 4: Orchestrator Synthesis (`reviewer-kit`)
@@ -143,12 +163,13 @@ The snapshot also carries the review inputs under `.review/`: `diff.patch` holds
   - `### Confirmed findings`: Detailed list of confirmed findings (priority, path, range, trigger, impact, evidence).
   - `### Required test coverage`: Mandatory directive to the committer — every confirmed coverage gap with file path, line range, changed behavior, and the concrete tests that must be added (edge tests per new boundary/default/error path, mutation tests naming the killed mutant). "None required" when every changed behavior is covered. Non-blocking only when the scout reported `test_harness: absent`; then the gaps are mirrored into `### Notes`.
   - `### Unproven/rejected summary`: Terse summary of rejected or unproven candidates with rationale.
-  - `### Notes`: Non-blocking observations (stale records with intact code, check commands suppressing output, showcase stub tests, disclosed gaps with named owners); never part of rejection envelope and never blocks PASS. Coverage items suppressed on the new grounds MUST be mirrored here with `file_path`, line range, and the ground applied — sourced from the three producer records: scout `non_coverable_items`, hunter `suppressed_coverage_items`, verifier `rejected_coverage_gaps` — so waived directives leave a durable record of what was evaluated and why; a suppression whose producer record is absent is not grounded and must be noted.
+  - `### Notes`: Non-blocking observations (stale records with intact code, check commands suppressing output, showcase stub tests, disclosed gaps with named owners); never blocks PASS. Coverage items suppressed on the new grounds MUST be mirrored here with `file_path`, line range, and the ground applied — sourced from the three producer records: scout `non_coverable_items`, hunter `suppressed_coverage_items`, verifier `rejected_coverage_gaps` — and when the verdict is BLOCK they additionally ride the envelope's `non_coverable_items` array (`category_kind:"non_coverable"`, `severity:"none"`, `blocking:false`, `source` = producer stage) so waived directives leave a durable machine-readable record of what was evaluated and why; a suppression whose producer record is absent is not grounded and must be noted.
   - `### Verified-OK`: Explicit paths, tests, caller checks, and invariants actually verified, each carrying a concrete measure (unit count, path, positive control). Bare "looks correct" is prohibited; never use this section to hide unresolved candidates.
 - **Rejection Envelope Rule**:
-  - A confirmed-finding BLOCK emits one strict `review-rejection-envelope@1` with the current diff hash and only normalized `correctness` or `security` findings.
-  - A coverage-only BLOCK (zero confirmed findings, at least one confirmed coverage gap, `test_harness: present`) emits one `coverage_required` envelope: `findings: []` plus `coverage_items` mirroring `confirmed_coverage_gaps` one-to-one (`coverage_id`, `file_path`, `line_start`, `line_end`, `behavior`, `required_tests`). Confirmed findings take precedence: when both exist, emit the `confirmed_findings` envelope and keep the coverage directive in the report section only.
-  - A mandatory-stage failure emits a `review_failure` envelope with `execution_failure` and a non-empty diagnostic message.
+  - A confirmed-finding BLOCK emits one strict `review-rejection-envelope@1` with the current diff hash and findings normalized to `correctness`, `security`, or (content lane) `content-risk` — each carrying `category_kind:"finding"`, `severity` mirroring `priority`, `blocking:true`, and `source` = the producing lane.
+  - A coverage-only BLOCK (zero confirmed findings, at least one confirmed coverage gap, `test_harness: present`) emits one `coverage_required` envelope: `findings: []` plus `coverage_items` mirroring `confirmed_coverage_gaps` one-to-one (`coverage_id`, `file_path`, `line_start`, `line_end`, `behavior`, `required_tests`) each normalized with `category_kind:"coverage"`, `severity` (`P1`|`P2`), `blocking:true`, `source` = producing stage. Confirmed findings take precedence: when both exist, emit the `confirmed_findings` envelope and keep the coverage directive in the report section only.
+  - Every BLOCK envelope carries `non_coverable_items` (`[]` when none): normalized producer records for waived coverage (`category_kind:"non_coverable"`, `severity:"none"`, `blocking:false`, `source` = `scout`|`hunter`|`verifier`).
+  - A mandatory-stage failure emits a `review_failure` envelope with `execution_failure`, a non-empty diagnostic message, `findings: []`, `non_coverable_items: []`.
   - The envelope occurs between standalone begin/end lines before the solitary BLOCK marker. PASS emits no envelope.
 - **Verdict Rule**:
   - Exactly zero confirmed findings and zero blocking coverage gaps -> emit `REVIEW_RESULT=PASS`.

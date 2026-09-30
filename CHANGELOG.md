@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.13.0] - 2026-09-30
+
+### Added
+- **Review profiles (`full` / `spec-docs`)**: the runner now classifies every staged path deterministically (`executable`, `test`, `prompt`, `spec`, `docs`, `config`, `data`) into `.review/file-classes.json` (`file-classes@1`, per-path class + staged-content SHA-256) and states the profile on the `Review profile for this diff:` prompt line. Diffs with zero `executable`/`test` files (docs, specs, agent/skill prompts, configs, audit data) run a reduced review — scout without `coverage_map`, one `content-risk` hunter lane (secrets in text, doc-vs-code contradictions, dead links/commands/steps, fabricated numbers, prompt-contract drift), verifier only when candidates exist, and no coverage machinery — instead of the full risk-lane pipeline. Confirmed content findings still BLOCK via `confirmed_findings` (`defect_class: "content-risk"`); the `coverage_required` envelope is never emitted under `spec-docs`.
+- **Deterministic snapshot reuse**: identical staged content (same diff bytes, e.g. re-running a commit after a `--no-verify` bail or a hook retry) reuses the content-addressed snapshot directory (`reviewer-kit-snapshot-<diffHash24>`) instead of re-materializing the whole index; cached copies are verified by byte-comparing `.review/diff.patch` and pruned past 5 entries or 7 days.
+- **Live stage progress + per-stage receipts**: `last-run.json` now carries `stage` (`scout`/`risk`/`verifier`/`synthesis`), `stagesCompleted`, and a `stageHistory` timeline, derived from the child OMP log (`Configured subagent`/`subagent launch timing` events) — the outer runner stays stage-agnostic while `/reviewer-kit:status` and Git hook output show where wall time actually goes.
+- **Risk-lane configuration (`OMP_REVIEW_KIT_LANES`)**: stage 2 now spawns one `review-risk-hunter` per lane named in a comma-separated allowlist over `correctness|security|content-risk`. Unset, the `full` profile runs the correctness lane only (the security lane is opt-in); `OMP_REVIEW_KIT_LANES=correctness,security` restores the classic two-lane stage 2. Unknown lane tokens fail closed with an actionable error.
+- **README badge**: every completed review writes `audit-reports/review-badge.json` (shields.io endpoint payload: verdict + duration) and `review-badge.full.json` (`review-badge@1` side-car: runId, diff hash, profile, stage trail, models tried). The README renders the badge from the committed endpoint file — it reflects the previous run's verdict by design.
+
 ## [0.12.7] - 2026-09-30
 
 ### Changed

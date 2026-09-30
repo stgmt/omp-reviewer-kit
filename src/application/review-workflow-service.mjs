@@ -1,3 +1,7 @@
+import { createHash, randomBytes } from 'node:crypto';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { ReviewRejectionEnvelope } from '../domain/review-rejection-envelope.mjs';
 import { ReviewPrompt } from '../domain/review-prompt.mjs';
 import { ReviewReport } from '../domain/review-report.mjs';
@@ -5,6 +9,7 @@ import { ReviewExecutionResult } from '../domain/review-execution-result.mjs';
 import { SuspicionMap, isTestPath, DEFAULT_ASSERT_PATTERNS, DEFAULT_TEST_PATH_PATTERNS, DEFAULT_TEST_DECLARATION_PATTERNS } from '../domain/suspicion-map.mjs';
 import { ExecutionEvidence } from '../domain/execution-evidence.mjs';
 import { buildRevertedFiles } from '../domain/reverted-snapshot.mjs';
+import { classifyChangedPaths, reviewProfileFor, riskLanesFor } from '../domain/file-class.mjs';
 import { StagedSnapshot } from '../domain/staged-snapshot.mjs';
 import { SubprocessExecutionAdapter, linkDependencyDirs } from '../infra/subprocess-execution-adapter.mjs';
 import { configuredInteger } from '../infra/omp-cli-reviewer-adapter.mjs';
@@ -12,9 +17,44 @@ import { GitPort, ReviewerPort, ReportStorePort, SnapshotStorePort, TelemetryPor
 import { FileSystemTelemetryAdapter, NULL_RUN_TELEMETRY, safeRunTelemetry } from '../infra/filesystem-telemetry-adapter.mjs';
 import { installRunSignalGuard } from '../infra/run-signal-guard.mjs';
 
+// Lease heartbeat period: reviews outliving the 24h marker TTL refresh
+// their `.live-<pid>` marker this often, keeping sweep protection whole.
+const LEASE_REFRESH_MS = 15 * 60 * 1000;
+
+// Per-process run sequence so two concurrent execute() calls on identical
+// staged content never share one runReportPath within a millisecond tick.
+let REPORT_SEQ = 0;
+
 /**
- * Application Orchestrator Service implementing the staged code review lifecycle use case.
+ * Renders a path for committed observability artifacts: repo-relative when
+ * inside the repo, otherwise the bare basename. Absolute operator paths
+ *
+ * @param {string} repoRoot
+ * @param {string} absolutePath
+ * @returns {string}
  */
+export function toCommittedPath(repoRoot, absolutePath) {
+  const rel = path.relative(repoRoot, absolutePath);
+  if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) return rel.split(path.sep).join('/');
+  return path.basename(absolutePath);
+}
+
+/**
+ * Decides how a snapshot dir is disposed when a run ends (normally or by
+ * signal): transient mkdtemp dirs are destroyed (`remove`); the deterministic
+ * content-addressed reuseDir only drops the caller's lease (`release`) so a
+ *
+ * @param {string} snapshotDir
+ * @param {string|null} reuseDir
+ * @returns {'remove'|'release'}
+ */
+export function snapshotDirDisposition(snapshotDir, reuseDir) {
+  return snapshotDir !== reuseDir ? 'remove' : 'release';
+}
+
+ /**
+  * Application Orchestrator Service implementing the staged code review lifecycle use case.
+  */
 export class ReviewWorkflowService {
   #gitPort;
   #reviewerPort;
@@ -109,6 +149,17 @@ export class ReviewWorkflowService {
 
     const runStamp = ReviewReport.formatTimestamp(new Date(startedAt));
     const runId = diff.isEmpty() ? `${runStamp}-skipped` : `${runStamp}-${diff.hash.slice(0, 12)}`;
+    // Durable per-run report copy: the dispatcher falls back to it when the
+    // agent URI is unreadable. It lives OUTSIDE the shared content-addressed
+    // snapshot dir (run-unique, not diff-addressed) so concurrent reviews
+    // on identical staged content never share, delete, or overwrite each
+    // other's fallback — the cache dir stays read-only for the run lifetime.
+    // Name: runId(timestamp+hash) + per-process seq + random nonce + pid
+    // tail. The nonce makes the path unpredictable to same-user processes
+    // (a predictable name can be pre-created as a planted PASS report the
+    // dispatcher would reproduce verbatim); the pid tail feeds the
+    // orphan-sweep owner check (`-<pid>.md$`).
+    const runReportPath = path.join(tmpdir(), `reviewer-kit-report-${runId}-${REPORT_SEQ++}-${randomBytes(8).toString('hex')}-${process.pid}.md`);
     let telemetry;
     try {
       telemetry = safeRunTelemetry(this.#telemetryPort.forRun({ repoRoot, runId }));
@@ -117,11 +168,29 @@ export class ReviewWorkflowService {
     }
     // Snapshot dirs created during this run; the signal guard removes them
     // before exit() since the finally blocks below never run on SIGINT/SIGTERM.
-    const liveSnapshotDirs = new Set();
+    // Transient mkdtemp dirs are destroyed; the deterministic content-addressed
+    // reuseDir only drops this process's `.live-<pid>` lease (release) so a
+    // concurrent review serving from it — or a later retry — keeps its input.
+    const transientSnapshotDirs = new Set();
+    let retainedSnapshotDir = null;
+    let clearLeaseTimer = async () => {};
     const cleanupSnapshots = async () => {
-      for (const dir of liveSnapshotDirs) {
+      await clearLeaseTimer();
+      for (const dir of transientSnapshotDirs) {
         await this.#snapshotStorePort.remove(dir).catch(() => {});
       }
+      if (retainedSnapshotDir && typeof this.#snapshotStorePort.release === 'function') {
+        // A tampered lease marker must not vanish silently: the adapter
+        // throws on non-regular markers to surface mid-run tampering —
+        // record it before swallowing the cleanup-path rejection.
+        await this.#snapshotStorePort.release(retainedSnapshotDir).catch(async (error) => {
+          await telemetry.record('snapshot_release_failed', {
+            dir: retainedSnapshotDir,
+            error: String(error?.message ?? error),
+          }).catch(() => {});
+        });
+      }
+      await rm(runReportPath, { force: true }).catch(() => {});
     };
     const uninstall = installRunSignalGuard({ telemetry, runId, cleanup: cleanupSnapshots });
     await telemetry.updateLastRun({
@@ -172,11 +241,55 @@ export class ReviewWorkflowService {
 
       const snapshotStartedAt = Date.now();
       const snapshot = await this.#gitPort.getSnapshot(repoRoot);
+      const fileClasses = classifyChangedPaths(
+        diff.changedPaths,
+        (p) => isTestPath(p, this.#testPathPatterns),
+        new Map(snapshot.files.map((f) => [f.path, f.mode])),
+      );
+      const shaByPath = new Map(
+        snapshot.files.map((f) => [f.path, createHash('sha256').update(f.content).digest('hex')]),
+      );
+      const fileClassRows = fileClasses.map((entry) => ({
+        ...entry,
+        sha256: shaByPath.get(entry.path) ?? null,
+      }));
+      // Resolve the profile + lanes BEFORE any lease is claimed: an invalid
+      // OMP_REVIEW_KIT_LANES must fail before create() stamps a .live marker,
+      // otherwise the throw leaks a foreign-live lease for its 24h TTL.
+      const reviewProfile = reviewProfileFor(fileClasses);
+      const riskLanes = riskLanesFor(reviewProfile, process.env);
+      const reuseDir = path.join(tmpdir(), `reviewer-kit-snapshot-${diff.hash.slice(0, 24)}`);
       const snapshotDir = await this.#snapshotStorePort.create(snapshot, {
         diffBytes: diff.bytes,
         changedPaths: diff.changedPaths,
+        fileClasses: fileClassRows,
+        reuseDir,
       });
-      liveSnapshotDirs.add(snapshotDir);
+      if (snapshotDir !== reuseDir) {
+        transientSnapshotDirs.add(snapshotDir);
+      } else {
+        retainedSnapshotDir = snapshotDir;
+      }
+      // Lease heartbeat: reviews outliving the 24h marker TTL keep sweep
+      // protection for their whole duration. Unref'd — never blocks exit;
+      // cleared on every completion path and on signal cleanup.
+      const storePort = this.#snapshotStorePort;
+      let leaseRefresh = Promise.resolve();
+      const leaseTimer = (typeof storePort.refreshLease === 'function' && typeof setInterval === 'function')
+        ? setInterval(() => {
+          // Ticks serialize on the chain: a second interval can never
+          // interleave inside refreshLease itself.
+          leaseRefresh = leaseRefresh.then(() => storePort.refreshLease(snapshotDir)).catch(() => {});
+        }, LEASE_REFRESH_MS)
+        : null;
+      leaseTimer?.unref?.();
+      clearLeaseTimer = async () => {
+        clearInterval(leaseTimer);
+        // Drain the in-flight tick before the caller releases: a refresh
+        // still racing release() is a fire-and-forget write that could
+        // re-stamp the marker on the retained dir after release() ran.
+        await leaseRefresh.catch(() => {});
+      };
       await telemetry.record('snapshot_materialized', {
         files: snapshot.files.length,
         bytes: snapshot.files.reduce((total, file) => total + file.content.length, 0),
@@ -248,7 +361,7 @@ export class ReviewWorkflowService {
                 const revertedDir = await this.#snapshotStorePort.create(revertedSnapshot, {
                   artifacts: false,
                 });
-                liveSnapshotDirs.add(revertedDir);
+                transientSnapshotDirs.add(revertedDir);
 
                 try {
                   await telemetry.updateLastRun({
@@ -282,7 +395,7 @@ export class ReviewWorkflowService {
                   });
                 } finally {
                   await this.#snapshotStorePort.remove(revertedDir);
-                  liveSnapshotDirs.delete(revertedDir);
+                  transientSnapshotDirs.delete(revertedDir);
                 }
               } else {
                 revertedSkipReason = !hasTest ? 'no test changes staged' : 'no non-test changes staged';
@@ -315,6 +428,10 @@ export class ReviewWorkflowService {
         const prompt = ReviewPrompt.forDiff(diff, snapshotDir, diff.changedPaths, {
           suspicionMapText: suspicionMap.toPromptText(),
           executionEvidenceText: executionEvidence ? executionEvidence.toPromptText() : '',
+          reviewProfile,
+          riskLanes,
+          fileClasses: fileClassRows,
+          reportPath: runReportPath,
           // ~50KB ≈ 12K tokens — cheaper than four read round-trips per subagent.
           inlineDiff: diff.length <= 50_000 ? diff.bytes.toString('utf8') : '',
         });
@@ -324,8 +441,26 @@ export class ReviewWorkflowService {
           telemetry,
         });
       } finally {
-        await this.#snapshotStorePort.remove(snapshotDir);
-        liveSnapshotDirs.delete(snapshotDir);
+        await clearLeaseTimer();
+        if (snapshotDirDisposition(snapshotDir, reuseDir) === 'remove') {
+          // Transient mkdtemp dirs are removed immediately; the deterministic
+          // content-addressed reuseDir is left in place so a later identical
+          // diff can reuse it (the adapter's retention sweep bounds its age).
+          await this.#snapshotStorePort.remove(snapshotDir);
+          transientSnapshotDirs.delete(snapshotDir);
+        } else if (typeof this.#snapshotStorePort.release === 'function') {
+          // The retained cache dir drops its in-use marker so the retention
+          // sweep can prune it once this run no longer references it.
+          await this.#snapshotStorePort.release(snapshotDir).catch(async (error) => {
+            await telemetry.record('snapshot_release_failed', {
+              dir: snapshotDir,
+              error: String(error?.message ?? error),
+            }).catch(() => {});
+          });
+        }
+        // The dispatcher consumed the durable report (or never needed it);
+        // remove this run's copy so per-run fallbacks never accumulate.
+        await rm(runReportPath, { force: true }).catch(() => {});
       }
 
       let combinedOutput = execResult.combined ?? `${execResult.stdout ?? ''}\n${execResult.stderr ?? ''}`;
@@ -438,6 +573,40 @@ export class ReviewWorkflowService {
         finishedAt: new Date().toISOString(),
       }, { force: true });
 
+      // Per-stage stats + README badge: best-effort, never gates the verdict.
+      // r26 correctness-2: only the kit's own repo (or an explicit opt-in)
+      // receives badge artifacts — a consumer repo under review must not
+      // accumulate unrequested committable files.
+      if (await this.#badgeEligible(repoRoot)) try {
+        const stageHistory = (Array.isArray(execResult.attempts) ? execResult.attempts : [])
+          .flatMap((a) => Array.isArray(a?.stageHistory) ? a.stageHistory : []);
+        const badgeColor = verdict.isPass() ? 'brightgreen' : 'red';
+        const stageParts = stageHistory.map((s) => s.stage).filter(Boolean);
+        const badge = {
+          schemaVersion: 1,
+          label: 'review-kit',
+          message: `${verdict.value} · ${Math.round((Date.now() - startedAt) / 1000)}s`,
+          color: badgeColor,
+        };
+        await this.#writeBadge(repoRoot, {
+          badge,
+          runId,
+          diffHash: diff.hash,
+          verdict: verdict.value,
+          reviewProfile,
+          durationMs: Date.now() - startedAt,
+          stageHistory,
+          stageTrail: stageParts.join('→'),
+          modelsTried,
+          // Committed artifact: repo-relative, never an absolute operator
+          // path (machine layout must not leak into public git history).
+          reportPath: toCommittedPath(repoRoot, reportPath),
+          generatedAt: new Date().toISOString(),
+        });
+      } catch {
+        // Badge writing is observability sugar; a failure must never fail the review.
+      }
+
       if (verdict.isPass()) {
         this.#logger.log(`reviewer-kit PASS: ${reportPath}\n`);
         return ReviewExecutionResult.pass(reportPath, verdict.value, modelsTried);
@@ -468,4 +637,40 @@ export class ReviewWorkflowService {
       uninstall?.();
     }
   }
+
+
+  /**
+   * Writes the README badge payload to `audit-reports/review-badge.json`
+   * (shields.io endpoint shape) plus the richer `review-badge.full.json`
+   * side-car with per-stage stats. Best-effort observability — callers wrap
+   * in try/catch and never let it gate the verdict.
+   */
+  async #badgeEligible(repoRoot) {
+    const env = process.env.OMP_REVIEW_KIT_BADGE;
+    if (env === '1') return true;
+    if (env === '0') return false;
+    try {
+      const pkg = JSON.parse(await readFile(path.join(repoRoot, 'package.json'), 'utf8'));
+      return pkg?.name === 'omp-reviewer-kit';
+    } catch {
+      return false;
+    }
+  }
+
+  async #writeBadge(repoRoot, payload) {
+    const dir = path.join(repoRoot, 'audit-reports');
+    await mkdir(dir, { recursive: true });
+    await writeFile(
+      path.join(dir, 'review-badge.json'),
+      JSON.stringify(payload.badge, null, 2) + '\n',
+      'utf8',
+    );
+    const { badge, ...full } = payload;
+    await writeFile(
+      path.join(dir, 'review-badge.full.json'),
+      JSON.stringify({ schema: 'review-badge@1', ...full }, null, 2) + '\n',
+      'utf8',
+    );
+  }
 }
+

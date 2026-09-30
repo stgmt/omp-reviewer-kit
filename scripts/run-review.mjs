@@ -1,7 +1,7 @@
-import { createHash } from 'node:crypto';
-import { appendFile, chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { createHash, randomBytes } from 'node:crypto';
+import { appendFile, chmod, lstat, mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -163,6 +163,246 @@ export function isTestPath(path, patterns = DEFAULT_TEST_PATH_PATTERNS) {
   if (typeof path !== 'string' || path.length === 0) return false;
   return patterns.some((p) => new RegExp(p).test(path));
 }
+const EXECUTABLE_EXTENSIONS = new Set([
+  '.mjs', '.cjs', '.js', '.jsx', '.ts', '.tsx', '.mts', '.cts',
+  '.py', '.go', '.rs', '.java', '.kt', '.kts', '.cs', '.fs',
+  '.rb', '.php', '.swift', '.scala', '.clj', '.ex', '.exs',
+  '.c', '.h', '.cc', '.cpp', '.hpp', '.cxx',
+  '.sh', '.bash', '.zsh', '.ps1', '.psm1', '.bat', '.cmd',
+  // Script-bearing or auto-executing payloads a renderer/shell can run.
+  '.hta', '.wsf', '.vbs', '.svg',
+  // Starlark build files execute at build time.
+  '.bzl',
+  // Make fragments, gem build specs, and desktop entries execute on build/open.
+  '.mk', '.gemspec', '.desktop',
+  // Groovy (Gradle/Jenkins) and Python launcher scripts execute like .py.
+  '.groovy', '.pyw',
+  // RPM/DEB build descriptors run %prep/%build/%install shell sections.
+  '.spec',
+  // Build-executing fragments/systems: CMake modules run execute_process,
+  // Gradle/Autotools/Ninja/GYP/MSBuild include-and-run arbitrary commands,
+  // Tcl and .m4 macros drive generation, .inc/.mak are make includes.
+  '.cmake', '.gradle', '.am', '.ninja', '.m4', '.mak',
+  '.gyp', '.gypi', '.props', '.targets', '.proj', '.inc', '.tcl',
+  // Shell-opened payloads: .scf/.url/.reg/.command/.applescript/.msc/.cpl
+  // run commands on open/import; .ipynb executes embedded code cells.
+  '.scf', '.url', '.reg', '.command', '.applescript', '.msc', '.cpl', '.ipynb',
+  // Binary payloads execute on load: PE images, native modules, wasm,
+  // JVM archives, shared libs, screensavers, and legacy .com/.pif runners.
+  '.exe', '.dll', '.wasm', '.node', '.msi', '.jar', '.so', '.dylib',
+  '.scr', '.com', '.pif',
+  // HTML/CSS are renderer-executable: .html/.htm embed scriptable markup
+  // (same rationale as .svg/.hta); .css drives external loads and legacy
+  // expression() — a style-only diff can still smuggle behavior.
+  '.html', '.htm', '.css',
+]);
+
+const CONFIG_EXTENSIONS = new Set([
+  '.json', '.jsonc', '.json5', '.yaml', '.yml', '.toml', '.xml',
+  '.ini', '.cfg', '.conf', '.env', '.lock', '.properties', '.plist',
+]);
+
+const DOCS_EXTENSIONS = new Set([
+  '.md', '.mdx', '.markdown', '.txt', '.rst', '.adoc',
+]);
+
+const CONFIG_BASENAMES = new Set([
+  'tsconfig.json', 'jsconfig.json', 'deno.json',
+  '.env', '.gitignore', '.gitattributes',
+  '.nvmrc', '.editorconfig',
+]);
+
+const EXECUTABLE_BASENAMES = new Set([
+  // Build files / wrappers that execute commands at build or commit time.
+  'dockerfile', 'makefile', 'gemfile', 'rakefile', 'jenkinsfile',
+  'vagrantfile', 'brewfile', 'package.json', 'go.mod', 'docker-bake.hcl',
+  'configure', 'configure.ac', 'gradlew', 'mvnw',
+  // Commit-time hook configs whose entries run arbitrary commands.
+  '.pre-commit-config.yaml', '.pre-commit-hooks.yaml',
+  // Standalone CI pipeline files (GitHub/GitLab dirs handled below).
+  '.travis.yml', 'azure-pipelines.yml', 'bitbucket-pipelines.yml',
+  '.drone.yml', 'appveyor.yml', 'cloudbuild.yaml',
+  // Task/build engines that embed command runners.
+  'taskfile', 'sconstruct', 'sconscript', 'meson.build', 'buck', 'workspace',
+  // Bazel canonical BUILD (basename 'build') and Ant build.xml execute at
+  // build time — '.xml' alone would classify Ant as config.
+  'build', 'build.xml',
+  'build.bazel', 'module.bazel', 'workspace.bazel', 'workspace.bzlmod',
+  'build.sbt', 'build.gradle', 'settings.gradle', 'build.gradle.kts',
+  'settings.gradle.kts', 'pom.xml',
+  // Supply-chain executables: lockfiles pin resolved URLs/integrity hashes,
+  // devcontainer/dependabot configs drive commands or package resolution.
+  'package-lock.json', 'npm-shrinkwrap.json', 'yarn.lock', 'pnpm-lock.yaml',
+  'devcontainer.json', 'dependabot.yml', 'dependabot.yaml', 'renovate.json',
+  '.npmrc',
+  // Editor and shell auto-exec surfaces: .vscode tasks run arbitrary
+  // commands on folder open, direnv and shell rc files execute on cd/login.
+  'justfile', 'snakefile', 'earthfile', 'pipefile',
+  '.envrc', '.bashrc', '.zshrc', '.profile', '.bash_profile', '.zprofile',
+  // Non-npm ecosystems, same supply-chain rationale: build manifests declare
+  // build backends/hooks that execute at install time; lockfiles pin
+  // resolved artifacts whose substitution is silent code execution.
+  'pyproject.toml', 'setup.cfg', 'setup.py',
+  'cargo.toml', 'cargo.lock',
+  'composer.json', 'composer.lock', 'gemfile.lock',
+  'go.sum', 'poetry.lock', 'pipfile', 'pipfile.lock',
+  'pdm.lock', 'uv.lock', 'bun.lock', 'deno.lock',
+  'requirements.txt', 'requirements-dev.txt', 'requirements-test.txt',
+  'requirements-prod.txt',
+  // Round-7 (P1): build-executing files must never ride spec-docs.
+  // CMakeLists execute_process/ExternalProject run arbitrary commands;
+  // GNUmakefile/*.mk/build.ninja are make executables; bitrise/pipeline
+  // YAML drive CI steps; gemspecs run code at gem build; .desktop files
+  // execute on open; shell auto-exec and review-gate (CODEOWNERS) files
+  // change what runs or who must approve.
+  'cmakelists.txt', 'gnumakefile', 'build.ninja',
+  'bitrise.yml', 'pipeline.yml',
+  'codeowners', '.htaccess', '.zshenv', '.xinitrc',
+  // Deploy executors: Procfile commands run at dyno start; tox/mise/
+  // cargo-make/CMakePresets all carry executable command entries.
+  'procfile', 'tox.ini', 'mise.toml', 'makefile.toml', 'cmakepresets.json',
+]);
+const EXECUTABLE_FAMILIES = [
+  'docker-compose', 'compose.', 'dockerfile.', '.gitlab-ci',
+  '.husky/', 'gradle-wrapper.', 'azure-pipelines', 'bitbucket-pipelines',
+  'cloudbuild.', 'taskfile.', 'pre-commit', '.pre-commit',
+];
+
+export function classifyFilePath(filePath) {
+  if (typeof filePath !== 'string' || filePath.length === 0) return 'data';
+  const normalized = filePath.replace(/\\/g, '/');
+  // NTFS silently strips trailing dots/spaces from EVERY path segment, so the
+  // name that materializes on Windows disk is the folded one — classify that
+  // name, not the raw staged string. `run.cmd ` writes `run.cmd`; without the
+  // fold the executable payload would be classified `data`.
+  const lower = normalized
+    .split('/')
+    .map((segment) => segment.replace(/[. ]+$/, ''))
+    .join('/')
+    .toLowerCase();
+  const basename = lower.split('/').pop() ?? lower;
+  const ext = basename.includes('.') ? basename.slice(basename.lastIndexOf('.')) : '';
+
+  // Executable surface first: code, scripts, CI workflows, git hooks, package
+  // lifecycle manifests, and build files can run or drive commit-time code
+  // regardless of the directory they live in, so they keep the profile `full`.
+  if (EXECUTABLE_EXTENSIONS.has(ext)) return 'executable';
+  if (lower.startsWith('.githooks/') || lower.includes('/.githooks/')) return 'executable';
+  if (lower.startsWith('.github/workflows/') || lower.includes('/.github/workflows/')) return 'executable';
+  if (lower.startsWith('.github/actions/') || lower.includes('/.github/actions/')) return 'executable';
+  if (lower.startsWith('.circleci/') || lower.includes('/.circleci/')) return 'executable';
+  if (lower.startsWith('.buildkite/') || lower.includes('/.buildkite/')) return 'executable';
+  if (lower.startsWith('.husky/') || lower.includes('/.husky/')) return 'executable';
+  if (lower.startsWith('ci/')) return 'executable';
+  if (lower.startsWith('.vscode/') || lower.includes('/.vscode/')) return 'executable';
+  if (lower === '.cargo/config.toml' || lower === '.cargo/config') return 'executable';
+  // Gitea/Forgejo are GitHub-compatible CI hosts: same workflow/action paths.
+  // GitLab's include:local split-out directory: .gitlab/ci/*.yml holds
+  // real pipeline YAML, not config.
+  if (lower.startsWith('.gitlab/ci/') || lower.includes('/.gitlab/ci/')) return 'executable';
+  if (lower.startsWith('.gitea/workflows/') || lower.includes('/.gitea/workflows/')) return 'executable';
+  if (lower.startsWith('.gitea/actions/') || lower.includes('/.gitea/actions/')) return 'executable';
+  if (lower.startsWith('.forgejo/workflows/') || lower.includes('/.forgejo/workflows/')) return 'executable';
+  if (lower.startsWith('.forgejo/actions/') || lower.includes('/.forgejo/actions/')) return 'executable';
+  // Woodpecker/Semaphore/Cirrus/Zuul CI surfaces.
+  if (lower.startsWith('.woodpecker/') || lower.includes('/.woodpecker/')) return 'executable';
+  if (basename === '.woodpecker.yml') return 'executable';
+  if (lower.startsWith('.semaphore/') || lower.includes('/.semaphore/')) return 'executable';
+  if (lower.startsWith('.cirrus/') || lower.includes('/.cirrus/')) return 'executable';
+  if (basename === '.cirrus.yml') return 'executable';
+  if (lower.startsWith('zuul.d/') || lower.includes('/zuul.d/')) return 'executable';
+  if (basename === '.zuul.yaml') return 'executable';
+  // `web.Dockerfile`-style suffixed Dockerfiles build images like Dockerfile.
+  if (basename.endsWith('.dockerfile')) return 'executable';
+  if (basename === '.gitmodules') return 'executable';
+  // Podman/Buildah Containerfile and Arch/Alpine build descriptors execute
+  // RUN/prepare/build shell at build time — same trust boundary as Dockerfile.
+  if (basename === 'containerfile' || basename.startsWith('containerfile.') || basename === 'pkgbuild' || basename === 'apkbuild') return 'executable';
+  // Extensionless payloads staged mode 100644 (every Windows checkout with
+  // core.fileMode=false) never reach the 100755 upgrade: the classifier must
+  // treat any dotless basename as a shell/script payload by DEFAULT and
+  // exempt only the conventional prose names. Directory whitelists were tried
+  // first — contrib/, libexec/, hack/, deploy/ gaps kept routing payloads to
+  // spec-docs, so the trust boundary inverts: unknown dotless names are
+  // executable, documented docs-names keep their doc class.
+  const DOTLESS_DOCS = new Set([
+    'license', 'license-mit', 'licence', 'copying', 'copying3', 'notice',
+    'readme', 'authors', 'contributors', 'changelog', 'changes', 'history',
+    'news', 'todo', 'install', 'version', 'thanks', 'credits', 'maintainers',
+    'codeowners2', 'dockerignore', 'gitkeep', 'keep',
+  ]);
+  if (!basename.includes('.') && !DOTLESS_DOCS.has(basename)) return 'executable';
+  // Maven extension/config dir runs args and injected jars at build time.
+  if (lower.startsWith('.mvn/') || lower.includes('/.mvn/')) return 'executable';
+  // IntelliJ run configurations execute commands in-repo.
+  if (lower.startsWith('.idea/runconfigurations/') || lower.includes('/.idea/runconfigurations/')) return 'executable';
+  if (EXECUTABLE_BASENAMES.has(basename)) return 'executable';
+  if (EXECUTABLE_FAMILIES.some((f) => basename.startsWith(f))) return 'executable';
+
+  // Document-class prefix rules then apply to document/config-class files only.
+  if (lower.startsWith('agents/') || lower.includes('/agents/')) return 'prompt';
+  if (lower.startsWith('skills/') || lower.includes('/skills/')) return 'prompt';
+  if (basename === 'skill.md') return 'prompt';
+  if (lower.startsWith('.specs/') || lower.includes('/.specs/')) return 'spec';
+  if (basename.endsWith('.feature') || basename.endsWith('_schema.md')) return 'spec';
+  if (CONFIG_BASENAMES.has(basename)) return 'config';
+
+  if (DOCS_EXTENSIONS.has(ext)) return 'docs';
+  if (CONFIG_EXTENSIONS.has(ext)) return 'config';
+  return 'data';
+}
+
+export function classifyChangedPaths(paths, isTest = () => false, modeByPath = new Map()) {
+  const result = [];
+  for (const p of paths ?? []) {
+    let fileClass = classifyFilePath(p);
+    if (fileClass !== 'executable' && modeByPath.get(p) === '100755') fileClass = 'executable';
+    // Test-path re-tag applies to EVERY non-executable class too: a staged
+    // fixture, golden oracle, or .feature under the test tree is the canonical
+    // suite-weakening move (assertions stay green while the oracle is tampered),
+    // so it must ride the full review profile like test code does.
+    if (isTest(p)) fileClass = 'test';
+    result.push({ path: p, fileClass });
+  }
+  return result;
+}
+
+export function reviewProfileFor(entries) {
+  const hasExecutable = (entries ?? []).some(
+    (e) => e.fileClass === 'executable' || e.fileClass === 'test',
+  );
+  return hasExecutable ? 'full' : 'spec-docs';
+}
+
+const VALID_RISK_LANES = new Set(['correctness', 'security', 'content-risk']);
+
+/**
+ * Resolve which risk-hunter lanes Stage 2 spawns.
+ * `OMP_REVIEW_KIT_LANES` is a comma-separated allowlist over
+ * `correctness|security|content-risk`. Unset/empty → `full` runs correctness
+ * ONLY (the security lane stays opt-in on request), `spec-docs` runs
+ * content-risk. Unknown tokens fail loudly — a typo must never silently
+ * disable every hunter lane.
+ *
+ * @param {'full'|'spec-docs'} profile
+ * @param {Record<string, string|undefined>} [env]
+ * @returns {string[]}
+ */
+export function riskLanesFor(profile, env = {}) {
+  const raw = typeof env?.OMP_REVIEW_KIT_LANES === 'string' ? env.OMP_REVIEW_KIT_LANES.trim() : '';
+  if (raw.length === 0) return profile === 'spec-docs' ? ['content-risk'] : ['correctness'];
+  const lanes = raw.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean);
+  if (lanes.length === 0) {
+    // Separator-only values (',', ' , ') must not silently disable Stage 2.
+    throw new Error('OMP_REVIEW_KIT_LANES names no usable lane (allowed: correctness, security, content-risk)');
+  }
+  for (const lane of lanes) {
+    if (!VALID_RISK_LANES.has(lane)) {
+      throw new Error(`OMP_REVIEW_KIT_LANES has unknown lane "${lane}" (allowed: correctness, security, content-risk)`);
+    }
+  }
+  return [...new Set(lanes)];
+}
 
 export function parseDiffBlocks(diffText) {
   if (typeof diffText !== 'string' || diffText.trim().length === 0) {
@@ -318,11 +558,11 @@ export class SuspicionMap {
     for (const entry of this.#entries) {
       if (entry.kind === 'assert_delta') {
         const netStr = entry.net > 0 ? `+${entry.net}` : `${entry.net}`;
-        lines.push(`- ${entry.path}: assert lines +${entry.added}/-${entry.removed} (net ${netStr})`);
+        lines.push(`- ${sanitizePromptToken(entry.path)}: assert lines +${entry.added}/-${entry.removed} (net ${netStr})`);
       } else if (entry.kind === 'deleted_test_file') {
-        lines.push(`- ${entry.path}: deleted test file (${entry.removed} removed lines)`);
+        lines.push(`- ${sanitizePromptToken(entry.path)}: deleted test file (${entry.removed} removed lines)`);
       } else if (entry.kind === 'removed_test_declarations') {
-        lines.push(`- ${entry.path}: ${entry.removed} test declaration${entry.removed === 1 ? '' : 's'} removed`);
+        lines.push(`- ${sanitizePromptToken(entry.path)}: ${entry.removed} test declaration${entry.removed === 1 ? '' : 's'} removed`);
       }
     }
 
@@ -633,9 +873,11 @@ const FAILURE_MESSAGES = Object.freeze({
   contradictory_rejection_envelope: 'The rejection envelope contradicted the review verdict.',
 });
 
-const TOP_LEVEL_KEYS = Object.freeze(['diff_hash', 'findings', 'kind', 'schema']);
+const TOP_LEVEL_KEYS = Object.freeze(['diff_hash', 'findings', 'kind', 'non_coverable_items', 'schema']);
 const FAILURE_TOP_LEVEL_KEYS = Object.freeze([...TOP_LEVEL_KEYS, 'failure'].sort());
 const FINDING_KEYS = Object.freeze([
+  'blocking',
+  'category_kind',
   'counterexample',
   'defect_class',
   'file_path',
@@ -643,19 +885,37 @@ const FINDING_KEYS = Object.freeze([
   'line_end',
   'line_start',
   'priority',
+  'severity',
+  'source',
   'verifier_argument',
 ]);
 const FAILURE_KEYS = Object.freeze(['code', 'message']);
-const COVERAGE_TOP_LEVEL_KEYS = Object.freeze(['coverage_items', 'diff_hash', 'findings', 'kind', 'schema']);
+const COVERAGE_TOP_LEVEL_KEYS = Object.freeze(['coverage_items', 'diff_hash', 'findings', 'kind', 'non_coverable_items', 'schema']);
 const COVERAGE_ITEM_KEYS = Object.freeze([
   'behavior',
+  'blocking',
+  'category_kind',
   'coverage_id',
   'file_path',
   'line_end',
   'line_start',
   'required_tests',
+  'severity',
+  'source',
 ]);
 const REQUIRED_TEST_KEYS = Object.freeze(['kind', 'mutant', 'scenario']);
+// Non-coverable items travel inside the envelope (blocking: false) so the
+// report's ### Notes section stays machine-readable; they never block PASS.
+const NON_COVERABLE_ITEM_KEYS = Object.freeze([
+  'blocking',
+  'category_kind',
+  'file_path',
+  'line_end',
+  'line_start',
+  'reason',
+  'severity',
+  'source',
+]);
 const SHA256_RE = /^[a-f0-9]{64}$/;
 const WINDOWS_ABSOLUTE_RE = /^[A-Za-z]:\//;
 
@@ -804,11 +1064,101 @@ function diffHashOf(diffIdentity) {
   return hash;
 }
 
+/**
+ * Model-emitted envelopes repeatedly drop fields the contract derives
+ * deterministically (severity=priority, category_kind, blocking, source
+ * mirroring). Filling contract-fixed derivable fields before strict
+ * validation is NOT leniency: nothing content-bearing is invented, and
+ * without it a schema drop turns a valid BLOCK into
+ * malformed_rejection_envelope, discarding every confirmed finding.
+ * Prototype-pollution keys (__proto__/constructor/prototype) are NEVER
+ * normalized: the item is returned verbatim so strict validation rejects.
+ */
+const DANGEROUS_KEYS = Object.freeze(['__proto__', 'constructor', 'prototype']);
+function hasDangerousKey(item) {
+  return DANGEROUS_KEYS.some((k) => Object.hasOwn(item, k));
+}
+function normalizeFinding(finding) {
+  if (!isRecord(finding)) return finding;
+  if (hasDangerousKey(finding)) return finding;
+  // Whitelist output: verbose model keys (impact, observed, evidence, ...)
+  // are not envelope fields — keeping them would fail hasExactKeys.
+  return {
+    finding_id: isNonEmptyString(finding.finding_id) ? finding.finding_id : finding.candidate_id,
+    priority: finding.priority,
+    severity: finding.severity === undefined ? finding.priority : finding.severity,
+    defect_class: isNonEmptyString(finding.defect_class) ? finding.defect_class : finding.lane,
+    category_kind: finding.category_kind === undefined ? 'finding' : finding.category_kind,
+    blocking: finding.blocking !== undefined ? finding.blocking : true,
+    source: finding.source !== undefined
+      ? finding.source
+      : (isNonEmptyString(finding.defect_class) ? finding.defect_class : finding.lane),
+    file_path: finding.file_path,
+    line_start: finding.line_start,
+    line_end: finding.line_end,
+    verifier_argument: finding.verifier_argument,
+    counterexample: finding.counterexample,
+  };
+}
+
+function normalizeCoverageItem(item) {
+  if (!isRecord(item)) return item;
+  if (hasDangerousKey(item)) return item;
+  // Whitelist output — see normalizeFinding.
+  return {
+    coverage_id: isNonEmptyString(item.coverage_id) ? item.coverage_id : item.candidate_id,
+    category_kind: item.category_kind === undefined ? 'coverage' : item.category_kind,
+    // Mandatory coverage gaps are contract-fixed P2 (blockers) — derive.
+    severity: item.severity === undefined ? 'P2' : item.severity,
+    blocking: item.blocking !== undefined ? item.blocking : true,
+    source: item.source !== undefined ? item.source : 'correctness',
+    file_path: item.file_path,
+    line_start: item.line_start,
+    line_end: item.line_end,
+    behavior: item.behavior,
+    required_tests: item.required_tests,
+  };
+}
+
+function normalizeNonCoverableItem(item) {
+  if (!isRecord(item)) return item;
+  if (hasDangerousKey(item)) return item;
+  // r34: producers emit different vocabularies — scout records carry
+  // `reason`, hunter `ground`, verifier `coverage_id`+`ground`. Map aliases
+  // onto the envelope contract and emit ONLY the 8 contract keys: producer
+  // bookkeeping ids (coverage_id, candidate_id, ...) are not envelope
+  // fields and must be stripped, else hasExactKeys rejects the whole
+  // envelope. `source` defaults by producer shape: coverage_id → verifier,
+  // ground → hunter, else scout (reason-bearing records).
+  const reason = item.reason !== undefined ? item.reason
+    : (item.ground !== undefined ? item.ground : item.rejection_ground);
+  const source = item.source !== undefined ? item.source
+    : (isNonEmptyString(item.producer) ? item.producer
+      : (isNonEmptyString(item.stage) ? item.stage
+        : (isNonEmptyString(item.lane) ? item.lane
+          : (isNonEmptyString(item.coverage_id) ? 'verifier'
+            : (isNonEmptyString(item.ground) ? 'hunter' : 'scout')))));
+  return {
+    category_kind: item.category_kind === undefined ? 'non_coverable' : item.category_kind,
+    severity: item.severity === undefined ? 'none' : item.severity,
+    blocking: item.blocking !== undefined ? item.blocking : false,
+    source,
+    file_path: item.file_path,
+    line_start: item.line_start,
+    line_end: item.line_end,
+    reason,
+  };
+}
+
 function validateFinding(finding, identifiers) {
   if (!hasExactKeys(finding, FINDING_KEYS)) return false;
   if (!isNonEmptyString(finding.finding_id) || identifiers.has(finding.finding_id)) return false;
   if (finding.priority !== 'P1' && finding.priority !== 'P2') return false;
-  if (finding.defect_class !== 'correctness' && finding.defect_class !== 'security') return false;
+  if (!['correctness', 'security', 'content-risk'].includes(finding.defect_class)) return false;
+  if (finding.category_kind !== 'finding') return false;
+  if (finding.severity !== finding.priority) return false;
+  if (finding.blocking !== true) return false;
+  if (!isNonEmptyString(finding.source)) return false;
   if (!isRelativeRepositoryPath(finding.file_path)) return false;
   if (!Number.isInteger(finding.line_start) || finding.line_start < 1) return false;
   if (!Number.isInteger(finding.line_end) || finding.line_end < finding.line_start) return false;
@@ -829,6 +1179,10 @@ function validateRequiredTest(test) {
 function validateCoverageItem(item, identifiers) {
   if (!hasExactKeys(item, COVERAGE_ITEM_KEYS)) return false;
   if (!isNonEmptyString(item.coverage_id) || identifiers.has(item.coverage_id)) return false;
+  if (item.category_kind !== 'coverage') return false;
+  if (item.severity !== 'P1' && item.severity !== 'P2') return false;
+  if (item.blocking !== true) return false;
+  if (!isNonEmptyString(item.source)) return false;
   if (!isRelativeRepositoryPath(item.file_path)) return false;
   if (!Number.isInteger(item.line_start) || item.line_start < 1) return false;
   if (!Number.isInteger(item.line_end) || item.line_end < item.line_start) return false;
@@ -839,10 +1193,45 @@ function validateCoverageItem(item, identifiers) {
   return true;
 }
 
+function validateNonCoverableItem(item, identifiers) {
+  if (!hasExactKeys(item, NON_COVERABLE_ITEM_KEYS)) return false;
+  if (item.category_kind !== 'non_coverable') return false;
+  if (item.severity !== 'none') return false;
+  if (item.blocking !== false) return false;
+  if (!isNonEmptyString(item.source)) return false;
+  if (!isRelativeRepositoryPath(item.file_path)) return false;
+  if (!Number.isInteger(item.line_start) || item.line_start < 1) return false;
+  if (!Number.isInteger(item.line_end) || item.line_end < item.line_start) return false;
+  if (!isNonEmptyString(item.reason)) return false;
+  const identity = `${item.file_path}:${item.line_start}:${item.line_end}:${item.reason}:${item.source}`;
+  if (identifiers.has(identity)) return false;
+  identifiers.add(identity);
+  return true;
+}
+
+function validateNonCoverableItems(value) {
+  if (!Array.isArray(value)) return false;
+  const identifiers = new Set();
+  return value.every((item) => validateNonCoverableItem(item, identifiers));
+}
+
 function validateEnvelope(value, diffHash) {
   if (!isRecord(value) || value.schema !== ENVELOPE_SCHEMA || value.diff_hash !== diffHash) return false;
+  // Contract-fixed absent-means-empty: models repeatedly drop the field
+  // wholesale; [] is the only legal meaning, so default before the
+  // strict top-level key check rather than discarding the envelope.
+  if (value.non_coverable_items === undefined) value.non_coverable_items = [];
+  // r32 correctness-2: normalize ONCE at the top so all three kinds —
+  // including review_failure — share the same derivable-field contract.
+  if (Array.isArray(value.non_coverable_items)) {
+    value.non_coverable_items = value.non_coverable_items.map(normalizeNonCoverableItem);
+  } else {
+    value.non_coverable_items = [];
+  }
   if (value.kind === 'confirmed_findings') {
     if (!hasExactKeys(value, TOP_LEVEL_KEYS) || !Array.isArray(value.findings) || value.findings.length === 0) return false;
+    value.findings = value.findings.map(normalizeFinding);
+    if (!validateNonCoverableItems(value.non_coverable_items)) return false;
     const identifiers = new Set();
     return value.findings.every((finding) => validateFinding(finding, identifiers));
   }
@@ -850,6 +1239,8 @@ function validateEnvelope(value, diffHash) {
     if (!hasExactKeys(value, COVERAGE_TOP_LEVEL_KEYS)) return false;
     if (!Array.isArray(value.findings) || value.findings.length !== 0) return false;
     if (!Array.isArray(value.coverage_items) || value.coverage_items.length === 0) return false;
+    value.coverage_items = value.coverage_items.map(normalizeCoverageItem);
+    if (!validateNonCoverableItems(value.non_coverable_items)) return false;
     const identifiers = new Set();
     return value.coverage_items.every((item) => validateCoverageItem(item, identifiers));
   }
@@ -857,11 +1248,24 @@ function validateEnvelope(value, diffHash) {
     return hasExactKeys(value, FAILURE_TOP_LEVEL_KEYS)
       && Array.isArray(value.findings)
       && value.findings.length === 0
+      && validateNonCoverableItems(value.non_coverable_items)
       && hasExactKeys(value.failure, FAILURE_KEYS)
       && Object.hasOwn(FAILURE_MESSAGES, value.failure.code)
       && isNonEmptyString(value.failure.message);
   }
   return false;
+}
+
+async function badgeEligible(repoRoot) {
+  const env = process.env.OMP_REVIEW_KIT_BADGE;
+  if (env === '1') return true;
+  if (env === '0') return false;
+  try {
+    const pkg = JSON.parse(await readFile(path.join(repoRoot, 'package.json'), 'utf8'));
+    return pkg?.name === 'omp-reviewer-kit';
+  } catch {
+    return false;
+  }
 }
 
 function failureValue(diffHash, code) {
@@ -870,6 +1274,7 @@ function failureValue(diffHash, code) {
     kind: 'review_failure',
     diff_hash: diffHash,
     findings: [],
+    non_coverable_items: [],
     failure: {
       code,
       message: FAILURE_MESSAGES[code],
@@ -903,6 +1308,9 @@ export class ReviewRejectionEnvelope {
     this.#value = Object.freeze({
       ...value,
       findings: Object.freeze(value.findings.map((finding) => Object.freeze({ ...finding }))),
+      non_coverable_items: Object.freeze(
+        value.non_coverable_items.map((item) => Object.freeze({ ...item })),
+      ),
       ...(value.coverage_items
         ? {
             coverage_items: Object.freeze(
@@ -1007,12 +1415,17 @@ export class ReviewRejectionEnvelope {
     return this.#value.coverage_items ?? [];
   }
 
+  get nonCoverableItems() {
+    return this.#value.non_coverable_items;
+  }
+
   toJSON() {
     return {
       schema: this.#value.schema,
       kind: this.#value.kind,
       diff_hash: this.#value.diff_hash,
       findings: this.#value.findings.map((finding) => ({ ...finding })),
+      non_coverable_items: this.#value.non_coverable_items.map((item) => ({ ...item })),
       ...(this.#value.coverage_items
         ? {
             coverage_items: this.#value.coverage_items.map((item) => ({
@@ -1030,6 +1443,26 @@ export class ReviewRejectionEnvelope {
   }
 }
 
+export function sanitizePromptToken(value) {
+  if (typeof value !== 'string') return '';
+  // C0 + DEL + full C1 range, NEL/CSI included as named members of it;
+  // Unicode line/paragraph separators; bidi marks (embeddings, overrides,
+  // isolates); zero-width and word-joiner characters; variation selectors;
+  // TAG characters (U+E0000-E007F, supplement U+E0100-E01EF) and deprecated
+  // format marks (ALM U+061C, Mongolian FVS U+180E); BOM. Legal filename
+  // bytes that can inject terminal escapes or spoof path lists must never
+  // reach prompts/log lines raw.
+  return value.replace(/[\x00-\x1f\x7f-\x9f\u00ad\u034f\u070f\u061c\u17b4-\u17b5\u180e\u2028\u2029\u202a-\u202e\u200b-\u200f\u2060-\u206f\ufe00-\ufe0f\ufeff\ufff9-\ufffb\u115f-\u1160\u3164\uffa0\u{1bca0}-\u{1bca3}\u{1d173}-\u{1d17a}\u{E0000}-\u{E007F}\u{E0100}-\u{E01EF}]/gu, (ch) => {
+    const cp = ch.codePointAt(0);
+    switch (cp) {
+      case 0x0a: return '\\n';
+      case 0x0d: return '\\r';
+      case 0x09: return '\\t';
+      default: return cp <= 0xffff ? `\\u${cp.toString(16).padStart(4, '0')}` : `\\u{${cp.toString(16)}}`;
+    }
+  });
+}
+
 /**
  * Domain specification and builder for reviewer agent prompt instructions.
  */
@@ -1039,7 +1472,11 @@ export class ReviewPrompt {
   #changedPaths;
   #suspicionMapText;
   #inlineDiff;
+  #reviewProfile;
+  #fileClasses;
   #executionEvidenceText;
+  #reportPath;
+  #riskLanes;
   #reemitOutput;
 
   constructor(diffHash, snapshotDir = '', changedPaths = [], extras = {}) {
@@ -1058,8 +1495,11 @@ export class ReviewPrompt {
     this.#suspicionMapText = typeof extras?.suspicionMapText === 'string' ? extras.suspicionMapText : '';
     this.#executionEvidenceText = typeof extras?.executionEvidenceText === 'string' ? extras.executionEvidenceText : '';
     this.#inlineDiff = typeof extras?.inlineDiff === 'string' && extras.inlineDiff.length > 0 ? extras.inlineDiff : null;
+    this.#reviewProfile = typeof extras?.reviewProfile === 'string' ? extras.reviewProfile : null;
+    this.#fileClasses = Array.isArray(extras?.fileClasses) ? extras.fileClasses : [];
+    this.#reportPath = typeof extras?.reportPath === 'string' && extras.reportPath.length > 0 ? extras.reportPath : null;
+    this.#riskLanes = Array.isArray(extras?.riskLanes) && extras.riskLanes.length > 0 ? extras.riskLanes.filter((l) => typeof l === 'string' && l.length > 0) : null;
   }
-
   static forDiff(target, snapshotDir = '', changedPaths = [], extras = {}) {
     const hash = target instanceof DiffIdentity ? target.hash : target;
     const paths = target instanceof DiffIdentity ? target.changedPaths : changedPaths;
@@ -1088,11 +1528,11 @@ export class ReviewPrompt {
       'Do not review the change yourself.',
       'The task must inspect only the current staged Git change.',
       'The task must execute the multi-stage review protocol from skill://multi-stage-review and skill://reality-first-review, reading only relevant project or user review skills discovered by OMP.',
-      'The task must run both correctness and security risk lanes; the correctness lane must inspect focused tests and YAGNI only when a concrete reachable P1/P2 impact is proven.',
+      'The task must run exactly the risk lanes named below under "Risk lanes for this diff" (each lane = one blocking review-risk-hunter task in a single batch). A lane list of ["correctness","security"] restores both standard lanes; only the correctness lane inspects focused tests and YAGNI, and only when a concrete reachable P1/P2 impact is proven.',
       'The task must not edit, stage, reset, commit, or delete anything.',
       'Invoke the task with only the supported name, agent, and task fields; omit model, outputSchema, schemaMode, and isolated so the reviewer agent owns its declared schema and model roles.',
-      'After the task returns, reproduce its complete report verbatim; if the result says it was truncated or provides an agent URI, read that URI first, and never summarize or omit a rejection envelope. If the agent URI cannot be read, read the durable report copy at .review/report.md inside the staged snapshot directory named in this prompt (the orchestrator writes it before yielding) and reproduce that file verbatim instead.',
-      'If the task fails, returns empty, or its result cannot be read, do not summarize: emit exactly one review_failure envelope — the line REVIEW_REJECTION_ENVELOPE_BEGIN, then one JSON object {"schema":"review-rejection-envelope@1","kind":"review_failure","diff_hash":"<the staged diff hash from this prompt>","findings":[],"failure":{"code":"execution_failure","message":"<the observed task error>"}}, then REVIEW_REJECTION_ENVELOPE_END, then REVIEW_RESULT=BLOCK on its own line.',
+      'After the task returns, reproduce its complete report verbatim; if the result says it was truncated or provides an agent URI, read that URI first, and never summarize or omit a rejection envelope. If the agent URI cannot be read, read the durable report copy at the per-run report path named in this prompt (the orchestrator writes it before yielding — pass that path to the reviewer-kit task in its task text) and reproduce that file verbatim instead.',
+      'If the task fails, returns empty, or its result cannot be read, do not summarize: emit exactly one review_failure envelope — the line REVIEW_REJECTION_ENVELOPE_BEGIN, then one JSON object {"schema":"review-rejection-envelope@1","kind":"review_failure","diff_hash":"<the staged diff hash from this prompt>","findings":[],"non_coverable_items":[],"failure":{"code":"execution_failure","message":"<the observed task error>"}}, then REVIEW_REJECTION_ENVELOPE_END, then REVIEW_RESULT=BLOCK on its own line.',
       'Reproduce the task report as raw Markdown text exactly as returned; never JSON-encode, wrap, or reformat it.',
       'The verdict contract in this prompt overrides any other format: finish with exactly one standalone REVIEW_RESULT=PASS or REVIEW_RESULT=BLOCK line as the last non-empty line of the output — markers anywhere else are ignored — even if a skill describes a different verdict vocabulary.',
     ];
@@ -1115,8 +1555,15 @@ export class ReviewPrompt {
     }
     if (this.#changedPaths.length > 0) {
       lines.push(
-        `The changed paths for this review are: ${this.#changedPaths.join(', ')}.`,
+        `The changed paths for this review are: ${this.#changedPaths.map((p) => sanitizePromptToken(p)).join(', ')}.`,
         'Pass these paths to the context scout in its task text so it does not re-derive them from the diff.',
+      );
+    }
+    if (this.#fileClasses.length > 0) {
+      const classLines = this.#fileClasses.map((e) => `${sanitizePromptToken(e?.path)}: ${sanitizePromptToken(e?.fileClass)}`);
+      lines.push(
+        'File-class manifest (deterministic path-only classification, materialized at .review/file-classes.json):',
+        ...classLines,
       );
     }
     if (this.#suspicionMapText) {
@@ -1126,6 +1573,9 @@ export class ReviewPrompt {
       lines.push('', this.#executionEvidenceText);
     }
     lines.push(`The staged diff hash for this hook invocation is ${this.#diffHash}.`);
+    if (this.#reportPath) lines.push(`The durable per-run report path for this review is \`${this.#reportPath}\`. Instruct the reviewer-kit task to write its complete final report verbatim to that path before yielding; it is the only path the task may write.`);
+    if (this.#reviewProfile) lines.push(`Review profile for this diff: ${this.#reviewProfile}.`);
+    if (Array.isArray(this.#riskLanes)) lines.push(`Risk lanes for this diff: ${JSON.stringify(this.#riskLanes)}.`);
     return lines.join('\n');
   }
 
@@ -1411,6 +1861,13 @@ export class SnapshotStorePort {
   remove(snapshotDir) {
     throw new Error('SnapshotStorePort.remove must be implemented');
   }
+
+  /**
+   * Optional: releases an in-use marker without deleting the directory.
+   * Implementations that retain created dirs as cache entries may override;
+   * callers feature-detect the method.
+   */
+  async release(snapshotDir) {}
 }
 
 export class ExecutionPort {
@@ -1571,6 +2028,43 @@ export function installRunSignalGuard({
   };
 }
 
+// Per-process run sequence so two concurrent execute() calls on identical
+// staged content never share one runReportPath within a millisecond tick.
+let REPORT_SEQ = 0;
+
+/**
+ * Decides how a snapshot dir is disposed when a run ends (normally or by
+ * signal): transient mkdtemp dirs are destroyed (`remove`); the deterministic
+ * content-addressed reuseDir only drops the caller's lease (`release`) so a
+ * concurrent review serving from it — or a later retry — keeps its input.
+ *
+ * @param {string} snapshotDir
+ * @param {string|null} reuseDir
+ * @returns {'remove'|'release'}
+ */
+export function snapshotDirDisposition(snapshotDir, reuseDir) {
+  return snapshotDir !== reuseDir ? 'remove' : 'release';
+}
+
+// Lease heartbeat period: reviews outliving the 24h marker TTL refresh
+// their `.live-<pid>` marker this often, keeping sweep protection whole.
+const LEASE_REFRESH_MS = 15 * 60 * 1000;
+
+/**
+ * Renders a path for committed observability artifacts: repo-relative when
+ * inside the repo, otherwise the bare basename. Absolute operator paths
+ * must never leak into public git history via badge side-cars.
+ *
+ * @param {string} repoRoot
+ * @param {string} absolutePath
+ * @returns {string}
+ */
+export function toCommittedPath(repoRoot, absolutePath) {
+  const rel = path.relative(repoRoot, absolutePath);
+  if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) return rel.split(path.sep).join('/');
+  return path.basename(absolutePath);
+}
+
 /**
  * Application Orchestrator Service implementing the staged code review lifecycle use case.
  */
@@ -1651,28 +2145,53 @@ export class ReviewWorkflowService {
 
     const runStamp = ReviewReport.formatTimestamp(new Date(startedAt));
     const runId = diff.isEmpty() ? `${runStamp}-skipped` : `${runStamp}-${diff.hash.slice(0, 12)}`;
+    // Durable per-run report copy: the dispatcher falls back to it when the
+    // agent URI is unreadable. It lives OUTSIDE the shared content-addressed
+    // snapshot dir (run-unique, not diff-addressed) so concurrent reviews
+    // on identical staged content never share, delete, or overwrite each
+    // other's fallback — the cache dir stays read-only for the run lifetime.
+    // Name: runId(timestamp+hash) + per-process seq + random nonce + pid
+    // tail. The nonce makes the path unpredictable to same-user processes
+    // (a predictable name can be pre-created as a planted PASS report the
+    // dispatcher would reproduce verbatim); the pid tail feeds the
+    // orphan-sweep owner check (`-<pid>.md$`).
+    const runReportPath = path.join(tmpdir(), `reviewer-kit-report-${runId}-${REPORT_SEQ++}-${randomBytes(8).toString('hex')}-${process.pid}.md`);
     let telemetry;
     try {
       telemetry = safeRunTelemetry(this.#telemetryPort.forRun({ repoRoot, runId }));
     } catch {
       telemetry = NULL_RUN_TELEMETRY;
     }
+    // Snapshot dirs created during this run; the signal guard removes them
+    // before exit() since the finally blocks below never run on SIGINT/SIGTERM.
+    // Transient mkdtemp dirs are destroyed; the deterministic content-addressed
+    // reuseDir only drops this process's `.live-<pid>` lease (release) so a
+    // concurrent review serving from it — or a later retry — keeps its input.
+    const transientSnapshotDirs = new Set();
+    let retainedSnapshotDir = null;
+    let clearLeaseTimer = async () => {};
+    const cleanupSnapshots = async () => {
+      await clearLeaseTimer();
+      for (const dir of transientSnapshotDirs) {
+        await this.#snapshotStorePort.remove(dir).catch(() => {});
+      }
+      if (retainedSnapshotDir && typeof this.#snapshotStorePort.release === 'function') {
+        await this.#snapshotStorePort.release(retainedSnapshotDir).catch(async (error) => {
+          await telemetry.record('snapshot_release_failed', {
+            dir: retainedSnapshotDir,
+            error: String(error?.message ?? error),
+          }).catch(() => {});
+        });
+      }
+      await rm(runReportPath, { force: true }).catch(() => {});
+    };
+    const uninstall = installRunSignalGuard({ telemetry, runId, cleanup: cleanupSnapshots });
     await telemetry.updateLastRun({
       state: 'started',
       runId,
       repoRoot,
       startedAt: new Date(startedAt).toISOString(),
     }, { force: true });
-
-    // Snapshot dirs created during this run; the signal guard removes them
-    // before exit() since the finally blocks below never run on SIGINT/SIGTERM.
-    const liveSnapshotDirs = new Set();
-    const cleanupSnapshots = async () => {
-      for (const dir of liveSnapshotDirs) {
-        await this.#snapshotStorePort.remove(dir).catch(() => {});
-      }
-    };
-    const uninstall = installRunSignalGuard({ telemetry, runId, cleanup: cleanupSnapshots });
 
     try {
       await telemetry.record('run_started', {
@@ -1715,11 +2234,52 @@ export class ReviewWorkflowService {
 
       const snapshotStartedAt = Date.now();
       const snapshot = await this.#gitPort.getSnapshot(repoRoot);
+      const fileClasses = classifyChangedPaths(
+        diff.changedPaths,
+        (p) => isTestPath(p, this.#testPathPatterns),
+        new Map(snapshot.files.map((f) => [f.path, f.mode])),
+      );
+      const shaByPath = new Map(
+        snapshot.files.map((f) => [f.path, createHash('sha256').update(f.content).digest('hex')]),
+      );
+      const fileClassRows = fileClasses.map((entry) => ({
+        ...entry,
+        sha256: shaByPath.get(entry.path) ?? null,
+      }));
+      // Resolve the profile + lanes BEFORE any lease is claimed: an invalid
+      // OMP_REVIEW_KIT_LANES must fail before create() stamps a .live marker,
+      // otherwise the throw leaks a foreign-live lease for its 24h TTL.
+      const reviewProfile = reviewProfileFor(fileClasses);
+      const riskLanes = riskLanesFor(reviewProfile, process.env);
+      const reuseDir = path.join(tmpdir(), `reviewer-kit-snapshot-${diff.hash.slice(0, 24)}`);
       const snapshotDir = await this.#snapshotStorePort.create(snapshot, {
         diffBytes: diff.bytes,
         changedPaths: diff.changedPaths,
+        fileClasses: fileClassRows,
+        reuseDir,
       });
-      liveSnapshotDirs.add(snapshotDir);
+      if (snapshotDir !== reuseDir) {
+        transientSnapshotDirs.add(snapshotDir);
+      } else {
+        retainedSnapshotDir = snapshotDir;
+      }
+      const storePort = this.#snapshotStorePort;
+      let leaseRefresh = Promise.resolve();
+      const leaseTimer = (typeof storePort.refreshLease === 'function' && typeof setInterval === 'function')
+        ? setInterval(() => {
+          // Ticks serialize on the chain: a second interval can never
+          // interleave inside refreshLease itself.
+          leaseRefresh = leaseRefresh.then(() => storePort.refreshLease(snapshotDir)).catch(() => {});
+        }, LEASE_REFRESH_MS)
+        : null;
+      leaseTimer?.unref?.();
+      clearLeaseTimer = async () => {
+        clearInterval(leaseTimer);
+        // Drain the in-flight tick before the caller releases: a refresh
+        // still racing release() is a fire-and-forget write that could
+        // re-stamp the marker on the retained dir after release() ran.
+        await leaseRefresh.catch(() => {});
+      };
       await telemetry.record('snapshot_materialized', {
         files: snapshot.files.length,
         bytes: snapshot.files.reduce((total, file) => total + file.content.length, 0),
@@ -1792,7 +2352,7 @@ export class ReviewWorkflowService {
                 const revertedDir = await this.#snapshotStorePort.create(revertedSnapshot, {
                   artifacts: false,
                 });
-                liveSnapshotDirs.add(revertedDir);
+                transientSnapshotDirs.add(revertedDir);
 
                 try {
                   await telemetry.updateLastRun({
@@ -1826,7 +2386,7 @@ export class ReviewWorkflowService {
                   });
                 } finally {
                   await this.#snapshotStorePort.remove(revertedDir);
-                  liveSnapshotDirs.delete(revertedDir);
+                  transientSnapshotDirs.delete(revertedDir);
                 }
               } else {
                 revertedSkipReason = !hasTest ? 'no test changes staged' : 'no non-test changes staged';
@@ -1859,7 +2419,10 @@ export class ReviewWorkflowService {
         const prompt = ReviewPrompt.forDiff(diff, snapshotDir, diff.changedPaths, {
           suspicionMapText: suspicionMap.toPromptText(),
           executionEvidenceText: executionEvidence ? executionEvidence.toPromptText() : '',
-          // ~50KB ≈ 12K tokens — cheaper than four read round-trips per subagent.
+          reviewProfile,
+          riskLanes,
+          fileClasses: fileClassRows,
+          reportPath: runReportPath,
           inlineDiff: diff.length <= 50_000 ? diff.bytes.toString('utf8') : '',
         });
         execResult = await this.#reviewerPort.executeReview({
@@ -1868,8 +2431,26 @@ export class ReviewWorkflowService {
           telemetry,
         });
       } finally {
-        await this.#snapshotStorePort.remove(snapshotDir);
-        liveSnapshotDirs.delete(snapshotDir);
+        await clearLeaseTimer();
+        if (snapshotDirDisposition(snapshotDir, reuseDir) === 'remove') {
+          // Transient mkdtemp dirs are removed immediately; the deterministic
+          // content-addressed reuseDir is left in place so a later identical
+          // diff can reuse it (the adapter's retention sweep bounds its age).
+          await this.#snapshotStorePort.remove(snapshotDir);
+          transientSnapshotDirs.delete(snapshotDir);
+        } else if (typeof this.#snapshotStorePort.release === 'function') {
+          // The retained cache dir drops its in-use marker so the retention
+          // sweep can prune it once this run no longer references it.
+          await this.#snapshotStorePort.release(snapshotDir).catch(async (error) => {
+            await telemetry.record('snapshot_release_failed', {
+              dir: snapshotDir,
+              error: String(error?.message ?? error),
+            }).catch(() => {});
+          });
+        }
+        // The dispatcher consumed the durable report (or never needed it);
+        // remove this run's copy so per-run fallbacks never accumulate.
+        await rm(runReportPath, { force: true }).catch(() => {});
       }
 
       let combinedOutput = execResult.combined ?? `${execResult.stdout ?? ''}\n${execResult.stderr ?? ''}`;
@@ -1981,6 +2562,51 @@ export class ReviewWorkflowService {
         modelsTried,
         finishedAt: new Date().toISOString(),
       }, { force: true });
+
+      // Per-stage stats + README badge: best-effort, never gates the verdict.
+      // r26 correctness-2: only the kit's own repo (or an explicit opt-in)
+      // receives badge artifacts — a consumer repo under review must not
+      // accumulate unrequested committable files.
+      if (await badgeEligible(repoRoot)) try {
+        const stageHistory = (Array.isArray(execResult.attempts) ? execResult.attempts : [])
+          .flatMap((a) => Array.isArray(a?.stageHistory) ? a.stageHistory : []);
+        const badgeColor = verdict.isPass() ? 'brightgreen' : 'red';
+        const stageParts = stageHistory.map((s) => s.stage).filter(Boolean);
+        const badge = {
+          schemaVersion: 1,
+          label: 'review-kit',
+          message: `${verdict.value} · ${Math.round((Date.now() - startedAt) / 1000)}s`,
+          color: badgeColor,
+        };
+        const badgeDir = path.join(repoRoot, 'audit-reports');
+        await mkdir(badgeDir, { recursive: true });
+        await writeFile(
+          path.join(badgeDir, 'review-badge.json'),
+          JSON.stringify(badge, null, 2) + '\n',
+          'utf8',
+        );
+        await writeFile(
+          path.join(badgeDir, 'review-badge.full.json'),
+          JSON.stringify({
+            schema: 'review-badge@1',
+            runId,
+            diffHash: diff.hash,
+            verdict: verdict.value,
+            reviewProfile,
+            durationMs: Date.now() - startedAt,
+            stageHistory,
+            stageTrail: stageParts.join('→'),
+            modelsTried,
+            // Committed artifact: repo-relative, never an absolute operator
+            // path (machine layout must not leak into public git history).
+            reportPath: toCommittedPath(repoRoot, reportPath),
+            generatedAt: new Date().toISOString(),
+          }, null, 2) + '\n',
+          'utf8',
+        );
+      } catch {
+        // Badge writing is observability sugar; a failure must never fail the review.
+      }
 
       if (verdict.isPass()) {
         this.#logger.log(`reviewer-kit PASS: ${reportPath}\n`);
@@ -2252,6 +2878,31 @@ function stripTitleGeneratorLines(text) {
 }
 
 /**
+ * Reads only the last `maxTailBytes` of a (possibly multi-MB) log file via a
+ * positioned read — the stage/quota pollers run every ~10s for the whole
+ * review, so a whole-file readFile+slice per tick was O(log size) memory and
+ * I/O per poll. A mid-UTF-8 start byte yields a truncated first line that
+ * never parses — same semantics as the old string slice.
+ *
+ * @param {string} filePath
+ * @param {number} maxTailBytes
+ * @returns {Promise<string>}
+ */
+async function readLogTail(filePath, maxTailBytes) {
+  const handle = await open(filePath, 'r');
+  try {
+    const { size } = await handle.stat();
+    const start = Math.max(0, size - maxTailBytes);
+    const length = size - start;
+    if (length <= 0) return '';
+    const { buffer } = await handle.read(Buffer.alloc(length), 0, length, start);
+    return buffer.toString('utf8');
+  } finally {
+    await handle.close();
+  }
+}
+
+/**
  * Best-effort child-log lookup: OMP names per-process logs
  * `omp.<date>.<pid>.log` (see ompLogHints in run telemetry). Returns true
  * when the tail carries a quota-stall signal. Never throws: an
@@ -2273,6 +2924,139 @@ async function readChildLog({ logDir, pid }) {
   }
 }
 
+const STAGE_AGENT_IDS = Object.freeze({
+  'review-context-scout': 'scout',
+  'review-risk-hunter': 'risk',
+  'review-finding-verifier': 'verifier',
+});
+
+// `Configured subagent …` events carry DISPLAY names (`role: "subagent:<Parent>.<Display>"`),
+// never the agent-type id — only `subagent launch timing` events do. Map the
+// observed display suffixes to stages and, as a positional fallback, pair
+// Configured events with launch-timing events in chronological order.
+const STAGE_ROLE_DISPLAYS = Object.freeze({
+  ContextScout: 'scout',
+  CorrectnessHunter: 'risk',
+  SecurityHunter: 'risk',
+  ContentRiskHunter: 'risk',
+  FindingVerifier: 'verifier',
+});
+
+/**
+ * Best-effort stage derivation from the child OMP log. Reads the newest
+ * `omp.<date>.<pid>.log`, scans for `Configured subagent` (stage start) and
+ * `subagent launch timing` (stage end) JSON entries, and returns the current
+ * stage label for `last-run.json`. Never throws: an unreadable or absent log
+ * yields `undefined`, leaving the caller to keep the prior stage value.
+ */
+export async function childLogReadStage({ logDir, pid, maxTailBytes = 262_144 } = {}) {
+  if (!Number.isInteger(pid) || pid <= 0) return undefined;
+  try {
+    const dir = logDir ?? path.join(homedir(), '.omp', 'logs');
+    const suffix = `.${pid}.log`;
+    const entries = await readdir(dir);
+    const matches = entries.filter((name) => name.startsWith('omp.') && name.endsWith(suffix));
+    if (matches.length === 0) return undefined;
+    matches.sort().reverse();
+    const tail = await readLogTail(path.join(dir, matches[0]), maxTailBytes);
+    const configuredRoles = [];
+    const launchedAgents = [];
+    for (const line of tail.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('{')) continue;
+      let entry;
+      try { entry = JSON.parse(trimmed); } catch { continue; }
+      const message = String(entry.message ?? '');
+      if (message === 'Configured subagent runtime model fallback chain') {
+        configuredRoles.push(String(entry.role ?? ''));
+      } else if (message === 'subagent launch timing') {
+        launchedAgents.push(String(entry.agent ?? ''));
+      }
+    }
+    // Stage-matched pairing, launch-side ground truth: a Configured dispatch
+    // only pairs with a launch event when their stages agree. The outer
+    // orchestrator's own Configured (role "subagent:<Parent>.ReviewerKit",
+    // no stage) and non-stage dispatches pair with NOTHING and cannot shift
+    // positional indices into wrong labels. A duplicated/retried/cancelled
+    // Configured for a stage that already launched is a phantom: it must
+    // not create an unfinished agent that pins the reported stage forever.
+    const dispatchQueueByStage = new Map();
+    for (const role of configuredRoles) {
+      const display = (role ?? '').split('.').pop() ?? '';
+      const stage = STAGE_ROLE_DISPLAYS[display];
+      if (!stage) continue;
+      const queue = dispatchQueueByStage.get(stage) ?? [];
+      queue.push(role);
+      dispatchQueueByStage.set(stage, queue);
+    }
+    const started = [];
+    for (const agent of launchedAgents) {
+      const agentStage = STAGE_AGENT_IDS[agent];
+      const queue = agentStage ? (dispatchQueueByStage.get(agentStage) ?? []) : [];
+      const dispatch = queue.length > 0 ? queue.shift() : undefined;
+      const display = (dispatch ?? '').split('.').pop() ?? '';
+      const stage = STAGE_ROLE_DISPLAYS[display] ?? agentStage;
+      if (stage) started.push(stage);
+    }
+    // Configured-but-never-launched stages (dispatch issued, launch event
+    // not yet in the tail): the stage is started only while it owns ZERO
+    // launches — a launch for that stage consumes its dispatch, so a
+    // surplus Configured for an already-launched stage is ignored.
+    for (const [stage, queue] of dispatchQueueByStage) {
+      const hadLaunches = launchedAgents.some((agent) => STAGE_AGENT_IDS[agent] === stage);
+      if (!hadLaunches && queue.length > 0) started.push(stage);
+    }
+    // Per-agent completion: the two parallel risk hunters must BOTH finish
+    // before the risk stage counts as complete; a Set of stage labels would
+    // collapse them into one 'risk' entry and falsely conclude `allDone`
+    // (regressing the reported stage back to 'scout').
+    const finishedAgents = launchedAgents
+      .map((agent) => STAGE_AGENT_IDS[agent])
+      .filter(Boolean);
+    const finishedCounts = new Map();
+    for (const stage of finishedAgents) {
+      finishedCounts.set(stage, (finishedCounts.get(stage) ?? 0) + 1);
+    }
+    const startedCounts = new Map();
+    for (const stage of started) {
+      startedCounts.set(stage, (startedCounts.get(stage) ?? 0) + 1);
+    }
+    // Current stage = the first observed stage whose agents are unfinished;
+    // when every observed agent finished, the review sits in the gap before
+    // the NEXT stage's Configured line — report the last completed stage
+    // (never 'synthesis', which only begins after the verifier completes).
+    let stage = 'scouting';
+    let lastCompleted;
+    for (let i = 0; i < started.length; i += 1) {
+      const s = started[i];
+      if ((finishedCounts.get(s) ?? 0) < (startedCounts.get(s) ?? 0)) {
+        stage = s;
+        lastCompleted = null;
+        break;
+      }
+      lastCompleted = s;
+    }
+    if (lastCompleted) stage = lastCompleted === 'verifier' ? 'synthesis' : lastCompleted;
+    // `completed` counts fully-finished STAGES: a stage is done when every
+    // agent dispatched for it (Configured rows by stage) has launched and
+    // finished. Configured-but-unlaunched dispatches count against the stage,
+    // so hunter#2 pending keeps risk out of the finished set.
+    const expectedByStage = new Map();
+    for (const role of configuredRoles) {
+      const disp = (role ?? '').split('.').pop() ?? '';
+      const st = STAGE_ROLE_DISPLAYS[disp];
+      if (st) expectedByStage.set(st, (expectedByStage.get(st) ?? 0) + 1);
+    }
+    const completedStages = new Set();
+    for (const [s, n] of finishedCounts) {
+      const expected = Math.max(expectedByStage.get(s) ?? 0, startedCounts.get(s) ?? 0);
+      if (n >= expected && expected > 0) completedStages.add(s);
+    }
+    return { stage, completed: completedStages.size };
+  } catch {
+    return undefined;
+  }
+}
 export async function childLogHasQuotaSignal({ logDir, pid, maxTailBytes = 65_536 } = {}) {
   const content = await readChildLog({ logDir, pid });
   if (content === null) return false;
@@ -2604,6 +3388,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
     this.#lastReviewModel = model;
     let responseObserved = false;
     let workingSignalObserved = false;
+    const stageHistory = [];
     const emitRunning = () => {
       this.#emitProgress({
         state: 'reviewing',
@@ -2663,6 +3448,25 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
             });
           }
         },
+        onStage: ({ stage, completed }) => {
+          if (!stage) return;
+          stageHistory.push({ stage, completed, at: new Date().toISOString(), elapsedMs: Date.now() - startedAt });
+          this.#emitProgress({
+            state: 'reviewing',
+            message: `review stage ${stage}${completed > 0 ? ` (${completed} done)` : ''}`,
+            model,
+            elapsedMs: Date.now() - startedAt,
+          });
+          void telemetry.updateLastRun({
+            state: 'reviewing',
+            model,
+            pid: record.pid,
+            stage,
+            stagesCompleted: completed,
+            stageHistory,
+            elapsedMs: Date.now() - startedAt,
+          });
+        },
       });
       record.status = result?.status;
       record.durationMs = Date.now() - startedAt;
@@ -2673,6 +3477,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
         maxTimeMs: this.#reviewMaxTime.ms,
       });
       record.stalledOnQuota = isQuotaStallStderr(result?.stderr);
+      if (stageHistory.length > 0) record.stageHistory = stageHistory;
       record.stdoutBytes = typeof result?.stdout === 'string' ? Buffer.byteLength(result.stdout) : 0;
       record.stderrBytes = typeof result?.stderr === 'string' ? Buffer.byteLength(result.stderr) : 0;
       await telemetry.record('review_attempt_finished', { ...record });
@@ -2753,10 +3558,10 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
    * @param {string} cwd
    * @param {number} [timeout]
    * @param {string} [model]
-   * @param {{ noTools?: boolean, maxTime?: string|null, quotaStallMs?: number, quotaPollMs?: number, quotaLogDir?: string|null, onOutput?: (chunk: unknown, stream: 'stdout'|'stderr') => void, onSpawn?: (pid: number|undefined) => void }} [options]
+   * @param {{ noTools?: boolean, maxTime?: string|null, quotaStallMs?: number, quotaPollMs?: number, quotaLogDir?: string|null, onOutput?: (chunk: unknown, stream: 'stdout'|'stderr') => void, onSpawn?: (pid: number|undefined) => void, registryEnv?: string|null }} [options]
    * @returns {Promise<{ status: number, stdout: string, stderr: string, pid?: number }>}
    */
-  static defaultRunner(prompt, cwd, timeout, model, { noTools = false, maxTime, quotaStallMs, quotaPollMs = 10_000, quotaLogDir = null, onOutput, onSpawn } = {}) {
+  static defaultRunner(prompt, cwd, timeout, model, { noTools = false, maxTime, quotaStallMs, quotaPollMs = 10_000, quotaLogDir = null, onOutput, onSpawn, onStage, registryEnv } = {}) {
     return new Promise((resolve) => {
       const command = process.env.OMP_REVIEW_KIT_OMP ?? 'omp';
       const selectedModel = model ?? process.env.OMP_REVIEW_KIT_MODEL ?? '@smol';
@@ -2787,6 +3592,9 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       const proc = spawn(executable, args, {
         cwd,
         stdio: ['pipe', 'pipe', 'pipe'],
+        // Stale-parent guard: pull PI_PROXY_* from the user registry when the
+        // inherited env lacks them — children otherwise die at OAuth refresh.
+        env: mergeRegistryProxyEnv(process.env, registryEnv ?? undefined),
         windowsHide: true,
         detached: process.platform !== 'win32',
       });
@@ -2796,7 +3604,6 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       } catch {
         // Telemetry callbacks must never affect the review process.
       }
-
       let stdout = '';
       let stderr = '';
       let timedOut = false;
@@ -2891,18 +3698,49 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
         onOutput?.(chunk, 'stderr');
       });
 
-      if (quotaStallMs > 0 && Number.isInteger(pid) && pid > 0) {
+      if (Number.isInteger(pid) && pid > 0) {
         let pollRunning = false;
+        let lastStage;
         quotaPoller = setInterval(() => {
-          // stdout progress cancels the armed watchdog, but the log poller
-          // stays live: mid-run 429s go to the child log, not stderr, so a
-          // child that printed a banner then stalled must still be caught.
           if (pollRunning || settled || stallTimer) return;
-          if (stdout.trim() !== '' && Date.now() - lastStdoutAt < quotaStallMs) return;
           pollRunning = true;
-          void childLogHasQuotaSignal({ logDir: quotaLogDir, pid })
-            .then((signalled) => {
+          // Stage progress is read unconditionally so last-run.json tracks the
+          // child continuously; the quota-stall log check only matters once
+          // stdout has gone quiet (mid-run 429s land in the child log anyway).
+          const checkQuota = quotaStallMs > 0
+            && (stdout.trim() === '' || Date.now() - lastStdoutAt >= quotaStallMs);
+          void Promise.all([
+            checkQuota ? childLogHasQuotaSignal({ logDir: quotaLogDir, pid }) : Promise.resolve(false),
+            typeof onStage === 'function' ? childLogReadStage({ logDir: quotaLogDir, pid }) : Promise.resolve(undefined),
+          ])
+            .then(([signalled, stageInfo]) => {
+              // Post-settle guard: an in-flight tick resolving after close()
+              // must not deliver stage updates — updateLastRun would regress
+              // the terminal state back to 'reviewing'.
+              if (settled) return;
               if (signalled) armQuotaStall();
+              if (stageInfo) {
+                // Monotonic progress: a truncated tail can make the log look
+                // earlier than it is; never report a regression — neither the
+                // stage label nor the completed count may move backward.
+                const rank = (s) => ['scouting', 'scout', 'risk', 'verifier', 'synthesis'].indexOf(s);
+                if (lastStage && rank(stageInfo.stage) >= 0 && rank(stageInfo.stage) < rank(lastStage.stage)) {
+                  stageInfo = { ...stageInfo, stage: lastStage.stage };
+                }
+                const prevCompleted = lastStage?.completed ?? -1;
+                // r28 correctness-1: tail-window eviction can shrink the
+                // recomputed count while the stage still advances — clamp
+                // completed to monotonic before reporting/tracking.
+                if ((stageInfo.completed ?? 0) < prevCompleted) {
+                  stageInfo = { ...stageInfo, completed: prevCompleted };
+                }
+                const advanced = stageInfo.stage !== lastStage?.stage
+                  || (stageInfo.completed ?? 0) > prevCompleted;
+                if (advanced) {
+                  lastStage = { stage: stageInfo.stage, completed: stageInfo.completed };
+                  try { onStage?.(stageInfo); } catch {}
+                }
+              }
             })
             .catch(() => {})
             .finally(() => {
@@ -2980,6 +3818,9 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
         proc = spawn(executable, args, {
           cwd,
           stdio: ['ignore', 'pipe', 'pipe'],
+          // Same stale-parent guard as the review attempt: role resolution
+          // must not die on a missing PI_PROXY_* env slice.
+          env: mergeRegistryProxyEnv(),
           windowsHide: true,
         });
       } catch {
@@ -3169,6 +4010,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
     } catch (error) {
       record.status = 1;
       record.durationMs = Date.now() - startedAt;
+      record.stdoutBytes = 0;
       record.stderrBytes = 0;
       record.error = error?.message ?? String(error);
       await telemetry.record('reemit_finished', { ...record });
@@ -3178,16 +4020,60 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
 }
 
 
+const CONTROL_BYTES_RE = /[\x00-\x1f\x7f-\x9f]/;
+
+// Windows/NTFS strips trailing dots and spaces from file and directory
+// names; POSIX folds none. A staged name that FOLDS into a reserved name
+// ('.live-1.', '.review ') must be treated as the reserved name, not a
+// harmless sibling.
+function foldFsName(name) {
+  return name
+    // Win32 DOS-to-NT normalization folds superscript digits U+00B9..B3 to
+    // ASCII 1-3 ('com\u00B9' resolves to COM1); fold before the device check.
+    .replace(/[\u00B9\u00B2\u00B3]/g, (ch) => ({ '\u00B9': '1', '\u00B2': '2', '\u00B3': '3' }[ch]))
+    .replace(/[. ]+$/, '');
+}
+
+const DOS_DEVICE_RE = /^(con|prn|aux|nul|com[1-9]|lpt[1-9]|conin\$|conout\$)(\.|$)/i;
+const NTFS_SHORT_ALIAS_RE = /~\d+(?:\.[^.\\/]*)?$/;
+
 function assertSafeSnapshotPath(filePath) {
   if (
     typeof filePath !== 'string' ||
     filePath.length === 0 ||
+    CONTROL_BYTES_RE.test(filePath) ||
     path.posix.isAbsolute(filePath) ||
     path.win32.isAbsolute(filePath) ||
     /^[A-Za-z]:/.test(filePath) ||
-    filePath.split('/').includes('..')
+    // Split on BOTH separators: Windows path.resolve honors '\' too, so a
+    // staged 'z\..\a.mjs' escapes the '/'-only check and materializes
+    // outside the snapshot (or forges .live* markers via 'z\..\.live-99').
+    // Literal '..' plus NTFS-folded forms ('.. ', '.. .', '...') all
+    // resolve to the parent on Windows — reject both shapes.
+    filePath.split(/[\\/]/).some((seg) => seg === '..' || foldFsName(seg) === '..') ||
+    // A colon inside any segment is an NTFS alternate data stream
+    // ('file.ts:evil' writes the ADS of file.ts on Windows): the manifest
+    // lists the staged name while the bytes land on a sibling stream —
+    // silent content evasion, same hazard class as device names.
+    // Windows-only hazards: ADS colons, DOS device names, and NTFS 8.3
+    // aliases are all legal POSIX filenames — gating on platform keeps
+    // Linux/macOS reviews from failing on staged POSIX-legal paths.
+    (process.platform === 'win32'
+      && filePath.split(/[\\/]/).some((seg) => seg.includes(':'))) ||
+    // DOS device basenames (con/nul/aux/com1-9/lpt1-9, extension-insensitive)
+    // sink writes to a device on Windows — staged payload bytes would never
+    // land on disk while the manifest lists the path: silent content evasion.
+    (process.platform === 'win32'
+      && filePath.split(/[\\/]/).some((seg) => DOS_DEVICE_RE.test(foldFsName(seg)))) ||
+    // NTFS 8.3 short-name aliases ('FOO~1.TXT') write through to whatever the
+    // 8.3 name resolves to on volumes where alias generation is enabled —
+    // the staged name can overwrite a sibling file's bytes.
+    (process.platform === 'win32'
+      && filePath.split(/[\\/]/).some((seg) => NTFS_SHORT_ALIAS_RE.test(seg)))
   ) {
-    throw new Error(`Unsafe staged path in snapshot: ${filePath}`);
+    // err.message flows into review_failure/last-run sinks — the raw staged
+    // path's control bytes must be escaped before it reaches them.
+    throw new Error(`Unsafe staged path in snapshot: ${sanitizePromptToken(filePath)}`);
   }
 }
 
@@ -3212,6 +4098,50 @@ export async function linkDependencyDirs(repoRoot, snapshotDir, dirNames = ['nod
   return warnings;
 }
 
+// Provider-proxy env vars that MUST reach every spawned `omp` child. On this
+// box google-antigravity OAuth refresh dies with a TLS cert error when the
+// request leaves the box without 127.0.0.1:3128, and children spawned from a
+// stale parent (started before the user-scope vars existed) inherit nothing —
+// reviewers die with "Use /login". Merge the user registry's PI_PROXY_* into
+// the child env when the inherited env lacks them; never overwrite values the
+// parent did set (scoped-off runs keep full control).
+const REGISTRY_PROXY_VARS = /^PI_(?:PROXY|CA_BUNDLE)_/;
+const REG_SZ_ROW_RE = /^\s+(\S+)\s+REG_SZ\s+(.+)$/;
+
+export function mergeRegistryProxyEnv(env = process.env, registryOut = readUserEnvironmentBlock()) {
+  const merged = { ...env };
+  const parentKeys = Object.keys(merged);
+  for (const line of String(registryOut ?? '').split(/\r?\n/)) {
+    const row = line.match(REG_SZ_ROW_RE);
+    if (!row) continue;
+    const [, name, value] = row;
+    if (!REGISTRY_PROXY_VARS.test(name)) continue;
+    if (merged[name] !== undefined) continue;
+    // Windows env lookup is case-insensitive but Node preserves the
+    // inherited spelling in enumeration: a parent-set `pi_proxy_meta`
+    // must still suppress the registry PI_PROXY_META row, else both
+    // spellings reach the child env block with unpredictable resolution.
+    if (process.platform === 'win32'
+      && parentKeys.some((k) => k.toUpperCase() === name.toUpperCase())) continue;
+    merged[name] = value.trim();
+  }
+  return merged;
+}
+
+function readUserEnvironmentBlock() {
+  if (process.platform !== 'win32') return '';
+  try {
+    const result = spawnSync('reg.exe', ['query', 'HKCU\\Environment'], {
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 5000,
+    });
+    return result.status === 0 ? result.stdout : '';
+  } catch {
+    return '';
+  }
+}
+
 export class SubprocessExecutionAdapter extends ExecutionPort {
   async run({ command, cwd, timeoutMs = 600000 }) {
     if (!command || typeof command !== 'string' || command.trim().length === 0) {
@@ -3228,7 +4158,7 @@ export class SubprocessExecutionAdapter extends ExecutionPort {
         child = spawn(command, {
           shell: true,
           cwd,
-          env: process.env,
+          env: mergeRegistryProxyEnv(),
           windowsHide: true,
         });
       } catch (err) {
@@ -3282,35 +4212,564 @@ export class SubprocessExecutionAdapter extends ExecutionPort {
   }
 }
 
+const SNAPSHOT_RETENTION = 5;
+const SNAPSHOT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+// A .live marker protects a dir in use by a running review; markers older
+// than a day belong to dead processes and no longer exempt the dir.
+const SNAPSHOT_LIVE_TTL_MS = 24 * 60 * 60 * 1000;
+
+// Per-consumer in-use markers: `.live-<pid>` at the snapshot root. Any fresh
+// marker exempts the dir from EVERY sweep deletion path; each consumer
+// removes only its own marker on release.
+const LIVE_MARKER_RE = /^\.live(?:-\d+(?:-[0-9a-f]+)?)?$/;
+
+/**
+ * True when pid plausibly still owns a live resource: signal-0 probes a
+ * running process (EPERM also means alive); ESRCH means it exited.
+ * Fail-open on other platforms' quirks: a live-looking report is kept.
+ */
+export function isPidAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error?.code === 'EPERM';
+  }
+}
 export class FileSystemSnapshotAdapter extends SnapshotStorePort {
+  #leaseName;
+  /** Per-dir binding: which lease name THIS adapter stamped in each dir.
+   *  #leaseName re-rolls per create() so ops on earlier dirs must resolve
+   *  through this map, not the current field (r29 correctness-1). */
+  #leaseByDir = new Map();
+  /** Lease marker name for the current run (test/introspection surface). */
+  get leaseName() {
+    return this.#leaseName;
+  }
   constructor() {
     super();
+    // Per-run lease name: same-process concurrent runs MUST NOT share the
+    // `.live-<pid>` marker — a sibling's release()/dropOwnMarker would unlink
+    // our lease mid-flight and #assertOwnLease would then refuse the dir.
+    this.#leaseName = `.live-${process.pid}-${randomBytes(4).toString('hex')}`;
   }
 
   async create(snapshot, artifacts) {
-    const targetDir = await mkdtemp(path.join(tmpdir(), 'reviewer-kit-snapshot-'));
+    this.lastReused = null;
+    // Fresh run → fresh lease name, so sequential create() calls on this
+    // adapter also carry distinct markers.
+    this.#leaseName = `.live-${process.pid}-${randomBytes(4).toString('hex')}`;
+    const reuseDir = typeof artifacts?.reuseDir === 'string' ? artifacts.reuseDir : null;
+    if (reuseDir) {
+      // Stamp our lease BEFORE the reuse probe: the dir is unprotected
+      // while #isReusable byte-verifies the whole index, and a concurrent
+      // same-diff review could rm+rebuild it out from under us mid-check —
+      // we would then markLive inside THEIR tree and serve bytes we never
+      // verified. The stamp is idempotent: reused → same marker retained;
+      // rejected → the rebuild either re-stamps into the rm'd+recreated
+      // dir or we drop our marker when diverting to transient.
+      const dirInfo = await stat(reuseDir).catch(() => null);
+      if (dirInfo?.isDirectory()) {
+        // The dir is unprotected at this instant: a concurrent sweep or
+        // rebuild can delete it between stat and markLive — a vanished dir
+        // means the stamp is moot, not fatal.
+        try {
+          await this.#markLive(reuseDir);
+        } catch {
+          await this.#dropOwnMarker(reuseDir);
+        }
+      }
+    }
+    if (reuseDir && (await this.#isReusable(snapshot, reuseDir, artifacts?.diffBytes, artifacts?.fileClasses, artifacts?.changedPaths))) {
+      // Deterministic reuse: identical staged content was materialized before
+      // and re-verified byte-for-byte over the WHOLE served index.
+      this.lastReused = reuseDir;
+      // The shared cache dir is read-only for the run lifetime: the durable
+      // per-run report lives OUTSIDE it (see ReviewPrompt reportPath), so
+      // reuse must not create, delete, or overwrite anything inside.
+      await this.#touch(reuseDir);
+      await this.#sweep(reuseDir);
+      let ownLeaseHeld = true;
+      try {
+        await this.#assertOwnLease(reuseDir);
+      } catch {
+        // Another consumer destroyed our lease mid-verify (e.g. stale-detach
+        // in their claim path) — fall through to a private staging dir;
+        // bytes verify from the live index either way, so a lost lease is a
+        // divert, never a hard failure.
+        this.lastReused = null;
+        await this.#dropOwnMarker(reuseDir);
+        ownLeaseHeld = false;
+      }
+      if (ownLeaseHeld) return reuseDir;
+    }
+    let targetDir = null;
+    if (reuseDir && (await this.#isLive(reuseDir))) {
+      // A rejected reuseDir that still serves a running review must never be
+      // destroyed — materialize into a transient dir instead. Our early
+      // stamp came with us: drop it so we do not extend false liveness on a
+      // dir serving a foreign run.
+      await this.#dropOwnMarker(reuseDir);
+    }
+    // Rebuild goes into a private staging dir first: the diff-addressed
+    // reuseDir is then claimed by a single atomic rename, so two concurrent
+    // same-diff reviews can never interleave materialize writes inside one
+    // shared dir (the old rm→mkdir→markLive window let process A rm B's
+    // mid-build tree and both served interleaved bytes).
+    targetDir = await mkdtemp(path.join(tmpdir(), 'reviewer-kit-snapshot-'));
     try {
+      // Stamp BEFORE materialize: the stage dir carries the shared
+      // 'reviewer-kit-snapshot-' prefix, and the retention sweep deletes
+      // unprotected dirs beyond SNAPSHOT_RETENTION — an unmarked staging
+      // dir mid-materialize is a victim for any concurrent sweeper.
+      await this.#markLive(targetDir);
       await this.materialize(snapshot, targetDir);
       await this.#writeReviewArtifacts(targetDir, artifacts);
+      if (reuseDir) {
+        targetDir = await this.#claimReuseDir(reuseDir, targetDir);
+      }
       return targetDir;
     } catch (error) {
-      await this.remove(targetDir);
+      // A staging dir we failed to claim is OURS — remove it. A claimed
+      // reuseDir is never rm'd on failure: a concurrent actor may already
+      // serve it; we only drop our own lease marker.
+      if (targetDir === reuseDir) {
+        await this.#dropOwnMarker(targetDir);
+      } else {
+        await this.remove(targetDir);
+        // A failed claim must not leave our early stamp on the rejected
+        // reuseDir — it would fake liveness for a stale/foreign dir.
+        if (reuseDir) await this.#dropOwnMarker(reuseDir);
+      }
       throw error;
     }
   }
 
+  /** Finds OUR lease marker file actually present in dir (own PID + any run hex). */
+  async #ownMarkerIn(dir) {
+    // r27+r29 correctness-1: prefer the lease WE stamped in THIS dir
+    // (per-dir map — #leaseName re-rolls per create() and would otherwise
+    // orphan earlier dirs' markers). Fallback order when the map has no
+    // entry (marker planted by an earlier create() roll or by tests that
+    // stamp directly): the current #leaseName, then the first own-PID
+    // marker — sibling same-PID hexes lose to our recorded leases.
+    const names = await readdir(dir).catch(() => []);
+    const mapped = this.#leaseByDir.get(dir);
+    if (mapped && names.includes(mapped)) return mapped;
+    if (names.includes(this.#leaseName)) return this.#leaseName;
+    const ownPid = new RegExp(`^\\.live-${process.pid}-[0-9a-f]+$`);
+    return names.find((name) => ownPid.test(name)) ?? null;
+  }
+
+  /** Removes only OUR lease marker(s); a foreign takeover owns a different PID. */
+  async #dropOwnMarker(dir) {
+    const name = await this.#ownMarkerIn(dir);
+    if (name) await rm(path.join(dir, name), { force: true }).catch(() => {});
+    this.#leaseByDir.delete(dir);
+  }
+
+  /**
+   * Atomically move the staged tree onto the diff-addressed reuseDir. Any
+   * contention (dir appears mid-claim, foreign lease, rename refusal) falls
+   * back to serving the private staging dir — correctness over cache sharing.
+   *
+   * @param {string} reuseDir
+   * @param {string} stageDir private dir holding the fully materialized tree
+   * @returns {Promise<string>} the dir to serve (reuseDir on claim, stageDir otherwise)
+   */
+  async #claimReuseDir(reuseDir, stageDir) {
+    // A leftover stale dir in the slot is not ours to serve; detach it into a
+    // private trash name first so a foreign in-flight writer keeps its own
+    // handle instead of corrupting our fresh tree. It may reappear between
+    // our live check and detach — a fresh foreign stamp means divert.
+    const dirInfo = await stat(reuseDir).catch(() => null);
+    if (dirInfo) {
+      if (await this.#isLive(reuseDir)) {
+        await this.#dropOwnMarker(reuseDir);
+        return stageDir;
+      }
+      // Foreign lease may appear any instant: detach-by-rename keeps the
+      // owner's fd-valid path alive even if they stamped after our check —
+      // their process holds the renamed dir, never our bytes.
+      const trashDir = `${reuseDir}.stale-${process.pid}-${Date.now()}`;
+      try {
+        await rename(reuseDir, trashDir);
+      } catch {
+        await this.#dropOwnMarker(reuseDir);
+        return stageDir; // someone else claimed/removed it — serve ours
+      }
+      // Our early stamp rode the rename into trashDir — unlink OUR marker by
+      // name so the protection re-check below counts only real foreign
+      // leases; an own-marker must never keep detached junk alive for 24h.
+      const movedLease = this.#leaseByDir.get(reuseDir);
+      if (movedLease) await rm(path.join(trashDir, movedLease), { force: true }).catch(() => {});
+      this.#leaseByDir.delete(reuseDir);
+      // Post-rename re-check mirrors #sweep: a foreign lease stamped between
+      // our probe and the rename moves WITH the tree into trashDir — deleting
+      // it kills a live consumer's marker. Leave the detached tree for the
+      // next sweep instead of rm'ing over a foreign stamp.
+      if (!(await this.#isProtected(trashDir))) {
+        await rm(trashDir, { recursive: true, force: true }).catch(() => {});
+      }
+    }
+    try {
+      await rename(stageDir, reuseDir);
+    } catch {
+      // Claim lost to a concurrent creator — our staging dir is authoritative.
+      await this.#dropOwnMarker(reuseDir);
+      return stageDir;
+    }
+    // The staging dir's lease name moves with the tree — rebind the map.
+    this.#leaseByDir.set(reuseDir, this.#leaseByDir.get(stageDir));
+    this.#leaseByDir.delete(stageDir);
+    // The rename consumed stageDir — there is no fallback left. Sweep foreign
+    // debris, then fail closed if our lease is gone: a same-process sibling
+    // or a destroyer mid-flight must never be served an unverified tree.
+    await this.#sweep(reuseDir);
+    await this.#assertOwnLease(reuseDir);
+    return reuseDir;
+  }
+
+  /**
+   * A cached snapshot is reusable when every check binds the on-disk cache to
+   * the CURRENT staged content, not merely to itself:
+   * - the directory tree contains EXACTLY the staged file set plus the
+   *   `.review/` artifacts and `.live*` markers — any foreign file,
+   *   symlink, junction, or other non-regular entry at the root or under
+   *   staged subdirectories fails reuse (planted bytes must never be
+   *   served as staged content),
+   * - `.review/` contains only diff.patch, changed-files.txt and (when the
+   *   run classifies paths) file-classes.json — a stale or planted
+   *   report.md fails reuse and the dir is rebuilt clean,
+   * - `.review/changed-files.txt` byte-equals the changed-path manifest,
+   * - `.review/file-classes.json` round-trips and its rows form an exact
+   *   bijection with the live fileClasses rows — same path set, matching
+   *   fileClass and equal sha256 per path (deleted paths carry null on
+   *   both sides) — so a self-consistent forged manifest pointing at
+   *   attacker bytes is rejected, and
+   * - every staged file in the WHOLE index byte-equals its staged content
+   *   (two worktrees can stage an identical patch while differing in
+   *   unchanged files).
+   * A cache written by an older runner or planted in tmpdir fails any of
+   * these checks and is rematerialized from the live index instead.
+   */
+  async #isReusable(snapshot, reuseDir, diffBytes, fileClasses, changedPaths) {
+    if (!Buffer.isBuffer(diffBytes)) return false;
+    try {
+      // Enumerate the whole tree: every served path must be a staged file,
+      // a `.review/` artifact, or a `.live*` marker. Extra planted files are
+      // the direct "serve attacker bytes as staged source" vector.
+      const expected = new Set(snapshot.files.map((f) => f.path.replace(/\\/g, '/')));
+      const stack = [''];
+      while (stack.length > 0) {
+        const rel = stack.pop();
+        const abs = rel === '' ? reuseDir : path.join(reuseDir, ...rel.split('/'));
+        const dirents = await readdir(abs, { withFileTypes: true });
+        for (const e of dirents) {
+          const childRel = rel === '' ? e.name : `${rel}/${e.name}`;
+          if (e.isDirectory()) {
+            if (childRel === '.review') continue; // handled below
+            stack.push(childRel);
+            continue;
+          }
+          // Non-regular entries (symlinks, junctions, fifos, sockets) are
+          // never staged content: withFileTypes does not follow links, so
+          // skipping them would let planted entries evade this check.
+          if (!e.isFile()) return false;
+          if (rel === '' && LIVE_MARKER_RE.test(e.name)) continue;
+          if (!expected.has(childRel)) return false;
+        }
+      }
+
+      const reviewDir = path.join(reuseDir, '.review');
+      const expectedArtifacts = new Set(['diff.patch', 'changed-files.txt']);
+      if (Array.isArray(fileClasses)) expectedArtifacts.add('file-classes.json');
+      const entries = await readdir(reviewDir, { withFileTypes: true });
+      if (entries.some((e) => !e.isFile() || !expectedArtifacts.has(e.name))) return false;
+      const names = new Set(entries.map((e) => e.name));
+      if (!names.has('diff.patch')) return false;
+      const existing = await readFile(path.join(reviewDir, 'diff.patch'));
+      if (!existing.equals(diffBytes)) return false;
+      if (Array.isArray(changedPaths)) {
+        const expected = `${changedPaths.map((p) => sanitizePromptToken(p)).join('\n')}\n`;
+        const onDisk = await readFile(path.join(reviewDir, 'changed-files.txt'), 'utf8');
+        if (onDisk !== expected) return false;
+      }
+      if (Array.isArray(fileClasses)) {
+        const manifest = JSON.parse(await readFile(path.join(reviewDir, 'file-classes.json'), 'utf8'));
+        if (manifest.schema !== 'file-classes@1' || !Array.isArray(manifest.files)) return false;
+        if (manifest.files.length !== fileClasses.length) return false;
+        // Bijection: every live fileClasses row binds to a manifest row for
+        // the SAME path with the SAME fileClass and the SAME sha256; every
+        // manifest row must name a live staged path. A forged manifest whose
+        // rows are only self-consistent (rows sha256-verifying planted bytes
+        // under arbitrary paths) fails here. Deleted staged paths carry
+        // sha256:null on BOTH sides (absent from snapshot.files, nothing to
+        // hash) — null equals null, so deletion diffs reuse; a null forged
+        // against a live non-null row still mismatches and fails.
+        // Path keys sanitize identically to the writer, so deletion diffs
+        // whose control bytes were escaped on disk still biject with the
+        // live rows — and a forged manifest never keys on a raw path that
+        // only LOOKS equal after escaping.
+        const expectedByPath = new Map(fileClasses.map((row) => [sanitizePromptToken(row.path), row]));
+        const manifestByPath = new Map();
+        for (const row of manifest.files) {
+          const sha = row?.sha256 ?? null;
+          if (typeof row?.path !== 'string' || (sha !== null && (typeof sha !== 'string' || sha.length === 0))) {
+            return false;
+          }
+          if (manifestByPath.has(row.path)) return false;
+          manifestByPath.set(row.path, row);
+        }
+        for (const row of manifest.files) {
+          const expected = expectedByPath.get(row.path);
+          if (!expected || expected.fileClass !== row.fileClass) return false;
+        }
+        for (const row of fileClasses) {
+          const manifestRow = manifestByPath.get(sanitizePromptToken(row.path));
+          if (!manifestRow || manifestRow.sha256 !== row.sha256) return false;
+        }
+      }
+
+      // Whole-index binding: the snapshot serves EVERY staged file to the
+      // reviewer, so reuse verifies every served byte — not only the paths
+      // that appear in the diff. Two repos/worktrees can stage a
+      // byte-identical patch while differing in unchanged files; hashing
+      // only the manifest would serve foreign content as staged source.
+      for (const file of snapshot.files) {
+        assertSafeSnapshotPath(file.path);
+        const bytes = await readFile(path.join(reuseDir, ...file.path.split('/'))).catch(() => null);
+        if (!bytes || !bytes.equals(file.content)) return false;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Refreshes a directory's mtime so a just-revalidated cache entry is not
+   * treated as stale by the very sweep that follows it.
+   */
+  async #touch(dir) {
+    const now = new Date();
+    await utimes(dir, now, now).catch(() => {});
+  }
+
+  get reusedDir() {
+    return this.lastReused ?? null;
+  }
+
+  async #sweep(excludeDir = null) {
+    try {
+      const base = tmpdir();
+      const names = await readdir(base);
+      const candidates = [];
+      for (const name of names) {
+        if (!name.startsWith('reviewer-kit-snapshot-')) continue;
+        const full = path.join(base, name);
+        if (excludeDir && path.resolve(full) === path.resolve(excludeDir)) continue;
+        const info = await lstat(full).catch(() => null);
+        if (!info || !info.isDirectory()) continue;
+        candidates.push({ full, mtimeMs: info.mtimeMs });
+      }
+      // Liveness first: ANY fresh `.live*` marker exempts the dir from every
+      // deletion path (TTL expiry AND retention count). Without this a long
+      // review loses its input the moment 5 newer dirs accumulate.
+      const now = Date.now();
+      const unprotected = [];
+      for (const c of candidates) {
+        if (await this.#isProtected(c.full)) continue;
+        unprotected.push(c);
+      }
+      const victims = unprotected.filter((c) => now - c.mtimeMs > SNAPSHOT_TTL_MS);
+      const fresh = unprotected
+        .filter((c) => now - c.mtimeMs <= SNAPSHOT_TTL_MS)
+        .sort((a, b) => b.mtimeMs - a.mtimeMs);
+      victims.push(...fresh.slice(SNAPSHOT_RETENTION));
+      for (const victim of victims) {
+        // Narrow the check-then-delete race: a lease stamped after the
+        // protection census must still stop this rm (no lock exists for
+        // same-user tmpdir sharing; re-checking shrinks the window).
+        if (await this.#isProtected(victim.full)) continue;
+        await rm(victim.full, { recursive: true, force: true }).catch(() => {});
+      }
+      // Orphan per-run durable reports (crashed runs never reach their
+      // finally): files only, TTL-bounded, and only when the owning pid is
+      // no longer alive — a same-diff concurrent run must never lose its
+      // report fallback mid-flight.
+      for (const name of names) {
+        if (!name.startsWith('reviewer-kit-report-') || !name.endsWith('.md')) continue;
+        const full = path.join(base, name);
+        const info = await lstat(full).catch(() => null);
+        if (!info || !info.isFile()) continue;
+        if (now - info.mtimeMs <= SNAPSHOT_TTL_MS) continue;
+        const owner = Number(name.match(/-(\d+)\.md$/)?.[1]);
+        if (Number.isInteger(owner) && isPidAlive(owner)) continue;
+        await rm(full, { force: true }).catch(() => {});
+      }
+    } catch {
+      // Sweeping is best-effort hygiene; never fail a review over it.
+    }
+  }
+
+  /**
+   * True while any OTHER consumer's `.live*` marker in dir is younger than
+   * SNAPSHOT_LIVE_TTL_MS. Our own `.live-<pid>` never blocks create(): it is
+   * this process's lease, not a foreign consumer's.
+   */
+  async #isLive(dir) {
+    const names = await readdir(dir).catch(() => []);
+    const now = Date.now();
+    const ownPid = new RegExp(`^\\.live-${process.pid}(?:-[0-9a-f]+)?$`);
+    for (const name of names) {
+      // All own-PID markers are ours — a stale hex from a dead earlier run
+      // of THIS process is not a live foreign consumer.
+      if (!LIVE_MARKER_RE.test(name) || ownPid.test(name)) continue;
+      const info = await stat(path.join(dir, name)).catch(() => null);
+      if (info && info.isFile() && now - info.mtimeMs < SNAPSHOT_LIVE_TTL_MS) return true;
+    }
+    return false;
+  }
+
+  /**
+   * True while any `.live*` marker — including our own — is younger than
+   * SNAPSHOT_LIVE_TTL_MS. Sweep protection counts every consumer's lease.
+   */
+  async #isProtected(dir) {
+    const names = await readdir(dir).catch(() => []);
+    const now = Date.now();
+    for (const name of names) {
+      if (!LIVE_MARKER_RE.test(name)) continue;
+      const info = await stat(path.join(dir, name)).catch(() => null);
+      if (info && info.isFile() && now - info.mtimeMs < SNAPSHOT_LIVE_TTL_MS) return true;
+    }
+    return false;
+  }
+  /**
+   * Stamps this consumer's in-use marker (`.live-<pid>`); the retention
+   * sweep honors every fresh marker, so concurrent consumers each hold
+   * their own lease.
+   *
+   * Throws: a lease that failed to stamp must never leave the caller
+   * serving from an unprotected diff-addressed dir.
+   */
+  async #markLive(dir) {
+    this.#leaseByDir.set(dir, this.#leaseName);
+    const marker = path.join(dir, this.#leaseName);
+    await writeFile(marker, `${process.pid}\n`, 'utf8');
+    const now = new Date();
+    await utimes(marker, now, now).catch(() => {});
+  }
+
+  /**
+   * Fails closed when this process's own `.live-<pid>` lease disappeared
+   * from dir — proof a concurrent actor destroyed or replaced the
+   * diff-addressed dir while we were still serving from it.
+   */
+  async #assertOwnLease(dir) {
+    const name = this.#leaseByDir.get(dir);
+    const info = name ? await stat(path.join(dir, name)).catch(() => null) : null;
+    if (!info || !info.isFile()) {
+      throw new Error(`snapshot lease lost for ${dir}`);
+    }
+  }
+
+  /**
+   * Releases ONLY this process's in-use marker WITHOUT deleting the
+   * directory: used for snapshot dirs that outlive this run as cache
+   * entries (the deterministic reuseDir). Other consumers' markers are
+   * untouched, so a concurrent review stays protected.
+   *
+   * @param {string} snapshotDir
+   * @returns {Promise<void>}
+   */
+  async release(snapshotDir) {
+    // Only this consumer's lease is released — resolve the marker from the
+    // DIRECTORY, not the current #leaseName: execute() can call create()
+    // twice on one adapter (reverted-evidence dir), and the second call
+    // re-rolls the name — a field lookup would orphan the first dir's stamp.
+    const name = await this.#ownMarkerIn(snapshotDir);
+    if (!name) return;
+    const marker = path.join(snapshotDir, name);
+    const info = await lstat(marker).catch(() => null);
+    // A non-regular marker at our lease name is foreign content (symlink,
+    // planted file) — never unlink it, and fail loudly: lease state was
+    // tampered with mid-run.
+    if (info && !info.isFile()) {
+      throw new Error(`snapshot lease marker is not a regular file: ${marker}`);
+    }
+    await rm(marker, { force: true }).catch(() => {});
+    this.#leaseByDir.delete(snapshotDir);
+  }
+
+  /**
+   * Lease heartbeat: refreshes ONLY this process's `.live-<pid>` marker
+   * mtime. Missing marker → NO-OP, always: the marker is absent because
+   * release() already ran (an in-flight tick landing after release must
+   * never resurrect the lease as a foreign-live marker for up to 24h) or
+   * the dir was swept. A non-regular marker at our lease name is removed
+   * (lease tamper) instead of updated.
+   *
+   * @param {string} snapshotDir
+   * @returns {Promise<void>}
+   */
+  async refreshLease(snapshotDir) {
+    const name = await this.#ownMarkerIn(snapshotDir);
+    if (!name) return;
+    const marker = path.join(snapshotDir, name);
+    const info = await lstat(marker).catch(() => null);
+    // Missing marker -> NO-OP, always: release() may land between our
+    // readdir and lstat, and a sweep can take the marker — a vanished
+    // lease is a no-op, never a TypeError.
+    if (info === null) return;
+    if (!info.isFile()) {
+      await rm(marker, { recursive: true, force: true }).catch(() => {});
+      return;
+    }
+    const now = new Date();
+    await utimes(marker, now, now).catch(() => {});
+  }
+
   async remove(snapshotDir) {
+    this.#leaseByDir.delete(snapshotDir);
     await rm(snapshotDir, { recursive: true, force: true });
   }
 
   async materialize(snapshot, targetDir) {
+    // Two staged paths can fold onto ONE on-disk name — case-insensitive
+    // (SRC/x vs src/x), backslash-vs-slash (a\b vs a/b), NTFS trailing
+    // dot/space strip (file. vs file). Without a seen-set the later index
+    // entry wins last-write-wins while diff.patch lists both: the reviewer
+    // reads bytes that differ from what the index commits. Fail closed on
+    // any fold collision; deterministic on every platform.
+    const seenDestinations = new Set();
     for (const file of snapshot.files) {
       assertSafeSnapshotPath(file.path);
       const normalized = file.path.replace(/\\/g, '/').toLowerCase();
       if (normalized === '.review' || normalized.startsWith('.review/')) {
         throw new Error(`Staged path collides with reserved snapshot artifacts directory: ${file.path}`);
       }
+      // The `.live*` root namespace is adapter lease state: a staged file
+      // with that name would forge an in-use lease (sweep- and TTL-immune
+      // for 24h) or be deleted by release() when it matches the own pid.
+      const topSegment = normalized.split('/')[0];
+      if (LIVE_MARKER_RE.test(topSegment)) {
+        throw new Error(`Staged path collides with reserved snapshot lease namespace: ${file.path}`);
+      }
+      // NTFS folds trailing dots/spaces: '.live-1.' materializes as
+      // '.live-1' and '.review.' as '.review' — a planted lease or a
+      // hidden artifacts dir by another name. Reject folded collisions.
+      if (LIVE_MARKER_RE.test(foldFsName(topSegment)) || foldFsName(topSegment) === '.review') {
+        throw new Error(`Staged path folds onto reserved snapshot namespace: ${file.path}`);
+      }
       const destination = path.resolve(targetDir, ...file.path.split('/'));
+      const destinationKey = file.path.replace(/\\/g, '/').split('/').map(foldFsName).join('/').toLowerCase();
+      if (seenDestinations.has(destinationKey)) {
+        throw new Error(`Staged paths fold onto one on-disk name: ${file.path}`);
+      }
+      seenDestinations.add(destinationKey);
       const root = path.resolve(targetDir) + path.sep;
       if (!destination.startsWith(root)) {
         throw new Error(`Staged path escapes snapshot directory: ${file.path}`);
@@ -3331,10 +4790,33 @@ export class FileSystemSnapshotAdapter extends SnapshotStorePort {
       return;
     }
     const reviewDir = path.join(targetDir, '.review');
+    // Purge any pre-existing .review content: when materializing into a
+    // deterministic reuseDir, foreign artifacts (a planted report.md the
+    // dispatcher would reproduce verbatim on agent-write failure) must not
+    // survive alongside the artifacts we are about to write.
+    await rm(reviewDir, { recursive: true, force: true });
     await mkdir(reviewDir, { recursive: true });
     await writeFile(path.join(reviewDir, 'diff.patch'), artifacts.diffBytes);
-    const manifest = (artifacts.changedPaths ?? []).join('\n') + '\n';
+    // Deleted staged paths never reach materialize; control bytes in their
+    // names must not reach the reviewer as raw text either — sanitize like
+    // the prompt does (reuse compare sanitizes live paths the same way).
+    const manifest = (artifacts.changedPaths ?? []).map((p) => sanitizePromptToken(p)).join('\n') + '\n';
     await writeFile(path.join(reviewDir, 'changed-files.txt'), manifest, 'utf8');
+    if (Array.isArray(artifacts.fileClasses)) {
+      const rows = artifacts.fileClasses.map((entry) => ({
+        // Paths sanitize identically to changed-files.txt: deleted staged
+        // paths never pass assertSafeSnapshotPath and their raw bytes (bidi,
+        // zero-width, C1) must not reach the reviewer-facing manifest.
+        path: sanitizePromptToken(entry.path),
+        fileClass: entry.fileClass,
+        sha256: entry.sha256 ?? null,
+      }));
+      await writeFile(
+        path.join(reviewDir, 'file-classes.json'),
+        JSON.stringify({ schema: 'file-classes@1', files: rows }, null, 2) + '\n',
+        'utf8',
+      );
+    }
   }
 }
 
