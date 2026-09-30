@@ -146,7 +146,7 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(reviewerKitAgent, /REVIEW_RESULT=BLOCK/);
     assert.match(reviewerKitAgent, /review-rejection-envelope@1/);
     assert.equal((reviewerKitAgent.match(/Stage [1-4]:/g) ?? []).length, 4);
-    assert.ok((reviewerKitAgent.match(/agent `review-risk-hunter`/g) ?? []).length >= 1);
+    assert.equal((reviewerKitAgent.match(/agent `review-risk-hunter`/g) ?? []).length, 1);
     assert.match(reviewerKitAgent, /Risk lanes for this diff/);
     assert.match(reviewerKitAgent, /CLI invocation pins the active and slow model roles/);
     assert.match(reviewerKitAgent, /omit `model`, `outputSchema`, `schemaMode`, and `isolated`/);

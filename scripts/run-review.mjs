@@ -329,7 +329,7 @@ export function classifyFilePath(filePath) {
     'license', 'license-mit', 'licence', 'copying', 'copying3', 'notice',
     'readme', 'authors', 'contributors', 'changelog', 'changes', 'history',
     'news', 'todo', 'install', 'version', 'thanks', 'credits', 'maintainers',
-    'codeowners2', 'dockerignore', 'gitkeep', 'keep',
+    'dockerignore', 'gitkeep', 'keep',
   ]);
   if (!basename.includes('.') && !DOTLESS_DOCS.has(basename)) return 'executable';
   // Maven extension/config dir runs args and injected jars at build time.
