@@ -2411,6 +2411,30 @@ function reviewThinkingLevel() {
   return REVIEW_THINKING_LEVELS.has(raw) ? raw : null;
 }
 
+/**
+ * Skill catalog visible to the review child. The catalog is resent with every
+ * request of every stage, and an autolearn-grown store of hundreds of skills
+ * made the base request ~213KB (measured; ~92KB with review-domain skills
+ * only), so the child lists only the plugin's own skills plus plugin-named
+ * skills by default. The plugin skills are always included: the orchestrator
+ * autoloads the protocol skills, and a filter that hides them empties the
+ * catalog and breaks every skill:// read. OMP_REVIEW_KIT_SKILLS: unset = the
+ * default extra patterns, a comma-separated glob list = extra patterns added
+ * to the plugin skills, `all` (any case, anywhere in the list) = the full
+ * catalog. An invalid list falls back to the default extra patterns.
+ */
+const REVIEW_PLUGIN_SKILLS = ['multi-stage-review', 'reality-first-review', 'range-audit', 'slop'];
+const DEFAULT_REVIEW_SKILL_PATTERNS = '*reviewer-kit*,*review-kit*';
+const REVIEW_SKILL_PATTERN_RE = /^[A-Za-z0-9_.*?-]+$/;
+function reviewSkillsSelection() {
+  const requested = (process.env.OMP_REVIEW_KIT_SKILLS ?? '').split(',').map((pattern) => pattern.trim()).filter(Boolean);
+  if (requested.some((pattern) => pattern.toLowerCase() === 'all')) return { args: [], label: 'all' };
+  const valid = requested.length > 0 && requested.every((pattern) => REVIEW_SKILL_PATTERN_RE.test(pattern));
+  const extra = valid ? requested : DEFAULT_REVIEW_SKILL_PATTERNS.split(',');
+  const value = [...new Set([...REVIEW_PLUGIN_SKILLS, ...extra])].join(',');
+  return { args: [`--skills=${value}`], label: value };
+}
+
 
 async function terminateProcessTree(proc) {
   if (!proc.pid) return;
@@ -2748,6 +2772,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       // stays a role selector so the child resolves the user's configured
       // role itself and keeps that role's retry.fallbackChains.
       const commandArgs = ['-p', '--model', selectedModel, ...(noTools ? ['--no-tools'] : ['--tools', 'task,read']), '--no-session', '--no-title', '--no-rules'];
+      commandArgs.push(...reviewSkillsSelection().args);
       const thinking = reviewThinkingLevel();
       if (thinking) commandArgs.push('--thinking', thinking);
       if (typeof maxTime === 'string' && REVIEW_MAX_TIME_RE.test(maxTime)) {
@@ -3010,6 +3035,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       maxTime: this.#reviewMaxTime.arg,
       quotaStallMs: this.#quotaStallMs,
       effortOverride: reviewThinkingLevel(),
+      skills: reviewSkillsSelection().label,
     });
     const promptText = typeof prompt === 'string' ? prompt : prompt.toString();
     const primaryModel = this.#primaryModel;

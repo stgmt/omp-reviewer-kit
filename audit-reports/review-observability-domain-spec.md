@@ -46,7 +46,7 @@ Every event: `{ schema, runId, type, at, ...payload }`. `runId = <reportTimestam
 | type | payload | emitted by |
 |---|---|---|
 | `run_started` | `cwd`, `repoRoot`, `node`, `platform` | workflow |
-| `review_chain` | `primaryModel`, `maxFallbacks`, `probeTimeoutMs` | adapter |
+| `review_chain` | `primaryModel`, `maxFallbacks`, `probeTimeoutMs`, `skills` (effective `--skills` patterns, or `all`) | adapter |
 | `diff_collected` | `diffHash`, `diffBytes` | workflow |
 | `snapshot_materialized` | `files`, `bytes`, `durationMs` | workflow |
 | `review_attempt_started` | `model`, `attemptIndex`, `pid` | adapter |
