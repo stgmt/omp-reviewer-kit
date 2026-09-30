@@ -475,17 +475,19 @@ async function runMutationGate() {
       await copyRepoTree(tempDir);
 
       const targetPath = path.join(tempDir, mutant.file);
-      const originalContent = await readFile(targetPath, 'utf8');
+      const originalContent = (await readFile(targetPath, 'utf8')).replace(/\r\n/g, '\n');
+      const normalizedOriginal = mutant.original.replace(/\r\n/g, '\n');
+      const normalizedReplacement = mutant.replacement.replace(/\r\n/g, '\n');
 
       // Guarded single replacement
-      const occurrences = originalContent.split(mutant.original).length - 1;
+      const occurrences = originalContent.split(normalizedOriginal).length - 1;
       if (occurrences !== 1) {
         throw new Error(
           `Mutation target guard failed for [${mutant.id}]: expected 1 occurrence of original string in ${mutant.file}, found ${occurrences}`
         );
       }
 
-      const mutatedContent = originalContent.replace(mutant.original, mutant.replacement);
+      const mutatedContent = originalContent.replace(normalizedOriginal, normalizedReplacement);
       await writeFile(targetPath, mutatedContent, 'utf8');
 
       // Run owning test suite in isolated directory

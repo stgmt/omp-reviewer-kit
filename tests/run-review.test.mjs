@@ -543,8 +543,9 @@ test('mutation manifest: every original string is present verbatim in its target
   assert.ok(mutants.length >= 20, `expected >=20 mutant anchors, got ${mutants.length}`);
   const failures = [];
   for (const mu of mutants) {
-    const content = await readFile(mu.file, 'utf8');
-    if (!content.includes(mu.original)) failures.push(`${mu.id} ${mu.file}: anchor not found (${mu.original.slice(0, 60)}...)`);
+    const content = (await readFile(mu.file, 'utf8')).replace(/\r\n/g, '\n');
+    const original = mu.original.replace(/\r\n/g, '\n');
+    if (!content.includes(original)) failures.push(`${mu.id} ${mu.file}: anchor not found (${mu.original.slice(0, 60)}...)`);
   }
   assert.deepEqual(failures, [], `drifted mutant anchors:\n${failures.join('\n')}`);
 });
