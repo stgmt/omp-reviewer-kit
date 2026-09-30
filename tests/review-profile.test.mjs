@@ -737,7 +737,7 @@ describe('Feature: runner mirror keeps identical classifier + prompt behavior', 
     await rm(root, { recursive: true, force: true }).catch(() => {});
   });
 
-  it('Given a staged filename with a literal newline, When review executes on Windows, Then the run fails closed', async () => {
+  it('Given a staged filename with a literal newline, When review executes, Then the run fails closed', async () => {
     // NTFS forbids control bytes in names: the snapshot cannot materialize the
     // exotic path, and the review must BLOCK (fail-closed) rather than skip it.
     const root = await mkdtemp(path.join(tmpdir(), 'omp-review-kit-'));
@@ -767,16 +767,10 @@ describe('Feature: runner mirror keeps identical classifier + prompt behavior', 
       },
     });
 
-    if (process.platform === 'win32') {
-      // NTFS refuses control bytes in names → materialize fails → run rejects
-      // without ever invoking the reviewer. Fail-closed: no PASS possible.
-      await assert.rejects(reviewPromise, /ENOENT|no such file|Unsafe staged path/);
-      assert.equal(ompCalled, false, 'reviewer must never run when snapshot materialization fails');
-    } else {
-      // POSIX: the file materializes and the sanitizer keeps the prompt intact.
-      const result = await reviewPromise;
-      assert.notEqual(result.exitCode, 0);
-    }
+    // Control bytes in names are rejected by assertSafeSnapshotPath on all platforms:
+    // the snapshot cannot materialize the exotic path, and the review fails closed.
+    await assert.rejects(reviewPromise, /ENOENT|no such file|Unsafe staged path/);
+    assert.equal(ompCalled, false, 'reviewer must never run when snapshot materialization fails');
     await rm(root, { recursive: true, force: true }).catch(() => {});
   });
 });
