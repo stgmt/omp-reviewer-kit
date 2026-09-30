@@ -25,9 +25,9 @@ Staged Diff (git diff --cached --binary --no-ext-diff --)
   - Generates structured context without judging code or emitting findings.
                     │
                     ▼
-[Stage 2: Parallel Risk Hunting] (review-risk-hunter x 2 batch)
-  - Lane 1 (Correctness): Boundary conditions, null/default states, resource leaks, test gaps.
-  - Lane 2 (Security): Untrusted sources, dangerous sinks, missing/bypassed mitigations.
+[Stage 2: Parallel Risk Hunting] (review-risk-hunter batch per lane)
+  - Profile `full`: Correctness lane by default; Security lane via `OMP_REVIEW_KIT_LANES=correctness,security`.
+  - Profile `spec-docs`: Content-risk lane only (secrets in text, doc-vs-code contradictions, dead links/steps).
   - Anti-Noise Prohibitions: Strictly rejects comments, formatting, naming, and ungrounded advice.
                     │
                     ▼
@@ -49,6 +49,11 @@ REVIEW_RESULT=PASS
 ```
 
 Any confirmed `P1` or `P2` finding, missing/failed stage, malformed marker, or process timeout strictly blocks the commit (fail-closed). Default execution timeout is 10 minutes (`600_000ms`), overridable via `timeoutMs`.
+
+### Review Profiles & Risk Lanes
+
+- **`full` profile** (diff contains executable code or tests): Runs the complete 4-stage pipeline with test coverage mapping. Stage 2 runs the `correctness` lane by default; set `OMP_REVIEW_KIT_LANES=correctness,security` to run both correctness and security lanes concurrently.
+- **`spec-docs` profile** (diff contains only documentation, specifications, agent/skill prompts, or configuration): Automatically selects a reduced review without the coverage requirement, focusing on `content-risk` findings.
 
 ## Standard Installation (Recommended)
 

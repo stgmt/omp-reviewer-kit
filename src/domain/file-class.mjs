@@ -72,7 +72,7 @@ const EXECUTABLE_BASENAMES = new Set([
   'vagrantfile', 'brewfile', 'package.json', 'go.mod', 'docker-bake.hcl',
   'configure', 'configure.ac', 'gradlew', 'mvnw',
   // Commit-time hook configs whose entries run arbitrary commands.
-  'taskfile', 'sconstruct', 'sconscript', 'meson.build', 'buck', 'workspace',
+  '.pre-commit-config.yaml', '.pre-commit-hooks.yaml',
   // Bazel canonical BUILD (basename 'build') and Ant build.xml execute at
   // build time — '.xml' alone would classify Ant as config.
   'build', 'build.xml',
@@ -152,7 +152,6 @@ export function classifyFilePath(filePath) {
   if (lower.startsWith('.githooks/') || lower.includes('/.githooks/')) return 'executable';
   if (lower.startsWith('ci/')) return 'executable';
   if (lower.startsWith('.vscode/') || lower.includes('/.vscode/')) return 'executable';
-  if (lower === '.cargo/config.toml') return 'executable';
   // Gitea/Forgejo are GitHub-compatible CI hosts: same workflow/action paths.
   // GitLab's include:local split-out directory: .gitlab/ci/*.yml holds
   // real pipeline YAML, not config.
@@ -184,7 +183,7 @@ export function classifyFilePath(filePath) {
     'license', 'license-mit', 'licence', 'copying', 'copying3', 'notice',
     'readme', 'authors', 'contributors', 'changelog', 'changes', 'history',
     'news', 'todo', 'install', 'version', 'thanks', 'credits', 'maintainers',
-    'codeowners2', 'dockerignore', 'gitkeep', 'keep',
+    'dockerignore', 'gitkeep', 'keep',
   ]);
   if (!basename.includes('.') && !DOTLESS_DOCS.has(basename)) return 'executable';
   if (basename.endsWith('.dockerfile')) return 'executable';

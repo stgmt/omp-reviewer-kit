@@ -150,10 +150,12 @@ test('run report fallback file is unlinked on PASS and BLOCK paths; basenames st
   }
 
   // Same for a BLOCK verdict path.
+  let blockReportPath;
   const blockingReviewer = {
     executeReview: async ({ prompt }) => {
       const m = prompt.toString().match(/report path for this review is `(\S+)`\./);
       const reportPath = m[1];
+      blockReportPath = reportPath;
       await writeFile(reportPath, '# report\n');
       return { status: 0, stdout: 'REVIEW_RESULT=BLOCK\n', stderr: '' };
     },
@@ -161,8 +163,8 @@ test('run report fallback file is unlinked on PASS and BLOCK paths; basenames st
   const service2 = makeService({ snapshotStore: store, reviewer: blockingReviewer });
   const result = await service2.execute({ cwd: '/mock/root' });
   assert.equal(result.exitCode, 1);
-  // The BLOCK-path file also lives under tmpdir naming; locate it via the same regex on the service's stdout is not available — re-derive from our captured list is impossible, so assert via the reviewer call:
-  // (the write happened; assert removal indirectly is covered by the PASS case above)
+  assert.ok(blockReportPath, 'BLOCK path must capture report path');
+  await assert.rejects(stat(blockReportPath), /ENOENT/, `${blockReportPath} must be unlinked after BLOCK run`);
 });
 
 test('badge-write failure never gates the verdict (audit-reports unwritable)', async () => {

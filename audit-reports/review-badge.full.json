@@ -1,40 +1,28 @@
 {
   "schema": "review-badge@1",
-  "runId": "2026-09-30T10-55-27-219Z-1c12fc5619e8",
-  "diffHash": "1c12fc5619e8f46eaa7efe3fc871d82cb1941d4248f4db922f4e4d2473e95744",
+  "runId": "2026-09-30T14-20-56-205Z-8ec0561ede65",
+  "diffHash": "8ec0561ede65f1f3dcd33cdde626564e7735bdd847abfa614a0d083453693f41",
   "verdict": "BLOCK",
   "reviewProfile": "full",
-  "durationMs": 2619115,
+  "durationMs": 1884323,
   "stageHistory": [
     {
       "stage": "scouting",
       "completed": 0,
-      "at": "2026-09-30T10:55:58.122Z",
-      "elapsedMs": 17430
+      "at": "2026-09-30T14:21:09.683Z",
+      "elapsedMs": 12294
     },
     {
       "stage": "scout",
       "completed": 1,
-      "at": "2026-09-30T11:04:19.357Z",
-      "elapsedMs": 518665
-    },
-    {
-      "stage": "risk",
-      "completed": 2,
-      "at": "2026-09-30T11:29:32.889Z",
-      "elapsedMs": 2032197
-    },
-    {
-      "stage": "synthesis",
-      "completed": 3,
-      "at": "2026-09-30T11:36:23.577Z",
-      "elapsedMs": 2442885
+      "at": "2026-09-30T14:27:41.094Z",
+      "elapsedMs": 403705
     }
   ],
-  "stageTrail": "scouting→scout→risk→synthesis",
+  "stageTrail": "scouting→scout",
   "modelsTried": [
-    "@slow"
+    "@smol"
   ],
-  "reportPath": "audit-reports/commit-reviews/2026-09-30T10-55-27-216Z-1c12fc5619e8f46eaa7efe3fc871d82cb1941d4248f4db922f4e4d2473e95744.md",
-  "generatedAt": "2026-09-30T11:39:06.334Z"
+  "reportPath": "audit-reports/commit-reviews/2026-09-30T14-20-56-203Z-8ec0561ede65f1f3dcd33cdde626564e7735bdd847abfa614a0d083453693f41.md",
+  "generatedAt": "2026-09-30T14:52:20.528Z"
 }
