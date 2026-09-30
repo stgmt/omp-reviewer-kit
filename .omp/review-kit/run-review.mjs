@@ -2909,19 +2909,18 @@ async function readLogTail(filePath, maxTailBytes) {
  * unresolvable log simply yields no signal and the watchdog degrades to
  * stderr-only.
  */
-export async function childLogHasQuotaSignal({ logDir, pid, maxTailBytes = 65_536 } = {}) {
-  if (!Number.isInteger(pid) || pid <= 0) return false;
+async function readChildLog({ logDir, pid }) {
+  if (!Number.isInteger(pid) || pid <= 0) return null;
   try {
     const dir = logDir ?? path.join(homedir(), '.omp', 'logs');
     const suffix = `.${pid}.log`;
     const entries = await readdir(dir);
     const matches = entries.filter((name) => name.startsWith('omp.') && name.endsWith(suffix));
-    if (matches.length === 0) return false;
+    if (matches.length === 0) return null;
     matches.sort().reverse();
-    const tail = await readLogTail(path.join(dir, matches[0]), maxTailBytes);
-    return containsQuotaStallSignal(stripTitleGeneratorLines(tail));
+    return await readFile(path.join(dir, matches[0]), 'utf8');
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -3058,6 +3057,31 @@ export async function childLogReadStage({ logDir, pid, maxTailBytes = 262_144 } 
     return undefined;
   }
 }
+export async function childLogHasQuotaSignal({ logDir, pid, maxTailBytes = 65_536 } = {}) {
+  const content = await readChildLog({ logDir, pid });
+  if (content === null) return false;
+  return containsQuotaStallSignal(stripTitleGeneratorLines(content.slice(-maxTailBytes)));
+}
+
+/**
+ * Child-log activity marker: `progress` counts main-flow lines that are
+ * neither title-generator noise nor provider-refusal lines; `refusals` counts
+ * refusal lines. A recovered refusal followed by new request/response lines
+ * raises only `progress`; a retry storm raises both. Returns null when the
+ * log is unresolvable.
+ */
+export async function childLogActivity({ logDir, pid } = {}) {
+  const content = await readChildLog({ logDir, pid });
+  if (content === null) return null;
+  let progress = 0;
+  let refusals = 0;
+  for (const line of content.split('\n')) {
+    if (line.trim() === '' || line.includes('title-generator')) continue;
+    if (containsQuotaStallSignal(line)) refusals += 1;
+    else progress += 1;
+  }
+  return { progress, refusals };
+}
 
 /**
  * Static heuristic proving a review attempt failed because the model provider
@@ -3169,6 +3193,30 @@ const REVIEW_THINKING_LEVELS = new Set(['off', 'minimal', 'low', 'medium', 'high
 function reviewThinkingLevel() {
   const raw = process.env.OMP_REVIEW_KIT_EFFORT;
   return REVIEW_THINKING_LEVELS.has(raw) ? raw : null;
+}
+
+/**
+ * Skill catalog visible to the review child. The catalog is resent with every
+ * request of every stage, and an autolearn-grown store of hundreds of skills
+ * made the base request ~213KB (measured; ~92KB with review-domain skills
+ * only), so the child lists only the plugin's own skills plus plugin-named
+ * skills by default. The plugin skills are always included: the orchestrator
+ * autoloads the protocol skills, and a filter that hides them empties the
+ * catalog and breaks every skill:// read. OMP_REVIEW_KIT_SKILLS: unset = the
+ * default extra patterns, a comma-separated glob list = extra patterns added
+ * to the plugin skills, `all` (any case, anywhere in the list) = the full
+ * catalog. An invalid list falls back to the default extra patterns.
+ */
+const REVIEW_PLUGIN_SKILLS = ['multi-stage-review', 'reality-first-review', 'range-audit', 'slop'];
+const DEFAULT_REVIEW_SKILL_PATTERNS = '*reviewer-kit*,*review-kit*';
+const REVIEW_SKILL_PATTERN_RE = /^[A-Za-z0-9_.*?-]+$/;
+function reviewSkillsSelection() {
+  const requested = (process.env.OMP_REVIEW_KIT_SKILLS ?? '').split(',').map((pattern) => pattern.trim()).filter(Boolean);
+  if (requested.some((pattern) => pattern.toLowerCase() === 'all')) return { args: [], label: 'all' };
+  const valid = requested.length > 0 && requested.every((pattern) => REVIEW_SKILL_PATTERN_RE.test(pattern));
+  const extra = valid ? requested : DEFAULT_REVIEW_SKILL_PATTERNS.split(',');
+  const value = [...new Set([...REVIEW_PLUGIN_SKILLS, ...extra])].join(',');
+  return { args: [`--skills=${value}`], label: value };
 }
 
 
@@ -3529,6 +3577,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       // stays a role selector so the child resolves the user's configured
       // role itself and keeps that role's retry.fallbackChains.
       const commandArgs = ['-p', '--model', selectedModel, ...(noTools ? ['--no-tools'] : ['--tools', 'task,read']), '--no-session', '--no-title', '--no-rules'];
+      commandArgs.push(...reviewSkillsSelection().args);
       const thinking = reviewThinkingLevel();
       if (thinking) commandArgs.push('--thinking', thinking);
       if (typeof maxTime === 'string' && REVIEW_MAX_TIME_RE.test(maxTime)) {
@@ -3590,12 +3639,25 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
         // after any banner, leaving mid-run stalls unbounded.
         if (!(quotaStallMs > 0) || stallTimer) return;
         const armedAt = lastStdoutAt;
+        const baseline = childLogActivity({ logDir: quotaLogDir, pid });
         stallTimer = setTimeout(async () => {
           stallTimer = undefined;
           // stdout progress after this arming means the observed refusal
           // recovered — disarm. A persistent refusal re-arms via the next
           // stderr chunk or log-poller tick.
           if (lastStdoutAt > armedAt) return;
+          // The child logs, not stdout, during a review: new main-flow log
+          // lines since arming mean the refusal recovered (fallback/retry).
+          const before = await baseline;
+          const now = await childLogActivity({ logDir: quotaLogDir, pid });
+          if (before && now) {
+            // Recovered = new main-flow lines outnumber new refusal lines. A
+            // retry storm (request + refusal per attempt) is not recovery.
+            const progress = now.progress - before.progress;
+            const refusals = now.refusals - before.refusals;
+            if (progress > 0 && refusals < progress) return;
+          }
+          if (lastStdoutAt > armedAt || settled) return;
           stopQuotaPoller();
           // Mark BEFORE terminating: terminateProcessTree awaits the kill, and
           // the proc 'close' event can fire during that await and settle the
@@ -3814,6 +3876,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       maxTime: this.#reviewMaxTime.arg,
       quotaStallMs: this.#quotaStallMs,
       effortOverride: reviewThinkingLevel(),
+      skills: reviewSkillsSelection().label,
     });
     const promptText = typeof prompt === 'string' ? prompt : prompt.toString();
     const primaryModel = this.#primaryModel;
@@ -4793,6 +4856,8 @@ const LIVE_LAST_RUN_STATES = new Set([
   'working',
   'response',
   'probe',
+  'probing',
+  'reemitting',
 ]);
 
 /**
@@ -4927,7 +4992,7 @@ class RunTelemetry {
       typeof previous !== 'object' ||
       previous.runId === this.#runId ||
       !LIVE_LAST_RUN_STATES.has(previous.state) ||
-      pidLiveness(previous.pid) !== 'dead'
+      pidLiveness(Number.isInteger(previous.runnerPid) ? previous.runnerPid : previous.pid) !== 'dead'
     ) {
       return;
     }
@@ -4996,7 +5061,7 @@ export class FileSystemTelemetryAdapter extends TelemetryPort {
     return new RunTelemetry({
       reportDir,
       runId,
-      base: { repoRoot },
+      base: { repoRoot, runnerPid: process.pid },
     });
   }
 }

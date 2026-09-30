@@ -142,6 +142,7 @@ OMP_REVIEW_KIT_PROBE_TIMEOUT_MS # availability probe timeout (default: 60000)
 OMP_REVIEW_KIT_QUOTA_STALL_MS   # kill silent reviews after provider refusal (default: 300000; 0 disables)
 OMP_REVIEW_KIT_MAX_TIME         # opt-in child-side bound via omp --max-time (default: off; 600|10m|1h shapes)
 OMP_REVIEW_KIT_EFFORT           # map to omp --thinking (default: unset = role's configured effort; off|minimal|low|medium|high|xhigh|max|auto)
+OMP_REVIEW_KIT_SKILLS           # extra skill globs the review child lists via omp --skills, added to the always-included plugin skills (default extras: *reviewer-kit*,*review-kit*; all = full catalog)
 OMP_REVIEW_KIT_OMP              # path/name of the omp executable
 OMP_REVIEW_KIT_TELEMETRY=0      # disable run telemetry writes
 OMP_REVIEW_KIT_ASSERT_PATTERNS    # comma-separated regexes identifying assert statements (suspicion map)

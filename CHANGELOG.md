@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [0.13.0] - 2026-09-28
+## [0.13.0] - 2026-09-30
 
 ### Added
 - **Review profiles (`full` / `spec-docs`)**: the runner now classifies every staged path deterministically (`executable`, `test`, `prompt`, `spec`, `docs`, `config`, `data`) into `.review/file-classes.json` (`file-classes@1`, per-path class + staged-content SHA-256) and states the profile on the `Review profile for this diff:` prompt line. Diffs with zero `executable`/`test` files (docs, specs, agent/skill prompts, configs, audit data) run a reduced review — scout without `coverage_map`, one `content-risk` hunter lane (secrets in text, doc-vs-code contradictions, dead links/commands/steps, fabricated numbers, prompt-contract drift), verifier only when candidates exist, and no coverage machinery — instead of the full risk-lane pipeline. Confirmed content findings still BLOCK via `confirmed_findings` (`defect_class: "content-risk"`); the `coverage_required` envelope is never emitted under `spec-docs`.
@@ -16,6 +16,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Risk-lane configuration (`OMP_REVIEW_KIT_LANES`)**: stage 2 now spawns one `review-risk-hunter` per lane named in a comma-separated allowlist over `correctness|security|content-risk`. Unset, the `full` profile runs the correctness lane only (the security lane is opt-in); `OMP_REVIEW_KIT_LANES=correctness,security` restores the classic two-lane stage 2. Unknown lane tokens fail closed with an actionable error.
 - **README badge**: every completed review writes `audit-reports/review-badge.json` (shields.io endpoint payload: verdict + duration) and `review-badge.full.json` (`review-badge@1` side-car: runId, diff hash, profile, stage trail, models tried). The README renders the badge from the committed endpoint file — it reflects the previous run's verdict by design.
 
+## [0.12.7] - 2026-09-30
+
+### Changed
+- **Review child lists only the plugin skills and plugin-named skills** (`OMP_REVIEW_KIT_SKILLS`): the skill catalog is resent with every request of every stage (orchestrator, scout, hunters, verifier), and an autolearn-grown store of ~480 managed skills made the base request ~213KB before any diff content (measured with `omp -p` on `@slow`: 213KB full catalog vs ~92KB filtered; a `review-finding-verifier` sub-agent's first request 220KB → 85KB, so the filter is inherited by sub-agents). The review child now passes `--skills=multi-stage-review,reality-first-review,range-audit,slop,*reviewer-kit*,*review-kit*` by default (estimated ~-33% request bytes per review from the ~360KB average request, lower prefill latency, and no skill-discovery delay at child start, which was observed taking >10s with the full store). The four plugin skills are always included, because the orchestrator autoloads the protocol skills and a filter that hides them empties the catalog (commit-review finding: `skill://` reads throw on an empty catalog). `OMP_REVIEW_KIT_SKILLS` is a comma-separated list of extra globs added to them (invalid lists fall back to the default extras); `all` (any case, anywhere in the list) restores the full catalog. No model, effort, stage, or verdict semantics change. Projects whose domain skills do not match the default extras should list them in `OMP_REVIEW_KIT_SKILLS`.
+- `review_chain` telemetry records the effective selection as `skills`.
+
+## [0.12.6] - 2026-09-29
+
+### Fixed
+- **Quota-stall watchdog could be starved by retry chatter** (found by the commit review of the v0.12.5 runner): a persistent refusal whose retries each logged a request line counted as "progress" and disarmed the watchdog forever. Recovery now requires new main-flow log lines to outnumber new refusal lines within the stall window (`childLogActivity` replaces `childLogProgressCount`); a request+refusal retry storm is killed.
+- **Stale-run sweep missed pid-less live states**: `started`/`executing` carry no attempt pid and `probing`/`reemitting` were absent from the live-state set, so a killed run in those phases left `last-run.json` permanently live. `RunTelemetry` now stamps `runnerPid` (the hook runner's pid) on every last-run doc; the sweep and `reconcileLastRun` check it (falling back to `pid`), and `probing`/`reemitting` are live states.
+
+## [0.12.5] - 2026-09-29
+
+### Fixed
+- **Quota-stall watchdog killed healthy reviews after one recovered provider error**: a single warn line such as `agent turn ended with provider error` (e.g. a socket error) armed the watchdog, and with no stdout for `OMP_REVIEW_KIT_QUOTA_STALL_MS` the whole review was killed even though the child log showed sub-agents still working (incident: tokenplan run 2026-09-29T05-10-19, devin/swe-2, killed while the Verifier sub-agent was starting). The kill now also requires that the child log showed no new main-flow lines (neither title-generator nor refusal lines) since arming; a recovered error followed by progress disarms, while refusals with no progress still kill. New `childLogProgressCount`; regression tests use a fake child log.
 
 ## [0.12.4] - 2026-09-28
 
