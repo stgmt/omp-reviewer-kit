@@ -1,7 +1,6 @@
 ---
 name: slop
 description: Adversarial 2-in-1 audit orchestrator for parasitic architecture, spec slop, and dead checks.
-model: "@slow"
 blocking: true
 tools: read, grep, glob, lsp, bash, task
 spawns: slop-scout, slop-verifier

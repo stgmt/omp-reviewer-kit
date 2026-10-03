@@ -8,8 +8,6 @@ import test from 'node:test';
 
 import { runReview } from '../scripts/run-review.mjs';
 
-const TEST_ROLES = { smol: 'acme/smol-flash:high', task: 'acme/task-fast:high', slow: 'acme/slow-max:max' };
-const testRoleResolver = () => TEST_ROLES;
 
 function git(args, cwd) {
   const res = spawnSync('git', args, { cwd, encoding: 'utf8', windowsHide: true });
@@ -59,7 +57,6 @@ test('runner passes the staged snapshot to the reviewer, not the worktree', asyn
     const result = await runReview({
       cwd: repoDir,
       omp: makePassReviewerFromSnapshot(),
-      ompOptions: { roleResolver: testRoleResolver },
     });
 
     // Then the reviewer saw the staged v1 through the snapshot and allowed the commit
@@ -69,36 +66,6 @@ test('runner passes the staged snapshot to the reviewer, not the worktree', asyn
     const reportContent = await readFile(result.reportPath, 'utf8');
     assert.match(reportContent, /### Verified-OK/);
   } finally {
-    await rm(repoDir, { recursive: true, force: true }).catch(() => {});
-  }
-});
-
-test('runner keeps the raw @role selector when OMP_REVIEW_KIT_EFFORT is set', async () => {
-  const repoDir = await mkdtemp(path.join(tmpdir(), 'omp-runner-effort-'));
-  const previous = process.env.OMP_REVIEW_KIT_EFFORT;
-  process.env.OMP_REVIEW_KIT_EFFORT = 'low';
-  try {
-    git(['init'], repoDir);
-    git(['config', 'user.name', 'Runner Effort'], repoDir);
-    git(['config', 'user.email', 'runner-effort@test.local'], repoDir);
-    await writeFile(path.join(repoDir, 'a.txt'), 'v1', 'utf8');
-    git(['add', 'a.txt'], repoDir);
-
-    let seenModel;
-    const result = await runReview({
-      cwd: repoDir,
-      omp: async (text, root, timeoutMs, model) => {
-        seenModel = model;
-        return { status: 0, stdout: 'REVIEW_RESULT=PASS', stderr: '' };
-      },
-      ompOptions: { roleResolver: testRoleResolver },
-    });
-
-    assert.equal(result.verdict, 'PASS');
-    assert.equal(seenModel, '@smol', 'the child resolves the role itself so fallback chains stay active');
-  } finally {
-    if (previous === undefined) delete process.env.OMP_REVIEW_KIT_EFFORT;
-    else process.env.OMP_REVIEW_KIT_EFFORT = previous;
     await rm(repoDir, { recursive: true, force: true }).catch(() => {});
   }
 });

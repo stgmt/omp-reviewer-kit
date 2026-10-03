@@ -12,8 +12,6 @@ import {
   formatProviderOutageError,
 } from '../src/infra/filesystem-telemetry-adapter.mjs';
 
-const TEST_ROLES = { smol: 'acme/smol-flash:high', task: 'acme/task-fast:high', slow: 'acme/slow-max:max' };
-const testRoleResolver = () => TEST_ROLES;
 
 async function makeRoot(prefix = 'omp-telemetry-') {
   const reportRoot = await mkdtemp(path.join(tmpdir(), prefix));
@@ -39,11 +37,10 @@ test('a PASS run persists runs.jsonl events and last-run.json state', async () =
   const result = await runReview({
     cwd: root,
     git: fakeGit(root, 'diff --staged-content'),
-    omp: async (prompt, cwd, timeout, model, options) => {
+    omp: async (prompt, cwd, timeout, options) => {
       options?.onSpawn?.(31337);
       return { status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '', pid: 31337 };
     },
-    ompOptions: { roleResolver: testRoleResolver },
     now: new Date('2026-09-13T12:00:00.000Z'),
   });
 
@@ -91,7 +88,6 @@ test('a BLOCK run is recorded with verdict and failure detail', async () => {
     cwd: root,
     git: fakeGit(root, 'diff bad'),
     omp: async () => ({ status: 1, stdout: '', stderr: 'omp exploded' }),
-    ompOptions: { roleResolver: testRoleResolver },
     now: new Date('2026-09-13T12:00:00.000Z'),
   });
 
@@ -122,7 +118,6 @@ test('a new run tombstones a stale live last-run.json left by a killed review', 
     cwd: root,
     git: fakeGit(root, 'diff --staged-content'),
     omp: async () => ({ status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' }),
-    ompOptions: { roleResolver: testRoleResolver },
     now: new Date('2026-09-28T12:00:00.000Z'),
   });
 
@@ -168,7 +163,6 @@ test('OMP_REVIEW_KIT_TELEMETRY=0 disables telemetry writes', async () => {
       cwd: root,
       git: fakeGit(root, 'diff'),
       omp: async () => ({ status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' }),
-      ompOptions: { roleResolver: testRoleResolver },
       now: new Date('2026-09-13T12:00:00.000Z'),
     });
     assert.equal(result.exitCode, 0);
@@ -193,7 +187,6 @@ test('a throwing telemetry port cannot change the verdict', async () => {
         };
       },
     },
-    ompOptions: { roleResolver: testRoleResolver },
     now: new Date('2026-09-13T12:00:00.000Z'),
   });
 
@@ -209,7 +202,6 @@ test('a telemetry port that throws from forRun falls back to null telemetry', as
     telemetry: {
       forRun() { throw new Error('no telemetry backend'); },
     },
-    ompOptions: { roleResolver: testRoleResolver },
     now: new Date('2026-09-13T12:00:00.000Z'),
   });
 
@@ -268,49 +260,88 @@ test('NullTelemetryAdapter and safeRunTelemetry absorb everything', async () => 
   await throwing.updateLastRun({});
 });
 
-test('provider outage on every model blocks the run with actionable stderr detail', async () => {
+test('a provider outage blocks the run after one attempt with actionable stderr detail', async () => {
   const root = await makeRoot();
   const calls = [];
   const result = await runReview({
     cwd: root,
     git: fakeGit(root, 'diff'),
-    omp: async (prompt, cwd, timeout, model) => {
-      calls.push(model);
+    omp: async () => {
+      calls.push('attempt');
       return { status: 1, stdout: '', stderr: 'HTTP 429 Too Many Requests: quota exhausted' };
-    },
-    ompOptions: {
-      primaryModel: '@smol',
-      modelsProvider: async () => ['@task'],
-      modelProbe: async () => ({ status: 1, stdout: '', stderr: 'provider unavailable' }),
-      roleResolver: () => ({ smol: 'acme/smol-flash:high', task: 'acme/task-fast:high' }),
     },
     now: new Date('2026-09-13T12:00:00.000Z'),
   });
 
   assert.equal(result.exitCode, 1);
   assert.equal(result.verdict, 'BLOCK');
-  assert.deepEqual(calls, ['@smol']);
+  assert.deepEqual(calls, ['attempt']);
   assert.match(result.details, /infrastructure failure/);
-  assert.match(result.details, /@smol -> @task/);
+  assert.match(result.details, /does not choose models/);
 
   const reportsDir = path.join(root, 'audit-reports', 'commit-reviews');
   const events = await readJsonl(path.join(reportsDir, 'runs.jsonl'));
   const finished = events.find((event) => event.type === 'run_finished');
   assert.equal(finished.verdict, 'BLOCK');
-  assert.deepEqual(finished.modelsTried, ['@smol', '@task']);
+  assert.deepEqual(finished.modelsTried ?? [], []);
   const attemptFinished = events.find((event) => event.type === 'review_attempt_finished');
   assert.equal(attemptFinished.providerFailure, true);
   const lastRun = JSON.parse(await readFile(path.join(reportsDir, 'last-run.json'), 'utf8'));
   assert.equal(lastRun.state, 'blocked');
 });
 
+test('a failed model-less health call blocks the run in seconds without starting the review', async () => {
+  const root = await makeRoot();
+  let reviewCalls = 0;
+  const result = await runReview({
+    cwd: root,
+    git: fakeGit(root, 'diff'),
+    omp: async () => {
+      reviewCalls += 1;
+      return { status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' };
+    },
+    ompOptions: {
+      preflight: async () => ({ status: 1, stdout: '', stderr: 'Set an API key environment variable' }),
+    },
+    now: new Date('2026-09-13T12:00:00.000Z'),
+  });
+
+  assert.equal(result.exitCode, 1);
+  assert.equal(result.verdict, 'BLOCK');
+  assert.equal(reviewCalls, 0);
+  assert.match(result.details, /infrastructure failure/);
+  assert.match(result.details, /Set an API key environment variable/);
+  const events = await readJsonl(path.join(root, 'audit-reports', 'commit-reviews', 'runs.jsonl'));
+  assert.equal(events.find((event) => event.type === 'preflight_finished').healthy, false);
+  assert.equal(events.some((event) => event.type === 'review_attempt_started'), false);
+});
+
+test('a hard child crash with no output is re-run once by the distributable runner', async () => {
+  const root = await makeRoot();
+  let calls = 0;
+  const result = await runReview({
+    cwd: root,
+    git: fakeGit(root, 'diff'),
+    omp: async () => {
+      calls += 1;
+      return calls === 1
+        ? { status: 3221226505, stdout: '', stderr: '' }
+        : { status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' };
+    },
+    now: new Date('2026-09-13T12:00:00.000Z'),
+  });
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(calls, 2);
+});
+
 test('provider outage message is actionable and marker-free', () => {
-  const message = formatProviderOutageError(['@smol', '@task'], 'HTTP 429 quota');
+  const message = formatProviderOutageError('HTTP 429 quota');
   assert.doesNotMatch(message, /REVIEW_RESULT=/);
   assert.match(message, /infrastructure failure/);
-  assert.match(message, /@smol -> @task/);
-  assert.match(message, /modelRoles\.smol/);
-  assert.match(message, /OMP_REVIEW_KIT_FALLBACK_MODELS/);
+  assert.match(message, /does not choose models/);
+  assert.match(message, /retry\.fallbackChains/);
+  assert.doesNotMatch(message, /OMP_REVIEW_KIT_(MODEL|FALLBACK_MODELS)/);
   assert.match(message, /429 quota/);
 });
 
@@ -334,7 +365,6 @@ for (const state of ['started', 'executing', 'probing', 'reemitting']) {
       cwd: root,
       git: fakeGit(root, 'diff --staged-content'),
       omp: async () => ({ status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' }),
-      ompOptions: { roleResolver: testRoleResolver },
       now: new Date('2026-09-28T12:00:00.000Z'),
     });
 

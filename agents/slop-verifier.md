@@ -1,7 +1,6 @@
 ---
 name: slop-verifier
 description: Adversarial verifier challenging slop-audit candidate findings against repository evidence.
-model: "@slow"
 blocking: true
 tools: read, grep, glob, lsp, bash
 autoloadSkills:

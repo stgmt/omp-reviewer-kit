@@ -1,7 +1,6 @@
 ---
 name: review-finding-verifier
 description: Adversarial finding verifier challenging defect candidates against repository evidence and defenses.
-model: "@slow"
 blocking: true
 tools: read, grep, glob, lsp, bash
 ---

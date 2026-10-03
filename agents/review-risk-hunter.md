@@ -1,7 +1,6 @@
 ---
 name: review-risk-hunter
 description: Targeted risk hunter generating high-precision defect candidates for correctness or security lanes.
-model: "@slow"
 blocking: true
 tools: read, grep, glob, lsp, bash
 ---

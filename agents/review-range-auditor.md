@@ -1,7 +1,6 @@
 ---
 name: review-range-auditor
 description: Read-only commit-range auditor applying the adversarial anti-neuroslop method to a base..head range.
-model: "@slow"
 blocking: true
 tools: read, grep, glob, lsp, bash
 autoloadSkills:

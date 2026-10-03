@@ -34,7 +34,7 @@ async function captureSpawnArgs(skillsEnv) {
   try {
     await writeFile(commandPath, command, 'utf8');
     if (!isWindows) await chmod(commandPath, 0o755);
-    const review = await OmpCliReviewerAdapter.defaultRunner('probe', cwd, 0, '@smol');
+    const review = await OmpCliReviewerAdapter.defaultRunner('probe', cwd, 0);
     assert.equal(review.status, 0, review.stderr);
     return (await readFile(argsPath, 'utf8')).split(/\s+/).filter(Boolean);
   } finally {
@@ -105,8 +105,6 @@ test('review_chain telemetry records the effective skills selection', async () =
         updateLastRun: async () => {},
       };
       const adapter = new OmpCliReviewerAdapter({
-        roleResolver: testRoleResolver,
-        primaryModel: '@smol',
         runner: async () => result(0, 'REVIEW_RESULT=PASS\n'),
       });
 
@@ -129,4 +127,23 @@ test('the distributable runner mirrors the adapter skills selection verbatim', a
 
   assert.ok(adapterBlock, 'adapter skills block not found');
   assert.equal(runnerBlock, adapterBlock);
+});
+
+test('the review child never receives model flags, whatever the legacy model env says', async () => {
+  const saved = { model: process.env.OMP_REVIEW_KIT_MODEL, effort: process.env.OMP_REVIEW_KIT_EFFORT };
+  process.env.OMP_REVIEW_KIT_MODEL = '@slow';
+  process.env.OMP_REVIEW_KIT_EFFORT = 'max';
+  try {
+    const args = await captureSpawnArgs(undefined);
+
+    for (const flag of ['--model', '--smol', '--slow', '--thinking']) {
+      assert.ok(!args.includes(flag), `${flag} must not be passed: ${args.join(' ')}`);
+    }
+    assert.ok(!args.includes('@slow'));
+  } finally {
+    for (const [key, name] of [['model', 'OMP_REVIEW_KIT_MODEL'], ['effort', 'OMP_REVIEW_KIT_EFFORT']]) {
+      if (saved[key] === undefined) delete process.env[name];
+      else process.env[name] = saved[key];
+    }
+  }
 });

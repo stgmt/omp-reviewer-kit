@@ -78,7 +78,7 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
   it('reviewer-kit is configured as a blocking orchestrator with exact specialist spawns', () => {
     const fm = parseFrontmatter(reviewerKitAgent);
     assert.equal(fm.name, 'reviewer-kit');
-    assert.equal(fm.model, '@slow');
+    assert.equal(fm.model, undefined, 'agents inherit the OMP default model role');
     assert.equal(fm.blocking, 'true');
 
     // Tool list contains task for orchestration, but no mutation tools
@@ -248,7 +248,7 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
 
   it('review-context-scout specifies read-only context output schema and forbids verdict markers', () => {
     const fm = parseFrontmatter(scoutAgent);
-    assert.equal(fm.model, '@smol');
+    assert.equal(fm.model, undefined, 'agents inherit the OMP default model role');
     assert.match(scoutAgent, /"change_goal"/);
     assert.match(scoutAgent, /"changed_paths"/);
     assert.match(scoutAgent, /"relevant_consumers"/);
@@ -271,7 +271,7 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
 
   it('review-risk-hunter uses one shared candidate schema for both correctness and security lanes', () => {
     const fm = parseFrontmatter(hunterAgent);
-    assert.equal(fm.model, '@slow');
+    assert.equal(fm.model, undefined, 'agents inherit the OMP default model role');
     assert.match(hunterAgent, /lane: "correctness"/);
     assert.match(hunterAgent, /lane: "security"/);
     assert.match(hunterAgent, /"candidate_id"/);
@@ -303,7 +303,7 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
 
   it('review-finding-verifier enforces mandatory disposition values and forbids verdict markers', () => {
     const fm = parseFrontmatter(verifierAgent);
-    assert.equal(fm.model, '@slow');
+    assert.equal(fm.model, undefined, 'agents inherit the OMP default model role');
     assert.match(verifierAgent, /"disposition": "confirmed \| rejected \| not_proven"/);
     assert.match(verifierAgent, /"confirmed_findings"/);
     assert.match(verifierAgent, /"triage":/);
@@ -363,7 +363,7 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
   it('slop orchestrator is a blocking agent spawning exactly slop-scout and slop-verifier with the VERDICT contract', () => {
     const fm = parseFrontmatter(slopAgent);
     assert.equal(fm.name, 'slop');
-    assert.equal(fm.model, '@slow');
+    assert.equal(fm.model, undefined, 'agents inherit the OMP default model role');
     assert.equal(fm.blocking, 'true');
 
     const tools = fm.tools.split(',').map(t => t.trim());
@@ -393,14 +393,14 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
 
   it('slop-scout and slop-verifier are read-only specialists without task spawning', () => {
     const subagents = [
-      { name: 'slop-scout', content: slopScoutAgent, model: '@smol' },
-      { name: 'slop-verifier', content: slopVerifierAgent, model: '@slow' },
+      { name: 'slop-scout', content: slopScoutAgent },
+      { name: 'slop-verifier', content: slopVerifierAgent },
     ];
 
-    for (const { name, content, model } of subagents) {
+    for (const { name, content } of subagents) {
       const fm = parseFrontmatter(content);
       assert.equal(fm.name, name);
-      assert.equal(fm.model, model, `${name} must use ${model}`);
+      assert.equal(fm.model, undefined, `${name} inherits the OMP default model role`);
       assert.equal(fm.blocking, 'true', `${name} must declare blocking: true`);
       const tools = fm.tools.split(',').map(t => t.trim());
       assert.ok(!tools.includes('edit'), `${name} must not contain edit tool`);
@@ -424,5 +424,13 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(slopVerifierAgent, /Can it turn red/);
     assert.match(slopVerifierAgent, /Grounding/);
     assert.match(slopVerifierAgent, /must NOT suggest replacement patches or emit verdict markers/i);
+  });
+});
+
+describe('Agent model inheritance', () => {
+  it('review-range-auditor inherits the OMP default model role', () => {
+    const fm = parseFrontmatter(rangeAuditorAgent);
+    assert.equal(fm.name, 'review-range-auditor');
+    assert.equal(fm.model, undefined, 'agents inherit the OMP default model role');
   });
 });

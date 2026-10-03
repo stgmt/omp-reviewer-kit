@@ -1,40 +1,56 @@
 {
   "schema": "review-badge@1",
-  "runId": "2026-09-30T21-04-00-870Z-f2ab230e3410",
-  "diffHash": "f2ab230e3410adaf38f91feeceded36762dfd972c61ed044312dd2f73b28405d",
+  "runId": "2026-10-03T02-32-24-290Z-27dbfe96f0e1",
+  "diffHash": "27dbfe96f0e1189e490f311bfd8ad1dd013258da92678d2d0e84ecd37ed799cd",
   "verdict": "BLOCK",
   "reviewProfile": "full",
-  "durationMs": 2191173,
+  "durationMs": 586492,
   "stageHistory": [
     {
       "stage": "scouting",
       "completed": 0,
-      "at": "2026-09-30T21:04:11.979Z",
-      "elapsedMs": 10559
+      "at": "2026-10-03T02:32:42.305Z",
+      "elapsedMs": 10048
+    },
+    {
+      "stage": "scout",
+      "completed": 0,
+      "at": "2026-10-03T02:32:52.309Z",
+      "elapsedMs": 20052
     },
     {
       "stage": "scout",
       "completed": 1,
-      "at": "2026-09-30T21:10:12.928Z",
-      "elapsedMs": 371508
+      "at": "2026-10-03T02:34:32.389Z",
+      "elapsedMs": 120132
+    },
+    {
+      "stage": "risk",
+      "completed": 1,
+      "at": "2026-10-03T02:34:42.391Z",
+      "elapsedMs": 130134
     },
     {
       "stage": "risk",
       "completed": 2,
-      "at": "2026-09-30T21:19:54.377Z",
-      "elapsedMs": 952957
+      "at": "2026-10-03T02:38:52.581Z",
+      "elapsedMs": 380324
+    },
+    {
+      "stage": "verifier",
+      "completed": 2,
+      "at": "2026-10-03T02:39:02.593Z",
+      "elapsedMs": 390336
     },
     {
       "stage": "synthesis",
       "completed": 3,
-      "at": "2026-09-30T21:37:55.400Z",
-      "elapsedMs": 2033980
+      "at": "2026-10-03T02:40:52.670Z",
+      "elapsedMs": 500413
     }
   ],
-  "stageTrail": "scouting→scout→risk→synthesis",
-  "modelsTried": [
-    "@smol"
-  ],
-  "reportPath": "audit-reports/commit-reviews/2026-09-30T21-04-00-868Z-f2ab230e3410adaf38f91feeceded36762dfd972c61ed044312dd2f73b28405d.md",
-  "generatedAt": "2026-09-30T21:40:32.043Z"
+  "stageTrail": "scouting→scout→scout→risk→risk→verifier→synthesis",
+  "modelsTried": [],
+  "reportPath": "audit-reports/commit-reviews/2026-10-03T02-32-24-288Z-27dbfe96f0e1189e490f311bfd8ad1dd013258da92678d2d0e84ecd37ed799cd.md",
+  "generatedAt": "2026-10-03T02:42:10.782Z"
 }
