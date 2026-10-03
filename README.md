@@ -131,7 +131,9 @@ Reports record:
 
 ## Claude Code Plugin and Target Sync
 
-The same repository is a Claude Code plugin: `/plugin marketplace add stgmt/omp-reviewer-kit`, then install `omp-reviewer-kit`. `/review` runs the runner on staged changes (review still executes on OMP). To roll a new runner out to several repositories run `node scripts/sync-targets.mjs` (dry run) or `--apply`, then commit each repository through its own hook.
+The Claude Code plugin is a thin shell over the OMP plugin (the review always runs on OMP): `/plugin marketplace add stgmt/omp-reviewer-kit`, `/plugin install omp-reviewer-kit`, then `/omp-reviewer-kit:install-omp` (checks what is already installed, shows the plan, and installs OMP and the OMP plugin only after your confirmation), `/omp-reviewer-kit:setup` for the current repository, and `/omp-reviewer-kit:review` before committing. `/omp-reviewer-kit:doctor` diagnoses the setup. Installing the OMP plugin does not install the Claude plugin; removing the Claude plugin does not remove a repository's hook.
+
+A repository has exactly one git hook and one vendored runner (`.omp/review-kit/run-review.mjs`). They are written only by the OMP plugin's installer, whichever channel invoked it, and an installed runner newer than the installer's own is never replaced. `/omp-reviewer-kit:review` runs that same runner file, so it agrees with the hook. To roll a new runner out to several repositories run `node scripts/sync-targets.mjs` (dry run) or `--apply`, then commit each repository through its own hook.
 
 ## Verdict Reuse
 

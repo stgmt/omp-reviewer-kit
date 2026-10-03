@@ -3,6 +3,7 @@ import { lstat, mkdir, open, readdir, readFile, realpath, rename, stat, unlink, 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { isRunnerNewer } from '../domain/runner-version.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -491,6 +492,7 @@ export class PluginInstallerService {
    *   hookCurrent: boolean,
    *   runnerPresent: boolean,
    *   runnerCurrent: boolean,
+   *   runnerNewer: boolean,
    *   isFullyActive: boolean,
    *   conflictReason: string|null
    * }>}
@@ -513,6 +515,7 @@ export class PluginInstallerService {
         chainedHookExecutable: false,
         runnerPresent: false,
         runnerCurrent: false,
+        runnerNewer: false,
         hookExecutable: false,
         conflictReason: null,
       };
@@ -649,6 +652,10 @@ export class PluginInstallerService {
     const runnerPath = path.join(repoRoot, '.omp', 'review-kit', 'run-review.mjs');
     let runnerPresent = false;
     let runnerCurrent = false;
+    // A vendored runner newer than this plugin's own is never downgraded: two
+    // install channels (OMP user/project scope, Claude shell) must not
+    // overwrite each other's runner in a shared repository.
+    let runnerNewer = false;
     const runnerSymlinkPath = await this.#findSymlinkComponent(repoRoot, runnerPath);
 
     if (runnerSymlinkPath) {
@@ -666,7 +673,8 @@ export class PluginInstallerService {
           }
         } else {
           const runnerContent = await readFile(runnerPath, 'utf8');
-          runnerCurrent = runnerContent === canonicalRunnerContent;
+          runnerNewer = isRunnerNewer(runnerContent, canonicalRunnerContent);
+          runnerCurrent = runnerNewer || runnerContent === canonicalRunnerContent;
         }
       } catch (error) {
         if (error?.code !== 'ENOENT' && !conflictReason) {
@@ -710,6 +718,7 @@ export class PluginInstallerService {
       chainedHookExecutable,
       runnerPresent,
       runnerCurrent,
+      runnerNewer,
       hookExecutable,
       isFullyActive: state === 'active',
       conflictReason,
@@ -794,7 +803,9 @@ export class PluginInstallerService {
     const canonicalRunnerPath = path.join(this.#pluginRoot, 'scripts', 'run-review.mjs');
     const canonicalRunnerContent = await readFile(canonicalRunnerPath, 'utf8');
     const targetRunnerPath = path.join(runnerDir, 'run-review.mjs');
-    const runnerWritten = await this.#writeIfChanged(repoRoot, targetRunnerPath, canonicalRunnerContent);
+    const runnerWritten = inspection.runnerNewer
+      ? false
+      : await this.#writeIfChanged(repoRoot, targetRunnerPath, canonicalRunnerContent);
     if (runnerWritten) {
       if (!inspection.runnerPresent) {
         installed = true;
@@ -846,6 +857,7 @@ export class PluginInstallerService {
    *   chainedHookExecutable: boolean,
    *   runnerPresent: boolean,
    *   runnerCurrent: boolean,
+   *   runnerNewer: boolean,
    *   isFullyActive: boolean,
    *   conflictReason: string|null,
    *   latestReview?: { date: string, verdict: string, file: string },

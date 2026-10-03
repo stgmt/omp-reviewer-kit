@@ -11,12 +11,12 @@ const json = async (file) => JSON.parse(await readFile(file, 'utf8'));
 
 test('Claude Code plugin manifests stay version-synchronized with the OMP plugin', async () => {
   const pkg = await json('package.json');
-  const plugin = await json('.claude-plugin/plugin.json');
+  const plugin = await json('claude-plugin/.claude-plugin/plugin.json');
   const catalog = await json('.claude-plugin/marketplace.json');
   assert.equal(plugin.name, 'omp-reviewer-kit');
   assert.equal(plugin.version, pkg.version);
   assert.equal(catalog.plugins[0].version, pkg.version);
-  assert.equal(catalog.plugins[0].source, './');
+  assert.equal(catalog.plugins[0].source, './claude-plugin');
   assert.deepEqual(plugin.agents, [], 'OMP agent frontmatter must not be loaded by Claude Code');
 });
 
@@ -61,8 +61,9 @@ test('loadTargets prefers explicit paths and rejects a non-array config', async 
 
 test('check-layout requires every Claude plugin and sync file and passes when all are present', async () => {
   const source = await readFile('scripts/check-layout.mjs', 'utf8');
-  const required = [...source.slice(source.indexOf('const required'), source.indexOf('];')).matchAll(/'([^']+)'/g)].map((m) => m[1]);
-  const mustBeListed = ['.claude-plugin/plugin.json', '.claude-plugin/marketplace.json', 'commands/review.md', 'scripts/sync-targets.mjs'];
+  const listed = (start) => { const from = source.indexOf(start); return [...source.slice(from, source.indexOf('];', from)).matchAll(/'([^']+)'/g)].map((m) => m[1]); };
+  const required = [...listed('const required'), ...listed('const CLAUDE_PLUGIN_FILES').map((file) => 'claude-plugin/' + file)];
+  const mustBeListed = ['.claude-plugin/marketplace.json', 'claude-plugin/.claude-plugin/plugin.json', 'claude-plugin/commands/review.md', 'claude-plugin/scripts/bridge.mjs', 'src/domain/runner-version.mjs', 'scripts/sync-targets.mjs'];
   const dir = await mkdtemp(path.join(tmpdir(), 'omp-layout-'));
   try {
     for (const file of required) {
@@ -109,15 +110,9 @@ test('sync-targets CLI prints the drift table with the apply hint and exits 1, t
   }
 });
 
-test('package.json files allowlist ships every Claude plugin runtime path', async () => {
+test('package.json files allowlist no longer ships the Claude shell, which has its own tree', async () => {
   const pkg = await json('package.json');
-  for (const entry of ['.claude-plugin', 'commands', 'scripts']) {
-    assert.ok(pkg.files.includes(entry), `files must include ${entry}`);
-    await readFile(path.join(entry, entry === 'commands' ? 'review.md' : entry === 'scripts' ? 'run-review.mjs' : 'plugin.json'));
-  }
-  assert.ok(!pkg.files.includes('hooks'));
-});
-
-test('review command runs the shipped runner through the plugin root', async () => {
-  assert.match(await readFile('commands/review.md', 'utf8'), /\$\{CLAUDE_PLUGIN_ROOT\}\/scripts\/run-review\.mjs/);
+  assert.ok(!pkg.files.includes('.claude-plugin'));
+  assert.ok(!pkg.files.includes('commands'));
+  for (const entry of ['scripts', 'src', 'templates']) assert.ok(pkg.files.includes(entry), 'files must include ' + entry);
 });
