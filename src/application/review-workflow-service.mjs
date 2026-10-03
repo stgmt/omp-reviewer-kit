@@ -61,6 +61,7 @@ export class ReviewWorkflowService {
   #reportStorePort;
   #snapshotStorePort;
   #telemetryPort;
+  #verdictCachePort;
   #clock;
   #logger;
   #assertPatterns;
@@ -86,6 +87,7 @@ export class ReviewWorkflowService {
     reportStorePort,
     snapshotStorePort,
     telemetryPort,
+    verdictCachePort = null,
     clock = () => new Date(),
     logger = {
       log: (msg) => process.stdout.write(msg),
@@ -107,6 +109,7 @@ export class ReviewWorkflowService {
     this.#reportStorePort = reportStorePort;
     this.#snapshotStorePort = snapshotStorePort;
     this.#telemetryPort = telemetryPort ?? new FileSystemTelemetryAdapter();
+    this.#verdictCachePort = verdictCachePort;
     this.#clock = clock;
     this.#logger = logger;
     const envAssert = process.env.OMP_REVIEW_KIT_ASSERT_PATTERNS?.trim();
@@ -224,6 +227,42 @@ export class ReviewWorkflowService {
         diffHash: diff.hash,
         diffBytes: diff.length,
       });
+
+      // PASS reuse: an identical staged tree + diff that already passed review
+      // (merge, cherry-pick, amend, retried commit) is not reviewed again. Any
+      // lookup problem is a plain miss; BLOCK is never cached.
+      let cacheTreeSha = null;
+      if (this.#verdictCachePort && process.env.OMP_REVIEW_KIT_CACHE !== '0'
+        && typeof this.#gitPort.getIndexTree === 'function') {
+        try {
+          cacheTreeSha = await this.#gitPort.getIndexTree(repoRoot);
+          const cached = cacheTreeSha
+            ? await this.#verdictCachePort.lookup({ repoRoot, treeSha: cacheTreeSha, diffHash: diff.hash })
+            : null;
+          if (cached) {
+            await telemetry.record('verdict_cache_hit', { reportPath: cached.reportPath, cachedAt: cached.at });
+            await telemetry.record('run_finished', {
+              verdict: 'PASS',
+              exitCode: 0,
+              durationMs: Date.now() - startedAt,
+              cached: true,
+            });
+            await telemetry.updateLastRun({
+              state: 'passed',
+              verdict: 'PASS',
+              exitCode: 0,
+              reportPath: cached.reportPath,
+              cached: true,
+              durationMs: Date.now() - startedAt,
+              finishedAt: new Date().toISOString(),
+            }, { force: true });
+            this.#logger.log(`reviewer-kit PASS (cached identical tree+diff): ${cached.reportPath}\n`);
+            return ReviewExecutionResult.pass(cached.reportPath, 'PASS', []);
+          }
+        } catch {
+          // cache trouble is a miss, never a verdict
+        }
+      }
 
       const suspicionMap = SuspicionMap.compute({
         diffBytes: diff.bytes,
@@ -626,6 +665,11 @@ ${reemitResult.stderr ?? ''}`;
       }
 
       if (verdict.isPass()) {
+        if (this.#verdictCachePort && cacheTreeSha) {
+          await this.#verdictCachePort
+            .record({ repoRoot, treeSha: cacheTreeSha, diffHash: diff.hash, reportPath })
+            .catch(() => {});
+        }
         this.#logger.log(`reviewer-kit PASS: ${reportPath}\n`);
         return ReviewExecutionResult.pass(reportPath, verdict.value, modelsTried);
       }

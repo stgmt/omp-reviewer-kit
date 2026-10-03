@@ -51,6 +51,17 @@ export class GitPort {
   getHeadFile(repoRoot, path) {
     throw new Error('GitPort.getHeadFile must be implemented');
   }
+
+  /**
+   * Object id of the staged index tree (`git write-tree`), or null when it
+   * cannot be determined (e.g. unmerged entries). Optional capability.
+   *
+   * @param {string} repoRoot
+   * @returns {Promise<string|null>|string|null}
+   */
+  getIndexTree(repoRoot) {
+    throw new Error('GitPort.getIndexTree must be implemented');
+  }
 }
 
 /**
@@ -153,6 +164,29 @@ export class ReportStorePort {
    */
   saveReport(repoRoot, report) {
     throw new Error('ReportStorePort.saveReport must be implemented');
+  }
+}
+
+/**
+ * Port remembering reusable PASS verdicts keyed by staged tree + diff hash.
+ *
+ * @interface
+ */
+export class VerdictCachePort {
+  /**
+   * @param {{ repoRoot: string, treeSha: string, diffHash: string }} key
+   * @returns {Promise<{ reportPath: string, at: string }|null>|{ reportPath: string, at: string }|null}
+   */
+  lookup(key) {
+    throw new Error('VerdictCachePort.lookup must be implemented');
+  }
+
+  /**
+   * @param {{ repoRoot: string, treeSha: string, diffHash: string, reportPath: string }} entry
+   * @returns {Promise<void>|void}
+   */
+  record(entry) {
+    throw new Error('VerdictCachePort.record must be implemented');
   }
 }
 

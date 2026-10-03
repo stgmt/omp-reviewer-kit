@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Envelope repair: a BLOCK whose rejection envelope is missing or malformed gets one bounded no-tools verbatim re-emit. The repaired output is accepted only when it is again a BLOCK with a valid non-failure envelope; a re-emit that flips to PASS, fails, or still lacks an envelope keeps the original failure, so a repair can never downgrade a BLOCK. Telemetry `reemit_recovery` gains `mode` (`missing_marker`|`envelope_repair`).
+- PASS verdict cache: a PASS is reused when the staged index tree (`git write-tree`) and the diff hash are both identical to an earlier PASS (merge, cherry-pick, amend, retried commit), so the reviewer is not invoked again. The hit is honored only when the referenced report still exists inside the repository with the same diff hash and `result: PASS`, and is at most 14 days old. BLOCK is never cached. New `VerdictCachePort`, `FileSystemVerdictCacheAdapter`, `GitPort.getIndexTree`, event `verdict_cache_hit`; `OMP_REVIEW_KIT_CACHE=0` disables it. The index lives in `audit-reports/commit-reviews/verdict-cache.jsonl` (ignored by default).
 
 ## [0.15.0] - 2026-10-03
 

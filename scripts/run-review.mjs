@@ -1864,6 +1864,17 @@ export class GitPort {
   getHeadFile(repoRoot, path) {
     throw new Error('GitPort.getHeadFile must be implemented');
   }
+
+  /**
+   * Object id of the staged index tree (`git write-tree`), or null when it
+   * cannot be determined (e.g. unmerged entries). Optional capability.
+   *
+   * @param {string} repoRoot
+   * @returns {Promise<string|null>|string|null}
+   */
+  getIndexTree(repoRoot) {
+    throw new Error('GitPort.getIndexTree must be implemented');
+  }
 }
 
 export class SnapshotStorePort {
@@ -1919,9 +1930,32 @@ export class ReportStorePort {
 }
 
 /**
+ * Port remembering reusable PASS verdicts keyed by staged tree + diff hash.
+ */
+export class VerdictCachePort {
+  /**
+   * @param {{ repoRoot: string, treeSha: string, diffHash: string }} key
+   * @returns {Promise<{ reportPath: string, at: string }|null>|{ reportPath: string, at: string }|null}
+   */
+  lookup(key) {
+    throw new Error('VerdictCachePort.lookup must be implemented');
+  }
+
+  /**
+   * @param {{ repoRoot: string, treeSha: string, diffHash: string, reportPath: string }} entry
+   * @returns {Promise<void>|void}
+   */
+  record(entry) {
+    throw new Error('VerdictCachePort.record must be implemented');
+  }
+}
+
+/**
  * Port representing the run telemetry sink factory.
  * A port creates a run-scoped sink per review; the sink persists observability
  * events and the live/last-run state without ever influencing the verdict.
+ *
+ * @interface
  */
 export class TelemetryPort {
   /**
@@ -2087,6 +2121,7 @@ export class ReviewWorkflowService {
   #reportStorePort;
   #snapshotStorePort;
   #telemetryPort;
+  #verdictCachePort;
   #clock;
   #logger;
   #assertPatterns;
@@ -2101,6 +2136,7 @@ export class ReviewWorkflowService {
     reportStorePort,
     snapshotStorePort,
     telemetryPort,
+    verdictCachePort = null,
     clock = () => new Date(),
     logger = {
       log: (msg) => process.stdout.write(msg),
@@ -2122,6 +2158,7 @@ export class ReviewWorkflowService {
     this.#reportStorePort = reportStorePort;
     this.#snapshotStorePort = snapshotStorePort;
     this.#telemetryPort = telemetryPort ?? new FileSystemTelemetryAdapter();
+    this.#verdictCachePort = verdictCachePort;
     this.#clock = clock;
     this.#logger = logger;
     const envAssert = process.env.OMP_REVIEW_KIT_ASSERT_PATTERNS?.trim();
@@ -2230,6 +2267,42 @@ export class ReviewWorkflowService {
         diffHash: diff.hash,
         diffBytes: diff.length,
       });
+
+      // PASS reuse: an identical staged tree + diff that already passed review
+      // (merge, cherry-pick, amend, retried commit) is not reviewed again. Any
+      // lookup problem is a plain miss; BLOCK is never cached.
+      let cacheTreeSha = null;
+      if (this.#verdictCachePort && process.env.OMP_REVIEW_KIT_CACHE !== '0'
+        && typeof this.#gitPort.getIndexTree === 'function') {
+        try {
+          cacheTreeSha = await this.#gitPort.getIndexTree(repoRoot);
+          const cached = cacheTreeSha
+            ? await this.#verdictCachePort.lookup({ repoRoot, treeSha: cacheTreeSha, diffHash: diff.hash })
+            : null;
+          if (cached) {
+            await telemetry.record('verdict_cache_hit', { reportPath: cached.reportPath, cachedAt: cached.at });
+            await telemetry.record('run_finished', {
+              verdict: 'PASS',
+              exitCode: 0,
+              durationMs: Date.now() - startedAt,
+              cached: true,
+            });
+            await telemetry.updateLastRun({
+              state: 'passed',
+              verdict: 'PASS',
+              exitCode: 0,
+              reportPath: cached.reportPath,
+              cached: true,
+              durationMs: Date.now() - startedAt,
+              finishedAt: new Date().toISOString(),
+            }, { force: true });
+            this.#logger.log(`reviewer-kit PASS (cached identical tree+diff): ${cached.reportPath}\n`);
+            return ReviewExecutionResult.pass(cached.reportPath, 'PASS', []);
+          }
+        } catch {
+          // cache trouble is a miss, never a verdict
+        }
+      }
 
       const suspicionMap = SuspicionMap.compute({
         diffBytes: diff.bytes,
@@ -2640,6 +2713,11 @@ ${reemitResult.stderr ?? ''}`;
       }
 
       if (verdict.isPass()) {
+        if (this.#verdictCachePort && cacheTreeSha) {
+          await this.#verdictCachePort
+            .record({ repoRoot, treeSha: cacheTreeSha, diffHash: diff.hash, reportPath })
+            .catch(() => {});
+        }
         this.#logger.log(`reviewer-kit PASS: ${reportPath}\n`);
         return ReviewExecutionResult.pass(reportPath, verdict.value, modelsTried);
       }
@@ -2720,6 +2798,19 @@ export class SubprocessGitAdapter extends GitPort {
   async getStagedDiff(repoRoot) {
     const output = await this.#runner(['diff', '--cached', '--binary', '--no-ext-diff', '--'], repoRoot);
     return DiffIdentity.fromBuffer(output);
+  }
+
+  /**
+   * @param {string} repoRoot
+   * @returns {Promise<string|null>}
+   */
+  async getIndexTree(repoRoot) {
+    try {
+      const id = (await this.#runner(['write-tree'], repoRoot)).toString('utf8').trim();
+      return /^[0-9a-f]{40}$|^[0-9a-f]{64}$/.test(id) ? id : null;
+    } catch {
+      return null;
+    }
   }
 
   async getHeadFile(repoRoot, filePath) {
@@ -4731,6 +4822,92 @@ export class FileSystemTelemetryAdapter extends TelemetryPort {
   }
 }
 
+const CACHE_SCHEMA = 'review-verdict-cache@1';
+const CACHE_FILE = 'verdict-cache.jsonl';
+const DEFAULT_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+const OBJECT_ID = /^[0-9a-f]{40}$|^[0-9a-f]{64}$/;
+
+/**
+ * Infrastructure adapter remembering PASS verdicts by (index tree, diff hash).
+ * Only PASS is reusable: a BLOCK is always re-reviewed. A hit is honored only
+ * when the referenced report still exists inside the repository and states the
+ * same diff hash and `result: PASS`, so a stale or tampered index line fails closed
+ * into a normal full review.
+ */
+export class FileSystemVerdictCacheAdapter extends VerdictCachePort {
+  #relativeDir;
+  #ttlMs;
+  #clock;
+
+  constructor({ relativeDir = path.join('audit-reports', 'commit-reviews'), ttlMs = DEFAULT_TTL_MS, clock = () => new Date() } = {}) {
+    super();
+    this.#relativeDir = relativeDir;
+    this.#ttlMs = ttlMs;
+    this.#clock = clock;
+  }
+
+  /**
+   * @param {{ repoRoot: string, treeSha: string, diffHash: string }} key
+   * @returns {Promise<{ reportPath: string, at: string } | null>}
+   */
+  async lookup({ repoRoot, treeSha, diffHash }) {
+    if (!OBJECT_ID.test(String(treeSha)) || !/^[0-9a-f]{64}$/.test(String(diffHash))) return null;
+    let text;
+    try {
+      text = await readFile(path.join(repoRoot, this.#relativeDir, CACHE_FILE), 'utf8');
+    } catch {
+      return null;
+    }
+    const now = this.#clock().getTime();
+    const lines = text.split('\n');
+    for (let index = lines.length - 1; index >= 0; index -= 1) {
+      let entry;
+      try {
+        entry = JSON.parse(lines[index]);
+      } catch {
+        continue;
+      }
+      if (entry?.schema !== CACHE_SCHEMA || entry.verdict !== 'PASS') continue;
+      if (entry.treeSha !== treeSha || entry.diffHash !== diffHash) continue;
+      const age = now - Date.parse(entry.at);
+      if (!Number.isFinite(age) || age < 0 || age > this.#ttlMs) continue;
+      const reportPath = path.resolve(repoRoot, String(entry.reportPath ?? ''));
+      const relative = path.relative(repoRoot, reportPath);
+      if (!entry.reportPath || relative.startsWith('..') || path.isAbsolute(relative)) continue;
+      let report;
+      try {
+        report = await readFile(reportPath, 'utf8');
+      } catch {
+        continue;
+      }
+      if (report.split(/\r?\n/).includes(`- staged diff hash: ${diffHash}`)
+        && report.split(/\r?\n/).includes('- result: PASS')) {
+        return { reportPath, at: entry.at };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * @param {{ repoRoot: string, treeSha: string, diffHash: string, reportPath: string }} entry
+   * @returns {Promise<void>}
+   */
+  async record({ repoRoot, treeSha, diffHash, reportPath }) {
+    if (!OBJECT_ID.test(String(treeSha))) return;
+    const dir = path.join(repoRoot, this.#relativeDir);
+    await mkdir(dir, { recursive: true });
+    const line = JSON.stringify({
+      schema: CACHE_SCHEMA,
+      treeSha,
+      diffHash,
+      verdict: 'PASS',
+      reportPath: path.relative(repoRoot, reportPath).split(path.sep).join('/'),
+      at: this.#clock().toISOString(),
+    });
+    await appendFile(path.join(dir, CACHE_FILE), `${line}\n`, 'utf8');
+  }
+}
+
 /**
  * ============================================================================
  * Public Facade / Composition Root
@@ -4743,6 +4920,7 @@ export function createReviewWorkflowService({ git, omp, ompOptions, clock, logge
   const reportStorePort = new FileSystemReportStoreAdapter();
   const snapshotStorePort = new FileSystemSnapshotAdapter();
   const telemetryPort = telemetry ?? new FileSystemTelemetryAdapter();
+  const verdictCachePort = new FileSystemVerdictCacheAdapter({ clock });
 
   return new ReviewWorkflowService({
     gitPort,
@@ -4750,6 +4928,7 @@ export function createReviewWorkflowService({ git, omp, ompOptions, clock, logge
     reportStorePort,
     snapshotStorePort,
     telemetryPort,
+    verdictCachePort,
     clock,
     logger,
     assertPatterns,

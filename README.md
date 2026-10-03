@@ -133,6 +133,10 @@ Reports record:
 
 The same repository is a Claude Code plugin: `/plugin marketplace add stgmt/omp-reviewer-kit`, then install `omp-reviewer-kit`. `/review` runs the runner on staged changes (review still executes on OMP). To roll a new runner out to several repositories run `node scripts/sync-targets.mjs` (dry run) or `--apply`, then commit each repository through its own hook.
 
+## Verdict Reuse
+
+A PASS is reused when the staged tree and diff hash are identical to an earlier PASS whose report is still present (14 days). BLOCK is never reused. Set `OMP_REVIEW_KIT_CACHE=0` to force a fresh review.
+
 ## Models
 
 reviewer-kit does not choose, pass, or fall back between models. OMP is your
