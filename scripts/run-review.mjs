@@ -1589,7 +1589,7 @@ export class ReviewPrompt {
       lines.push('', this.#roundContextText);
     }
     lines.push(`The staged diff hash for this hook invocation is ${this.#diffHash}.`);
-    if (this.#reportPath) lines.push(`The durable per-run report path for this review is \`${this.#reportPath}\`. Instruct the reviewer-kit task to write its complete final report verbatim to that path before yielding; it is the only path the task may write.`);
+    if (this.#reportPath) lines.push(`The durable per-run report path for this review is \`${this.#reportPath}\`. Instruct the reviewer-kit task to write its complete final report verbatim to that path before yielding, as a best-effort durable copy: if a project policy guard denies the write, the task must not retry or work around it, because the runner recovers the report from the task session artifacts. It is the only path the task may write.`);
     if (this.#reviewProfile) lines.push(`Review profile for this diff: ${this.#reviewProfile}.`);
     if (Array.isArray(this.#riskLanes)) lines.push(`Risk lanes for this diff: ${JSON.stringify(this.#riskLanes)}.`);
     return lines.join('\n');
@@ -1603,6 +1603,10 @@ export class ReviewPrompt {
 
   get diffHash() {
     return this.#diffHash;
+  }
+
+  get reportPath() {
+    return this.#reportPath;
   }
 
   get snapshotDir() {
@@ -3241,6 +3245,89 @@ export function isModelProviderFailure(result) {
 
 // Windows STATUS_STACK_BUFFER_OVERRUN (0xC0000409) and generic -1 exits: the
 // child crashed before producing any review output.
+// Second report channel: no bash write needed. Each review attempt runs the
+// OMP child with its own `--session-dir`, so the task tool persists every
+// task's complete result as `<session>/<artifacts>/<TaskId>.md`. The
+// dispatcher's stdout can still lose the report (truncated task preview,
+// unreadable `agent://` URI) and the durable per-run report file depends on
+// a bash heredoc that project policy guards may deny; this artifact needs
+// neither, so the runner reads it directly after the child exits.
+const TASK_ARTIFACT_MAX_BYTES = 8 * 1024 * 1024;
+const REPORT_MARKER_LINE_RE = /^REVIEW_RESULT=(PASS|BLOCK)\r?$/m;
+const EXECUTION_FAILURE_CODE_RE = /"code"\s*:\s*"execution_failure"/;
+
+/**
+ * A task artifact stores the `yield` payload JSON-encoded: a plain string for
+ * schema-less agents, an object for `reviewer-kit` whose `report` field holds
+ * the complete Markdown. Decode either back to the raw report text; anything
+ * else is returned as-is.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+export function decodeTaskArtifact(text) {
+  const raw = String(text ?? '');
+  const trimmed = raw.trim();
+  if (trimmed.startsWith('"') || trimmed.startsWith('{')) {
+    try {
+      const decoded = JSON.parse(trimmed);
+      if (typeof decoded === 'string') return decoded;
+      if (decoded && typeof decoded === 'object' && typeof decoded.report === 'string') return decoded.report;
+    } catch {
+      // Not decodable JSON: fall through to the raw text.
+    }
+  }
+  return raw;
+}
+
+/**
+ * True when the dispatcher stdout cannot be trusted to carry the reviewer's
+ * report: no standalone verdict marker, or the dispatcher itself reported an
+ * execution_failure envelope (typically "full report unreadable").
+ *
+ * @param {string|undefined} stdout
+ * @returns {boolean}
+ */
+export function reviewOutputNeedsRecovery(stdout) {
+  const text = String(stdout ?? '');
+  return !REPORT_MARKER_LINE_RE.test(text) || EXECUTION_FAILURE_CODE_RE.test(text);
+}
+
+/**
+ * Reads the newest top-level task result (one directory below the session
+ * dir) that carries a standalone verdict marker. Subagent transcripts live a
+ * level deeper and never qualify. Returns null when nothing usable exists.
+ *
+ * @param {string|null|undefined} sessionDir
+ * @returns {Promise<{ text: string, file: string, bytes: number }|null>}
+ */
+export async function recoverTaskReport(sessionDir) {
+  if (typeof sessionDir !== 'string' || sessionDir.length === 0) return null;
+  let best = null;
+  try {
+    for (const entry of await readdir(sessionDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const artifactsDir = path.join(sessionDir, entry.name);
+      for (const file of await readdir(artifactsDir, { withFileTypes: true }).catch(() => [])) {
+        if (!file.isFile() || !file.name.endsWith('.md')) continue;
+        const full = path.join(artifactsDir, file.name);
+        const info = await stat(full).catch(() => null);
+        if (!info || info.size === 0 || info.size > TASK_ARTIFACT_MAX_BYTES) continue;
+        const text = decodeTaskArtifact(await readFile(full, 'utf8'));
+        if (!REPORT_MARKER_LINE_RE.test(text)) continue;
+        // Newest wins; equal mtimes (coarse-timestamp filesystems) fall back to the
+        // greater path so the choice never depends on readdir order.
+        if (!best || info.mtimeMs > best.mtimeMs || (info.mtimeMs === best.mtimeMs && full > best.file)) {
+          best = { text, file: full, mtimeMs: info.mtimeMs };
+        }
+      }
+    }
+  } catch {
+    return null;
+  }
+  return best ? { text: best.text, file: best.file, bytes: Buffer.byteLength(best.text) } : null;
+}
+
 const CHILD_CRASH_STATUSES = new Set([3221226505, -1073740791, 4294967295, -1]);
 
 /**
@@ -3427,7 +3514,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
     }
   }
 
-  async #runReviewAttempt(promptText, cwd, telemetry, attempts, attemptIndex) {
+  async #runReviewAttempt(promptText, cwd, telemetry, attempts, attemptIndex, { reportPath = null } = {}) {
     const startedAt = Date.now();
     const record = { attemptIndex, startedAt: new Date(startedAt).toISOString() };
     const stageHistory = [];
@@ -3454,9 +3541,19 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
     });
     const heartbeat = setInterval(emitRunning, 5_000);
     heartbeat.unref?.();
+    let sessionDir = null;
+    try {
+      sessionDir = await mkdtemp(path.join(tmpdir(), `reviewer-kit-session-${process.pid}-`));
+    } catch {
+      sessionDir = null;
+    }
     try {
       const result = await this.#runner(promptText, cwd, undefined, {
         maxTime: this.#reviewMaxTime.arg,
+        ...(sessionDir ? { sessionDir } : {}),
+        // Lets project policy guards recognize the one write the reviewer
+        // may perform (its durable report) without pattern-matching the command.
+        ...(reportPath ? { env: { OMP_REVIEW_KIT_REPORT_PATH: reportPath } } : {}),
         onSpawn: (pid) => {
           record.pid = pid;
           void telemetry.record('review_attempt_started', { ...record, pid });
@@ -3516,10 +3613,21 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       record.stdoutBytes = typeof result?.stdout === 'string' ? Buffer.byteLength(result.stdout) : 0;
       if (stageHistory.length > 0) record.stageHistory = stageHistory;
       record.stderrBytes = typeof result?.stderr === 'string' ? Buffer.byteLength(result.stderr) : 0;
+      let outcome = result;
+      if (sessionDir && reviewOutputNeedsRecovery(result?.stdout)) {
+        const recovered = await recoverTaskReport(sessionDir);
+        if (recovered) {
+          const reason = EXECUTION_FAILURE_CODE_RE.test(String(result?.stdout ?? '')) ? 'execution_failure' : 'missing_marker';
+          record.reportRecovered = { reason, bytes: recovered.bytes };
+          await telemetry.record('report_artifact_recovered', { attemptIndex, pid: record.pid, reason, bytes: recovered.bytes });
+          outcome = { ...result, stdout: recovered.text };
+        }
+      }
       await telemetry.record('review_attempt_finished', { ...record });
-      return result;
+      return outcome;
     } finally {
       clearInterval(heartbeat);
+      if (sessionDir) await rm(sessionDir, { recursive: true, force: true }).catch(() => {});
     }
   }
 
@@ -3568,10 +3676,10 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
    * @param {string} prompt
    * @param {string} cwd
    * @param {number} [timeout]
-   * @param {{ noTools?: boolean, maxTime?: string|null, stagePollMs?: number, logDir?: string|null, onOutput?: (chunk: unknown, stream: 'stdout'|'stderr') => void, onSpawn?: (pid: number|undefined) => void, onStage?: (info: { stage: string, completed: number }) => void, registryEnv?: string|null }} [options]
+   * @param {{ noTools?: boolean, maxTime?: string|null, stagePollMs?: number, logDir?: string|null, onOutput?: (chunk: unknown, stream: 'stdout'|'stderr') => void, onSpawn?: (pid: number|undefined) => void, onStage?: (info: { stage: string, completed: number }) => void, registryEnv?: string|null, sessionDir?: string, env?: Record<string, string> }} [options]
    * @returns {Promise<{ status: number, stdout: string, stderr: string, pid?: number }>}
    */
-  static defaultRunner(prompt, cwd, timeout, { noTools = false, maxTime, stagePollMs = 10_000, logDir = null, onOutput, onSpawn, onStage, registryEnv } = {}) {
+  static defaultRunner(prompt, cwd, timeout, { noTools = false, maxTime, stagePollMs = 10_000, logDir = null, onOutput, onSpawn, onStage, registryEnv, sessionDir, env: extraEnv } = {}) {
     return new Promise((resolve) => {
       const command = process.env.OMP_REVIEW_KIT_OMP ?? 'omp';
       const isWindowsWrapper = /\.(cmd|bat)$/i.test(command);
@@ -3580,7 +3688,11 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       // tools are task/read plus read-only specialists), so skip title
       // generation and rules discovery on every spawned session. No model
       // flag: the child resolves the user's own OMP configuration.
-      const commandArgs = ['-p', ...(noTools ? ['--no-tools'] : ['--tools', 'task,read']), '--no-session', '--no-title', '--no-rules'];
+      // A review attempt persists its session under its own directory so the
+      // task artifacts (the full reviewer result) survive until the runner
+      // has read them; no-tools probes stay ephemeral.
+      const sessionArgs = typeof sessionDir === 'string' && sessionDir.length > 0 ? ['--session-dir', sessionDir] : ['--no-session'];
+      const commandArgs = ['-p', ...(noTools ? ['--no-tools'] : ['--tools', 'task,read']), ...sessionArgs, '--no-title', '--no-rules'];
       commandArgs.push(...reviewSkillsSelection().args);
       if (typeof maxTime === 'string' && REVIEW_MAX_TIME_RE.test(maxTime)) {
         commandArgs.push('--max-time', maxTime);
@@ -3596,7 +3708,10 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
         stdio: ['pipe', 'pipe', 'pipe'],
         // Stale-parent guard: pull PI_PROXY_* from the user registry when the
         // inherited env lacks them — children otherwise die at OAuth refresh.
-        env: mergeRegistryProxyEnv(process.env, registryEnv ?? undefined),
+        env: {
+          ...mergeRegistryProxyEnv(process.env, registryEnv ?? undefined),
+          ...Object.fromEntries(Object.entries(extraEnv ?? {}).filter(([, value]) => typeof value === 'string')),
+        },
         windowsHide: true,
         detached: process.platform !== 'win32',
       });
@@ -3737,6 +3852,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       skills: reviewSkillsSelection().label,
     });
     const promptText = typeof prompt === 'string' ? prompt : prompt.toString();
+    const reportPath = typeof prompt === 'object' && typeof prompt?.reportPath === 'string' ? prompt.reportPath : null;
     const attempts = [];
     const probes = [];
 
@@ -3750,11 +3866,11 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
         stderr: formatProviderOutageError(preflightFailure.stderr || preflightFailure.stdout),
       };
     } else {
-      result = await this.#runReviewAttempt(promptText, cwd, telemetry, attempts, 0);
+      result = await this.#runReviewAttempt(promptText, cwd, telemetry, attempts, 0, { reportPath });
       // A hard child crash (Windows 0xC0000409 / -1) with no output is a
       // runtime fault, not a verdict: one more run with the same command.
       if (isChildCrash(result)) {
-        result = await this.#runReviewAttempt(promptText, cwd, telemetry, attempts, 1);
+        result = await this.#runReviewAttempt(promptText, cwd, telemetry, attempts, 1, { reportPath });
       }
       if (isModelProviderFailure(result)) {
         result = {
@@ -4436,6 +4552,18 @@ export class FileSystemSnapshotAdapter extends SnapshotStorePort {
         const owner = Number(name.match(/-(\d+)\.md$/)?.[1]);
         if (Number.isInteger(owner) && isPidAlive(owner)) continue;
         await rm(full, { force: true }).catch(() => {});
+      }
+      // Orphan per-attempt session dirs (crashed runs never reach their
+      // finally): TTL-bounded and only once the owning pid is gone.
+      for (const name of names) {
+        if (!name.startsWith('reviewer-kit-session-')) continue;
+        const full = path.join(base, name);
+        const info = await lstat(full).catch(() => null);
+        if (!info || !info.isDirectory()) continue;
+        if (now - info.mtimeMs <= SNAPSHOT_TTL_MS) continue;
+        const owner = Number(name.match(/^reviewer-kit-session-(\d+)-/)?.[1]);
+        if (Number.isInteger(owner) && isPidAlive(owner)) continue;
+        await rm(full, { recursive: true, force: true }).catch(() => {});
       }
     } catch {
       // Sweeping is best-effort hygiene; never fail a review over it.

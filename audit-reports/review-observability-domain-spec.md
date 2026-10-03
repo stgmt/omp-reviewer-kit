@@ -53,6 +53,7 @@ Every event: `{ schema, runId, type, at, ...payload }`. `runId = <reportTimestam
 | `review_attempt_first_output` | `model`, `attemptIndex`, `pid`, `elapsedMs` | adapter (first stdout byte) |
 | `review_attempt_working` | `model`, `attemptIndex`, `pid`, `elapsedMs` | adapter (first `Working...` stderr signal) |
 | `review_attempt_finished` | `model`, `attemptIndex`, `pid`, `status`, `durationMs`, `providerFailure`, `stdoutBytes`, `stderrBytes` | adapter |
+| `report_artifact_recovered` | `attemptIndex`, `pid`, `reason` (`missing_marker`\|`execution_failure`), `bytes` | adapter (full reviewer result read from the task session artifact when dispatcher stdout lost it) |
 | `probe_started` | `model` | adapter |
 | `probe_finished` | `model`, `pid`, `durationMs`, `status` | adapter |
 | `verdict_evaluated` | `verdict`, `envelopeKind`, `findings` | workflow |

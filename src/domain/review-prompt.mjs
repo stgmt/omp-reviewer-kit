@@ -147,7 +147,7 @@ export class ReviewPrompt {
       lines.push('', this.#roundContextText);
     }
     lines.push(`The staged diff hash for this hook invocation is ${this.#diffHash}.`);
-    if (this.#reportPath) lines.push(`The durable per-run report path for this review is \`${this.#reportPath}\`. Instruct the reviewer-kit task to write its complete final report verbatim to that path before yielding; it is the only path the task may write.`);
+    if (this.#reportPath) lines.push(`The durable per-run report path for this review is \`${this.#reportPath}\`. Instruct the reviewer-kit task to write its complete final report verbatim to that path before yielding, as a best-effort durable copy: if a project policy guard denies the write, the task must not retry or work around it, because the runner recovers the report from the task session artifacts. It is the only path the task may write.`);
     if (this.#reviewProfile) lines.push(`Review profile for this diff: ${this.#reviewProfile}.`);
     if (Array.isArray(this.#riskLanes)) lines.push(`Risk lanes for this diff: ${JSON.stringify(this.#riskLanes)}.`);
     return lines.join('\n');
@@ -161,6 +161,10 @@ export class ReviewPrompt {
 
   get diffHash() {
     return this.#diffHash;
+  }
+
+  get reportPath() {
+    return this.#reportPath;
   }
 
   get snapshotDir() {

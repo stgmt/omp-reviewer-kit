@@ -1,44 +1,38 @@
 {
   "schema": "review-badge@1",
-  "runId": "2026-10-03T14-39-39-163Z-184be1c61219",
-  "diffHash": "184be1c612194ed46206c3cf75a901ff2ebebae4846ab60263f018f80eba304f",
-  "verdict": "PASS",
+  "runId": "2026-10-03T20-25-01-342Z-ca8407c2f4ed",
+  "diffHash": "ca8407c2f4ed2666fcaf13b48fe90a9a115a340c325031bec5d44f720139bfb1",
+  "verdict": "BLOCK",
   "reviewProfile": "full",
-  "durationMs": 427533,
+  "durationMs": 1831513,
   "stageHistory": [
     {
       "stage": "scouting",
       "completed": 0,
-      "at": "2026-10-03T14:40:04.693Z",
-      "elapsedMs": 10049
-    },
-    {
-      "stage": "scout",
-      "completed": 0,
-      "at": "2026-10-03T14:41:24.753Z",
-      "elapsedMs": 90109
+      "at": "2026-10-03T20:25:17.980Z",
+      "elapsedMs": 10041
     },
     {
       "stage": "scout",
       "completed": 1,
-      "at": "2026-10-03T14:43:04.849Z",
-      "elapsedMs": 190205
-    },
-    {
-      "stage": "risk",
-      "completed": 1,
-      "at": "2026-10-03T14:43:44.881Z",
-      "elapsedMs": 230237
+      "at": "2026-10-03T20:28:58.151Z",
+      "elapsedMs": 230212
     },
     {
       "stage": "risk",
       "completed": 2,
-      "at": "2026-10-03T14:45:54.969Z",
-      "elapsedMs": 360326
+      "at": "2026-10-03T20:37:28.533Z",
+      "elapsedMs": 740594
+    },
+    {
+      "stage": "synthesis",
+      "completed": 3,
+      "at": "2026-10-03T20:48:59.097Z",
+      "elapsedMs": 1431158
     }
   ],
-  "stageTrail": "scouting→scout→scout→risk→risk",
+  "stageTrail": "scouting→scout→risk→synthesis",
   "modelsTried": [],
-  "reportPath": "audit-reports/commit-reviews/2026-10-03T14-39-39-162Z-184be1c612194ed46206c3cf75a901ff2ebebae4846ab60263f018f80eba304f.md",
-  "generatedAt": "2026-10-03T14:46:46.696Z"
+  "reportPath": "audit-reports/commit-reviews/2026-10-03T20-25-01-341Z-ca8407c2f4ed2666fcaf13b48fe90a9a115a340c325031bec5d44f720139bfb1.md",
+  "generatedAt": "2026-10-03T20:55:32.855Z"
 }
