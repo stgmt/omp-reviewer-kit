@@ -129,6 +129,10 @@ Reports record:
 - Unproven and rejected candidate summaries with defense justifications
 - Machine-readable verdict marker (`REVIEW_RESULT=PASS` or `REVIEW_RESULT=BLOCK`)
 
+## Claude Code Plugin and Target Sync
+
+The same repository is a Claude Code plugin: `/plugin marketplace add stgmt/omp-reviewer-kit`, then install `omp-reviewer-kit`. `/review` runs the runner on staged changes (review still executes on OMP). To roll a new runner out to several repositories run `node scripts/sync-targets.mjs` (dry run) or `--apply`, then commit each repository through its own hook.
+
 ## Models
 
 reviewer-kit does not choose, pass, or fall back between models. OMP is your

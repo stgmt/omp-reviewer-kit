@@ -1,0 +1,12 @@
+{
+  "name": "omp-reviewer-kit",
+  "owner": { "name": "stgmt" },
+  "plugins": [
+    {
+      "name": "omp-reviewer-kit",
+      "description": "Evidence-first multi-stage review of staged Git changes on the OMP stack.",
+      "source": "./",
+      "version": "0.14.0"
+    }
+  ]
+}

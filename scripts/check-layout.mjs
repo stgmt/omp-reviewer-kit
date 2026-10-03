@@ -3,6 +3,10 @@ import { access, readFile } from 'node:fs/promises';
 const required = [
   'package.json',
   '.omp-plugin/marketplace.json',
+  '.claude-plugin/plugin.json',
+  '.claude-plugin/marketplace.json',
+  'commands/review.md',
+  'scripts/sync-targets.mjs',
   'skills/reality-first-review/SKILL.md',
   'skills/multi-stage-review/SKILL.md',
   'agents/reviewer-kit.md',

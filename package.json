@@ -25,6 +25,8 @@
     "skills",
     "src",
     ".omp-plugin",
+    ".claude-plugin",
+    "commands",
     "ROADMAP.md",
     "CHANGELOG.md"
   ],
