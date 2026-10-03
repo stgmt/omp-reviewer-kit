@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.15.0] - 2026-10-03
+
+### Added
+- Claude Code plugin (`.claude-plugin/`, `commands/review.md`): `/review` runs the same fail-closed runner (the git pre-commit hook remains the only enforcement point). `agents` is pinned to `[]` so OMP agent frontmatter is not loaded by Claude Code.
+- `scripts/sync-targets.mjs`: dry-run table of runner and hook hashes across target repositories (`~/.omp/review-kit-targets.json` or explicit paths), `--apply` copies; `tp-*` and `omp-reviewer-kit-release` are always skipped.
+
 ## [0.14.0] - 2026-10-03
 
 ### Changed
