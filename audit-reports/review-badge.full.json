@@ -1,56 +1,44 @@
 {
   "schema": "review-badge@1",
-  "runId": "2026-10-03T14-21-52-188Z-98526a3c4078",
-  "diffHash": "98526a3c407876897ce4d3046287bbd51ac736f0bab66c9e706c626e55184ab8",
-  "verdict": "BLOCK",
+  "runId": "2026-10-03T14-39-39-163Z-184be1c61219",
+  "diffHash": "184be1c612194ed46206c3cf75a901ff2ebebae4846ab60263f018f80eba304f",
+  "verdict": "PASS",
   "reviewProfile": "full",
-  "durationMs": 762094,
+  "durationMs": 427533,
   "stageHistory": [
     {
       "stage": "scouting",
       "completed": 0,
-      "at": "2026-10-03T14:22:17.663Z",
-      "elapsedMs": 10053
+      "at": "2026-10-03T14:40:04.693Z",
+      "elapsedMs": 10049
     },
     {
       "stage": "scout",
       "completed": 0,
-      "at": "2026-10-03T14:23:27.717Z",
-      "elapsedMs": 80107
+      "at": "2026-10-03T14:41:24.753Z",
+      "elapsedMs": 90109
     },
     {
       "stage": "scout",
       "completed": 1,
-      "at": "2026-10-03T14:24:37.779Z",
-      "elapsedMs": 150169
+      "at": "2026-10-03T14:43:04.849Z",
+      "elapsedMs": 190205
     },
     {
       "stage": "risk",
       "completed": 1,
-      "at": "2026-10-03T14:25:27.827Z",
-      "elapsedMs": 200217
+      "at": "2026-10-03T14:43:44.881Z",
+      "elapsedMs": 230237
     },
     {
       "stage": "risk",
       "completed": 2,
-      "at": "2026-10-03T14:30:28.066Z",
-      "elapsedMs": 500456
-    },
-    {
-      "stage": "verifier",
-      "completed": 2,
-      "at": "2026-10-03T14:30:48.097Z",
-      "elapsedMs": 520487
-    },
-    {
-      "stage": "synthesis",
-      "completed": 3,
-      "at": "2026-10-03T14:32:28.141Z",
-      "elapsedMs": 620531
+      "at": "2026-10-03T14:45:54.969Z",
+      "elapsedMs": 360326
     }
   ],
-  "stageTrail": "scouting→scout→scout→risk→risk→verifier→synthesis",
+  "stageTrail": "scouting→scout→scout→risk→risk",
   "modelsTried": [],
-  "reportPath": "audit-reports/commit-reviews/2026-10-03T14-21-52-186Z-98526a3c407876897ce4d3046287bbd51ac736f0bab66c9e706c626e55184ab8.md",
-  "generatedAt": "2026-10-03T14:34:34.282Z"
+  "reportPath": "audit-reports/commit-reviews/2026-10-03T14-39-39-162Z-184be1c612194ed46206c3cf75a901ff2ebebae4846ab60263f018f80eba304f.md",
+  "generatedAt": "2026-10-03T14:46:46.696Z"
 }

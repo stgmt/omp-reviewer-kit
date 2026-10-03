@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [Unreleased]
+## [0.15.0] - 2026-10-03
 
 ### Added
 - Claude Code plugin (`.claude-plugin/`, `commands/review.md`): `/review` runs the same fail-closed runner (the git pre-commit hook remains the only enforcement point). `agents` is pinned to `[]` so OMP agent frontmatter is not loaded by Claude Code.
