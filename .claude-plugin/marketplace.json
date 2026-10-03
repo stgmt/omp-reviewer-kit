@@ -6,7 +6,7 @@
       "name": "omp-reviewer-kit",
       "description": "Evidence-first multi-stage review of staged Git changes on the OMP stack.",
       "source": "./",
-      "version": "0.15.0"
+      "version": "0.16.0"
     }
   ]
 }
