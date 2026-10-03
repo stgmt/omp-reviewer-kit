@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [Unreleased]
+
+### Added
+- Envelope repair: a BLOCK whose rejection envelope is missing or malformed gets one bounded no-tools verbatim re-emit. The repaired output is accepted only when it is again a BLOCK with a valid non-failure envelope; a re-emit that flips to PASS, fails, or still lacks an envelope keeps the original failure, so a repair can never downgrade a BLOCK. Telemetry `reemit_recovery` gains `mode` (`missing_marker`|`envelope_repair`).
+
 ## [0.15.0] - 2026-10-03
 
 ### Added

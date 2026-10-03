@@ -1487,6 +1487,7 @@ export class ReviewPrompt {
   #reportPath;
   #riskLanes;
   #reemitOutput;
+  #repairEnvelope = false;
 
   constructor(diffHash, snapshotDir = '', changedPaths = [], extras = {}) {
     if (!diffHash || typeof diffHash !== 'string') {
@@ -1522,8 +1523,9 @@ export class ReviewPrompt {
    * @param {string} originalOutput
    * @returns {ReviewPrompt}
    */
-  static forReemit(originalOutput) {
+  static forReemit(originalOutput, { repairEnvelope = false } = {}) {
     const prompt = new ReviewPrompt('verbatim-reemit');
+    prompt.#repairEnvelope = repairEnvelope === true;
     prompt.#reemitOutput = String(originalOutput ?? '');
     return prompt;
   }
@@ -1589,7 +1591,9 @@ export class ReviewPrompt {
   }
 
   #toReemitString() {
-    return 'Reproduce the following review report verbatim as raw Markdown text exactly as returned; never JSON-encode, wrap, or reformat it. The verdict contract overrides any other format: finish with exactly one standalone REVIEW_RESULT=PASS or REVIEW_RESULT=BLOCK line as the last non-empty line of the output — markers anywhere else are ignored — even if the input describes a different verdict vocabulary.\n\n---ORIGINAL OUTPUT---\n' + this.#reemitOutput;
+    const repair = this.#repairEnvelope
+      ? 'The original verdict is BLOCK and must stay BLOCK: change no finding, priority, or verdict. Its rejection envelope is missing or malformed, so the output must contain exactly one valid envelope — the line REVIEW_REJECTION_ENVELOPE_BEGIN, one strict JSON object of schema review-rejection-envelope@1 describing exactly the findings already reported, the line REVIEW_REJECTION_ENVELOPE_END — immediately followed by the standalone REVIEW_RESULT=BLOCK line. ' : '';
+    return repair + 'Reproduce the following review report verbatim as raw Markdown text exactly as returned; never JSON-encode, wrap, or reformat it. The verdict contract overrides any other format: finish with exactly one standalone REVIEW_RESULT=PASS or REVIEW_RESULT=BLOCK line as the last non-empty line of the output — markers anywhere else are ignored — even if the input describes a different verdict vocabulary.\n\n---ORIGINAL OUTPUT---\n' + this.#reemitOutput;
   }
 
   get diffHash() {
@@ -2472,14 +2476,21 @@ export class ReviewWorkflowService {
         processError: execResult.stderr,
       });
 
-      // Fail-closed verbatim re-emit recovery: when the reviewer exited cleanly
-      // and produced output but no standalone verdict marker, ask the same
-      // model once — with no tools and a bounded timeout — to reproduce its
-      // report verbatim under the verdict contract, then re-run the full
-      // envelope evaluation on the re-emitted output. A failed re-emit keeps
-      // the original verdict; exactly one re-emit is ever attempted.
+      // Fail-closed verbatim re-emit recovery. Two recoverable shapes, one
+      // attempt total, no tools, bounded timeout:
+      //  - missing_verdict_marker: the reviewer finished but forgot the marker;
+      //    the re-emit is re-evaluated in full and may yield PASS or BLOCK.
+      //  - missing/malformed rejection envelope on an explicit BLOCK: only the
+      //    envelope shape is repaired; the re-emit is accepted solely when it is
+      //    again a BLOCK carrying a valid non-failure envelope, so a repair can
+      //    never downgrade a BLOCK to PASS.
+      // A failed re-emit keeps the original verdict.
+      const envelopeFailureCode = envelope?.kind === 'review_failure' ? envelope.failure?.code : null;
+      const markerRecovery = verdict.reason === 'missing_verdict_marker';
+      const envelopeRecovery = !markerRecovery
+        && (envelopeFailureCode === 'missing_rejection_envelope' || envelopeFailureCode === 'malformed_rejection_envelope');
       if (
-        verdict.reason === 'missing_verdict_marker'
+        (markerRecovery || envelopeRecovery)
         && execResult.status === 0
         && combinedOutput.trim() !== ''
         && process.env.OMP_REVIEW_KIT_REEMIT !== '0'
@@ -2487,7 +2498,7 @@ export class ReviewWorkflowService {
         const reemitStartedAt = Date.now();
         const originalBytes = Buffer.byteLength(combinedOutput);
         const reemitResult = await this.#reviewerPort.reemitVerbatim({
-          prompt: ReviewPrompt.forReemit(combinedOutput),
+          prompt: ReviewPrompt.forReemit(combinedOutput, { repairEnvelope: envelopeRecovery }),
           cwd: repoRoot,
           telemetry,
         });
@@ -2497,21 +2508,32 @@ export class ReviewWorkflowService {
             ...reemitResult.attempts,
           ];
         }
+        let recovered = false;
         if (reemitResult?.status === 0) {
-          const reemittedOutput = reemitResult.combined ?? `${reemitResult.stdout ?? ''}\n${reemitResult.stderr ?? ''}`;
+          const reemittedOutput = reemitResult.combined ?? `${reemitResult.stdout ?? ''}
+${reemitResult.stderr ?? ''}`;
           const reevaluated = ReviewRejectionEnvelope.evaluate({
             output: reemittedOutput,
             diffIdentity: diff,
             processStatus: reemitResult.status,
             processError: reemitResult.stderr,
           });
-          verdict = reevaluated.verdict;
-          envelope = reevaluated.envelope;
-          combinedOutput = reemittedOutput;
+          const accepted = markerRecovery
+            ? reevaluated.verdict.reason !== 'missing_verdict_marker'
+            : !reevaluated.verdict.isPass()
+              && reevaluated.envelope != null
+              && reevaluated.envelope.kind !== 'review_failure';
+          if (markerRecovery || accepted) {
+            verdict = reevaluated.verdict;
+            envelope = reevaluated.envelope;
+            combinedOutput = reemittedOutput;
+          }
+          recovered = accepted;
         }
         await telemetry.record('reemit_recovery', {
           originalBytes,
-          recovered: verdict.reason !== 'missing_verdict_marker',
+          recovered,
+          mode: envelopeRecovery ? 'envelope_repair' : 'missing_marker',
           reemitStatus: reemitResult?.status ?? null,
           durationMs: Date.now() - reemitStartedAt,
         });
