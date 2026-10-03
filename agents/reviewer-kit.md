@@ -1,7 +1,6 @@
 ---
 name: reviewer-kit
 description: OMP Review Kit orchestrator agent for multi-stage evidence-first review of staged Git changes.
-model: "@slow"
 blocking: true
 tools: read, grep, glob, lsp, bash, task
 spawns: review-context-scout, review-risk-hunter, review-finding-verifier

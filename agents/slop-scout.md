@@ -1,7 +1,6 @@
 ---
 name: slop-scout
 description: Read-only scout discovering parasitic-architecture, spec-slop, and dead-check candidates for the slop audit.
-model: "@smol"
 blocking: true
 tools: read, grep, glob, lsp, bash
 autoloadSkills:

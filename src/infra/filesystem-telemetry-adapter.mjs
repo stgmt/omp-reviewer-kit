@@ -42,22 +42,19 @@ function pidLiveness(pid) {
 }
 
 /**
- * Builds the user-facing message emitted when every model in the chain failed
- * with a provider/availability error. The review produced no verdict; the
- * commit is blocked by infrastructure, not by findings.
+ * Builds the user-facing message emitted when OMP could not reach a model
+ * (health call or review run). The review produced no verdict; the commit is
+ * blocked by infrastructure, not by findings.
  *
- * @param {string[]} modelsTried
  * @param {string} [lastStderr]
  * @returns {string}
  */
-export function formatProviderOutageError(modelsTried, lastStderr) {
+export function formatProviderOutageError(lastStderr) {
   const lines = [
     'reviewer-kit infrastructure failure: no review verdict was produced.',
-    'Every configured model failed with a provider/availability error (this is an outage, not a code verdict).',
-    `Models attempted: ${modelsTried.join(' -> ')}`,
-    'Fix: point the fast roles at available fast models in ~/.omp/agent/config.yml',
-    '  (modelRoles.smol / modelRoles.task), or set OMP_REVIEW_KIT_MODEL /',
-    '  OMP_REVIEW_KIT_FALLBACK_MODELS to explicit model selectors.',
+    'OMP could not get an answer from a model (this is an outage or a configuration problem, not a code verdict).',
+    'Fix: reviewer-kit does not choose models. Check the login and the default model role in OMP itself,',
+    '  and configure fallbacks there (modelRoles / retry.fallbackChains in ~/.omp/agent/config.yml).',
     'The detailed report and run telemetry are under audit-reports/commit-reviews/.',
   ];
   const tail = typeof lastStderr === 'string'

@@ -719,7 +719,6 @@ describe('Feature: runner mirror keeps identical classifier + prompt behavior', 
         );
         return { status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' };
       },
-      ompOptions: { roleResolver: () => ({ smol: 'a/s:high', task: 'a/t:high', slow: 'a/l:max' }) },
       now: new Date('2026-09-28T12:00:00.000Z'),
     });
 

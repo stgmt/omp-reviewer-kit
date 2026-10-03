@@ -248,6 +248,16 @@ function summarizeRun(runId, events) {
         summary.diffHash = event.diffHash;
         summary.diffBytes = event.diffBytes;
         break;
+      case 'preflight_started':
+        summary.probes.push({ kind: 'preflight', startedAt: event.at });
+        break;
+      case 'preflight_finished': {
+        const pre = summary.probes.findLast?.((p) => p.kind === 'preflight' && p.status === undefined)
+          ?? summary.probes[summary.probes.length - 1];
+        if (pre) Object.assign(pre, event);
+        else summary.probes.push({ kind: 'preflight', ...event });
+        break;
+      }
       case 'probe_started':
         summary.probes.push({ model: event.model, startedAt: event.at });
         break;
@@ -640,7 +650,7 @@ async function main() {
   if (summary.error) console.log(`  error: ${summary.error}`);
 
   for (const attempt of result.attempts) {
-    console.log(`  attempt #${attempt.attemptIndex ?? '?'} model ${attempt.model}  pid ${attempt.pid ?? '-'}  ${fmtDuration(attempt.durationMs)}  status ${attempt.status ?? '-'}${attempt.providerFailure ? '  PROVIDER-FAILURE' : ''}`);
+    console.log(`  attempt #${attempt.attemptIndex ?? '?'}${attempt.model ? " model " + attempt.model : ""}  pid ${attempt.pid ?? '-'}  ${fmtDuration(attempt.durationMs)}  status ${attempt.status ?? '-'}${attempt.providerFailure ? '  PROVIDER-FAILURE' : ''}`);
     printLogInfo(attempt.log);
     printTranscriptInfo(attempt.transcripts);
     if (attempt.ompLog && attempt.ompLogCorrelation === 'time-window') {
@@ -648,7 +658,7 @@ async function main() {
     }
   }
   for (const probe of result.probes) {
-    console.log(`  probe model ${probe.model}  pid ${probe.pid ?? '-'}  ${fmtDuration(probe.durationMs)}  status ${probe.status ?? '-'}`);
+    console.log(`  ${probe.kind === 'preflight' ? 'preflight (OMP default role)' : 'probe model ' + probe.model}  pid ${probe.pid ?? '-'}  ${fmtDuration(probe.durationMs)}  status ${probe.status ?? '-'}`);
   }
   if (result.attempts.length === 0 && summary.ompLogHints.length > 0) {
     console.log(`  omp log hints: ${summary.ompLogHints.join(', ')}`);

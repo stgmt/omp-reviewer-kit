@@ -129,24 +129,25 @@ Reports record:
 - Unproven and rejected candidate summaries with defense justifications
 - Machine-readable verdict marker (`REVIEW_RESULT=PASS` or `REVIEW_RESULT=BLOCK`)
 
-## Model Selection & Fallback
+## Models
 
-The hook runs the review on the `@smol` role by default and falls back once to
-`@task` (each fallback is availability-probed first). Only OMP role selectors
-(`@name`) are accepted — the child resolves the role itself, so the user's
-`modelRoles` assignments and `retry.fallbackChains` apply inside the review
-child. Concrete `provider/model` selectors are rejected. If every role fails
-with a provider/quota error the commit is blocked with an actionable message —
-this is an infrastructure failure, not a code verdict.
+reviewer-kit does not choose, pass, or fall back between models. OMP is your
+tool: you log in, assign the default model role, and configure fallbacks
+(`modelRoles`, `retry.fallbackChains`, `modelFallback` in
+`~/.omp/agent/config.yml`) yourself, and the review child and all four agents
+inherit exactly that. The hook only asks OMP for a verdict and gets `PASS`,
+`BLOCK`, or an error.
+
+Before the four stages start, the runner makes one short model-less health
+call. If OMP cannot reach a model (missing login, dead provider, exhausted
+quota with no configured fallback) the commit is blocked within seconds with a
+message telling you to fix the OMP configuration. This is an infrastructure
+failure, not a code verdict. A hard OMP child crash with no output is re-run
+once.
 
 ```text
-OMP_REVIEW_KIT_MODEL            # primary model role selector (default: @smol)
-OMP_REVIEW_KIT_FALLBACK_MODELS  # comma-separated @role fallback list (default: @task)
-OMP_REVIEW_KIT_MAX_FALLBACKS    # max fallback attempts (default: 3)
-OMP_REVIEW_KIT_PROBE_TIMEOUT_MS # availability probe timeout (default: 60000)
-OMP_REVIEW_KIT_QUOTA_STALL_MS   # kill silent reviews after provider refusal (default: 300000; 0 disables)
+OMP_REVIEW_KIT_PREFLIGHT_TIMEOUT_MS # health-call timeout (default: 90000)
 OMP_REVIEW_KIT_MAX_TIME         # opt-in child-side bound via omp --max-time (default: off; 600|10m|1h shapes)
-OMP_REVIEW_KIT_EFFORT           # map to omp --thinking (default: unset = role's configured effort; off|minimal|low|medium|high|xhigh|max|auto)
 OMP_REVIEW_KIT_SKILLS           # extra skill globs the review child lists via omp --skills, added to the always-included plugin skills (default extras: *reviewer-kit*,*review-kit*; all = full catalog)
 OMP_REVIEW_KIT_OMP              # path/name of the omp executable
 OMP_REVIEW_KIT_TELEMETRY=0      # disable run telemetry writes

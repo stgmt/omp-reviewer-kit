@@ -2850,43 +2850,6 @@ export function containsProviderRefusal(text) {
 }
 
 /**
- * Broader live-monitoring signal: the strict refusal pattern plus mid-line
- * provider error shapes observed in OMP logs (`Error 429: Daily free
- * limit`, `INFERENCE_CAP_ERROR`). Safe here because stderr and child logs
- * carry diagnostics, never review prose - the incidental-doc-text concern
- * that keeps the final classifier line-anchored does not apply. Byte-count
- * false positives are excluded by requiring an error/limit word near the
- * status code.
- */
-const QUOTA_STALL_SIGNAL_EXTRA_RE = /(?:error|failure|failed)[^\n]{0,40}?\b(?:401|403|429)\b|(?:free|daily)[ -]?limit|INFERENCE_CAP_ERROR/i;
-
-export function containsQuotaStallSignal(text) {
-  return containsProviderRefusal(text) || (typeof text === 'string' && QUOTA_STALL_SIGNAL_EXTRA_RE.test(text));
-}
-
-const QUOTA_STALL_PREFIX = 'Review stalled on provider quota after ';
-
-/**
- * Detects a quota-stall kill performed by the runner: the marker is prepended
- * to stderr exactly once when the watchdog fires. Mirrors the existing
- * 'Review timed out after' marker convention.
- */
-export function isQuotaStallStderr(stderr) {
-  return typeof stderr === 'string' && stderr.includes(QUOTA_STALL_PREFIX);
-}
-/**
- * Title-generator lines are auxiliary session-name requests, not the review
- * flow: they run through a different provider chain and fail with 403/429
- * while the main review keeps streaming. Counting them as a quota signal
- * kills healthy reviews (observed 2026-09-23: pids 46340/79756/27104/58628
- * stall-killed on title-generator 403 FreeTierError with zero main-flow
- * provider errors).
- */
-function stripTitleGeneratorLines(text) {
-  return String(text ?? '').split('\n').filter((line) => !line.includes('title-generator')).join('\n');
-}
-
-/**
  * Reads only the last `maxTailBytes` of a (possibly multi-MB) log file via a
  * positioned read — the stage/quota pollers run every ~10s for the whole
  * review, so a whole-file readFile+slice per tick was O(log size) memory and
@@ -2908,28 +2871,6 @@ async function readLogTail(filePath, maxTailBytes) {
     return buffer.toString('utf8');
   } finally {
     await handle.close();
-  }
-}
-
-/**
- * Best-effort child-log lookup: OMP names per-process logs
- * `omp.<date>.<pid>.log` (see ompLogHints in run telemetry). Returns true
- * when the tail carries a quota-stall signal. Never throws: an
- * unresolvable log simply yields no signal and the watchdog degrades to
- * stderr-only.
- */
-async function readChildLog({ logDir, pid }) {
-  if (!Number.isInteger(pid) || pid <= 0) return null;
-  try {
-    const dir = logDir ?? path.join(homedir(), '.omp', 'logs');
-    const suffix = `.${pid}.log`;
-    const entries = await readdir(dir);
-    const matches = entries.filter((name) => name.startsWith('omp.') && name.endsWith(suffix));
-    if (matches.length === 0) return null;
-    matches.sort().reverse();
-    return await readFile(path.join(dir, matches[0]), 'utf8');
-  } catch {
-    return null;
   }
 }
 
@@ -3066,41 +3007,12 @@ export async function childLogReadStage({ logDir, pid, maxTailBytes = 262_144 } 
     return undefined;
   }
 }
-export async function childLogHasQuotaSignal({ logDir, pid, maxTailBytes = 65_536 } = {}) {
-  const content = await readChildLog({ logDir, pid });
-  if (content === null) return false;
-  return containsQuotaStallSignal(stripTitleGeneratorLines(content.slice(-maxTailBytes)));
-}
-
-/**
- * Child-log activity marker: `progress` counts main-flow lines that are
- * neither title-generator noise nor provider-refusal lines; `refusals` counts
- * refusal lines. A recovered refusal followed by new request/response lines
- * raises only `progress`; a retry storm raises both. Returns null when the
- * log is unresolvable.
- */
-export async function childLogActivity({ logDir, pid } = {}) {
-  const content = await readChildLog({ logDir, pid });
-  if (content === null) return null;
-  let progress = 0;
-  let refusals = 0;
-  for (const line of content.split('\n')) {
-    if (line.trim() === '' || line.includes('title-generator')) continue;
-    if (containsQuotaStallSignal(line)) refusals += 1;
-    else progress += 1;
-  }
-  return { progress, refusals };
-}
-
 /**
  * Static heuristic proving a review attempt failed because the model provider
  * refused the request (quota, rate limit, auth, or capacity), rather than
- * because the review itself produced a verdict or timed out.
- *
- * A provider-side failure is the only legitimate trigger for fallback retries.
- * We never fall back after a real PASS/BLOCK verdict or after the timeout: a
- * timed-out review would time out on every model, and the timeout budget is
- * per-attempt, so retrying would multiply wall-clock cost without new signal.
+ * because the review itself produced a verdict or timed out. A provider
+ * failure ends the run with an infrastructure error: the kit never switches
+ * models, that is OMP's own configuration (default role + fallbackChains).
  *
  * @param {{ status: number, stdout?: string, stderr?: string }} result
  * @returns {boolean}
@@ -3108,13 +3020,7 @@ export async function childLogActivity({ logDir, pid } = {}) {
 export function isModelProviderFailure(result) {
   if (result.status === 0) return false;
   const combined = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
-  // A stall kill proves a provider refusal was observed mid-run (stderr or
-  // child log); the marker alone classifies even when the accumulated
-  // output carries no refusal text (mid-run 429s go to the log, not stderr).
-  if (isQuotaStallStderr(combined)) return true;
-
-  // Timeout is per-attempt; retrying would multiply wall-clock cost without
-  // new signal on another model.
+  // A timeout is not a provider verdict.
   if (/Review timed out after/.test(combined)) return false;
 
   // A provider-side refusal can be wrapped in a synthetic BLOCK marker by
@@ -3133,16 +3039,25 @@ export function isModelProviderFailure(result) {
   if (containsProviderRefusal(combined)) return true;
 
   // A real verdict means the review ran; the non-zero status may be OMP
-  // reporting a BLOCK exit code. Never retry that.
+  // reporting a BLOCK exit code.
   return false;
+}
+
+// Windows STATUS_STACK_BUFFER_OVERRUN (0xC0000409) and generic -1 exits: the
+// child crashed before producing any review output.
+const CHILD_CRASH_STATUSES = new Set([3221226505, -1073740791, 4294967295, -1]);
+
+/**
+ * True when the OMP child died with a hard crash code and printed nothing:
+ * a runtime fault, not a verdict, worth exactly one re-run.
+ */
+export function isChildCrash(result) {
+  return CHILD_CRASH_STATUSES.has(result?.status) && String(result?.stdout ?? '').trim() === '';
 }
 
 function configuredInteger(value, fallback, minimum) {
   const parsed = Number.parseInt(value, 10);
   return Number.isInteger(parsed) && parsed >= minimum ? parsed : fallback;
-}
-function isSafeModelSelector(value) {
-  return typeof value === 'string' && /^[A-Za-z0-9@._:/+-]+$/.test(value);
 }
 
 /**
@@ -3181,27 +3096,6 @@ export function isMaxTimeExpiry({ stdout, durationMs, maxTimeMs }) {
   if (!(maxTimeMs > 0)) return false;
   if ((stdout ?? '').trim() !== '') return false;
   return durationMs >= maxTimeMs - 30_000;
-}
-
-/**
- * Review children are spawned with OMP role selectors only (`@smol`,
- * `@task`, ...). A concrete `provider/model` selector would bypass the
- * user's `retry.fallbackChains` (chains key off the configured role) and
- * could pick a model the user never assigned, so non-role selectors are
- * rejected before spawn.
- */
-function isRoleSelector(value) {
-  return typeof value === 'string' && /^@[A-Za-z0-9_-]+$/.test(value);
-}
-
-/**
- * Thinking levels accepted by `omp --thinking`. OMP_REVIEW_KIT_EFFORT maps
- * to that flag; unset means the role's own configured effort applies.
- */
-const REVIEW_THINKING_LEVELS = new Set(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'auto']);
-function reviewThinkingLevel() {
-  const raw = process.env.OMP_REVIEW_KIT_EFFORT;
-  return REVIEW_THINKING_LEVELS.has(raw) ? raw : null;
 }
 
 /**
@@ -3290,57 +3184,43 @@ async function terminateProcessTree(proc) {
  */
 export class OmpCliReviewerAdapter extends ReviewerPort {
   #runner;
-  #modelsProvider;
-  #primaryModel;
-  #maxFallbacks;
-  #modelProbe;
-  #probeTimeoutMs;
+  #preflight;
+  #preflightTimeoutMs;
   #reviewMaxTime;
-  #quotaStallMs;
   #progress;
-  #roleResolver;
-  #rolesCache;
-  #lastReviewModel;
 
   /**
+   * The adapter never selects, resolves, or falls back between models: OMP is
+   * the user's configured tool (default role, `retry.fallbackChains`,
+   * `modelFallback`) and the review child inherits it untouched. The only
+   * pre-check is a short model-less health call so a missing login or dead
+   * provider fails in seconds instead of after a full review.
+   *
    * @param {{
-   *   runner?: (prompt: string, cwd: string, timeoutMs?: number, model?: string) => Promise<{ status: number, stdout?: string, stderr?: string }>|{ status: number, stdout?: string, stderr?: string },
-   *   modelsProvider?: () => string[]|Promise<string[]>,
-   *   primaryModel?: string,
-   *   maxFallbacks?: number,
-   *   modelProbe?: (cwd: string, timeoutMs: number, model: string) => Promise<{ status: number, stdout?: string, stderr?: string }>|{ status: number, stdout?: string, stderr?: string },
-   *   probeTimeoutMs?: number,
+   *   runner?: (prompt: string, cwd: string, timeoutMs?: number, options?: object) => Promise<{ status: number, stdout?: string, stderr?: string }>|{ status: number, stdout?: string, stderr?: string },
+   *   preflight?: ((cwd: string, timeoutMs: number) => Promise<{ status: number, stdout?: string, stderr?: string }>|{ status: number, stdout?: string, stderr?: string })|null,
+   *   preflightTimeoutMs?: number,
    *   maxTime?: string,
-   *   quotaStallMs?: number,
-   *   progress?: (event: { state: string, message: string, model?: string, elapsedMs?: number }) => void,
-   *   roleResolver?: (cwd: string) => Promise<Record<string, string>>|Record<string, string>
+   *   progress?: (event: { state: string, message: string, elapsedMs?: number }) => void
    * }} [options]
    */
   constructor({
     runner,
-    modelsProvider,
-    primaryModel = process.env.OMP_REVIEW_KIT_MODEL ?? '@smol',
-    maxFallbacks = configuredInteger(process.env.OMP_REVIEW_KIT_MAX_FALLBACKS, 3, 0),
-    modelProbe,
-    probeTimeoutMs = configuredInteger(process.env.OMP_REVIEW_KIT_PROBE_TIMEOUT_MS, 60_000, 1),
+    preflight,
+    preflightTimeoutMs = configuredInteger(process.env.OMP_REVIEW_KIT_PREFLIGHT_TIMEOUT_MS, 90_000, 1),
     maxTime = process.env.OMP_REVIEW_KIT_MAX_TIME ?? null,
-    quotaStallMs = configuredInteger(process.env.OMP_REVIEW_KIT_QUOTA_STALL_MS, 300_000, 0),
     progress,
-    roleResolver,
   } = {}) {
     super();
     this.#runner = runner ?? OmpCliReviewerAdapter.defaultRunner;
-    this.#modelsProvider = modelsProvider ?? OmpCliReviewerAdapter.defaultModelsProvider;
-    this.#primaryModel = primaryModel;
-    this.#maxFallbacks = maxFallbacks;
-    this.#modelProbe = modelProbe ?? OmpCliReviewerAdapter.defaultModelProbe;
-    this.#probeTimeoutMs = configuredInteger(probeTimeoutMs, 60_000, 1);
+    // An injected runner replaces the real OMP child, so the real health call
+    // would be meaningless (and spawn a real process); it is opt-in then.
+    this.#preflight = preflight === undefined
+      ? (runner ? null : OmpCliReviewerAdapter.defaultPreflight)
+      : preflight;
+    this.#preflightTimeoutMs = configuredInteger(preflightTimeoutMs, 90_000, 1);
     this.#reviewMaxTime = parseReviewMaxTime(maxTime);
-    this.#quotaStallMs = configuredInteger(quotaStallMs, 300_000, 0);
     this.#progress = progress ?? (() => {});
-    this.#roleResolver = roleResolver ?? OmpCliReviewerAdapter.defaultRoleResolver;
-    this.#rolesCache = null;
-    this.#lastReviewModel = null;
   }
 
   #emitProgress(event) {
@@ -3351,63 +3231,21 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
     }
   }
 
-  /**
-   * Validates an OMP role selector (`@smol`, `@task`, ...) against the
-   * user's configured roles and returns the concrete `provider/model[:effort]`
-   * for telemetry. The child itself is spawned with the raw `@role` so OMP
-   * resolves the role inside the child and the user's `retry.fallbackChains`
-   * stay active there. Non-role selectors are rejected.
-   */
-  async #resolveSelector(cwd, selector, telemetry) {
-    if (!isRoleSelector(selector)) {
-      throw new Error(`Model selector ${JSON.stringify(selector)} is not an OMP role (@name); reviewer-kit uses only configured roles`);
-    }
-    if (!this.#rolesCache) {
-      this.#rolesCache = Promise.resolve()
-        .then(() => this.#roleResolver(cwd))
-        .then((roles) => (roles && typeof roles === 'object' ? roles : {}))
-        .catch(() => ({}));
-      const roles = await this.#rolesCache;
-      await telemetry.record('roles_resolved', { roles });
-    }
-    const resolved = (await this.#rolesCache)[selector.slice(1)];
-    if (typeof resolved !== 'string' || !isSafeModelSelector(resolved)) {
-      throw new Error(`Model role ${selector} not found in OMP configuration`);
-    }
-    return resolved;
-  }
-
-  async #runReviewAttempt(promptText, cwd, model, telemetry, attempts, attemptIndex) {
+  async #runReviewAttempt(promptText, cwd, telemetry, attempts, attemptIndex) {
     const startedAt = Date.now();
-    const record = { model, attemptIndex, startedAt: new Date(startedAt).toISOString() };
+    const record = { attemptIndex, startedAt: new Date(startedAt).toISOString() };
+    const stageHistory = [];
     attempts.push(record);
-    let resolvedModel;
-    try {
-      resolvedModel = await this.#resolveSelector(cwd, model, telemetry);
-    } catch (error) {
-      record.status = 1;
-      record.durationMs = Date.now() - startedAt;
-      record.providerFailure = true;
-      record.stderrBytes = 0;
-      record.error = error?.message ?? String(error);
-      await telemetry.record('review_attempt_finished', { ...record });
-      return { status: 1, stdout: '', stderr: record.error };
-    }
-    if (resolvedModel !== model) record.resolvedModel = resolvedModel;
-    this.#lastReviewModel = model;
     let responseObserved = false;
     let workingSignalObserved = false;
-    const stageHistory = [];
     const emitRunning = () => {
       this.#emitProgress({
         state: 'reviewing',
         message: 'commit hook review running; waiting for model response',
-        model,
         elapsedMs: Date.now() - startedAt,
       });
       void telemetry.updateLastRun({
         state: 'reviewing',
-        model,
         pid: record.pid,
         elapsedMs: Date.now() - startedAt,
       });
@@ -3416,19 +3254,17 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
     this.#emitProgress({
       state: 'reviewing',
       message: 'commit hook review started; waiting for model response',
-      model,
       elapsedMs: 0,
     });
     const heartbeat = setInterval(emitRunning, 5_000);
     heartbeat.unref?.();
     try {
-      const result = await this.#runner(promptText, cwd, undefined, model, {
+      const result = await this.#runner(promptText, cwd, undefined, {
         maxTime: this.#reviewMaxTime.arg,
-        quotaStallMs: this.#quotaStallMs,
         onSpawn: (pid) => {
           record.pid = pid;
           void telemetry.record('review_attempt_started', { ...record, pid });
-          void telemetry.updateLastRun({ state: 'reviewing', model, pid });
+          void telemetry.updateLastRun({ state: 'reviewing', pid });
         },
         onOutput: (chunk, stream) => {
           const text = String(chunk);
@@ -3437,11 +3273,10 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
             this.#emitProgress({
               state: 'working',
               message: 'OMP child process is active; waiting for model response',
-              model,
               elapsedMs: Date.now() - startedAt,
             });
             void telemetry.record('review_attempt_working', {
-              model, attemptIndex, pid: record.pid, elapsedMs: Date.now() - startedAt,
+              attemptIndex, pid: record.pid, elapsedMs: Date.now() - startedAt,
             });
           }
           if (stream === 'stdout' && !responseObserved && text.trim()) {
@@ -3449,11 +3284,10 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
             this.#emitProgress({
               state: 'response',
               message: 'model response received; checking verdict',
-              model,
               elapsedMs: Date.now() - startedAt,
             });
             void telemetry.record('review_attempt_first_output', {
-              model, attemptIndex, pid: record.pid, elapsedMs: Date.now() - startedAt,
+              attemptIndex, pid: record.pid, elapsedMs: Date.now() - startedAt,
             });
           }
         },
@@ -3463,12 +3297,10 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
           this.#emitProgress({
             state: 'reviewing',
             message: `review stage ${stage}${completed > 0 ? ` (${completed} done)` : ''}`,
-            model,
             elapsedMs: Date.now() - startedAt,
           });
           void telemetry.updateLastRun({
             state: 'reviewing',
-            model,
             pid: record.pid,
             stage,
             stagesCompleted: completed,
@@ -3485,9 +3317,8 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
         durationMs: record.durationMs,
         maxTimeMs: this.#reviewMaxTime.ms,
       });
-      record.stalledOnQuota = isQuotaStallStderr(result?.stderr);
-      if (stageHistory.length > 0) record.stageHistory = stageHistory;
       record.stdoutBytes = typeof result?.stdout === 'string' ? Buffer.byteLength(result.stdout) : 0;
+      if (stageHistory.length > 0) record.stageHistory = stageHistory;
       record.stderrBytes = typeof result?.stderr === 'string' ? Buffer.byteLength(result.stderr) : 0;
       await telemetry.record('review_attempt_finished', { ...record });
       return result;
@@ -3496,99 +3327,65 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
     }
   }
 
-  async #runModelProbe(cwd, model, telemetry, probes) {
+  /**
+   * Model-less health call: proves OMP can answer at all with the user's own
+   * configuration (default role plus whatever fallbacks they configured).
+   * Returns null when healthy, otherwise the failing result.
+   */
+  async #runPreflight(cwd, telemetry) {
+    if (!this.#preflight) return null;
     const startedAt = Date.now();
-    const record = { model, startedAt: new Date(startedAt).toISOString() };
-    probes.push(record);
-    let resolvedModel;
-    try {
-      resolvedModel = await this.#resolveSelector(cwd, model, telemetry);
-    } catch (error) {
-      record.status = 1;
-      record.durationMs = Date.now() - startedAt;
-      record.error = error?.message ?? String(error);
-      await telemetry.record('probe_finished', { ...record });
-      return { status: 1, stdout: '', stderr: record.error };
-    }
-    if (resolvedModel !== model) record.resolvedModel = resolvedModel;
-    await telemetry.record('probe_started', { ...record });
-    this.#emitProgress({
-      state: 'probe',
-      message: 'checking model availability',
-      model,
-      elapsedMs: 0,
-    });
-    void telemetry.updateLastRun({ state: 'probing', model });
+    const record = { startedAt: new Date(startedAt).toISOString() };
+    await telemetry.record('preflight_started', { ...record });
+    this.#emitProgress({ state: 'probe', message: 'checking that OMP can reach a model', elapsedMs: 0 });
+    void telemetry.updateLastRun({ state: 'probing' });
     const heartbeat = setInterval(() => this.#emitProgress({
       state: 'probe',
-      message: 'checking model availability',
-      model,
+      message: 'checking that OMP can reach a model',
       elapsedMs: Date.now() - startedAt,
     }), 5_000);
     heartbeat.unref?.();
+    let result;
     try {
-      const result = await this.#modelProbe(cwd, this.#probeTimeoutMs, model);
-      record.pid = result?.pid;
-      record.status = result?.status;
-      record.durationMs = Date.now() - startedAt;
-      await telemetry.record('probe_finished', { ...record });
-      return result;
+      result = await this.#preflight(cwd, this.#preflightTimeoutMs);
+    } catch (error) {
+      result = { status: 1, stdout: '', stderr: error?.message ?? String(error) };
     } finally {
       clearInterval(heartbeat);
     }
-  }
-
-  /**
-   * Default candidate model list for fallback retries.
-   *
-   * Priority:
-   * 1. `OMP_REVIEW_KIT_FALLBACK_MODELS` (comma-separated) overrides the list.
-   * 2. Otherwise the single role fallback `@task` — a role selector always
-   *    resolves to whatever fast model the user configured, without probing
-   *    the `omp models --json` catalog for arbitrary providers.
-   *
-   * @returns {Promise<string[]>}
-   */
-  static async defaultModelsProvider() {
-    const explicit = process.env.OMP_REVIEW_KIT_FALLBACK_MODELS;
-    if (explicit) {
-      return explicit
-        .split(',')
-        .map((s) => s.trim())
-        .filter(isRoleSelector);
-    }
-    return ['@task'];
+    record.pid = result?.pid;
+    record.status = result?.status;
+    record.durationMs = Date.now() - startedAt;
+    // Healthy = exit 0 with an actual answer. Provider-error text on stderr alone
+    // is not a failure here: OMP prints auxiliary-request noise (e.g. 403 on a
+    // side model) while the main flow still answers.
+    const healthy = result?.status === 0 && String(result?.stdout ?? '').trim() !== '';
+    record.healthy = healthy;
+    await telemetry.record('preflight_finished', { ...record });
+    return healthy ? null : (result ?? { status: 1, stdout: '', stderr: '' });
   }
 
   /**
    * Standard OMP CLI runner using async spawn to avoid pipe buffer deadlocks.
+   * No model flags are ever passed: OMP resolves its own default role.
    *
    * @param {string} prompt
    * @param {string} cwd
    * @param {number} [timeout]
-   * @param {string} [model]
-   * @param {{ noTools?: boolean, maxTime?: string|null, quotaStallMs?: number, quotaPollMs?: number, quotaLogDir?: string|null, onOutput?: (chunk: unknown, stream: 'stdout'|'stderr') => void, onSpawn?: (pid: number|undefined) => void, registryEnv?: string|null }} [options]
+   * @param {{ noTools?: boolean, maxTime?: string|null, stagePollMs?: number, logDir?: string|null, onOutput?: (chunk: unknown, stream: 'stdout'|'stderr') => void, onSpawn?: (pid: number|undefined) => void, onStage?: (info: { stage: string, completed: number }) => void, registryEnv?: string|null }} [options]
    * @returns {Promise<{ status: number, stdout: string, stderr: string, pid?: number }>}
    */
-  static defaultRunner(prompt, cwd, timeout, model, { noTools = false, maxTime, quotaStallMs, quotaPollMs = 10_000, quotaLogDir = null, onOutput, onSpawn, onStage, registryEnv } = {}) {
+  static defaultRunner(prompt, cwd, timeout, { noTools = false, maxTime, stagePollMs = 10_000, logDir = null, onOutput, onSpawn, onStage, registryEnv } = {}) {
     return new Promise((resolve) => {
       const command = process.env.OMP_REVIEW_KIT_OMP ?? 'omp';
-      const selectedModel = model ?? process.env.OMP_REVIEW_KIT_MODEL ?? '@smol';
-      if (!isRoleSelector(selectedModel)) {
-        resolve({ status: 1, stdout: '', stderr: 'Rejected non-role model selector' });
-        return;
-      }
       const isWindowsWrapper = /\.(cmd|bat)$/i.test(command);
       // Read-only review child: session titles are never displayed in print
       // mode and project rules guard edits the child cannot perform (its
       // tools are task/read plus read-only specialists), so skip title
-      // generation and rules discovery on every spawned session. The model
-      // stays a role selector so the child resolves the user's configured
-      // role itself and keeps that role's retry.fallbackChains.
-      const commandArgs = ['-p', '--model', selectedModel, ...(noTools ? ['--no-tools'] : ['--tools', 'task,read']), '--no-session', '--no-title', '--no-rules'];
+      // generation and rules discovery on every spawned session. No model
+      // flag: the child resolves the user's own OMP configuration.
+      const commandArgs = ['-p', ...(noTools ? ['--no-tools'] : ['--tools', 'task,read']), '--no-session', '--no-title', '--no-rules'];
       commandArgs.push(...reviewSkillsSelection().args);
-      const thinking = reviewThinkingLevel();
-      if (thinking) commandArgs.push('--thinking', thinking);
       if (typeof maxTime === 'string' && REVIEW_MAX_TIME_RE.test(maxTime)) {
         commandArgs.push('--max-time', maxTime);
       }
@@ -3613,73 +3410,19 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       } catch {
         // Telemetry callbacks must never affect the review process.
       }
+
       let stdout = '';
       let stderr = '';
       let timedOut = false;
-      let stallKilled = false;
       let settled = false;
+      let timer;
+      let stagePoller;
       const finish = (result) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        clearStallTimer();
-        stopQuotaPoller();
+        if (stagePoller) clearInterval(stagePoller);
         resolve({ pid, ...result });
-      };
-      let timer;
-      let stallTimer;
-      const clearStallTimer = () => {
-        if (stallTimer) {
-          clearTimeout(stallTimer);
-          stallTimer = undefined;
-        }
-      };
-      let quotaPoller;
-      const stopQuotaPoller = () => {
-        if (quotaPoller) {
-          clearInterval(quotaPoller);
-          quotaPoller = undefined;
-        }
-      };
-      const armQuotaStall = () => {
-        // No stdout guard here: the stall timer itself is cleared by each
-        // stdout chunk, so arming while stdout flows is harmless — the next
-        // chunk cancels it. The guard made the log poller's arm call a no-op
-        // after any banner, leaving mid-run stalls unbounded.
-        if (!(quotaStallMs > 0) || stallTimer) return;
-        const armedAt = lastStdoutAt;
-        const baseline = childLogActivity({ logDir: quotaLogDir, pid });
-        stallTimer = setTimeout(async () => {
-          stallTimer = undefined;
-          // stdout progress after this arming means the observed refusal
-          // recovered — disarm. A persistent refusal re-arms via the next
-          // stderr chunk or log-poller tick.
-          if (lastStdoutAt > armedAt) return;
-          // The child logs, not stdout, during a review: new main-flow log
-          // lines since arming mean the refusal recovered (fallback/retry).
-          const before = await baseline;
-          const now = await childLogActivity({ logDir: quotaLogDir, pid });
-          if (before && now) {
-            // Recovered = new main-flow lines outnumber new refusal lines. A
-            // retry storm (request + refusal per attempt) is not recovery.
-            const progress = now.progress - before.progress;
-            const refusals = now.refusals - before.refusals;
-            if (progress > 0 && refusals < progress) return;
-          }
-          if (lastStdoutAt > armedAt || settled) return;
-          stopQuotaPoller();
-          // Mark BEFORE terminating: terminateProcessTree awaits the kill, and
-          // the proc 'close' event can fire during that await and settle the
-          // promise first — dropping the stall marker. The close handler checks
-          // this flag and prepends the marker itself.
-          stallKilled = true;
-          await terminateProcessTree(proc);
-          finish({
-            status: 1,
-            stdout,
-            stderr: `${QUOTA_STALL_PREFIX}${quotaStallMs}ms\n` + stderr,
-          });
-        }, quotaStallMs);
       };
 
       if (timeout && timeout > 0) {
@@ -3694,40 +3437,27 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
         }, timeout);
       }
 
-      let lastStdoutAt = 0;
       proc.stdout.on('data', (chunk) => {
         stdout += chunk.toString('utf8');
-        lastStdoutAt = Date.now();
-        if (stdout.trim() !== '') clearStallTimer();
         onOutput?.(chunk, 'stdout');
       });
       proc.stderr.on('data', (chunk) => {
         stderr += chunk.toString('utf8');
-        if (containsQuotaStallSignal(stderr)) armQuotaStall();
         onOutput?.(chunk, 'stderr');
       });
 
-      if (Number.isInteger(pid) && pid > 0) {
+      if (Number.isInteger(pid) && pid > 0 && typeof onStage === 'function') {
         let pollRunning = false;
         let lastStage;
-        quotaPoller = setInterval(() => {
-          if (pollRunning || settled || stallTimer) return;
+        stagePoller = setInterval(() => {
+          if (pollRunning || settled) return;
           pollRunning = true;
-          // Stage progress is read unconditionally so last-run.json tracks the
-          // child continuously; the quota-stall log check only matters once
-          // stdout has gone quiet (mid-run 429s land in the child log anyway).
-          const checkQuota = quotaStallMs > 0
-            && (stdout.trim() === '' || Date.now() - lastStdoutAt >= quotaStallMs);
-          void Promise.all([
-            checkQuota ? childLogHasQuotaSignal({ logDir: quotaLogDir, pid }) : Promise.resolve(false),
-            typeof onStage === 'function' ? childLogReadStage({ logDir: quotaLogDir, pid }) : Promise.resolve(undefined),
-          ])
-            .then(([signalled, stageInfo]) => {
+          void childLogReadStage({ logDir, pid })
+            .then((stageInfo) => {
               // Post-settle guard: an in-flight tick resolving after close()
               // must not deliver stage updates — updateLastRun would regress
               // the terminal state back to 'reviewing'.
               if (settled) return;
-              if (signalled) armQuotaStall();
               if (stageInfo) {
                 // Monotonic progress: a truncated tail can make the log look
                 // earlier than it is; never report a regression — neither the
@@ -3755,25 +3485,17 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
             .finally(() => {
               pollRunning = false;
             });
-        }, quotaPollMs > 0 ? quotaPollMs : 10_000);
+        }, stagePollMs > 0 ? stagePollMs : 10_000);
       }
 
       proc.on('close', (code) => {
         if (timedOut) return;
-        finish({
-          status: code ?? 1,
-          stdout,
-          stderr: stallKilled ? `${QUOTA_STALL_PREFIX}${quotaStallMs}ms\n` + stderr : stderr,
-        });
+        finish({ status: code ?? 1, stdout, stderr });
       });
 
       proc.on('error', (err) => {
         if (timedOut) return;
-        finish({
-          status: 1,
-          stdout,
-          stderr: `${stallKilled ? QUOTA_STALL_PREFIX + quotaStallMs + 'ms\n' : ''}${err.message || err}\n${stderr}`,
-        });
+        finish({ status: 1, stdout, stderr: `${err.message || err}\n${stderr}` });
       });
 
       // Guard against EPIPE if process terminates before reading stdin
@@ -3788,84 +3510,19 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
   }
 
   /**
-   * Performs a minimal no-tools request to confirm that a fallback model can answer.
+   * Minimal no-tools, model-less request confirming OMP can reach a model.
    *
    * @param {string} cwd
    * @param {number} timeout
-   * @param {string} model
    * @returns {Promise<{ status: number, stdout: string, stderr: string }>}
    */
-  static defaultModelProbe(cwd, timeout, model) {
-    const boundedTimeout = configuredInteger(timeout, 60_000, 1);
+  static defaultPreflight(cwd, timeout) {
     return OmpCliReviewerAdapter.defaultRunner(
       'Respond with exactly READY. Do not use tools.',
       cwd,
-      boundedTimeout,
-      model,
+      configuredInteger(timeout, 90_000, 1),
       { noTools: true },
     );
-  }
-
-  /**
-   * Resolves the user's OMP role map (`omp config get modelRoles --json`).
-   * Best-effort: returns `{}` when the command is unavailable or slow.
-   *
-   * @param {string} cwd
-   * @returns {Promise<Record<string, string>>}
-   */
-  static defaultRoleResolver(cwd) {
-    return new Promise((resolve) => {
-      const command = process.env.OMP_REVIEW_KIT_OMP ?? 'omp';
-      const isWindowsWrapper = /\.(cmd|bat)$/i.test(command);
-      const commandArgs = ['config', 'get', 'modelRoles', '--json'];
-      const executable = isWindowsWrapper ? (process.env.ComSpec ?? 'cmd.exe') : command;
-      const args = isWindowsWrapper
-        ? ['/d', '/c', 'call', command, ...commandArgs]
-        : commandArgs;
-      let proc;
-      try {
-        proc = spawn(executable, args, {
-          cwd,
-          stdio: ['ignore', 'pipe', 'pipe'],
-          // Same stale-parent guard as the review attempt: role resolution
-          // must not die on a missing PI_PROXY_* env slice.
-          env: mergeRegistryProxyEnv(),
-          windowsHide: true,
-        });
-      } catch {
-        resolve({});
-        return;
-      }
-      let stdout = '';
-      let settled = false;
-      const finish = (roles) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        resolve(roles);
-      };
-      const timer = setTimeout(async () => {
-        await terminateProcessTree(proc);
-        finish({});
-      }, 15_000);
-      timer.unref?.();
-      proc.stdout.on('data', (chunk) => {
-        stdout += chunk.toString('utf8');
-      });
-      proc.on('close', (code) => {
-        if (code !== 0) {
-          finish({});
-          return;
-        }
-        try {
-          const value = JSON.parse(stdout)?.value;
-          finish(value && typeof value === 'object' ? value : {});
-        } catch {
-          finish({});
-        }
-      });
-      proc.on('error', () => finish({}));
-    });
   }
 
   /**
@@ -3879,69 +3536,37 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
   async executeReview({ prompt, cwd, telemetry = NULL_RUN_TELEMETRY }) {
     telemetry = safeRunTelemetry(telemetry);
     await telemetry.record('review_chain', {
-      primaryModel: this.#primaryModel,
-      maxFallbacks: this.#maxFallbacks,
-      probeTimeoutMs: this.#probeTimeoutMs,
+      preflightTimeoutMs: this.#preflight ? this.#preflightTimeoutMs : null,
       maxTime: this.#reviewMaxTime.arg,
-      quotaStallMs: this.#quotaStallMs,
-      effortOverride: reviewThinkingLevel(),
       skills: reviewSkillsSelection().label,
     });
     const promptText = typeof prompt === 'string' ? prompt : prompt.toString();
-    const primaryModel = this.#primaryModel;
-    const modelsTried = [primaryModel];
     const attempts = [];
     const probes = [];
-    let result = await this.#runReviewAttempt(promptText, cwd, primaryModel, telemetry, attempts, 0);
-    let providerOutage = isModelProviderFailure(result);
 
-    if (providerOutage && this.#maxFallbacks > 0) {
-      let fallbackModels = [];
-      try {
-        fallbackModels = await this.#modelsProvider(this.#probeTimeoutMs);
-      } catch {
-        fallbackModels = [];
-      }
-
-      const candidates = Array.isArray(fallbackModels)
-        ? fallbackModels
-          .filter((model) => typeof model === 'string' && model.length > 0 && model !== primaryModel)
-          .filter((model, index, models) => models.indexOf(model) === index)
-        : [];
-      let reviewAttempts = 0;
-
-      for (const model of candidates) {
-        if (reviewAttempts >= this.#maxFallbacks) break;
-        modelsTried.push(model);
-        let probeResult;
-        try {
-          probeResult = await this.#runModelProbe(cwd, model, telemetry, probes);
-        } catch (error) {
-          probeResult = { status: 1, stdout: '', stderr: error?.message ?? String(error) };
-          const probeRecord = probes.at(-1);
-          if (probeRecord) {
-            probeRecord.status = 1;
-            probeRecord.error = error?.message ?? String(error);
-            probeRecord.durationMs = Date.now() - Date.parse(probeRecord.startedAt);
-          }
-        }
-        if (probeResult?.status !== 0) {
-          continue;
-        }
-
-        reviewAttempts += 1;
-        result = await this.#runReviewAttempt(promptText, cwd, model, telemetry, attempts, reviewAttempts);
-        providerOutage = isModelProviderFailure(result);
-        if (!providerOutage) break;
-      }
-    }
-
-    if (providerOutage) {
+    const preflightFailure = await this.#runPreflight(cwd, telemetry);
+    let result;
+    if (preflightFailure) {
+      probes.push({ kind: 'preflight', status: preflightFailure.status });
       result = {
         status: 1,
-        stdout: result.stdout ?? '',
-        stderr: formatProviderOutageError(modelsTried, result.stderr),
+        stdout: '',
+        stderr: formatProviderOutageError(preflightFailure.stderr || preflightFailure.stdout),
       };
+    } else {
+      result = await this.#runReviewAttempt(promptText, cwd, telemetry, attempts, 0);
+      // A hard child crash (Windows 0xC0000409 / -1) with no output is a
+      // runtime fault, not a verdict: one more run with the same command.
+      if (isChildCrash(result)) {
+        result = await this.#runReviewAttempt(promptText, cwd, telemetry, attempts, 1);
+      }
+      if (isModelProviderFailure(result)) {
+        result = {
+          status: 1,
+          stdout: result.stdout ?? '',
+          stderr: formatProviderOutageError(result.stderr),
+        };
+      }
     }
 
     const stdout = result.stdout ?? '';
@@ -3953,17 +3578,16 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       stdout,
       stderr,
       combined,
-      modelsTried,
+      modelsTried: [],
       attempts,
       probes,
     };
   }
 
   /**
-   * Runs exactly one bounded no-tools re-prompt asking the same model to
-   * reproduce its previous output verbatim under the verdict contract.
-   * Reuses the single-shot runner path and the probe-timeout budget; never
-   * probes the catalog and never falls back to another model.
+   * Runs exactly one bounded no-tools re-prompt asking OMP to reproduce its
+   * previous output verbatim under the verdict contract. Reuses the
+   * single-shot runner path and the preflight-timeout budget.
    *
    * @param {{
    *   prompt: import('../domain/review-prompt.mjs').ReviewPrompt|string,
@@ -3976,31 +3600,18 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
   async reemitVerbatim({ prompt, cwd, timeoutMs, telemetry = NULL_RUN_TELEMETRY }) {
     telemetry = safeRunTelemetry(telemetry);
     const promptText = typeof prompt === 'string' ? prompt : prompt.toString();
-    const model = this.#lastReviewModel ?? this.#primaryModel;
-    const timeout = configuredInteger(timeoutMs, this.#probeTimeoutMs, 1);
+    const timeout = configuredInteger(timeoutMs, this.#preflightTimeoutMs, 1);
     const startedAt = Date.now();
-    const record = { model, kind: 'reemit', startedAt: new Date(startedAt).toISOString() };
+    const record = { kind: 'reemit', startedAt: new Date(startedAt).toISOString() };
     const attempts = [record];
-    let resolvedModel;
-    try {
-      resolvedModel = await this.#resolveSelector(cwd, model, telemetry);
-    } catch (error) {
-      record.status = 1;
-      record.durationMs = Date.now() - startedAt;
-      record.stderrBytes = 0;
-      record.error = error?.message ?? String(error);
-      await telemetry.record('reemit_finished', { ...record });
-      return { status: 1, stdout: '', stderr: record.error, attempts };
-    }
-    if (resolvedModel !== model) record.resolvedModel = resolvedModel;
     await telemetry.record('reemit_started', { ...record });
-    void telemetry.updateLastRun({ state: 'reemitting', model });
+    void telemetry.updateLastRun({ state: 'reemitting' });
     try {
-      const result = await this.#runner(promptText, cwd, timeout, model, {
+      const result = await this.#runner(promptText, cwd, timeout, {
         noTools: true,
         onSpawn: (pid) => {
           record.pid = pid;
-          void telemetry.updateLastRun({ state: 'reemitting', model, pid });
+          void telemetry.updateLastRun({ state: 'reemitting', pid });
         },
       });
       record.pid = record.pid ?? result?.pid;
@@ -4019,7 +3630,6 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
     } catch (error) {
       record.status = 1;
       record.durationMs = Date.now() - startedAt;
-      record.stdoutBytes = 0;
       record.stderrBytes = 0;
       record.error = error?.message ?? String(error);
       await telemetry.record('reemit_finished', { ...record });
@@ -4919,14 +4529,12 @@ function pidLiveness(pid) {
  * with a provider/availability error. The review produced no verdict; the
  * commit is blocked by infrastructure, not by findings.
  */
-function formatProviderOutageError(modelsTried, lastStderr) {
+function formatProviderOutageError(lastStderr) {
   const lines = [
     'reviewer-kit infrastructure failure: no review verdict was produced.',
-    'Every configured model failed with a provider/availability error (this is an outage, not a code verdict).',
-    `Models attempted: ${modelsTried.join(' -> ')}`,
-    'Fix: point the fast roles at available fast models in ~/.omp/agent/config.yml',
-    '  (modelRoles.smol / modelRoles.task), or set OMP_REVIEW_KIT_MODEL /',
-    '  OMP_REVIEW_KIT_FALLBACK_MODELS to @role selectors.',
+    'OMP could not get an answer from a model (this is an outage or a configuration problem, not a code verdict).',
+    'Fix: reviewer-kit does not choose models. Check the login and the default model role in OMP itself,',
+    '  and configure fallbacks there (modelRoles / retry.fallbackChains in ~/.omp/agent/config.yml).',
     'The detailed report and run telemetry are under audit-reports/commit-reviews/.',
   ];
   const tail = typeof lastStderr === 'string'

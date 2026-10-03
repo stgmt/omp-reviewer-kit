@@ -1,7 +1,6 @@
 ---
 name: review-context-scout
 description: Read-only context scout discovering changed paths, callers, invariants, and test coverage for staged diffs.
-model: "@smol"
 blocking: true
 tools: read, grep, glob, lsp, bash
 ---

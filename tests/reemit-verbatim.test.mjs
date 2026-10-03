@@ -6,8 +6,6 @@ import path from 'node:path';
 import test, { describe, it } from 'node:test';
 import { runReview } from '../src/index.mjs';
 
-const TEST_ROLES = { smol: 'acme/smol-flash:high', task: 'acme/task-fast:high', slow: 'acme/slow-max:max' };
-const testRoleResolver = () => TEST_ROLES;
 const DIFF_TEXT = 'reemit recovery diff content';
 const DIFF_HASH = createHash('sha256').update(DIFF_TEXT).digest('hex');
 
@@ -51,12 +49,12 @@ function createTelemetryCapture() {
 
 /**
  * Fake OMP runner: the first call is the full review attempt, every later
- * call is the verbatim re-emit re-prompt. Records noTools/timeout/model.
+ * call is the verbatim re-emit re-prompt. Records noTools/timeout.
  */
 function createRunner({ review, reemit }) {
   const calls = [];
-  const runner = async (prompt, cwd, timeoutMs, model, options = {}) => {
-    const call = { prompt, timeoutMs, model, noTools: options.noTools === true };
+  const runner = async (prompt, cwd, timeoutMs, options = {}) => {
+    const call = { prompt, timeoutMs, noTools: options.noTools === true };
     calls.push(call);
     if (calls.length === 1) {
       call.kind = 'review';
@@ -156,7 +154,6 @@ async function runWithCleanup(repoRoot, options) {
   return await runReview({
     cwd: repoRoot,
     git: createFakeGit(repoRoot),
-    ompOptions: { roleResolver: testRoleResolver },
     logger: createSilentLogger(),
     now: new Date('2026-09-15T10:00:00.000Z'),
     ...options,
@@ -282,7 +279,7 @@ describe('Feature: Verbatim Re-emit Recovery (missing verdict marker)', () => {
     assert.equal(calls[1].kind, 'reemit');
   });
 
-  it('S10: Given a markerless output, When re-emit runs, Then the runner is invoked with the no-tools flag and the probe-timeout budget', async () => {
+  it('S10: Given a markerless output, When re-emit runs, Then the runner is invoked with the no-tools flag and the bounded health-call budget', async () => {
     // Given
     const repoRoot = await createTempRepo();
     const { calls, runner } = createRunner({
@@ -298,8 +295,7 @@ describe('Feature: Verbatim Re-emit Recovery (missing verdict marker)', () => {
     assert.equal(calls.length, 2);
     assert.equal(calls[0].noTools, false);
     assert.equal(calls[1].noTools, true);
-    assert.equal(calls[1].timeoutMs, 60_000);
-    assert.equal(calls[1].model, calls[0].model);
+    assert.equal(calls[1].timeoutMs, 90_000);
   });
 
   it('E1: Given an empty reviewer output, When the review executes, Then no re-emit is attempted', async () => {
@@ -423,8 +419,6 @@ describe('Re-emit failure attempt records', () => {
     const telemetry = { record: async () => {}, updateLastRun: async () => {} };
     const adapter = new OmpCliReviewerAdapter({
       runner: async () => { throw new Error('runner exploded'); },
-      roleResolver: () => TEST_ROLES,
-      primaryModel: '@smol',
     });
     const { status, attempts } = await adapter.reemitVerbatim({ prompt: 'x', cwd: '/tmp', telemetry });
     assert.equal(status, 1);
@@ -436,20 +430,4 @@ describe('Re-emit failure attempt records', () => {
     assert.equal(typeof attempts[0].durationMs, 'number');
   });
 
-  it('pins status/stderrBytes/error on attempts[0] when selector resolution fails', async () => {
-    const { OmpCliReviewerAdapter } = await import('../src/infra/omp-cli-reviewer-adapter.mjs');
-    const telemetry = { record: async () => {}, updateLastRun: async () => {} };
-    const adapter = new OmpCliReviewerAdapter({
-      runner: async () => ({ status: 0, stdout: 'x', stderr: '' }),
-      roleResolver: () => ({}), // no roles → resolveSelector rejects
-      primaryModel: '@smol',
-    });
-    const { status, attempts } = await adapter.reemitVerbatim({ prompt: 'x', cwd: '/tmp', telemetry });
-    assert.equal(status, 1);
-    assert.equal(attempts.length, 1);
-    assert.equal(attempts[0].status, 1);
-    assert.equal(attempts[0].stderrBytes, 0);
-    assert.match(attempts[0].error, /not found in OMP configuration/);
-    assert.equal(attempts[0].stdoutBytes, undefined);
-  });
 });

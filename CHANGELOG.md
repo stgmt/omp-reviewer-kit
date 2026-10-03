@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.14.0] - 2026-10-03
+
+### Changed
+- **BREAKING: reviewer-kit no longer chooses, passes, or falls back between models.** OMP is the user's configured tool: login, the default model role, `modelRoles`, `retry.fallbackChains`, and `modelFallback` live in OMP, and the review child and all agents inherit them. The child is spawned without `--model`/`--thinking`. Removed: `OMP_REVIEW_KIT_MODEL`, `OMP_REVIEW_KIT_FALLBACK_MODELS`, `OMP_REVIEW_KIT_MAX_FALLBACKS`, `OMP_REVIEW_KIT_PROBE_TIMEOUT_MS`, `OMP_REVIEW_KIT_QUOTA_STALL_MS`, `OMP_REVIEW_KIT_EFFORT`, the in-kit fallback chain, per-model probes, role resolver, and the quota-stall watchdog. `OMP_REVIEW_KIT_MAX_TIME` stays as an opt-in child-side bound.
+- `agents/*.md` no longer pin `model:`; subagents inherit the user's default role. Note `agentModelOverrides` in `~/.omp/agent/config.yml` still wins.
+- `formatProviderOutageError(lastStderr)` now takes only the last provider error and points at the OMP configuration. `modelsTried` is always empty; `review_chain` telemetry records `preflightTimeoutMs`/`maxTime`/`skills`.
+
+### Added
+- **Fast preflight**: one short model-less health call (`OMP_REVIEW_KIT_PREFLIGHT_TIMEOUT_MS`, default 90000) runs before the four stages. If OMP cannot answer (no login, dead provider, exhausted quota with no configured fallback) the commit is blocked in seconds with an actionable infrastructure message instead of after a full review. Healthy = exit 0 with an answer. New `preflight_started`/`preflight_finished` events; `analyze-review-run` reports them.
+- A hard OMP child crash (Windows `0xC0000409` / `-1`) with no output is re-run once.
+
+### Fixed
+- Verdict parsing tolerates the OMP epilogue tail and the `Working...` progress line; snapshot leases use strict identity (commit 359803f, previously unreleased).
+
+### Migration
+Remove the deleted `OMP_REVIEW_KIT_*` model variables from shells, CI, and project instructions; configure models and fallbacks in OMP. Update the globally installed plugin so the agents stop pinning `@slow`/`@smol`.
+
 ## [0.13.0] - 2026-09-30
 
 ### Added

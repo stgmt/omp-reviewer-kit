@@ -17,8 +17,6 @@ import {
 } from '../src/index.mjs';
 import { runReview } from '../scripts/run-review.mjs';
 
-const TEST_ROLES = { smol: 'acme/smol-flash:high', task: 'acme/task-fast:high', slow: 'acme/slow-max:max' };
-const testRoleResolver = () => TEST_ROLES;
 
 /**
  * Creates an isolated mock repository directory.
@@ -101,7 +99,6 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
     const result = await runReview({
       cwd: repoRoot,
       git,
-      ompOptions: { roleResolver: testRoleResolver },
       omp: (prompt, cwd, timeout) => {
         return {
           status: 0,
@@ -138,7 +135,6 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
     const result = await runReview({
       cwd: repoRoot,
       git,
-      ompOptions: { roleResolver: testRoleResolver },
       omp: () => ({
         status: 0,
         stdout: rejectionOutput('bad diff content'),
@@ -167,7 +163,6 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
     const result = await runReview({
       cwd: repoRoot,
       git,
-      ompOptions: { roleResolver: testRoleResolver },
       omp: () => {
         ompCalled = true;
         return { status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' };
@@ -190,7 +185,6 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
     const result = await runReview({
       cwd: repoRoot,
       git,
-      ompOptions: { roleResolver: testRoleResolver },
       omp: () => ({
         status: 1,
         stdout: '',
@@ -214,7 +208,6 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
     const result = await runReview({
       cwd: repoRoot,
       git,
-      ompOptions: { roleResolver: testRoleResolver },
       omp: () => ({
         status: 0,
         stdout: 'Looks good! REVIEW_RESULT=PASSED\n',
@@ -236,7 +229,6 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
     const result = await runReview({
       cwd: repoRoot,
       git,
-      ompOptions: { roleResolver: testRoleResolver },
       omp: () => ({
         status: 0,
         stdout: 'REVIEW_RESULT=PASS\nWait, actually:\nREVIEW_RESULT=BLOCK\n',
@@ -259,7 +251,6 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
     const result = await runReview({
       cwd: repoRoot,
       git,
-      ompOptions: { roleResolver: testRoleResolver },
       omp: () => ({ status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' }),
     });
 
@@ -276,7 +267,6 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
     const first = await runReview({
       cwd: repoRoot,
       git,
-      ompOptions: { roleResolver: testRoleResolver },
       omp: () => ({ status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' }),
       now: new Date('2026-09-04T12:00:00.000Z'),
     });
@@ -284,7 +274,6 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
     const second = await runReview({
       cwd: repoRoot,
       git,
-      ompOptions: { roleResolver: testRoleResolver },
       omp: () => ({ status: 0, stdout: rejectionOutput('same diff content'), stderr: '' }),
       now: new Date('2026-09-04T12:00:01.000Z'),
     });
@@ -304,7 +293,6 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
     const result = await runReview({
       cwd: repoRoot,
       git,
-      ompOptions: { roleResolver: testRoleResolver },
       omp: () => ({
         status: 0,
         stdout: rejectionOutput('diff for stage failure test', { kind: 'review_failure' }),
@@ -330,7 +318,6 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
     await runReview({
       cwd: repoRoot,
       git,
-      ompOptions: { roleResolver: testRoleResolver },
       omp: (prompt) => {
         capturedPrompt = prompt;
         return { status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' };
@@ -898,8 +885,7 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
     const result = await runReview({
       cwd: repoRoot,
       git,
-      ompOptions: { roleResolver: testRoleResolver },
-      omp: async (prompt, cwd, timeout, model, options) => {
+      omp: async (prompt, cwd, timeout, options) => {
         options?.onSpawn?.(5150);
         return { status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' };
       },
@@ -923,7 +909,7 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
     await rm(repoRoot, { recursive: true, force: true }).catch(() => {});
   });
 
-  it('Scenario: Given both fast model roles are down, When the review runs, Then the commit is blocked with an actionable infrastructure message', async () => {
+  it('Scenario: Given OMP cannot reach any model, When the review runs, Then the commit is blocked with an actionable infrastructure message', async () => {
     // Given
     const repoRoot = await createTempRepo('omp-outage-bdd-');
     const git = createFakeGit(repoRoot, 'outage diff content');
@@ -935,12 +921,6 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
       cwd: repoRoot,
       git,
       omp: async () => ({ status: 1, stdout: '', stderr: 'HTTP 429 Too Many Requests' }),
-      ompOptions: {
-        primaryModel: '@smol',
-        modelsProvider: async () => ['@task'],
-        modelProbe: async () => ({ status: 1, stdout: '', stderr: 'provider unavailable' }),
-        roleResolver: () => ({ smol: 'acme/smol-flash:high', task: 'acme/task-fast:high' }),
-      },
       now: new Date('2026-09-13T09:05:00.000Z'),
       logger,
     });
@@ -949,7 +929,7 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
     assert.equal(result.exitCode, 1);
     assert.equal(result.verdict, 'BLOCK');
     assert.match(result.details, /infrastructure failure/);
-    assert.match(result.details, /modelRoles\.smol/);
+    assert.match(result.details, /retry\.fallbackChains/);
     const lastRun = JSON.parse(await readFile(
       path.join(repoRoot, 'audit-reports', 'commit-reviews', 'last-run.json'), 'utf8'));
     assert.equal(lastRun.state, 'blocked');
@@ -984,7 +964,6 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
       cwd: repoRoot,
       git: fakeGit,
       omp: fakeOmp,
-      ompOptions: { roleResolver: () => ({ smol: 'acme/smol-flash:high', task: 'acme/task-fast:high' }) },
       now: new Date('2026-09-15T10:00:00.000Z'),
     });
 
@@ -1037,7 +1016,6 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
         capturedPrompt = prompt;
         return { status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' };
       },
-      ompOptions: { roleResolver: () => ({ smol: 'acme/smol-flash:high', task: 'acme/task-fast:high' }) },
       now: new Date('2026-09-15T11:00:00.000Z'),
     });
 

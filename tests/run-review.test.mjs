@@ -6,8 +6,6 @@ import path from 'node:path';
 import test from 'node:test';
 import { runReview } from '../scripts/run-review.mjs';
 
-const TEST_ROLES = { smol: 'acme/smol-flash:high', task: 'acme/task-fast:high', slow: 'acme/slow-max:max' };
-const testRoleResolver = () => TEST_ROLES;
 
 async function makeRoot(prefix = 'omp-review-kit-') {
   const reportRoot = await mkdtemp(path.join(tmpdir(), prefix));
@@ -105,7 +103,6 @@ async function runAt(root, diff, ompResult, now = new Date('2026-09-04T12:00:00.
       prompt = value;
       return ompResult;
     },
-    ompOptions: { roleResolver: testRoleResolver },
     now,
   });
   return { result, prompt, root };
@@ -385,7 +382,6 @@ test('excludes unstaged working-tree changes from the reviewed hash', async () =
       prompt = value;
       return { status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' };
     },
-    ompOptions: { roleResolver: testRoleResolver },
   });
   const expectedHash = createHash('sha256').update(stagedDiff).digest('hex');
 
@@ -440,7 +436,6 @@ test('dispatcher prompt carries deterministic suspicion map for deleted test fil
       prompt = value;
       return { status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' };
     },
-    ompOptions: { roleResolver: testRoleResolver },
   });
 
   assert.equal(result.exitCode, 0);
@@ -467,7 +462,6 @@ test('dispatcher prompt carries execution evidence when OMP_REVIEW_KIT_EXECUTE i
         prompt = value;
         return { status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' };
       },
-      ompOptions: { roleResolver: testRoleResolver },
     });
 
     assert.equal(result.exitCode, 0);
@@ -503,7 +497,6 @@ test('runner fails open and includes unavailable in prompt when execution throws
       prompt = value;
       return { status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' };
     },
-    ompOptions: { roleResolver: testRoleResolver },
   });
 
   assert.equal(result.exitCode, 0);
