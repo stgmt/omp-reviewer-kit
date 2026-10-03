@@ -1484,9 +1484,11 @@ export class ReviewPrompt {
   #reviewProfile;
   #fileClasses;
   #executionEvidenceText;
+  #roundContextText;
   #reportPath;
   #riskLanes;
   #reemitOutput;
+  #repairEnvelope = false;
 
   constructor(diffHash, snapshotDir = '', changedPaths = [], extras = {}) {
     if (!diffHash || typeof diffHash !== 'string') {
@@ -1503,6 +1505,7 @@ export class ReviewPrompt {
     this.#changedPaths = changedPaths;
     this.#suspicionMapText = typeof extras?.suspicionMapText === 'string' ? extras.suspicionMapText : '';
     this.#executionEvidenceText = typeof extras?.executionEvidenceText === 'string' ? extras.executionEvidenceText : '';
+    this.#roundContextText = typeof extras?.roundContextText === 'string' ? extras.roundContextText : '';
     this.#inlineDiff = typeof extras?.inlineDiff === 'string' && extras.inlineDiff.length > 0 ? extras.inlineDiff : null;
     this.#reviewProfile = typeof extras?.reviewProfile === 'string' ? extras.reviewProfile : null;
     this.#fileClasses = Array.isArray(extras?.fileClasses) ? extras.fileClasses : [];
@@ -1522,8 +1525,9 @@ export class ReviewPrompt {
    * @param {string} originalOutput
    * @returns {ReviewPrompt}
    */
-  static forReemit(originalOutput) {
+  static forReemit(originalOutput, { repairEnvelope = false } = {}) {
     const prompt = new ReviewPrompt('verbatim-reemit');
+    prompt.#repairEnvelope = repairEnvelope === true;
     prompt.#reemitOutput = String(originalOutput ?? '');
     return prompt;
   }
@@ -1581,6 +1585,9 @@ export class ReviewPrompt {
     if (this.#executionEvidenceText) {
       lines.push('', this.#executionEvidenceText);
     }
+    if (this.#roundContextText) {
+      lines.push('', this.#roundContextText);
+    }
     lines.push(`The staged diff hash for this hook invocation is ${this.#diffHash}.`);
     if (this.#reportPath) lines.push(`The durable per-run report path for this review is \`${this.#reportPath}\`. Instruct the reviewer-kit task to write its complete final report verbatim to that path before yielding; it is the only path the task may write.`);
     if (this.#reviewProfile) lines.push(`Review profile for this diff: ${this.#reviewProfile}.`);
@@ -1589,7 +1596,9 @@ export class ReviewPrompt {
   }
 
   #toReemitString() {
-    return 'Reproduce the following review report verbatim as raw Markdown text exactly as returned; never JSON-encode, wrap, or reformat it. The verdict contract overrides any other format: finish with exactly one standalone REVIEW_RESULT=PASS or REVIEW_RESULT=BLOCK line as the last non-empty line of the output — markers anywhere else are ignored — even if the input describes a different verdict vocabulary.\n\n---ORIGINAL OUTPUT---\n' + this.#reemitOutput;
+    const repair = this.#repairEnvelope
+      ? 'The original verdict is BLOCK and must stay BLOCK: change no finding, priority, or verdict. Its rejection envelope is missing or malformed, so the output must contain exactly one valid envelope — the line REVIEW_REJECTION_ENVELOPE_BEGIN, one strict JSON object of schema review-rejection-envelope@1 describing exactly the findings already reported, the line REVIEW_REJECTION_ENVELOPE_END — immediately followed by the standalone REVIEW_RESULT=BLOCK line. ' : '';
+    return repair + 'Reproduce the following review report verbatim as raw Markdown text exactly as returned; never JSON-encode, wrap, or reformat it. The verdict contract overrides any other format: finish with exactly one standalone REVIEW_RESULT=PASS or REVIEW_RESULT=BLOCK line as the last non-empty line of the output — markers anywhere else are ignored — even if the input describes a different verdict vocabulary.\n\n---ORIGINAL OUTPUT---\n' + this.#reemitOutput;
   }
 
   get diffHash() {
@@ -1610,6 +1619,10 @@ export class ReviewPrompt {
 
   get executionEvidenceText() {
     return this.#executionEvidenceText;
+  }
+
+  get roundContextText() {
+    return this.#roundContextText;
   }
 }
 
@@ -1860,6 +1873,17 @@ export class GitPort {
   getHeadFile(repoRoot, path) {
     throw new Error('GitPort.getHeadFile must be implemented');
   }
+
+  /**
+   * Object id of the staged index tree (`git write-tree`), or null when it
+   * cannot be determined (e.g. unmerged entries). Optional capability.
+   *
+   * @param {string} repoRoot
+   * @returns {Promise<string|null>|string|null}
+   */
+  getIndexTree(repoRoot) {
+    throw new Error('GitPort.getIndexTree must be implemented');
+  }
 }
 
 export class SnapshotStorePort {
@@ -1915,9 +1939,49 @@ export class ReportStorePort {
 }
 
 /**
+ * Port remembering reusable PASS verdicts keyed by staged tree + diff hash.
+ */
+export class RoundStorePort {
+  /** @param {string} repoRoot @returns {Promise<object|null>|object|null} */
+  load(repoRoot) {
+    throw new Error('RoundStorePort.load must be implemented');
+  }
+
+  /** @param {string} repoRoot @param {object} record @returns {Promise<void>|void} */
+  save(repoRoot, record) {
+    throw new Error('RoundStorePort.save must be implemented');
+  }
+
+  /** @param {string} repoRoot @returns {Promise<void>|void} */
+  clear(repoRoot) {
+    throw new Error('RoundStorePort.clear must be implemented');
+  }
+}
+
+export class VerdictCachePort {
+  /**
+   * @param {{ repoRoot: string, treeSha: string, diffHash: string }} key
+   * @returns {Promise<{ reportPath: string, at: string }|null>|{ reportPath: string, at: string }|null}
+   */
+  lookup(key) {
+    throw new Error('VerdictCachePort.lookup must be implemented');
+  }
+
+  /**
+   * @param {{ repoRoot: string, treeSha: string, diffHash: string, reportPath: string }} entry
+   * @returns {Promise<void>|void}
+   */
+  record(entry) {
+    throw new Error('VerdictCachePort.record must be implemented');
+  }
+}
+
+/**
  * Port representing the run telemetry sink factory.
  * A port creates a run-scoped sink per review; the sink persists observability
  * events and the live/last-run state without ever influencing the verdict.
+ *
+ * @interface
  */
 export class TelemetryPort {
   /**
@@ -2058,6 +2122,8 @@ export function snapshotDirDisposition(snapshotDir, reuseDir) {
 // Lease heartbeat period: reviews outliving the 24h marker TTL refresh
 // their `.live-<pid>` marker this often, keeping sweep protection whole.
 const LEASE_REFRESH_MS = 15 * 60 * 1000;
+const ROUND_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+const ROUND_MAX_DIFF_CHARS = 2_000_000;
 
 /**
  * Renders a path for committed observability artifacts: repo-relative when
@@ -2083,6 +2149,8 @@ export class ReviewWorkflowService {
   #reportStorePort;
   #snapshotStorePort;
   #telemetryPort;
+  #verdictCachePort;
+  #roundStorePort;
   #clock;
   #logger;
   #assertPatterns;
@@ -2097,6 +2165,8 @@ export class ReviewWorkflowService {
     reportStorePort,
     snapshotStorePort,
     telemetryPort,
+    verdictCachePort = null,
+    roundStorePort = null,
     clock = () => new Date(),
     logger = {
       log: (msg) => process.stdout.write(msg),
@@ -2118,6 +2188,8 @@ export class ReviewWorkflowService {
     this.#reportStorePort = reportStorePort;
     this.#snapshotStorePort = snapshotStorePort;
     this.#telemetryPort = telemetryPort ?? new FileSystemTelemetryAdapter();
+    this.#verdictCachePort = verdictCachePort;
+    this.#roundStorePort = roundStorePort;
     this.#clock = clock;
     this.#logger = logger;
     const envAssert = process.env.OMP_REVIEW_KIT_ASSERT_PATTERNS?.trim();
@@ -2226,6 +2298,69 @@ export class ReviewWorkflowService {
         diffHash: diff.hash,
         diffBytes: diff.length,
       });
+
+      // PASS reuse: an identical staged tree + diff that already passed review
+      // (merge, cherry-pick, amend, retried commit) is not reviewed again. Any
+      // lookup problem is a plain miss; BLOCK is never cached.
+      let cacheTreeSha = null;
+      if (this.#verdictCachePort && process.env.OMP_REVIEW_KIT_CACHE !== '0'
+        && typeof this.#gitPort.getIndexTree === 'function') {
+        try {
+          cacheTreeSha = await this.#gitPort.getIndexTree(repoRoot);
+          const cached = cacheTreeSha
+            ? await this.#verdictCachePort.lookup({ repoRoot, treeSha: cacheTreeSha, diffHash: diff.hash })
+            : null;
+          if (cached) {
+            await telemetry.record('verdict_cache_hit', { reportPath: cached.reportPath, cachedAt: cached.at });
+            await telemetry.record('run_finished', {
+              verdict: 'PASS',
+              exitCode: 0,
+              durationMs: Date.now() - startedAt,
+              cached: true,
+            });
+            await telemetry.updateLastRun({
+              state: 'passed',
+              verdict: 'PASS',
+              exitCode: 0,
+              reportPath: cached.reportPath,
+              cached: true,
+              durationMs: Date.now() - startedAt,
+              finishedAt: new Date().toISOString(),
+            }, { force: true });
+            this.#logger.log(`reviewer-kit PASS (cached identical tree+diff): ${cached.reportPath}\n`);
+            return ReviewExecutionResult.pass(cached.reportPath, 'PASS', []);
+          }
+        } catch {
+          // cache trouble is a miss, never a verdict
+        }
+      }
+
+      // Delta round: when the previous review of this repository BLOCKed a
+      // different diff with confirmed findings, the prompt carries those
+      // findings and the lines added since, so the reviewer verifies the fixes
+      // and keeps new P2 candidates inside the delta instead of drifting.
+      let reviewRound = null;
+      if (this.#roundStorePort && process.env.OMP_REVIEW_KIT_ROUNDS !== '0') {
+        try {
+          reviewRound = ReviewRound.fromRecord({
+            record: await this.#roundStorePort.load(repoRoot),
+            currentDiffText: diff.bytes.toString('utf8'),
+            currentHash: diff.hash,
+            now: this.#clock(),
+            maxAgeMs: ROUND_MAX_AGE_MS,
+          });
+          if (reviewRound) {
+            await telemetry.record('review_round_context', {
+              round: reviewRound.number,
+              previousHash: reviewRound.previousHash,
+              findings: reviewRound.findings.length,
+              deltaFiles: reviewRound.delta === null ? null : reviewRound.delta.length,
+            });
+          }
+        } catch {
+          reviewRound = null;
+        }
+      }
 
       const suspicionMap = SuspicionMap.compute({
         diffBytes: diff.bytes,
@@ -2428,6 +2563,7 @@ export class ReviewWorkflowService {
         const prompt = ReviewPrompt.forDiff(diff, snapshotDir, diff.changedPaths, {
           suspicionMapText: suspicionMap.toPromptText(),
           executionEvidenceText: executionEvidence ? executionEvidence.toPromptText() : '',
+          roundContextText: reviewRound ? reviewRound.toPromptText() : '',
           reviewProfile,
           riskLanes,
           fileClasses: fileClassRows,
@@ -2472,14 +2608,21 @@ export class ReviewWorkflowService {
         processError: execResult.stderr,
       });
 
-      // Fail-closed verbatim re-emit recovery: when the reviewer exited cleanly
-      // and produced output but no standalone verdict marker, ask the same
-      // model once — with no tools and a bounded timeout — to reproduce its
-      // report verbatim under the verdict contract, then re-run the full
-      // envelope evaluation on the re-emitted output. A failed re-emit keeps
-      // the original verdict; exactly one re-emit is ever attempted.
+      // Fail-closed verbatim re-emit recovery. Two recoverable shapes, one
+      // attempt total, no tools, bounded timeout:
+      //  - missing_verdict_marker: the reviewer finished but forgot the marker;
+      //    the re-emit is re-evaluated in full and may yield PASS or BLOCK.
+      //  - missing/malformed rejection envelope on an explicit BLOCK: only the
+      //    envelope shape is repaired; the re-emit is accepted solely when it is
+      //    again a BLOCK carrying a valid non-failure envelope, so a repair can
+      //    never downgrade a BLOCK to PASS.
+      // A failed re-emit keeps the original verdict.
+      const envelopeFailureCode = envelope?.kind === 'review_failure' ? envelope.failure?.code : null;
+      const markerRecovery = verdict.reason === 'missing_verdict_marker';
+      const envelopeRecovery = !markerRecovery
+        && (envelopeFailureCode === 'missing_rejection_envelope' || envelopeFailureCode === 'malformed_rejection_envelope');
       if (
-        verdict.reason === 'missing_verdict_marker'
+        (markerRecovery || envelopeRecovery)
         && execResult.status === 0
         && combinedOutput.trim() !== ''
         && process.env.OMP_REVIEW_KIT_REEMIT !== '0'
@@ -2487,7 +2630,7 @@ export class ReviewWorkflowService {
         const reemitStartedAt = Date.now();
         const originalBytes = Buffer.byteLength(combinedOutput);
         const reemitResult = await this.#reviewerPort.reemitVerbatim({
-          prompt: ReviewPrompt.forReemit(combinedOutput),
+          prompt: ReviewPrompt.forReemit(combinedOutput, { repairEnvelope: envelopeRecovery }),
           cwd: repoRoot,
           telemetry,
         });
@@ -2497,21 +2640,32 @@ export class ReviewWorkflowService {
             ...reemitResult.attempts,
           ];
         }
+        let recovered = false;
         if (reemitResult?.status === 0) {
-          const reemittedOutput = reemitResult.combined ?? `${reemitResult.stdout ?? ''}\n${reemitResult.stderr ?? ''}`;
+          const reemittedOutput = reemitResult.combined ?? `${reemitResult.stdout ?? ''}
+${reemitResult.stderr ?? ''}`;
           const reevaluated = ReviewRejectionEnvelope.evaluate({
             output: reemittedOutput,
             diffIdentity: diff,
             processStatus: reemitResult.status,
             processError: reemitResult.stderr,
           });
-          verdict = reevaluated.verdict;
-          envelope = reevaluated.envelope;
-          combinedOutput = reemittedOutput;
+          const accepted = markerRecovery
+            ? reevaluated.verdict.reason !== 'missing_verdict_marker'
+            : !reevaluated.verdict.isPass()
+              && reevaluated.envelope != null
+              && reevaluated.envelope.kind !== 'review_failure';
+          if (markerRecovery || accepted) {
+            verdict = reevaluated.verdict;
+            envelope = reevaluated.envelope;
+            combinedOutput = reemittedOutput;
+          }
+          recovered = accepted;
         }
         await telemetry.record('reemit_recovery', {
           originalBytes,
-          recovered: verdict.reason !== 'missing_verdict_marker',
+          recovered,
+          mode: envelopeRecovery ? 'envelope_repair' : 'missing_marker',
           reemitStatus: reemitResult?.status ?? null,
           durationMs: Date.now() - reemitStartedAt,
         });
@@ -2617,7 +2771,36 @@ export class ReviewWorkflowService {
         // Badge writing is observability sugar; a failure must never fail the review.
       }
 
+      if (this.#roundStorePort) {
+        // PASS ends the chain; a BLOCK with confirmed findings or coverage
+        // gaps starts/extends it; an infrastructure failure leaves it as is.
+        try {
+          const confirmedKinds = ['confirmed_findings', 'coverage_required'];
+          if (verdict.isPass()) {
+            await this.#roundStorePort.clear(repoRoot);
+          } else if (envelope && confirmedKinds.includes(envelope.kind)) {
+            const diffText = diff.bytes.toString('utf8');
+            await this.#roundStorePort.save(repoRoot, {
+              schema: ReviewRound.SCHEMA,
+              diffHash: diff.hash,
+              at: this.#clock().toISOString(),
+              round: reviewRound ? reviewRound.number : 1,
+              envelopeKind: envelope.kind,
+              findings: roundFindingsFromEnvelope(envelope.toJSON()),
+              ...(diffText.length <= ROUND_MAX_DIFF_CHARS ? { diffText } : {}),
+            });
+          }
+        } catch {
+          // round bookkeeping never gates the verdict
+        }
+      }
+
       if (verdict.isPass()) {
+        if (this.#verdictCachePort && cacheTreeSha) {
+          await this.#verdictCachePort
+            .record({ repoRoot, treeSha: cacheTreeSha, diffHash: diff.hash, reportPath })
+            .catch(() => {});
+        }
         this.#logger.log(`reviewer-kit PASS: ${reportPath}\n`);
         return ReviewExecutionResult.pass(reportPath, verdict.value, modelsTried);
       }
@@ -2698,6 +2881,19 @@ export class SubprocessGitAdapter extends GitPort {
   async getStagedDiff(repoRoot) {
     const output = await this.#runner(['diff', '--cached', '--binary', '--no-ext-diff', '--'], repoRoot);
     return DiffIdentity.fromBuffer(output);
+  }
+
+  /**
+   * @param {string} repoRoot
+   * @returns {Promise<string|null>}
+   */
+  async getIndexTree(repoRoot) {
+    try {
+      const id = (await this.#runner(['write-tree'], repoRoot)).toString('utf8').trim();
+      return /^[0-9a-f]{40}$|^[0-9a-f]{64}$/.test(id) ? id : null;
+    } catch {
+      return null;
+    }
   }
 
   async getHeadFile(repoRoot, filePath) {
@@ -4709,6 +4905,293 @@ export class FileSystemTelemetryAdapter extends TelemetryPort {
   }
 }
 
+const CACHE_SCHEMA = 'review-verdict-cache@1';
+const CACHE_FILE = 'verdict-cache.jsonl';
+const DEFAULT_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+const OBJECT_ID = /^[0-9a-f]{40}$|^[0-9a-f]{64}$/;
+
+/**
+ * Infrastructure adapter remembering PASS verdicts by (index tree, diff hash).
+ * Only PASS is reusable: a BLOCK is always re-reviewed. A hit is honored only
+ * when the referenced report still exists inside the repository and states the
+ * same diff hash and `result: PASS`, so a stale or tampered index line fails closed
+ * into a normal full review.
+ */
+export class FileSystemVerdictCacheAdapter extends VerdictCachePort {
+  #relativeDir;
+  #ttlMs;
+  #clock;
+
+  constructor({ relativeDir = path.join('audit-reports', 'commit-reviews'), ttlMs = DEFAULT_TTL_MS, clock = () => new Date() } = {}) {
+    super();
+    this.#relativeDir = relativeDir;
+    this.#ttlMs = ttlMs;
+    this.#clock = clock;
+  }
+
+  /**
+   * @param {{ repoRoot: string, treeSha: string, diffHash: string }} key
+   * @returns {Promise<{ reportPath: string, at: string } | null>}
+   */
+  async lookup({ repoRoot, treeSha, diffHash }) {
+    if (!OBJECT_ID.test(String(treeSha)) || !/^[0-9a-f]{64}$/.test(String(diffHash))) return null;
+    let text;
+    try {
+      text = await readFile(path.join(repoRoot, this.#relativeDir, CACHE_FILE), 'utf8');
+    } catch {
+      return null;
+    }
+    const now = this.#clock().getTime();
+    const lines = text.split('\n');
+    for (let index = lines.length - 1; index >= 0; index -= 1) {
+      let entry;
+      try {
+        entry = JSON.parse(lines[index]);
+      } catch {
+        continue;
+      }
+      if (entry?.schema !== CACHE_SCHEMA || entry.verdict !== 'PASS') continue;
+      if (entry.treeSha !== treeSha || entry.diffHash !== diffHash) continue;
+      const age = now - Date.parse(entry.at);
+      if (!Number.isFinite(age) || age < 0 || age > this.#ttlMs) continue;
+      const reportPath = path.resolve(repoRoot, String(entry.reportPath ?? ''));
+      const relative = path.relative(repoRoot, reportPath);
+      if (!entry.reportPath || relative.startsWith('..') || path.isAbsolute(relative)) continue;
+      let report;
+      try {
+        report = await readFile(reportPath, 'utf8');
+      } catch {
+        continue;
+      }
+      if (report.split(/\r?\n/).includes(`- staged diff hash: ${diffHash}`)
+        && report.split(/\r?\n/).includes('- result: PASS')) {
+        return { reportPath, at: entry.at };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * @param {{ repoRoot: string, treeSha: string, diffHash: string, reportPath: string }} entry
+   * @returns {Promise<void>}
+   */
+  async record({ repoRoot, treeSha, diffHash, reportPath }) {
+    if (!OBJECT_ID.test(String(treeSha))) return;
+    const dir = path.join(repoRoot, this.#relativeDir);
+    await mkdir(dir, { recursive: true });
+    const line = JSON.stringify({
+      schema: CACHE_SCHEMA,
+      treeSha,
+      diffHash,
+      verdict: 'PASS',
+      reportPath: path.relative(repoRoot, reportPath).split(path.sep).join('/'),
+      at: this.#clock().toISOString(),
+    });
+    await appendFile(path.join(dir, CACHE_FILE), `${line}\n`, 'utf8');
+  }
+}
+
+const ROUND_SCHEMA = 'review-round@1';
+const MAX_FINDINGS = 20;
+const MAX_DELTA_FILES = 40;
+
+/**
+ * Added content lines per file from a unified diff (`+` lines only).
+ *
+ * @param {string} diffText
+ * @returns {Map<string, Set<string>>}
+ */
+export function addedLinesByFile(diffText) {
+  const byFile = new Map();
+  let current = null;
+  for (const line of String(diffText ?? '').split(/\r\n|\n/)) {
+    if (line.startsWith('diff --git ')) {
+      current = null;
+    } else if (line.startsWith('+++ ')) {
+      const target = line.slice(4);
+      current = target === '/dev/null' ? null : target.replace(/^b\//, '');
+      if (current && !byFile.has(current)) byFile.set(current, new Set());
+    } else if (current && line.startsWith('+')) {
+      byFile.get(current).add(line.slice(1));
+    }
+  }
+  return byFile;
+}
+
+/**
+ * Files whose added lines differ from the previous round's diff.
+ *
+ * @param {string} previousDiff
+ * @param {string} currentDiff
+ * @returns {{ path: string, newLines: number }[]}
+ */
+export function deltaSincePrevious(previousDiff, currentDiff) {
+  const before = addedLinesByFile(previousDiff);
+  const after = addedLinesByFile(currentDiff);
+  const delta = [];
+  for (const [file, lines] of after) {
+    const known = before.get(file);
+    let newLines = 0;
+    for (const line of lines) if (!known || !known.has(line)) newLines += 1;
+    if (newLines > 0) delta.push({ path: file, newLines });
+  }
+  return delta;
+}
+
+/**
+ * Condenses a BLOCK envelope into the findings carried to the next round.
+ *
+ * @param {{ kind: string, findings?: object[], coverage_items?: object[] }} envelope
+ * @returns {{ id: string, priority: string, file: string, line: number|null, summary: string }[]}
+ */
+export function roundFindingsFromEnvelope(envelope) {
+  const rows = [];
+  for (const finding of envelope?.findings ?? []) {
+    rows.push({
+      id: String(finding.finding_id ?? ''),
+      priority: String(finding.priority ?? ''),
+      file: String(finding.file_path ?? ''),
+      line: Number.isInteger(finding.line_start) ? finding.line_start : null,
+      summary: String(finding.counterexample ?? finding.verifier_argument ?? ''),
+    });
+  }
+  for (const item of envelope?.coverage_items ?? []) {
+    rows.push({
+      id: String(item.coverage_id ?? ''),
+      priority: String(item.severity ?? 'P2'),
+      file: String(item.file_path ?? ''),
+      line: Number.isInteger(item.line_start) ? item.line_start : null,
+      summary: `missing coverage: ${String(item.behavior ?? '')}`,
+    });
+  }
+  return rows.slice(0, MAX_FINDINGS);
+}
+
+/**
+ * Value object describing the previous BLOCKed round for the same repository.
+ */
+export class ReviewRound {
+  static SCHEMA = ROUND_SCHEMA;
+
+  #number;
+  #previousHash;
+  #previousAt;
+  #findings;
+  #delta;
+
+  constructor({ number, previousHash, previousAt, findings, delta }) {
+    this.#number = number;
+    this.#previousHash = previousHash;
+    this.#previousAt = previousAt;
+    this.#findings = findings;
+    this.#delta = delta;
+  }
+
+  /**
+   * @param {{ record: object, currentDiffText: string, currentHash: string, now: Date, maxAgeMs: number }} params
+   * @returns {ReviewRound|null}
+   */
+  static fromRecord({ record, currentDiffText, currentHash, now, maxAgeMs }) {
+    if (!record || record.schema !== ROUND_SCHEMA) return null;
+    if (!/^[0-9a-f]{64}$/.test(String(record.diffHash)) || record.diffHash === currentHash) return null;
+    const age = now.getTime() - Date.parse(record.at);
+    if (!Number.isFinite(age) || age < 0 || age > maxAgeMs) return null;
+    if (!Array.isArray(record.findings) || record.findings.length === 0) return null;
+    return new ReviewRound({
+      number: (Number.isInteger(record.round) ? record.round : 1) + 1,
+      previousHash: record.diffHash,
+      previousAt: record.at,
+      findings: record.findings.slice(0, MAX_FINDINGS),
+      delta: typeof record.diffText === 'string' ? deltaSincePrevious(record.diffText, currentDiffText) : null,
+    });
+  }
+
+  get number() {
+    return this.#number;
+  }
+
+  get previousHash() {
+    return this.#previousHash;
+  }
+
+  get findings() {
+    return this.#findings;
+  }
+
+  /** @returns {{ path: string, newLines: number }[]|null} null when the previous diff was not retained */
+  get delta() {
+    return this.#delta;
+  }
+
+  toPromptText() {
+    const lines = [
+      `PREVIOUS ROUND (this is review round ${this.#number}): the previous review of this repository BLOCKed a different staged diff (${this.#previousHash}) at ${sanitizePromptToken(this.#previousAt)}. Findings confirmed in that round:`,
+      ...this.#findings.map((f) => `- ${sanitizePromptToken(f.id)} (${sanitizePromptToken(f.priority)}) ${sanitizePromptToken(f.file)}${f.line ? `:${f.line}` : ''} — ${sanitizePromptToken(f.summary).slice(0, 240)}`),
+    ];
+    if (this.#delta === null) {
+      lines.push('The previous diff was not retained, so the lines changed since that round cannot be computed: treat the whole diff as changed.');
+    } else if (this.#delta.length === 0) {
+      lines.push('No added lines differ from the previous round (only removals or identical additions).');
+    } else {
+      lines.push(
+        'Files with lines added since the previous round (the round delta):',
+        ...this.#delta.slice(0, MAX_DELTA_FILES).map((d) => `- ${sanitizePromptToken(d.path)}: ${d.newLines} new line(s)`),
+      );
+    }
+    lines.push(
+      'Round rules: (1) The verifier must first decide for EVERY previous finding whether the current diff fixes it (fixed / still present), with evidence from the staged snapshot; a finding that is still present stays confirmed and blocks. (2) A new P2 finding is admissible only if it is rooted in the round delta or in a direct interaction with it; pre-existing lines unchanged since the previous round that were not flagged then must not become new P2 findings. New P1 findings (security, data loss, crash on the main path) are admissible anywhere in the diff. (3) Embed this PREVIOUS ROUND block verbatim in the task text of every hunter and the verifier.',
+    );
+    return lines.join('\n');
+  }
+}
+
+const ROUND_FILE = 'last-block.json';
+
+/**
+ * Infrastructure adapter keeping the single most recent BLOCKed round
+ * (findings plus the diff text) so the next review of the same repository can
+ * verify those findings and restrict new P2 candidates to the round delta.
+ */
+export class FileSystemRoundStoreAdapter extends RoundStorePort {
+  #relativeDir;
+
+  constructor({ relativeDir = path.join('audit-reports', 'commit-reviews') } = {}) {
+    super();
+    this.#relativeDir = relativeDir;
+  }
+
+  /**
+   * @param {string} repoRoot
+   * @returns {Promise<object|null>}
+   */
+  async load(repoRoot) {
+    try {
+      return JSON.parse(await readFile(path.join(repoRoot, this.#relativeDir, ROUND_FILE), 'utf8'));
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * @param {string} repoRoot
+   * @param {object} record
+   * @returns {Promise<void>}
+   */
+  async save(repoRoot, record) {
+    const dir = path.join(repoRoot, this.#relativeDir);
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, ROUND_FILE), `${JSON.stringify(record)}\n`, 'utf8');
+  }
+
+  /**
+   * @param {string} repoRoot
+   * @returns {Promise<void>}
+   */
+  async clear(repoRoot) {
+    await rm(path.join(repoRoot, this.#relativeDir, ROUND_FILE), { force: true });
+  }
+}
+
 /**
  * ============================================================================
  * Public Facade / Composition Root
@@ -4721,6 +5204,8 @@ export function createReviewWorkflowService({ git, omp, ompOptions, clock, logge
   const reportStorePort = new FileSystemReportStoreAdapter();
   const snapshotStorePort = new FileSystemSnapshotAdapter();
   const telemetryPort = telemetry ?? new FileSystemTelemetryAdapter();
+  const verdictCachePort = new FileSystemVerdictCacheAdapter({ clock });
+  const roundStorePort = new FileSystemRoundStoreAdapter();
 
   return new ReviewWorkflowService({
     gitPort,
@@ -4728,6 +5213,8 @@ export function createReviewWorkflowService({ git, omp, ompOptions, clock, logge
     reportStorePort,
     snapshotStorePort,
     telemetryPort,
+    verdictCachePort,
+    roundStorePort,
     clock,
     logger,
     assertPatterns,

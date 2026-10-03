@@ -32,6 +32,10 @@ For each candidate defect, perform these rigorous checks:
 
 Use the absolute staged snapshot directory for every source read; use the repository only for read-only Git metadata and project-skill discovery.
 
+## Previous Round Check
+
+When your task text includes a `PREVIOUS ROUND` block, decide first, for every listed previous finding, whether the staged snapshot fixes it (`fixed` or `still_present`) with file-and-line evidence. A `still_present` finding is confirmed again and keeps the verdict BLOCK. Reject a new P2 candidate that is neither rooted in the round delta nor a direct interaction with it, citing that ground.
+
 ## Output Schema
 Return your verdict decisions and confirmed findings as structured JSON:
 

@@ -41,9 +41,11 @@ export class ReviewPrompt {
   #reviewProfile;
   #fileClasses;
   #executionEvidenceText;
+  #roundContextText;
   #reportPath;
   #riskLanes;
   #reemitOutput;
+  #repairEnvelope = false;
 
   constructor(diffHash, snapshotDir = '', changedPaths = [], extras = {}) {
     if (!diffHash || typeof diffHash !== 'string') {
@@ -60,6 +62,7 @@ export class ReviewPrompt {
     this.#changedPaths = changedPaths;
     this.#suspicionMapText = typeof extras?.suspicionMapText === 'string' ? extras.suspicionMapText : '';
     this.#executionEvidenceText = typeof extras?.executionEvidenceText === 'string' ? extras.executionEvidenceText : '';
+    this.#roundContextText = typeof extras?.roundContextText === 'string' ? extras.roundContextText : '';
     this.#inlineDiff = typeof extras?.inlineDiff === 'string' && extras.inlineDiff.length > 0 ? extras.inlineDiff : null;
     this.#reviewProfile = typeof extras?.reviewProfile === 'string' ? extras.reviewProfile : null;
     this.#fileClasses = Array.isArray(extras?.fileClasses) ? extras.fileClasses : [];
@@ -80,8 +83,9 @@ export class ReviewPrompt {
    * @param {string} originalOutput
    * @returns {ReviewPrompt}
    */
-  static forReemit(originalOutput) {
+  static forReemit(originalOutput, { repairEnvelope = false } = {}) {
     const prompt = new ReviewPrompt('verbatim-reemit');
+    prompt.#repairEnvelope = repairEnvelope === true;
     prompt.#reemitOutput = String(originalOutput ?? '');
     return prompt;
   }
@@ -139,6 +143,9 @@ export class ReviewPrompt {
     if (this.#executionEvidenceText) {
       lines.push('', this.#executionEvidenceText);
     }
+    if (this.#roundContextText) {
+      lines.push('', this.#roundContextText);
+    }
     lines.push(`The staged diff hash for this hook invocation is ${this.#diffHash}.`);
     if (this.#reportPath) lines.push(`The durable per-run report path for this review is \`${this.#reportPath}\`. Instruct the reviewer-kit task to write its complete final report verbatim to that path before yielding; it is the only path the task may write.`);
     if (this.#reviewProfile) lines.push(`Review profile for this diff: ${this.#reviewProfile}.`);
@@ -147,7 +154,9 @@ export class ReviewPrompt {
   }
 
   #toReemitString() {
-    return 'Reproduce the following review report verbatim as raw Markdown text exactly as returned; never JSON-encode, wrap, or reformat it. The verdict contract overrides any other format: finish with exactly one standalone REVIEW_RESULT=PASS or REVIEW_RESULT=BLOCK line as the last non-empty line of the output — markers anywhere else are ignored — even if the input describes a different verdict vocabulary.\n\n---ORIGINAL OUTPUT---\n' + this.#reemitOutput;
+    const repair = this.#repairEnvelope
+      ? 'The original verdict is BLOCK and must stay BLOCK: change no finding, priority, or verdict. Its rejection envelope is missing or malformed, so the output must contain exactly one valid envelope — the line REVIEW_REJECTION_ENVELOPE_BEGIN, one strict JSON object of schema review-rejection-envelope@1 describing exactly the findings already reported, the line REVIEW_REJECTION_ENVELOPE_END — immediately followed by the standalone REVIEW_RESULT=BLOCK line. ' : '';
+    return repair + 'Reproduce the following review report verbatim as raw Markdown text exactly as returned; never JSON-encode, wrap, or reformat it. The verdict contract overrides any other format: finish with exactly one standalone REVIEW_RESULT=PASS or REVIEW_RESULT=BLOCK line as the last non-empty line of the output — markers anywhere else are ignored — even if the input describes a different verdict vocabulary.\n\n---ORIGINAL OUTPUT---\n' + this.#reemitOutput;
   }
 
   get diffHash() {
@@ -168,5 +177,9 @@ export class ReviewPrompt {
 
   get executionEvidenceText() {
     return this.#executionEvidenceText;
+  }
+
+  get roundContextText() {
+    return this.#roundContextText;
   }
 }

@@ -159,6 +159,8 @@ test('run report fallback file is unlinked on PASS and BLOCK paths; basenames st
       await writeFile(reportPath, '# report\n');
       return { status: 0, stdout: 'REVIEW_RESULT=BLOCK\n', stderr: '' };
     },
+    // A bare BLOCK without envelope triggers the single envelope-repair re-emit.
+    reemitVerbatim: async () => ({ status: 1, stdout: '', stderr: 'no repair' }),
   };
   const service2 = makeService({ snapshotStore: store, reviewer: blockingReviewer });
   const result = await service2.execute({ cwd: '/mock/root' });

@@ -1,6 +1,6 @@
 {
   "name": "omp-reviewer-kit",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "Evidence-first multi-stage review of staged Git changes on the OMP stack; fail-closed pre-commit gate.",
   "author": { "name": "stgmt" },
   "homepage": "https://github.com/stgmt/omp-reviewer-kit",

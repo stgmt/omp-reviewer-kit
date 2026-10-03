@@ -5,6 +5,7 @@ import path from 'node:path';
 import { ReviewRejectionEnvelope } from '../domain/review-rejection-envelope.mjs';
 import { ReviewPrompt } from '../domain/review-prompt.mjs';
 import { ReviewReport } from '../domain/review-report.mjs';
+import { ReviewRound, roundFindingsFromEnvelope } from '../domain/review-round.mjs';
 import { ReviewExecutionResult } from '../domain/review-execution-result.mjs';
 import { SuspicionMap, isTestPath, DEFAULT_ASSERT_PATTERNS, DEFAULT_TEST_PATH_PATTERNS, DEFAULT_TEST_DECLARATION_PATTERNS } from '../domain/suspicion-map.mjs';
 import { ExecutionEvidence } from '../domain/execution-evidence.mjs';
@@ -20,6 +21,8 @@ import { installRunSignalGuard } from '../infra/run-signal-guard.mjs';
 // Lease heartbeat period: reviews outliving the 24h marker TTL refresh
 // their `.live-<pid>` marker this often, keeping sweep protection whole.
 const LEASE_REFRESH_MS = 15 * 60 * 1000;
+const ROUND_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+const ROUND_MAX_DIFF_CHARS = 2_000_000;
 
 // Per-process run sequence so two concurrent execute() calls on identical
 // staged content never share one runReportPath within a millisecond tick.
@@ -61,6 +64,8 @@ export class ReviewWorkflowService {
   #reportStorePort;
   #snapshotStorePort;
   #telemetryPort;
+  #verdictCachePort;
+  #roundStorePort;
   #clock;
   #logger;
   #assertPatterns;
@@ -86,6 +91,8 @@ export class ReviewWorkflowService {
     reportStorePort,
     snapshotStorePort,
     telemetryPort,
+    verdictCachePort = null,
+    roundStorePort = null,
     clock = () => new Date(),
     logger = {
       log: (msg) => process.stdout.write(msg),
@@ -107,6 +114,8 @@ export class ReviewWorkflowService {
     this.#reportStorePort = reportStorePort;
     this.#snapshotStorePort = snapshotStorePort;
     this.#telemetryPort = telemetryPort ?? new FileSystemTelemetryAdapter();
+    this.#verdictCachePort = verdictCachePort;
+    this.#roundStorePort = roundStorePort;
     this.#clock = clock;
     this.#logger = logger;
     const envAssert = process.env.OMP_REVIEW_KIT_ASSERT_PATTERNS?.trim();
@@ -224,6 +233,69 @@ export class ReviewWorkflowService {
         diffHash: diff.hash,
         diffBytes: diff.length,
       });
+
+      // PASS reuse: an identical staged tree + diff that already passed review
+      // (merge, cherry-pick, amend, retried commit) is not reviewed again. Any
+      // lookup problem is a plain miss; BLOCK is never cached.
+      let cacheTreeSha = null;
+      if (this.#verdictCachePort && process.env.OMP_REVIEW_KIT_CACHE !== '0'
+        && typeof this.#gitPort.getIndexTree === 'function') {
+        try {
+          cacheTreeSha = await this.#gitPort.getIndexTree(repoRoot);
+          const cached = cacheTreeSha
+            ? await this.#verdictCachePort.lookup({ repoRoot, treeSha: cacheTreeSha, diffHash: diff.hash })
+            : null;
+          if (cached) {
+            await telemetry.record('verdict_cache_hit', { reportPath: cached.reportPath, cachedAt: cached.at });
+            await telemetry.record('run_finished', {
+              verdict: 'PASS',
+              exitCode: 0,
+              durationMs: Date.now() - startedAt,
+              cached: true,
+            });
+            await telemetry.updateLastRun({
+              state: 'passed',
+              verdict: 'PASS',
+              exitCode: 0,
+              reportPath: cached.reportPath,
+              cached: true,
+              durationMs: Date.now() - startedAt,
+              finishedAt: new Date().toISOString(),
+            }, { force: true });
+            this.#logger.log(`reviewer-kit PASS (cached identical tree+diff): ${cached.reportPath}\n`);
+            return ReviewExecutionResult.pass(cached.reportPath, 'PASS', []);
+          }
+        } catch {
+          // cache trouble is a miss, never a verdict
+        }
+      }
+
+      // Delta round: when the previous review of this repository BLOCKed a
+      // different diff with confirmed findings, the prompt carries those
+      // findings and the lines added since, so the reviewer verifies the fixes
+      // and keeps new P2 candidates inside the delta instead of drifting.
+      let reviewRound = null;
+      if (this.#roundStorePort && process.env.OMP_REVIEW_KIT_ROUNDS !== '0') {
+        try {
+          reviewRound = ReviewRound.fromRecord({
+            record: await this.#roundStorePort.load(repoRoot),
+            currentDiffText: diff.bytes.toString('utf8'),
+            currentHash: diff.hash,
+            now: this.#clock(),
+            maxAgeMs: ROUND_MAX_AGE_MS,
+          });
+          if (reviewRound) {
+            await telemetry.record('review_round_context', {
+              round: reviewRound.number,
+              previousHash: reviewRound.previousHash,
+              findings: reviewRound.findings.length,
+              deltaFiles: reviewRound.delta === null ? null : reviewRound.delta.length,
+            });
+          }
+        } catch {
+          reviewRound = null;
+        }
+      }
 
       const suspicionMap = SuspicionMap.compute({
         diffBytes: diff.bytes,
@@ -428,6 +500,7 @@ export class ReviewWorkflowService {
         const prompt = ReviewPrompt.forDiff(diff, snapshotDir, diff.changedPaths, {
           suspicionMapText: suspicionMap.toPromptText(),
           executionEvidenceText: executionEvidence ? executionEvidence.toPromptText() : '',
+          roundContextText: reviewRound ? reviewRound.toPromptText() : '',
           reviewProfile,
           riskLanes,
           fileClasses: fileClassRows,
@@ -473,14 +546,21 @@ export class ReviewWorkflowService {
         processError: execResult.stderr,
       });
 
-      // Fail-closed verbatim re-emit recovery: when the reviewer exited cleanly
-      // and produced output but no standalone verdict marker, ask the same
-      // model once — with no tools and a bounded timeout — to reproduce its
-      // report verbatim under the verdict contract, then re-run the full
-      // envelope evaluation on the re-emitted output. A failed re-emit keeps
-      // the original verdict; exactly one re-emit is ever attempted.
+      // Fail-closed verbatim re-emit recovery. Two recoverable shapes, one
+      // attempt total, no tools, bounded timeout:
+      //  - missing_verdict_marker: the reviewer finished but forgot the marker;
+      //    the re-emit is re-evaluated in full and may yield PASS or BLOCK.
+      //  - missing/malformed rejection envelope on an explicit BLOCK: only the
+      //    envelope shape is repaired; the re-emit is accepted solely when it is
+      //    again a BLOCK carrying a valid non-failure envelope, so a repair can
+      //    never downgrade a BLOCK to PASS.
+      // A failed re-emit keeps the original verdict.
+      const envelopeFailureCode = envelope?.kind === 'review_failure' ? envelope.failure?.code : null;
+      const markerRecovery = verdict.reason === 'missing_verdict_marker';
+      const envelopeRecovery = !markerRecovery
+        && (envelopeFailureCode === 'missing_rejection_envelope' || envelopeFailureCode === 'malformed_rejection_envelope');
       if (
-        verdict.reason === 'missing_verdict_marker'
+        (markerRecovery || envelopeRecovery)
         && execResult.status === 0
         && combinedOutput.trim() !== ''
         && process.env.OMP_REVIEW_KIT_REEMIT !== '0'
@@ -488,7 +568,7 @@ export class ReviewWorkflowService {
         const reemitStartedAt = Date.now();
         const originalBytes = Buffer.byteLength(combinedOutput);
         const reemitResult = await this.#reviewerPort.reemitVerbatim({
-          prompt: ReviewPrompt.forReemit(combinedOutput),
+          prompt: ReviewPrompt.forReemit(combinedOutput, { repairEnvelope: envelopeRecovery }),
           cwd: repoRoot,
           telemetry,
         });
@@ -498,21 +578,32 @@ export class ReviewWorkflowService {
             ...reemitResult.attempts,
           ];
         }
+        let recovered = false;
         if (reemitResult?.status === 0) {
-          const reemittedOutput = reemitResult.combined ?? `${reemitResult.stdout ?? ''}\n${reemitResult.stderr ?? ''}`;
+          const reemittedOutput = reemitResult.combined ?? `${reemitResult.stdout ?? ''}
+${reemitResult.stderr ?? ''}`;
           const reevaluated = ReviewRejectionEnvelope.evaluate({
             output: reemittedOutput,
             diffIdentity: diff,
             processStatus: reemitResult.status,
             processError: reemitResult.stderr,
           });
-          verdict = reevaluated.verdict;
-          envelope = reevaluated.envelope;
-          combinedOutput = reemittedOutput;
+          const accepted = markerRecovery
+            ? reevaluated.verdict.reason !== 'missing_verdict_marker'
+            : !reevaluated.verdict.isPass()
+              && reevaluated.envelope != null
+              && reevaluated.envelope.kind !== 'review_failure';
+          if (markerRecovery || accepted) {
+            verdict = reevaluated.verdict;
+            envelope = reevaluated.envelope;
+            combinedOutput = reemittedOutput;
+          }
+          recovered = accepted;
         }
         await telemetry.record('reemit_recovery', {
           originalBytes,
-          recovered: verdict.reason !== 'missing_verdict_marker',
+          recovered,
+          mode: envelopeRecovery ? 'envelope_repair' : 'missing_marker',
           reemitStatus: reemitResult?.status ?? null,
           durationMs: Date.now() - reemitStartedAt,
         });
@@ -607,7 +698,36 @@ export class ReviewWorkflowService {
         // Badge writing is observability sugar; a failure must never fail the review.
       }
 
+      if (this.#roundStorePort) {
+        // PASS ends the chain; a BLOCK with confirmed findings or coverage
+        // gaps starts/extends it; an infrastructure failure leaves it as is.
+        try {
+          const confirmedKinds = ['confirmed_findings', 'coverage_required'];
+          if (verdict.isPass()) {
+            await this.#roundStorePort.clear(repoRoot);
+          } else if (envelope && confirmedKinds.includes(envelope.kind)) {
+            const diffText = diff.bytes.toString('utf8');
+            await this.#roundStorePort.save(repoRoot, {
+              schema: ReviewRound.SCHEMA,
+              diffHash: diff.hash,
+              at: this.#clock().toISOString(),
+              round: reviewRound ? reviewRound.number : 1,
+              envelopeKind: envelope.kind,
+              findings: roundFindingsFromEnvelope(envelope.toJSON()),
+              ...(diffText.length <= ROUND_MAX_DIFF_CHARS ? { diffText } : {}),
+            });
+          }
+        } catch {
+          // round bookkeeping never gates the verdict
+        }
+      }
+
       if (verdict.isPass()) {
+        if (this.#verdictCachePort && cacheTreeSha) {
+          await this.#verdictCachePort
+            .record({ repoRoot, treeSha: cacheTreeSha, diffHash: diff.hash, reportPath })
+            .catch(() => {});
+        }
         this.#logger.log(`reviewer-kit PASS: ${reportPath}\n`);
         return ReviewExecutionResult.pass(reportPath, verdict.value, modelsTried);
       }

@@ -74,6 +74,19 @@ export class SubprocessGitAdapter extends GitPort {
   }
 
   /**
+   * @param {string} repoRoot
+   * @returns {Promise<string|null>}
+   */
+  async getIndexTree(repoRoot) {
+    try {
+      const id = (await this.#runner(['write-tree'], repoRoot)).toString('utf8').trim();
+      return /^[0-9a-f]{40}$|^[0-9a-f]{64}$/.test(id) ? id : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Captures the staged index via NUL-delimited Git index entries and blob IDs.
    * Only index content is read; the working tree is never consulted.
    *
