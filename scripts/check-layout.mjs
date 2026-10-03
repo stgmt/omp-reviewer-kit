@@ -8,6 +8,8 @@ const required = [
   'commands/review.md',
   'scripts/sync-targets.mjs',
   'src/infra/filesystem-verdict-cache-adapter.mjs',
+  'src/infra/filesystem-round-store-adapter.mjs',
+  'src/domain/review-round.mjs',
   'skills/reality-first-review/SKILL.md',
   'skills/multi-stage-review/SKILL.md',
   'agents/reviewer-kit.md',

@@ -18,7 +18,7 @@ export {
 export { ReviewReport } from './domain/review-report.mjs';
 export { ReviewExecutionResult } from './domain/review-execution-result.mjs';
 
-export { GitPort, ReviewerPort, ReportStorePort, SnapshotStorePort, TelemetryPort, ExecutionPort, VerdictCachePort } from './application/ports.mjs';
+export { GitPort, ReviewerPort, ReportStorePort, SnapshotStorePort, TelemetryPort, ExecutionPort, VerdictCachePort, RoundStorePort } from './application/ports.mjs';
 export { ReviewWorkflowService } from './application/review-workflow-service.mjs';
 export { PluginInstallerService } from './application/installer-service.mjs';
 
@@ -27,6 +27,8 @@ export { FileSystemSnapshotAdapter } from './infra/filesystem-snapshot-adapter.m
 export { OmpCliReviewerAdapter, sanitizeReviewerOutput } from './infra/omp-cli-reviewer-adapter.mjs';
 export { FileSystemReportStoreAdapter } from './infra/filesystem-report-store-adapter.mjs';
 export { FileSystemVerdictCacheAdapter } from './infra/filesystem-verdict-cache-adapter.mjs';
+export { FileSystemRoundStoreAdapter } from './infra/filesystem-round-store-adapter.mjs';
+export { ReviewRound, addedLinesByFile, deltaSincePrevious, roundFindingsFromEnvelope } from './domain/review-round.mjs';
 export { SubprocessExecutionAdapter, linkDependencyDirs } from './infra/subprocess-execution-adapter.mjs';
 export {
   FileSystemTelemetryAdapter,
@@ -43,6 +45,7 @@ import { FileSystemSnapshotAdapter } from './infra/filesystem-snapshot-adapter.m
 import { OmpCliReviewerAdapter } from './infra/omp-cli-reviewer-adapter.mjs';
 import { FileSystemReportStoreAdapter } from './infra/filesystem-report-store-adapter.mjs';
 import { FileSystemVerdictCacheAdapter } from './infra/filesystem-verdict-cache-adapter.mjs';
+import { FileSystemRoundStoreAdapter } from './infra/filesystem-round-store-adapter.mjs';
 import { FileSystemTelemetryAdapter } from './infra/filesystem-telemetry-adapter.mjs';
 import { ReviewWorkflowService } from './application/review-workflow-service.mjs';
 
@@ -65,6 +68,7 @@ export function createReviewWorkflowService({ git, omp, ompOptions, clock, logge
   const snapshotStorePort = new FileSystemSnapshotAdapter();
   const telemetryPort = telemetry ?? new FileSystemTelemetryAdapter();
   const verdictCachePort = new FileSystemVerdictCacheAdapter({ clock });
+  const roundStorePort = new FileSystemRoundStoreAdapter();
 
   return new ReviewWorkflowService({
     gitPort,
@@ -73,6 +77,7 @@ export function createReviewWorkflowService({ git, omp, ompOptions, clock, logge
     snapshotStorePort,
     telemetryPort,
     verdictCachePort,
+    roundStorePort,
     clock,
     logger,
     assertPatterns,

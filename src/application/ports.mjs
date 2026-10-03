@@ -191,6 +191,28 @@ export class VerdictCachePort {
 }
 
 /**
+ * Port keeping the most recent BLOCKed review round of a repository.
+ *
+ * @interface
+ */
+export class RoundStorePort {
+  /** @param {string} repoRoot @returns {Promise<object|null>|object|null} */
+  load(repoRoot) {
+    throw new Error('RoundStorePort.load must be implemented');
+  }
+
+  /** @param {string} repoRoot @param {object} record @returns {Promise<void>|void} */
+  save(repoRoot, record) {
+    throw new Error('RoundStorePort.save must be implemented');
+  }
+
+  /** @param {string} repoRoot @returns {Promise<void>|void} */
+  clear(repoRoot) {
+    throw new Error('RoundStorePort.clear must be implemented');
+  }
+}
+
+/**
  * Port representing the run telemetry sink factory.
  * A port creates a run-scoped sink per review; the sink persists observability
  * events and the live/last-run state without ever influencing the verdict.

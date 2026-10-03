@@ -5,6 +5,7 @@ import path from 'node:path';
 import { ReviewRejectionEnvelope } from '../domain/review-rejection-envelope.mjs';
 import { ReviewPrompt } from '../domain/review-prompt.mjs';
 import { ReviewReport } from '../domain/review-report.mjs';
+import { ReviewRound, roundFindingsFromEnvelope } from '../domain/review-round.mjs';
 import { ReviewExecutionResult } from '../domain/review-execution-result.mjs';
 import { SuspicionMap, isTestPath, DEFAULT_ASSERT_PATTERNS, DEFAULT_TEST_PATH_PATTERNS, DEFAULT_TEST_DECLARATION_PATTERNS } from '../domain/suspicion-map.mjs';
 import { ExecutionEvidence } from '../domain/execution-evidence.mjs';
@@ -20,6 +21,8 @@ import { installRunSignalGuard } from '../infra/run-signal-guard.mjs';
 // Lease heartbeat period: reviews outliving the 24h marker TTL refresh
 // their `.live-<pid>` marker this often, keeping sweep protection whole.
 const LEASE_REFRESH_MS = 15 * 60 * 1000;
+const ROUND_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+const ROUND_MAX_DIFF_CHARS = 2_000_000;
 
 // Per-process run sequence so two concurrent execute() calls on identical
 // staged content never share one runReportPath within a millisecond tick.
@@ -62,6 +65,7 @@ export class ReviewWorkflowService {
   #snapshotStorePort;
   #telemetryPort;
   #verdictCachePort;
+  #roundStorePort;
   #clock;
   #logger;
   #assertPatterns;
@@ -88,6 +92,7 @@ export class ReviewWorkflowService {
     snapshotStorePort,
     telemetryPort,
     verdictCachePort = null,
+    roundStorePort = null,
     clock = () => new Date(),
     logger = {
       log: (msg) => process.stdout.write(msg),
@@ -110,6 +115,7 @@ export class ReviewWorkflowService {
     this.#snapshotStorePort = snapshotStorePort;
     this.#telemetryPort = telemetryPort ?? new FileSystemTelemetryAdapter();
     this.#verdictCachePort = verdictCachePort;
+    this.#roundStorePort = roundStorePort;
     this.#clock = clock;
     this.#logger = logger;
     const envAssert = process.env.OMP_REVIEW_KIT_ASSERT_PATTERNS?.trim();
@@ -261,6 +267,33 @@ export class ReviewWorkflowService {
           }
         } catch {
           // cache trouble is a miss, never a verdict
+        }
+      }
+
+      // Delta round: when the previous review of this repository BLOCKed a
+      // different diff with confirmed findings, the prompt carries those
+      // findings and the lines added since, so the reviewer verifies the fixes
+      // and keeps new P2 candidates inside the delta instead of drifting.
+      let reviewRound = null;
+      if (this.#roundStorePort && process.env.OMP_REVIEW_KIT_ROUNDS !== '0') {
+        try {
+          reviewRound = ReviewRound.fromRecord({
+            record: await this.#roundStorePort.load(repoRoot),
+            currentDiffText: diff.bytes.toString('utf8'),
+            currentHash: diff.hash,
+            now: this.#clock(),
+            maxAgeMs: ROUND_MAX_AGE_MS,
+          });
+          if (reviewRound) {
+            await telemetry.record('review_round_context', {
+              round: reviewRound.number,
+              previousHash: reviewRound.previousHash,
+              findings: reviewRound.findings.length,
+              deltaFiles: reviewRound.delta === null ? null : reviewRound.delta.length,
+            });
+          }
+        } catch {
+          reviewRound = null;
         }
       }
 
@@ -467,6 +500,7 @@ export class ReviewWorkflowService {
         const prompt = ReviewPrompt.forDiff(diff, snapshotDir, diff.changedPaths, {
           suspicionMapText: suspicionMap.toPromptText(),
           executionEvidenceText: executionEvidence ? executionEvidence.toPromptText() : '',
+          roundContextText: reviewRound ? reviewRound.toPromptText() : '',
           reviewProfile,
           riskLanes,
           fileClasses: fileClassRows,
@@ -662,6 +696,30 @@ ${reemitResult.stderr ?? ''}`;
         });
       } catch {
         // Badge writing is observability sugar; a failure must never fail the review.
+      }
+
+      if (this.#roundStorePort) {
+        // PASS ends the chain; a BLOCK with confirmed findings or coverage
+        // gaps starts/extends it; an infrastructure failure leaves it as is.
+        try {
+          const confirmedKinds = ['confirmed_findings', 'coverage_required'];
+          if (verdict.isPass()) {
+            await this.#roundStorePort.clear(repoRoot);
+          } else if (envelope && confirmedKinds.includes(envelope.kind)) {
+            const diffText = diff.bytes.toString('utf8');
+            await this.#roundStorePort.save(repoRoot, {
+              schema: ReviewRound.SCHEMA,
+              diffHash: diff.hash,
+              at: this.#clock().toISOString(),
+              round: reviewRound ? reviewRound.number : 1,
+              envelopeKind: envelope.kind,
+              findings: roundFindingsFromEnvelope(envelope.toJSON()),
+              ...(diffText.length <= ROUND_MAX_DIFF_CHARS ? { diffText } : {}),
+            });
+          }
+        } catch {
+          // round bookkeeping never gates the verdict
+        }
       }
 
       if (verdict.isPass()) {
