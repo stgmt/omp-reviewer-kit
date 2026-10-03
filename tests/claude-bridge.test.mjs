@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -445,7 +445,8 @@ test('review executes the repository runner (the file the hook runs) and passes 
       const code = await review({ cwd: repo.dir, env: pluginEnv(home), exec, err: sink.err });
       assert.equal(code, expected);
       const nodeCall = exec.calls.find((c) => c.command === process.execPath);
-      assert.equal(nodeCall.args[0], path.join(repo.dir, '.omp', 'review-kit', 'run-review.mjs'));
+      // git reports the long form of 8.3 short temp paths on Windows runners
+      assert.equal(realpathSync.native(nodeCall.args[0]), realpathSync.native(path.join(repo.dir, '.omp', 'review-kit', 'run-review.mjs')));
       assert.equal(nodeCall.options.inherit, true);
       assert.equal(nodeCall.options.cwd, repo.dir);
     }
