@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [0.17.0] - 2026-10-03
+## [0.17.0] - 2026-10-04
 
 ### Changed
 - **The Claude Code plugin is now a thin shell over the OMP plugin** (`claude-plugin/`, about 20 KB; installing the old root-sourced plugin from a working copy cached 3.9 MB, 1.9 MB of it tracked files). It ships a manifest, a SessionStart hook, four commands, and `bridge.mjs`; the runner, the hook installer, and the hook template come only from the installed OMP plugin, so a repository's single git hook has one owner (`PluginInstallerService`). `.claude-plugin/marketplace.json` now points its source at `./claude-plugin`; the root `.claude-plugin/plugin.json` and `commands/review.md` are gone, and `package.json` `files` no longer lists them.
