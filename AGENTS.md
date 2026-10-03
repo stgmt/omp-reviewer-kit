@@ -46,6 +46,7 @@
 - `templates/githooks/`: pre-commit hook copied into target repositories.
 - `.omp/review-kit/`: self-hosted runner copy used by this repository's pre-commit hook.
 - `.omp-plugin/`: marketplace plugin catalog metadata.
+- `claude-plugin/`: the Claude Code shell (manifest, SessionStart hook, four commands, `scripts/bridge.mjs`); `.claude-plugin/marketplace.json` points at it. It contains no runner, installer, agents, or skills; `npm run check` enforces the exact file set and a size cap. Invariant: the git hook and `.omp/review-kit/run-review.mjs` are written only by `PluginInstallerService` (reached through the OMP plugin), and a runner with a newer `// omp-reviewer-kit runner vX.Y.Z` marker is never overwritten.
 - `tests/`: flat native Node.js test suites (`*.test.mjs`), including contract, BDD, extension, marketplace, mutation, telemetry, and real Git hook E2E suites.
 - `.devin/skills/`: repository skills, including `omp-review-incidents` (incident-investigation playbook).
 - `.github/workflows/`: cross-platform CI automation (`ci.yml`).

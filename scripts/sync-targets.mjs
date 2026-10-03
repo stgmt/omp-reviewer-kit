@@ -4,6 +4,7 @@ import { access, chmod, copyFile, mkdir, readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isRunnerNewer } from '../src/domain/runner-version.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SKIPPED = [/^tp-/, /^omp-reviewer-kit-release$/];
@@ -22,11 +23,16 @@ export async function syncTarget(repo, { apply = false, source = root } = {}) {
   if (!(await exists(path.join(repo, '.git')))) return { repo, status: 'not-a-repo', files: [] };
   const files = [];
   for (const { from, to } of FILES) {
-    const want = sha256(await readFile(path.join(source, from)));
+    const wantBytes = await readFile(path.join(source, from));
+    const want = sha256(wantBytes);
     const target = path.join(repo, to);
-    const have = (await exists(target)) ? sha256(await readFile(target)) : null;
-    let state = have === want ? 'ok' : have === null ? 'missing' : 'stale';
-    if (apply && state !== 'ok') {
+    const haveBytes = (await exists(target)) ? await readFile(target) : null;
+    const have = haveBytes ? sha256(haveBytes) : null;
+    // A vendored runner newer than the source is never rolled back.
+    const newer = to.endsWith('run-review.mjs') && haveBytes !== null
+      && isRunnerNewer(haveBytes.toString('utf8'), wantBytes.toString('utf8'));
+    let state = have === want ? 'ok' : newer ? 'newer' : have === null ? 'missing' : 'stale';
+    if (apply && state !== 'ok' && state !== 'newer') {
       await mkdir(path.dirname(target), { recursive: true });
       await copyFile(path.join(source, from), target);
       if (to === '.githooks/pre-commit') await chmod(target, 0o755);
@@ -34,7 +40,7 @@ export async function syncTarget(repo, { apply = false, source = root } = {}) {
     }
     files.push({ file: to, want: want.slice(0, 16), have: have ? have.slice(0, 16) : null, state });
   }
-  return { repo, status: files.every((f) => f.state === 'ok' || f.state === 'updated') ? 'synced' : 'drift', files };
+  return { repo, status: files.every((f) => f.state === 'ok' || f.state === 'updated' || f.state === 'newer') ? 'synced' : 'drift', files };
 }
 
 export async function loadTargets(argv, configPath) {

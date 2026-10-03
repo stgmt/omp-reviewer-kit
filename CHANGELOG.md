@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.17.0] - 2026-10-03
+
+### Changed
+- **The Claude Code plugin is now a thin shell over the OMP plugin** (`claude-plugin/`, about 20 KB; installing the old root-sourced plugin from a working copy cached 3.9 MB, 1.9 MB of it tracked files). It ships a manifest, a SessionStart hook, four commands, and `bridge.mjs`; the runner, the hook installer, and the hook template come only from the installed OMP plugin, so a repository's single git hook has one owner (`PluginInstallerService`). `.claude-plugin/marketplace.json` now points its source at `./claude-plugin`; the root `.claude-plugin/plugin.json` and `commands/review.md` are gone, and `package.json` `files` no longer lists them.
+- `/omp-reviewer-kit:review` runs `<repo>/.omp/review-kit/run-review.mjs`, the very file the git hook executes (previously a separate copy from the plugin cache), after an idempotent setup, so `/review` and the following commit agree on the runner version and a PASS is served from the verdict cache.
+
+### Added
+- `/omp-reviewer-kit:install-omp`: checks for `omp` and for the OMP plugin first, then installs only what is missing, after an explicit confirmation (the command carries no tool pre-approval, so Claude Code shows the exact command; without `--yes` it only prints the plan). Order of preference: `bun install -g @oh-my-pi/pi-coding-agent`, then the official install script; the plugin is pinned to the Claude plugin's version tag. Logging in and choosing models remain OMP's business.
+- `/omp-reviewer-kit:setup`, `/omp-reviewer-kit:doctor [--probe]`: delegate to the OMP plugin's installer and diagnostics (hook state, versions, optional one-request model check). The SessionStart hook is silent when healthy and otherwise adds one context line (OMP missing, plugin outdated, hook missing, hook conflict); it never installs or changes anything.
+- Runner version marker: `scripts/run-review.mjs` starts with `// omp-reviewer-kit runner vX.Y.Z`, enforced against `package.json` by `npm run check`. The installer (`PluginInstallerService`, new `runnerNewer` status field) and `scripts/sync-targets.mjs` never overwrite a vendored runner that is newer than their own, so two install channels can no longer roll each other back.
+- `npm run check` also verifies the exact file set and size (< 100 KB) of `claude-plugin/` and version synchronization of both Claude manifests.
+
 ## [0.16.0] - 2026-10-03
 
 ### Added

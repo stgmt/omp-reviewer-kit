@@ -1,12 +1,13 @@
 {
   "name": "omp-reviewer-kit",
+  "description": "Claude Code shell for omp-reviewer-kit: evidence-first review of staged Git changes on the OMP stack.",
   "owner": { "name": "stgmt" },
   "plugins": [
     {
       "name": "omp-reviewer-kit",
-      "description": "Evidence-first multi-stage review of staged Git changes on the OMP stack.",
-      "source": "./",
-      "version": "0.16.0"
+      "description": "Evidence-first multi-stage review of staged Git changes on the OMP stack. Installs and drives the OMP plugin.",
+      "source": "./claude-plugin",
+      "version": "0.17.0"
     }
   ]
 }
