@@ -1,38 +1,38 @@
 {
   "schema": "review-badge@1",
-  "runId": "2026-10-03T20-25-01-342Z-ca8407c2f4ed",
-  "diffHash": "ca8407c2f4ed2666fcaf13b48fe90a9a115a340c325031bec5d44f720139bfb1",
+  "runId": "2026-10-03T22-30-47-932Z-74cd74e90e91",
+  "diffHash": "74cd74e90e917df973364bd0715f6e42248799e714f876e86a0ab3085ded82f4",
   "verdict": "BLOCK",
   "reviewProfile": "full",
-  "durationMs": 1831513,
+  "durationMs": 1148034,
   "stageHistory": [
     {
       "stage": "scouting",
       "completed": 0,
-      "at": "2026-10-03T20:25:17.980Z",
-      "elapsedMs": 10041
+      "at": "2026-10-03T22:31:07.667Z",
+      "elapsedMs": 10048
     },
     {
       "stage": "scout",
       "completed": 1,
-      "at": "2026-10-03T20:28:58.151Z",
-      "elapsedMs": 230212
+      "at": "2026-10-03T22:33:47.771Z",
+      "elapsedMs": 170152
     },
     {
       "stage": "risk",
       "completed": 2,
-      "at": "2026-10-03T20:37:28.533Z",
-      "elapsedMs": 740594
+      "at": "2026-10-03T22:40:38.052Z",
+      "elapsedMs": 580433
     },
     {
       "stage": "synthesis",
       "completed": 3,
-      "at": "2026-10-03T20:48:59.097Z",
-      "elapsedMs": 1431158
+      "at": "2026-10-03T22:48:58.381Z",
+      "elapsedMs": 1080762
     }
   ],
   "stageTrail": "scouting→scout→risk→synthesis",
   "modelsTried": [],
-  "reportPath": "audit-reports/commit-reviews/2026-10-03T20-25-01-341Z-ca8407c2f4ed2666fcaf13b48fe90a9a115a340c325031bec5d44f720139bfb1.md",
-  "generatedAt": "2026-10-03T20:55:32.855Z"
+  "reportPath": "audit-reports/commit-reviews/2026-10-03T22-30-47-931Z-74cd74e90e917df973364bd0715f6e42248799e714f876e86a0ab3085ded82f4.md",
+  "generatedAt": "2026-10-03T22:49:55.966Z"
 }
