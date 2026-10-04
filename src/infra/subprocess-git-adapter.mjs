@@ -11,13 +11,16 @@ import { StagedSnapshot } from '../domain/staged-snapshot.mjs';
  */
 export class SubprocessGitAdapter extends GitPort {
   #runner;
+  #vendoredFiles;
 
   /**
    * @param {(args: string[], cwd: string) => Buffer|Promise<Buffer>} [runner]
+   * @param {{ vendoredFiles?: () => Promise<Map<string, string>> }} [options]
    */
-  constructor(runner) {
+  constructor(runner, { vendoredFiles } = {}) {
     super();
     this.#runner = runner ?? SubprocessGitAdapter.defaultRunner;
+    this.#vendoredFiles = vendoredFiles;
   }
 
   /**
@@ -69,8 +72,53 @@ export class SubprocessGitAdapter extends GitPort {
    * @returns {Promise<DiffIdentity>}
    */
   async getStagedDiff(repoRoot) {
-    const output = await this.#runner(['diff', '--cached', '--binary', '--no-ext-diff', '--'], repoRoot);
+    const excluded = await this.#identicalVendoredPaths(repoRoot);
+    const args = ['diff', '--cached', '--binary', '--no-ext-diff', '--'];
+    if (excluded.length > 0) args.push('.', ...excluded.map((p) => `:(exclude,literal)${p}`));
+    const output = await this.#runner(args, repoRoot);
     return DiffIdentity.fromBuffer(output);
+  }
+
+  /**
+   * Staged vendored kit files (runner, hook) that are byte-identical to the
+   * installed kit's canonical copy: they are the review plugin, not the
+   * committer's work, so the review diff leaves them out. Any doubt (no
+   * canonical copy, unreadable blob, different bytes) keeps the file in review.
+   *
+   * @param {string} repoRoot
+   * @returns {Promise<string[]>}
+   */
+  async #identicalVendoredPaths(repoRoot) {
+    if (typeof this.#vendoredFiles !== 'function') return [];
+    let canonical;
+    try {
+      canonical = await this.#vendoredFiles();
+    } catch {
+      return [];
+    }
+    if (!(canonical instanceof Map) || canonical.size === 0) return [];
+    const fields = (await this.#runner(['diff', '--cached', '--raw', '--no-renames', '-z', '--'], repoRoot))
+      .toString('utf8').split('\0');
+    const normalize = (text) => String(text).replace(/\r\n/g, '\n');
+    const regularModes = new Set(['100644', '100755']);
+    const identical = [];
+    for (let i = 0; i + 1 < fields.length; i += 2) {
+      const meta = /^:(\d{6}) (\d{6}) [0-9a-f]+ [0-9a-f]+ ([A-Z])\d*$/.exec(fields[i]);
+      const name = fields[i + 1];
+      if (!meta || !canonical.has(name)) continue;
+      // A mode change (the hook losing its executable bit, a symlink in place
+      // of the file) changes behaviour even when the bytes are canonical.
+      const [, oldMode, newMode, status] = meta;
+      const modeOk = status === 'M' ? oldMode === newMode : status === 'A' && regularModes.has(newMode);
+      if (!modeOk) continue;
+      try {
+        const staged = (await this.#runner(['show', `:${name}`], repoRoot)).toString('utf8');
+        if (normalize(staged) === normalize(canonical.get(name))) identical.push(name);
+      } catch {
+        // unreadable staged blob stays in review
+      }
+    }
+    return identical;
   }
 
   /**

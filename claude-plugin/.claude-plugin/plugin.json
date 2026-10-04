@@ -1,6 +1,6 @@
 {
   "name": "omp-reviewer-kit",
-  "version": "0.17.1",
+  "version": "0.17.2",
   "description": "Claude Code shell for omp-reviewer-kit: evidence-first review of staged Git changes on OMP; installs and drives the OMP plugin.",
   "author": { "name": "stgmt" },
   "homepage": "https://github.com/stgmt/omp-reviewer-kit",

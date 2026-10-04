@@ -63,7 +63,7 @@ test('check-layout requires every Claude plugin and sync file and passes when al
   const source = await readFile('scripts/check-layout.mjs', 'utf8');
   const listed = (start) => { const from = source.indexOf(start); return [...source.slice(from, source.indexOf('];', from)).matchAll(/'([^']+)'/g)].map((m) => m[1]); };
   const required = [...listed('const required'), ...listed('const CLAUDE_PLUGIN_FILES').map((file) => 'claude-plugin/' + file)];
-  const mustBeListed = ['.claude-plugin/marketplace.json', 'claude-plugin/.claude-plugin/plugin.json', 'claude-plugin/commands/review.md', 'claude-plugin/scripts/bridge.mjs', 'src/domain/runner-version.mjs', 'scripts/sync-targets.mjs'];
+  const mustBeListed = ['.claude-plugin/marketplace.json', 'claude-plugin/.claude-plugin/plugin.json', 'claude-plugin/commands/review.md', 'claude-plugin/scripts/bridge.mjs', 'src/domain/runner-version.mjs', 'src/infra/vendored-kit-files.mjs', 'scripts/sync-targets.mjs'];
   const dir = await mkdtemp(path.join(tmpdir(), 'omp-layout-'));
   try {
     for (const file of required) {

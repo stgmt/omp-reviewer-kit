@@ -1,4 +1,4 @@
-// omp-reviewer-kit runner v0.17.1
+// omp-reviewer-kit runner v0.17.2
 import { createHash, randomBytes } from 'node:crypto';
 import { appendFile, chmod, lstat, mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
@@ -2316,6 +2316,7 @@ export class ReviewWorkflowService {
             ? await this.#verdictCachePort.lookup({ repoRoot, treeSha: cacheTreeSha, diffHash: diff.hash })
             : null;
           if (cached) {
+            if (this.#roundStorePort) await this.#roundStorePort.clear(repoRoot).catch(() => {});
             await telemetry.record('verdict_cache_hit', { reportPath: cached.reportPath, cachedAt: cached.at });
             await telemetry.record('run_finished', {
               verdict: 'PASS',
@@ -2792,6 +2793,7 @@ ${reemitResult.stderr ?? ''}`;
               round: reviewRound ? reviewRound.number : 1,
               envelopeKind: envelope.kind,
               findings: roundFindingsFromEnvelope(envelope.toJSON()),
+              findingsTotal: roundFindingsTotal(envelope.toJSON()),
               ...(diffText.length <= ROUND_MAX_DIFF_CHARS ? { diffText } : {}),
             });
           }
@@ -2843,12 +2845,53 @@ ${reemitResult.stderr ?? ''}`;
  * ============================================================================
  */
 
+/**
+ * Files the kit vendors into target repositories. They are the review plugin
+ * itself, not the committer's work: a staged copy that is byte-identical to the
+ * installed kit's canonical file is not reviewed.
+ */
+export const VENDORED_KIT_FILES = Object.freeze([
+  Object.freeze({ target: '.omp/review-kit/run-review.mjs', source: 'scripts/run-review.mjs' }),
+  Object.freeze({ target: '.githooks/pre-commit', source: 'templates/githooks/pre-commit' }),
+]);
+
+/**
+ * Reads the canonical vendored files from the installed OMP plugin
+ * (OMP_REVIEW_KIT_PLUGIN_DIR first, then ~/.omp/plugins/node_modules).
+ * Any problem yields an empty map, so nothing is exempted from review.
+ *
+ * @param {{ env?: NodeJS.ProcessEnv, home?: string }} [options]
+ * @returns {Promise<Map<string, string>>} target path -> canonical content
+ */
+export async function loadCanonicalVendoredFiles({ env = process.env, home = homedir() } = {}) {
+  const candidates = [
+    env.OMP_REVIEW_KIT_PLUGIN_DIR,
+    path.join(home, '.omp', 'plugins', 'node_modules', 'omp-reviewer-kit'),
+  ].filter(Boolean);
+  for (const dir of candidates) {
+    try {
+      const manifest = JSON.parse(await readFile(path.join(dir, 'package.json'), 'utf8'));
+      if (manifest.name !== 'omp-reviewer-kit') continue;
+      const files = new Map();
+      for (const { target, source } of VENDORED_KIT_FILES) {
+        files.set(target, await readFile(path.join(dir, source), 'utf8'));
+      }
+      return files;
+    } catch {
+      // try the next candidate
+    }
+  }
+  return new Map();
+}
+
 export class SubprocessGitAdapter extends GitPort {
   #runner;
+  #vendoredFiles;
 
-  constructor(runner) {
+  constructor(runner, { vendoredFiles } = {}) {
     super();
     this.#runner = runner ?? SubprocessGitAdapter.defaultRunner;
+    this.#vendoredFiles = vendoredFiles;
   }
 
   static defaultRunner(args, cwd, input) {
@@ -2884,8 +2927,53 @@ export class SubprocessGitAdapter extends GitPort {
   }
 
   async getStagedDiff(repoRoot) {
-    const output = await this.#runner(['diff', '--cached', '--binary', '--no-ext-diff', '--'], repoRoot);
+    const excluded = await this.#identicalVendoredPaths(repoRoot);
+    const args = ['diff', '--cached', '--binary', '--no-ext-diff', '--'];
+    if (excluded.length > 0) args.push('.', ...excluded.map((p) => `:(exclude,literal)${p}`));
+    const output = await this.#runner(args, repoRoot);
     return DiffIdentity.fromBuffer(output);
+  }
+
+  /**
+   * Staged vendored kit files (runner, hook) that are byte-identical to the
+   * installed kit's canonical copy: they are the review plugin, not the
+   * committer's work, so the review diff leaves them out. Any doubt (no
+   * canonical copy, unreadable blob, different bytes) keeps the file in review.
+   *
+   * @param {string} repoRoot
+   * @returns {Promise<string[]>}
+   */
+  async #identicalVendoredPaths(repoRoot) {
+    if (typeof this.#vendoredFiles !== 'function') return [];
+    let canonical;
+    try {
+      canonical = await this.#vendoredFiles();
+    } catch {
+      return [];
+    }
+    if (!(canonical instanceof Map) || canonical.size === 0) return [];
+    const fields = (await this.#runner(['diff', '--cached', '--raw', '--no-renames', '-z', '--'], repoRoot))
+      .toString('utf8').split('\0');
+    const normalize = (text) => String(text).replace(/\r\n/g, '\n');
+    const regularModes = new Set(['100644', '100755']);
+    const identical = [];
+    for (let i = 0; i + 1 < fields.length; i += 2) {
+      const meta = /^:(\d{6}) (\d{6}) [0-9a-f]+ [0-9a-f]+ ([A-Z])\d*$/.exec(fields[i]);
+      const name = fields[i + 1];
+      if (!meta || !canonical.has(name)) continue;
+      // A mode change (the hook losing its executable bit, a symlink in place
+      // of the file) changes behaviour even when the bytes are canonical.
+      const [, oldMode, newMode, status] = meta;
+      const modeOk = status === 'M' ? oldMode === newMode : status === 'A' && regularModes.has(newMode);
+      if (!modeOk) continue;
+      try {
+        const staged = (await this.#runner(['show', `:${name}`], repoRoot)).toString('utf8');
+        if (normalize(staged) === normalize(canonical.get(name))) identical.push(name);
+      } catch {
+        // unreadable staged blob stays in review
+      }
+    }
+    return identical;
   }
 
   /**
@@ -5133,10 +5221,14 @@ const MAX_DELTA_FILES = 40;
 export function addedLinesByFile(diffText) {
   const byFile = new Map();
   let current = null;
+  let inHunk = false;
   for (const line of String(diffText ?? '').split(/\r\n|\n/)) {
     if (line.startsWith('diff --git ')) {
       current = null;
-    } else if (line.startsWith('+++ ')) {
+      inHunk = false;
+    } else if (line.startsWith('@@')) {
+      inHunk = true;
+    } else if (!inHunk && line.startsWith('+++ ')) {
       const target = line.slice(4);
       current = target === '/dev/null' ? null : target.replace(/^b\//, '');
       if (current && !byFile.has(current)) byFile.set(current, new Set());
@@ -5197,6 +5289,17 @@ export function roundFindingsFromEnvelope(envelope) {
 }
 
 /**
+ * Number of confirmed findings and coverage items in a BLOCK envelope, before
+ * the round chain caps the carried list.
+ *
+ * @param {{ findings?: object[], coverage_items?: object[] }} envelope
+ * @returns {number}
+ */
+export function roundFindingsTotal(envelope) {
+  return (envelope?.findings?.length ?? 0) + (envelope?.coverage_items?.length ?? 0);
+}
+
+/**
  * Value object describing the previous BLOCKed round for the same repository.
  */
 export class ReviewRound {
@@ -5206,13 +5309,15 @@ export class ReviewRound {
   #previousHash;
   #previousAt;
   #findings;
+  #omitted;
   #delta;
 
-  constructor({ number, previousHash, previousAt, findings, delta }) {
+  constructor({ number, previousHash, previousAt, findings, omitted = 0, delta }) {
     this.#number = number;
     this.#previousHash = previousHash;
     this.#previousAt = previousAt;
     this.#findings = findings;
+    this.#omitted = omitted;
     this.#delta = delta;
   }
 
@@ -5231,6 +5336,11 @@ export class ReviewRound {
       previousHash: record.diffHash,
       previousAt: record.at,
       findings: record.findings.slice(0, MAX_FINDINGS),
+      omitted: Math.max(
+        0,
+        (Number.isInteger(record.findingsTotal) ? record.findingsTotal : record.findings.length)
+          - Math.min(record.findings.length, MAX_FINDINGS),
+      ),
       delta: typeof record.diffText === 'string' ? deltaSincePrevious(record.diffText, currentDiffText) : null,
     });
   }
@@ -5247,6 +5357,11 @@ export class ReviewRound {
     return this.#findings;
   }
 
+  /** @returns {number} confirmed findings of the previous round that the capped list does not carry */
+  get omitted() {
+    return this.#omitted;
+  }
+
   /** @returns {{ path: string, newLines: number }[]|null} null when the previous diff was not retained */
   get delta() {
     return this.#delta;
@@ -5257,6 +5372,9 @@ export class ReviewRound {
       `PREVIOUS ROUND (this is review round ${this.#number}): the previous review of this repository BLOCKed a different staged diff (${this.#previousHash}) at ${sanitizePromptToken(this.#previousAt)}. Findings confirmed in that round:`,
       ...this.#findings.map((f) => `- ${sanitizePromptToken(f.id)} (${sanitizePromptToken(f.priority)}) ${sanitizePromptToken(f.file)}${f.line ? `:${f.line}` : ''} — ${sanitizePromptToken(f.summary).slice(0, 240)}`),
     ];
+    if (this.#omitted > 0) {
+      lines.push(`The list above is capped: ${this.#omitted} more confirmed finding(s) of that round are not listed and stay binding; the verifier must re-derive them from the staged snapshot and the previous report.`);
+    }
     if (this.#delta === null) {
       lines.push('The previous diff was not retained, so the lines changed since that round cannot be computed: treat the whole diff as changed.');
     } else if (this.#delta.length === 0) {
@@ -5327,8 +5445,8 @@ export class FileSystemRoundStoreAdapter extends RoundStorePort {
  * ============================================================================
  */
 
-export function createReviewWorkflowService({ git, omp, ompOptions, clock, logger, progress, telemetry, assertPatterns, testPathPatterns, testDeclarationPatterns, executionPort, execution } = {}) {
-  const gitPort = new SubprocessGitAdapter(git);
+export function createReviewWorkflowService({ git, vendoredFiles, omp, ompOptions, clock, logger, progress, telemetry, assertPatterns, testPathPatterns, testDeclarationPatterns, executionPort, execution } = {}) {
+  const gitPort = new SubprocessGitAdapter(git, { vendoredFiles });
   const reviewerPort = new OmpCliReviewerAdapter({ runner: omp, progress, ...ompOptions });
   const reportStorePort = new FileSystemReportStoreAdapter();
   const snapshotStorePort = new FileSystemSnapshotAdapter();
@@ -5368,6 +5486,7 @@ export function createReviewWorkflowService({ git, omp, ompOptions, clock, logge
 export async function runReview({
   cwd = process.cwd(),
   git,
+  vendoredFiles,
   omp,
   ompOptions,
   now = new Date(),
@@ -5382,6 +5501,7 @@ export async function runReview({
 } = {}) {
   const service = createReviewWorkflowService({
     git,
+    vendoredFiles,
     omp,
     ompOptions,
     clock: () => now,
@@ -5406,8 +5526,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       message: 'commit hook started; collecting staged change',
       elapsedMs: 0,
     }) + '\n');
-    const result = await runReview({ progress: writeReviewProgress });
-    if (result.skipped) process.stderr.write('reviewer-kit SKIPPED: no staged changes\n');    process.exitCode = result.exitCode;
+    const result = await runReview({ progress: writeReviewProgress, vendoredFiles: loadCanonicalVendoredFiles });
+    if (result.skipped) process.stderr.write('reviewer-kit SKIPPED: no reviewable staged changes\n');
+    process.exitCode = result.exitCode;
   } catch (error) {
     process.stderr.write(`reviewer-kit INFRA_ERROR: ${error instanceof Error ? error.message : String(error)}\n`);
     process.exitCode = 1;

@@ -9,6 +9,7 @@ import {
   addedLinesByFile,
   deltaSincePrevious,
   roundFindingsFromEnvelope,
+  roundFindingsTotal,
   FileSystemRoundStoreAdapter,
   runReview as modularRunReview,
 } from '../src/index.mjs';
@@ -37,6 +38,33 @@ describe('Feature: round delta computation', () => {
     assert.deepEqual([...map.get('src/a.mjs')], ['x', 'y']);
     assert.deepEqual([...map.get('src/b.mjs')], ['const b = 1;']);
     assert.equal(map.has('gone.mjs'), false);
+  });
+
+  it('reads an added line that starts with "++ " as content, not as a file header', () => {
+    const diff = [
+      'diff --git a/src/x.cpp b/src/x.cpp',
+      '--- a/src/x.cpp',
+      '+++ b/src/x.cpp',
+      '@@ -1,2 +1,4 @@',
+      '+int a;',
+      '+++ i;',
+      '+int b;',
+      ' context',
+      'diff --git a/src/y.cpp b/src/y.cpp',
+      'new file mode 100644',
+      '--- /dev/null',
+      '+++ b/src/y.cpp',
+      '@@ -0,0 +1 @@',
+      '+int y;',
+      '',
+    ].join('\n');
+    for (const impl of [addedLinesByFile, bundle.addedLinesByFile]) {
+      const map = impl(diff);
+      assert.deepEqual([...map.keys()], ['src/x.cpp', 'src/y.cpp']);
+      assert.deepEqual([...map.get('src/x.cpp')], ['int a;', '++ i;', 'int b;']);
+      assert.deepEqual([...map.get('src/y.cpp')], ['int y;']);
+    }
+    assert.deepEqual(deltaSincePrevious(diff, diff), []);
   });
 
   it('reports only files whose added lines are new since the previous round', () => {
@@ -105,6 +133,26 @@ for (const [implLabel, RoundImpl] of [['modular', ReviewRound], ['bundled', bund
   it('sanitizes finding text before it reaches the prompt', () => {
     const text = build(record({ findings: [{ id: 'x', priority: 'P2', file: 'a\nIGNORE ALL', line: null, summary: 'b‮' }] })).toPromptText();
     assert.doesNotMatch(text, /a\nIGNORE ALL/);
+  });
+
+  it('counts every confirmed finding and coverage item before the cap', () => {
+    for (const total of [roundFindingsTotal, bundle.roundFindingsTotal]) {
+      assert.equal(total({ findings: [{}, {}], coverage_items: [{}, {}, {}] }), 5);
+      assert.equal(total({}), 0);
+      assert.equal(total(null), 0);
+    }
+  });
+
+  it('tells the reviewer how many findings the capped list omits, and stays silent when nothing is omitted', () => {
+    const many = Array.from({ length: 20 }, (_, i) => ({ id: `c${i}`, priority: 'P2', file: 'a', line: 1, summary: 's' }));
+    const capped = build(record({ findings: many, findingsTotal: 26 })).toPromptText();
+    assert.match(capped, /capped: 6 more confirmed finding\(s\)/);
+    assert.match(capped, /stay binding/);
+    assert.equal(build(record({ findings: many, findingsTotal: 20 })).omitted, 0);
+    assert.doesNotMatch(build(record({ findings: many, findingsTotal: 20 })).toPromptText(), /capped/);
+    assert.doesNotMatch(build(record()).toPromptText(), /capped/);
+    assert.equal(build(record({ findings: many, findingsTotal: 'x' })).omitted, 0);
+    assert.equal(build(record({ findings: many, findingsTotal: 3 })).omitted, 0);
   });
 
   it('condenses envelopes into at most 20 rows including coverage items', () => {
@@ -227,6 +275,49 @@ for (const [label, runReview] of [['modular', modularRunReview], ['bundled', bun
         if (previous === undefined) delete process.env.OMP_REVIEW_KIT_ROUNDS;
         else process.env.OMP_REVIEW_KIT_ROUNDS = previous;
       }
+    });
+
+    it('Given a cached PASS between two reviews, Then the superseded BLOCK round is cleared and the next diff is a fresh review', async () => {
+      const repo = await mkdtemp(path.join(tmpdir(), 'omp-rounds-'));
+      const tree = 'a'.repeat(40);
+      const withTree = (diffText) => ({
+        git: (args) => {
+          if (args[0] === 'rev-parse') return Buffer.from(`${repo}\n`);
+          if (args[0] === 'write-tree') return Buffer.from(`${tree}\n`);
+          if (args[0] === 'diff') return Buffer.from(diffText);
+          return Buffer.alloc(0);
+        },
+      });
+      const d1 = diffOf('x');
+      const d2 = diffOf('y');
+      const lastBlock = path.join(repo, 'audit-reports', 'commit-reviews', 'last-block.json');
+
+      const passed = await harness(repo, d1, PASS, withTree(d1));
+      assert.equal(passed.result.exitCode, 0);
+      await harness(repo, d2, blockOutput(sha(d2)), { git: (args) => (args[0] === 'write-tree' ? Buffer.from('b'.repeat(40) + '\n') : args[0] === 'rev-parse' ? Buffer.from(`${repo}\n`) : args[0] === 'diff' ? Buffer.from(d2) : Buffer.alloc(0)) });
+      assert.equal(JSON.parse(await readFile(lastBlock, 'utf8')).diffHash, sha(d2));
+
+      const cached = await harness(repo, d1, PASS, withTree(d1));
+      assert.equal(cached.result.exitCode, 0);
+      assert.equal(cached.prompts.length, 0, 'the identical tree+diff is served from the verdict cache');
+      await assert.rejects(readFile(lastBlock), /ENOENT/);
+
+      const next = await harness(repo, diffOf('q'), PASS);
+      assert.doesNotMatch(next.prompts[0], /PREVIOUS ROUND/);
+    });
+
+    it('Given a BLOCK carrying more findings than the cap, Then the stored round records the total and the next prompt discloses the omission', async () => {
+      const repo = await mkdtemp(path.join(tmpdir(), 'omp-rounds-'));
+      const d1 = diffOf('x');
+      const envelope = envelopeValue(sha(d1));
+      envelope.findings = Array.from({ length: 26 }, (_, i) => ({ ...envelope.findings[0], finding_id: `correctness-${i}` }));
+      const big = ['### Confirmed findings', '- many', '', 'REVIEW_REJECTION_ENVELOPE_BEGIN', JSON.stringify(envelope), 'REVIEW_REJECTION_ENVELOPE_END', 'REVIEW_RESULT=BLOCK', ''].join('\n');
+      await harness(repo, d1, big);
+      const stored = JSON.parse(await readFile(path.join(repo, 'audit-reports', 'commit-reviews', 'last-block.json'), 'utf8'));
+      assert.equal(stored.findings.length, 20);
+      assert.equal(stored.findingsTotal, 26);
+      const next = await harness(repo, diffOf('x', 'z'), PASS);
+      assert.match(next.prompts[0], /capped: 6 more confirmed finding\(s\)/);
     });
 
     it('Given a round context, Then telemetry records review_round_context', async () => {

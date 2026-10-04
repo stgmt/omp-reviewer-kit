@@ -5,7 +5,7 @@ import path from 'node:path';
 import { ReviewRejectionEnvelope } from '../domain/review-rejection-envelope.mjs';
 import { ReviewPrompt } from '../domain/review-prompt.mjs';
 import { ReviewReport } from '../domain/review-report.mjs';
-import { ReviewRound, roundFindingsFromEnvelope } from '../domain/review-round.mjs';
+import { ReviewRound, roundFindingsFromEnvelope, roundFindingsTotal } from '../domain/review-round.mjs';
 import { ReviewExecutionResult } from '../domain/review-execution-result.mjs';
 import { SuspicionMap, isTestPath, DEFAULT_ASSERT_PATTERNS, DEFAULT_TEST_PATH_PATTERNS, DEFAULT_TEST_DECLARATION_PATTERNS } from '../domain/suspicion-map.mjs';
 import { ExecutionEvidence } from '../domain/execution-evidence.mjs';
@@ -246,6 +246,7 @@ export class ReviewWorkflowService {
             ? await this.#verdictCachePort.lookup({ repoRoot, treeSha: cacheTreeSha, diffHash: diff.hash })
             : null;
           if (cached) {
+            if (this.#roundStorePort) await this.#roundStorePort.clear(repoRoot).catch(() => {});
             await telemetry.record('verdict_cache_hit', { reportPath: cached.reportPath, cachedAt: cached.at });
             await telemetry.record('run_finished', {
               verdict: 'PASS',
@@ -714,6 +715,7 @@ ${reemitResult.stderr ?? ''}`;
               round: reviewRound ? reviewRound.number : 1,
               envelopeKind: envelope.kind,
               findings: roundFindingsFromEnvelope(envelope.toJSON()),
+              findingsTotal: roundFindingsTotal(envelope.toJSON()),
               ...(diffText.length <= ROUND_MAX_DIFF_CHARS ? { diffText } : {}),
             });
           }
