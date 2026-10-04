@@ -129,6 +129,31 @@ Reports record:
 - Unproven and rejected candidate summaries with defense justifications
 - Machine-readable verdict marker (`REVIEW_RESULT=PASS` or `REVIEW_RESULT=BLOCK`)
 
+### Report delivery and project policy guards
+
+The review child is a dispatcher plus a `reviewer-kit` task; the dispatcher's stdout is the only thing the runner parses, so the full report must survive the hop from the task. Two channels guarantee that, and neither depends on the dispatcher reading anything back:
+
+1. **Session artifacts (primary fallback, no write).** Every review attempt runs `omp` with its own `--session-dir` (a `reviewer-kit-session-<pid>-*` directory under the OS temp dir, removed after the attempt). When the dispatcher output has no standalone verdict marker, or carries an `execution_failure` envelope, the runner reads the task's complete result from `<session>/<artifacts>/<TaskId>.md` and evaluates that instead. Telemetry records `report_artifact_recovered`. A reviewer verdict is never invented: the recovered text goes through the same fail-closed `ReviewVerdict` / envelope validation as any other output.
+2. **Durable report file (best effort).** The prompt names a per-run path (`reviewer-kit-report-*.md` in the OS temp dir) and the same path is exported to the review child as `OMP_REVIEW_KIT_REPORT_PATH`. The orchestrator tries one bash heredoc write to it before yielding and does not retry if it is denied.
+
+**Projects that guard bash commands** (for example an extension that hard-denies commands containing `;`, `&`, `|`, a backtick or `$`) will deny that heredoc, because a Markdown report contains those characters. That no longer fails the review — channel 1 covers it — but you can keep channel 2 working by exempting exactly one write, keyed on the exported path rather than on a command pattern:
+
+```ts
+// In a deny-first tool_call guard, before the chained/substituted-command deny:
+const reportPath = process.env.OMP_REVIEW_KIT_REPORT_PATH?.replace(/\\/g, "/");
+function isReportWrite(command: string): boolean {
+  const lines = command.trim().split(/\r?\n/);
+  // cat > "<report path>" <<'DELIM' ... DELIM  — one heredoc, nothing else.
+  const heredoc = lines[0].match(/^cat\s*>\s*"?([^"\s]+)"?\s*<<\s*'(\w+)'$/);
+  return !!reportPath && !!heredoc
+    && heredoc[1].replace(/\\/g, "/") === reportPath
+    && lines.at(-1) === heredoc[2];
+}
+if (event.toolName === "bash" && isReportWrite(String(event.input.command ?? ""))) return;
+```
+
+Keep the exemption narrow (single heredoc, target equal to `OMP_REVIEW_KIT_REPORT_PATH`); the reviewer is otherwise read-only and must keep being blocked from other writes. If you skip the exemption entirely, only the secondary copy is lost.
+
 ## Claude Code Plugin and Target Sync
 
 The Claude Code plugin is a thin shell over the OMP plugin (the review always runs on OMP): `/plugin marketplace add stgmt/omp-reviewer-kit`, `/plugin install omp-reviewer-kit`, then `/omp-reviewer-kit:install-omp` (checks what is already installed, shows the plan, and installs OMP and the OMP plugin only after your confirmation), `/omp-reviewer-kit:setup` for the current repository, and `/omp-reviewer-kit:review` before committing. `/omp-reviewer-kit:doctor` diagnoses the setup. Installing the OMP plugin does not install the Claude plugin; removing the Claude plugin does not remove a repository's hook.

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.17.1] - 2026-10-04
+
+### Fixed
+- A completed review no longer fails with `execution_failure` ("full report unreadable; durable report not found") when the dispatcher output is truncated and a project guard denies the reviewer's bash report write. The review child now runs with a per-attempt `--session-dir`, and the runner recovers the complete task result from the persisted task artifact (`report_artifact_recovered` telemetry) whenever the dispatcher output lacks a verdict marker or carries an `execution_failure` envelope. The recovered text still goes through the fail-closed verdict and envelope validation.
+
+### Changed
+- The per-run report path is exported to the review child as `OMP_REVIEW_KIT_REPORT_PATH`, and the reviewer's write to it is best-effort (no retry or workaround when denied). README documents the narrow exemption projects with deny-first command guards should add.
+- Orphan `reviewer-kit-session-*` directories from crashed runs are swept with the existing TTL/owner-pid rule.
+
 ## [0.17.0] - 2026-10-04
 
 ### Changed

@@ -495,6 +495,18 @@ export class FileSystemSnapshotAdapter extends SnapshotStorePort {
         if (Number.isInteger(owner) && isPidAlive(owner)) continue;
         await rm(full, { force: true }).catch(() => {});
       }
+      // Orphan per-attempt session dirs (crashed runs never reach their
+      // finally): TTL-bounded and only once the owning pid is gone.
+      for (const name of names) {
+        if (!name.startsWith('reviewer-kit-session-')) continue;
+        const full = path.join(base, name);
+        const info = await lstat(full).catch(() => null);
+        if (!info || !info.isDirectory()) continue;
+        if (now - info.mtimeMs <= SNAPSHOT_TTL_MS) continue;
+        const owner = Number(name.match(/^reviewer-kit-session-(\d+)-/)?.[1]);
+        if (Number.isInteger(owner) && isPidAlive(owner)) continue;
+        await rm(full, { recursive: true, force: true }).catch(() => {});
+      }
     } catch {
       // Sweeping is best-effort hygiene; never fail a review over it.
     }
