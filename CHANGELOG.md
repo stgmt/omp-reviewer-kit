@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.17.2] - 2026-10-04
+
+### Fixed
+- The review hook of a target repository no longer reviews the vendored kit files. A staged `.omp/review-kit/run-review.mjs` or `.githooks/pre-commit` that is byte-identical (line endings aside) to the copy in the installed OMP plugin is left out of the reviewed diff, and a commit made only of such files is skipped. Before, the changed runner was reviewed as the committer's code and blocked on "required test coverage" because the kit's tests live in the kit repository, so the documented rollout (`sync-targets --apply`, then commit through the target's own hook) could not pass in a repository with its own test harness. A hand-edited copy, or any doubt (no installed plugin), still goes through review.
+- A verdict-cache hit now ends the delta-round chain like any other PASS; before, a superseded BLOCK round stayed active and the next different diff was reviewed as "round 2" with the old findings.
+- `addedLinesByFile` no longer reads an added line that starts with `++ ` (a diff line `+++ …`) as a file header once a hunk has started, which produced a bogus path in the round delta.
+- The round chain still carries at most 20 findings, but the prompt now says how many confirmed findings the list omits and that they stay binding (`findingsTotal` is stored with the round).
+
 ## [0.17.1] - 2026-10-04
 
 ### Fixed

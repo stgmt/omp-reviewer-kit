@@ -13,10 +13,14 @@ const MAX_DELTA_FILES = 40;
 export function addedLinesByFile(diffText) {
   const byFile = new Map();
   let current = null;
+  let inHunk = false;
   for (const line of String(diffText ?? '').split(/\r\n|\n/)) {
     if (line.startsWith('diff --git ')) {
       current = null;
-    } else if (line.startsWith('+++ ')) {
+      inHunk = false;
+    } else if (line.startsWith('@@')) {
+      inHunk = true;
+    } else if (!inHunk && line.startsWith('+++ ')) {
       const target = line.slice(4);
       current = target === '/dev/null' ? null : target.replace(/^b\//, '');
       if (current && !byFile.has(current)) byFile.set(current, new Set());
@@ -77,6 +81,17 @@ export function roundFindingsFromEnvelope(envelope) {
 }
 
 /**
+ * Number of confirmed findings and coverage items in a BLOCK envelope, before
+ * the round chain caps the carried list.
+ *
+ * @param {{ findings?: object[], coverage_items?: object[] }} envelope
+ * @returns {number}
+ */
+export function roundFindingsTotal(envelope) {
+  return (envelope?.findings?.length ?? 0) + (envelope?.coverage_items?.length ?? 0);
+}
+
+/**
  * Value object describing the previous BLOCKed round for the same repository.
  */
 export class ReviewRound {
@@ -86,13 +101,15 @@ export class ReviewRound {
   #previousHash;
   #previousAt;
   #findings;
+  #omitted;
   #delta;
 
-  constructor({ number, previousHash, previousAt, findings, delta }) {
+  constructor({ number, previousHash, previousAt, findings, omitted = 0, delta }) {
     this.#number = number;
     this.#previousHash = previousHash;
     this.#previousAt = previousAt;
     this.#findings = findings;
+    this.#omitted = omitted;
     this.#delta = delta;
   }
 
@@ -111,6 +128,11 @@ export class ReviewRound {
       previousHash: record.diffHash,
       previousAt: record.at,
       findings: record.findings.slice(0, MAX_FINDINGS),
+      omitted: Math.max(
+        0,
+        (Number.isInteger(record.findingsTotal) ? record.findingsTotal : record.findings.length)
+          - Math.min(record.findings.length, MAX_FINDINGS),
+      ),
       delta: typeof record.diffText === 'string' ? deltaSincePrevious(record.diffText, currentDiffText) : null,
     });
   }
@@ -127,6 +149,11 @@ export class ReviewRound {
     return this.#findings;
   }
 
+  /** @returns {number} confirmed findings of the previous round that the capped list does not carry */
+  get omitted() {
+    return this.#omitted;
+  }
+
   /** @returns {{ path: string, newLines: number }[]|null} null when the previous diff was not retained */
   get delta() {
     return this.#delta;
@@ -137,6 +164,9 @@ export class ReviewRound {
       `PREVIOUS ROUND (this is review round ${this.#number}): the previous review of this repository BLOCKed a different staged diff (${this.#previousHash}) at ${sanitizePromptToken(this.#previousAt)}. Findings confirmed in that round:`,
       ...this.#findings.map((f) => `- ${sanitizePromptToken(f.id)} (${sanitizePromptToken(f.priority)}) ${sanitizePromptToken(f.file)}${f.line ? `:${f.line}` : ''} — ${sanitizePromptToken(f.summary).slice(0, 240)}`),
     ];
+    if (this.#omitted > 0) {
+      lines.push(`The list above is capped: ${this.#omitted} more confirmed finding(s) of that round are not listed and stay binding; the verifier must re-derive them from the staged snapshot and the previous report.`);
+    }
     if (this.#delta === null) {
       lines.push('The previous diff was not retained, so the lines changed since that round cannot be computed: treat the whole diff as changed.');
     } else if (this.#delta.length === 0) {

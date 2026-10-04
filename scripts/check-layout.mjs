@@ -20,6 +20,7 @@ const required = [
   '.claude-plugin/marketplace.json',
   ...CLAUDE_PLUGIN_FILES.map((file) => `claude-plugin/${file}`),
   'src/domain/runner-version.mjs',
+  'src/infra/vendored-kit-files.mjs',
   'scripts/sync-targets.mjs',
   'src/infra/filesystem-verdict-cache-adapter.mjs',
   'src/infra/filesystem-round-store-adapter.mjs',

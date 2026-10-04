@@ -23,12 +23,13 @@ export { ReviewWorkflowService } from './application/review-workflow-service.mjs
 export { PluginInstallerService } from './application/installer-service.mjs';
 
 export { SubprocessGitAdapter } from './infra/subprocess-git-adapter.mjs';
+export { VENDORED_KIT_FILES, loadCanonicalVendoredFiles } from './infra/vendored-kit-files.mjs';
 export { FileSystemSnapshotAdapter } from './infra/filesystem-snapshot-adapter.mjs';
 export { OmpCliReviewerAdapter, sanitizeReviewerOutput } from './infra/omp-cli-reviewer-adapter.mjs';
 export { FileSystemReportStoreAdapter } from './infra/filesystem-report-store-adapter.mjs';
 export { FileSystemVerdictCacheAdapter } from './infra/filesystem-verdict-cache-adapter.mjs';
 export { FileSystemRoundStoreAdapter } from './infra/filesystem-round-store-adapter.mjs';
-export { ReviewRound, addedLinesByFile, deltaSincePrevious, roundFindingsFromEnvelope } from './domain/review-round.mjs';
+export { ReviewRound, addedLinesByFile, deltaSincePrevious, roundFindingsFromEnvelope, roundFindingsTotal } from './domain/review-round.mjs';
 export { SubprocessExecutionAdapter, linkDependencyDirs } from './infra/subprocess-execution-adapter.mjs';
 export {
   FileSystemTelemetryAdapter,
@@ -61,8 +62,8 @@ import { ReviewWorkflowService } from './application/review-workflow-service.mjs
  * }} [options]
  * @returns {ReviewWorkflowService}
  */
-export function createReviewWorkflowService({ git, omp, ompOptions, clock, logger, progress, telemetry, assertPatterns, testPathPatterns, testDeclarationPatterns, executionPort, execution } = {}) {
-  const gitPort = new SubprocessGitAdapter(git);
+export function createReviewWorkflowService({ git, vendoredFiles, omp, ompOptions, clock, logger, progress, telemetry, assertPatterns, testPathPatterns, testDeclarationPatterns, executionPort, execution } = {}) {
+  const gitPort = new SubprocessGitAdapter(git, { vendoredFiles });
   const reviewerPort = new OmpCliReviewerAdapter({ runner: omp, progress, ...ompOptions });
   const reportStorePort = new FileSystemReportStoreAdapter();
   const snapshotStorePort = new FileSystemSnapshotAdapter();
@@ -103,6 +104,7 @@ export function createReviewWorkflowService({ git, omp, ompOptions, clock, logge
 export async function runReview({
   cwd = process.cwd(),
   git,
+  vendoredFiles,
   omp,
   ompOptions,
   now = new Date(),
@@ -117,6 +119,7 @@ export async function runReview({
 } = {}) {
   const service = createReviewWorkflowService({
     git,
+    vendoredFiles,
     omp,
     ompOptions,
     clock: () => now,
