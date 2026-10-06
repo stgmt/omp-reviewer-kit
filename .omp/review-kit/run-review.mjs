@@ -2856,6 +2856,15 @@ export const VENDORED_KIT_FILES = Object.freeze([
 ]);
 
 /**
+ * The kit repository keeps a self-hosted copy of its own runner next to the
+ * source. When that copy equals the staged source, only the source is reviewed.
+ */
+export const VENDORED_RUNNER_MIRROR = Object.freeze({
+  target: '.omp/review-kit/run-review.mjs',
+  source: 'scripts/run-review.mjs',
+});
+
+/**
  * Reads the canonical vendored files from the installed OMP plugin
  * (OMP_REVIEW_KIT_PLUGIN_DIR first, then ~/.omp/plugins/node_modules).
  * Any problem yields an empty map, so nothing is exempted from review.
@@ -2937,38 +2946,49 @@ export class SubprocessGitAdapter extends GitPort {
   /**
    * Staged vendored kit files (runner, hook) that are byte-identical to the
    * installed kit's canonical copy: they are the review plugin, not the
-   * committer's work, so the review diff leaves them out. Any doubt (no
-   * canonical copy, unreadable blob, different bytes) keeps the file in review.
+   * committer's work, so the review diff leaves them out. In the kit repository
+   * itself the self-hosted runner is a byte-identical mirror of the staged
+   * `scripts/run-review.mjs`, which stays in review, so the mirror is left out
+   * too. Any doubt (no canonical copy, unreadable blob, different bytes) keeps
+   * the file in review.
    *
    * @param {string} repoRoot
    * @returns {Promise<string[]>}
    */
   async #identicalVendoredPaths(repoRoot) {
-    if (typeof this.#vendoredFiles !== 'function') return [];
-    let canonical;
-    try {
-      canonical = await this.#vendoredFiles();
-    } catch {
-      return [];
+    let canonical = new Map();
+    if (typeof this.#vendoredFiles === 'function') {
+      try {
+        const loaded = await this.#vendoredFiles();
+        if (loaded instanceof Map) canonical = loaded;
+      } catch {
+        canonical = new Map();
+      }
     }
-    if (!(canonical instanceof Map) || canonical.size === 0) return [];
     const fields = (await this.#runner(['diff', '--cached', '--raw', '--no-renames', '-z', '--'], repoRoot))
       .toString('utf8').split('\0');
     const normalize = (text) => String(text).replace(/\r\n/g, '\n');
     const regularModes = new Set(['100644', '100755']);
+    const stagedText = async (name) => (await this.#runner(['show', `:${name}`], repoRoot)).toString('utf8');
     const identical = [];
     for (let i = 0; i + 1 < fields.length; i += 2) {
       const meta = /^:(\d{6}) (\d{6}) [0-9a-f]+ [0-9a-f]+ ([A-Z])\d*$/.exec(fields[i]);
       const name = fields[i + 1];
-      if (!meta || !canonical.has(name)) continue;
+      if (!meta) continue;
+      const isMirror = name === VENDORED_RUNNER_MIRROR.target;
+      if (!canonical.has(name) && !isMirror) continue;
       // A mode change (the hook losing its executable bit, a symlink in place
       // of the file) changes behaviour even when the bytes are canonical.
       const [, oldMode, newMode, status] = meta;
       const modeOk = status === 'M' ? oldMode === newMode : status === 'A' && regularModes.has(newMode);
       if (!modeOk) continue;
       try {
-        const staged = (await this.#runner(['show', `:${name}`], repoRoot)).toString('utf8');
-        if (normalize(staged) === normalize(canonical.get(name))) identical.push(name);
+        const staged = normalize(await stagedText(name));
+        if (canonical.has(name) && staged === normalize(canonical.get(name))) {
+          identical.push(name);
+        } else if (isMirror && staged === normalize(await stagedText(VENDORED_RUNNER_MIRROR.source))) {
+          identical.push(name);
+        }
       } catch {
         // unreadable staged blob stays in review
       }
@@ -3551,6 +3571,125 @@ async function terminateProcessTree(proc) {
   await waitForExit(250);
 }
 
+const TRANSCRIPT_MAX_BYTES = 64 * 1024 * 1024;
+const MAX_TRANSCRIPTS = 40;
+
+function percentile(sortedValues, fraction) {
+  if (sortedValues.length === 0) return null;
+  return sortedValues[Math.min(sortedValues.length - 1, Math.floor(sortedValues.length * fraction))];
+}
+
+/**
+ * Stage label from a transcript file name: `ReviewerKit.Scout.jsonl` -> `Scout`,
+ * the orchestrator's own `ReviewerKit.jsonl` keeps its name.
+ *
+ * @param {string} fileName
+ * @returns {string}
+ */
+export function stageLabelFromTranscript(fileName) {
+  const stem = String(fileName).replace(/\.jsonl$/i, '');
+  const dot = stem.indexOf('.');
+  return dot >= 0 ? stem.slice(dot + 1) : stem;
+}
+
+/**
+ * Condenses one OMP session transcript (JSONL) into latency counters: how many
+ * model turns and tool calls a stage took and how long a turn takes. Lines
+ * that are not JSON are ignored.
+ *
+ * @param {string} text
+ * @param {string} stage
+ * @returns {{ stage: string, turns: number, toolCalls: number, tools: Record<string, number>, startedAtMs: number, spanMs: number, turnGapMedianMs: number|null, turnGapP90Ms: number|null, turnGapMaxMs: number|null, model: string|null }}
+ */
+export function summarizeTranscript(text, stage) {
+  const tools = {};
+  const turnTimes = [];
+  let firstAt = Infinity;
+  let lastAt = -Infinity;
+  let model = null;
+  let subagentModel = null;
+  let toolCalls = 0;
+  for (const line of String(text).split('\n')) {
+    if (!line.trim()) continue;
+    let entry;
+    try {
+      entry = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (!entry || typeof entry !== 'object') continue;
+    const at = Date.parse(entry.timestamp);
+    if (Number.isFinite(at)) {
+      if (at < firstAt) firstAt = at;
+      if (at > lastAt) lastAt = at;
+    }
+    if (entry.type === 'model_change' && typeof entry.model === 'string') {
+      if (String(entry.role ?? '').startsWith('subagent:')) subagentModel ??= entry.model;
+      else model ??= entry.model;
+    }
+    if (entry.type !== 'message' || entry.message?.role !== 'assistant') continue;
+    if (Number.isFinite(at)) turnTimes.push(at);
+    for (const item of Array.isArray(entry.message.content) ? entry.message.content : []) {
+      if (item?.type !== 'toolCall' && item?.type !== 'tool_use') continue;
+      toolCalls += 1;
+      const name = String(item.name ?? item.toolName ?? 'unknown');
+      tools[name] = (tools[name] ?? 0) + 1;
+    }
+  }
+  const gaps = [];
+  for (let i = 1; i < turnTimes.length; i += 1) gaps.push(turnTimes[i] - turnTimes[i - 1]);
+  gaps.sort((a, b) => a - b);
+  return {
+    stage,
+    turns: turnTimes.length,
+    toolCalls,
+    tools,
+    startedAtMs: Number.isFinite(firstAt) ? firstAt : 0,
+    spanMs: lastAt > firstAt ? lastAt - firstAt : 0,
+    turnGapMedianMs: percentile(gaps, 0.5),
+    turnGapP90Ms: percentile(gaps, 0.9),
+    turnGapMaxMs: gaps.length > 0 ? gaps[gaps.length - 1] : null,
+    model: subagentModel ?? model,
+  };
+}
+
+/**
+ * Summarises every stage transcript an OMP review child left in its
+ * `--session-dir` (`<session>/<artifacts>/<Parent>/<Parent>.<Stage>.jsonl`, plus the
+ * orchestrator's `<artifacts>/<Parent>.jsonl`). Never throws: telemetry must
+ * not be able to change a verdict.
+ *
+ * @param {string|null|undefined} sessionDir
+ * @returns {Promise<ReturnType<typeof summarizeTranscript>[]>}
+ */
+export async function summarizeStageTranscripts(sessionDir) {
+  if (typeof sessionDir !== 'string' || sessionDir.length === 0) return [];
+  const stages = [];
+  try {
+    for (const artifacts of await readdir(sessionDir, { withFileTypes: true })) {
+      if (!artifacts.isDirectory()) continue;
+      const artifactsDir = path.join(sessionDir, artifacts.name);
+      const files = [];
+      for (const entry of await readdir(artifactsDir, { withFileTypes: true })) {
+        if (entry.isFile() && entry.name.endsWith('.jsonl')) files.push(path.join(artifactsDir, entry.name));
+        if (!entry.isDirectory()) continue;
+        const nested = path.join(artifactsDir, entry.name);
+        for (const inner of await readdir(nested, { withFileTypes: true })) {
+          if (inner.isFile() && inner.name.endsWith('.jsonl')) files.push(path.join(nested, inner.name));
+        }
+      }
+      for (const file of files.slice(0, MAX_TRANSCRIPTS)) {
+        const info = await stat(file).catch(() => null);
+        if (!info || info.size === 0 || info.size > TRANSCRIPT_MAX_BYTES) continue;
+        stages.push(summarizeTranscript(await readFile(file, 'utf8'), stageLabelFromTranscript(path.basename(file))));
+      }
+    }
+  } catch {
+    // keep whatever was read before the failure
+  }
+  return stages.sort((a, b) => a.startedAtMs - b.startedAtMs);
+}
+
 /**
  * Infrastructure adapter running headless OMP CLI reviews.
  */
@@ -3712,6 +3851,10 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
           outcome = { ...result, stdout: recovered.text };
         }
       }
+      // Per-stage turn and tool-call counts: a stage lasts turns x turn latency,
+      // so this is what explains a slow review. Read before the session dir goes.
+      const stages = await summarizeStageTranscripts(sessionDir);
+      if (stages.length > 0) await telemetry.record('stage_stats', { attemptIndex, pid: record.pid, stages });
       await telemetry.record('review_attempt_finished', { ...record });
       return outcome;
     } finally {

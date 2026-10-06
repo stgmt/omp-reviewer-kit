@@ -279,6 +279,12 @@ function summarizeRun(runId, events) {
         summary.attempts.set(key, { ...attempt, ...event, finishedAt: event.at });
         break;
       }
+      case 'stage_stats': {
+        const key = event.attemptIndex ?? summary.attempts.size - 1;
+        const attempt = summary.attempts.get(key) ?? {};
+        summary.attempts.set(key, { ...attempt, stageStats: Array.isArray(event.stages) ? event.stages : [] });
+        break;
+      }
       case 'report_written':
         summary.reportPath = event.reportPath;
         break;
@@ -312,6 +318,15 @@ function summarizeRun(runId, events) {
     if (start !== undefined && end !== undefined) summary.durationMs = end - start;
   }
   return summary;
+}
+
+// A stage lasts turns x per-turn latency, so these counters explain a slow review.
+function printStageStats(stages) {
+  for (const stage of stages ?? []) {
+    const tools = Object.entries(stage.tools ?? {}).map(([name, count]) => `${name}×${count}`).join(' ');
+    const gap = (value) => (Number.isFinite(value) ? `${Math.round(value / 1000)}s` : '-');
+    console.log(`    stage ${stage.stage}: ${fmtDuration(stage.spanMs)}  turns ${stage.turns}  tool calls ${stage.toolCalls}${tools ? ` (${tools})` : ''}  turn gap median ${gap(stage.turnGapMedianMs)} p90 ${gap(stage.turnGapP90Ms)} max ${gap(stage.turnGapMaxMs)}${stage.model ? `  ${stage.model}` : ''}`);
+  }
 }
 
 function printLogInfo(info) {
@@ -651,6 +666,7 @@ async function main() {
 
   for (const attempt of result.attempts) {
     console.log(`  attempt #${attempt.attemptIndex ?? '?'}${attempt.model ? " model " + attempt.model : ""}  pid ${attempt.pid ?? '-'}  ${fmtDuration(attempt.durationMs)}  status ${attempt.status ?? '-'}${attempt.providerFailure ? '  PROVIDER-FAILURE' : ''}`);
+    printStageStats(attempt.stageStats);
     printLogInfo(attempt.log);
     printTranscriptInfo(attempt.transcripts);
     if (attempt.ompLog && attempt.ompLogCorrelation === 'time-window') {

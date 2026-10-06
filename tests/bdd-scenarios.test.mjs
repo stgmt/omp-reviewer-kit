@@ -256,7 +256,7 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
 
     // Then
     assert.equal(result.exitCode, 0);
-    assert.deepEqual(calls[1], ['diff', '--cached', '--binary', '--no-ext-diff', '--']);
+    assert.deepEqual(calls.find((call) => call.includes('--binary')), ['diff', '--cached', '--binary', '--no-ext-diff', '--']);
   });
 
   it('Scenario 8: Given consecutive reviews, When reviews finish, Then each report is uniquely preserved', async () => {
