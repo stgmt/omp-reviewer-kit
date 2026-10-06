@@ -42,8 +42,11 @@ export class ReviewPrompt {
   #fileClasses;
   #executionEvidenceText;
   #roundContextText;
+  #scoutBaselineText;
   #reportPath;
+  #contextPackPath;
   #riskLanes;
+  #hunterShardsText;
   #reemitOutput;
   #repairEnvelope = false;
 
@@ -63,10 +66,13 @@ export class ReviewPrompt {
     this.#suspicionMapText = typeof extras?.suspicionMapText === 'string' ? extras.suspicionMapText : '';
     this.#executionEvidenceText = typeof extras?.executionEvidenceText === 'string' ? extras.executionEvidenceText : '';
     this.#roundContextText = typeof extras?.roundContextText === 'string' ? extras.roundContextText : '';
+    this.#scoutBaselineText = typeof extras?.scoutBaselineText === 'string' ? extras.scoutBaselineText : '';
     this.#inlineDiff = typeof extras?.inlineDiff === 'string' && extras.inlineDiff.length > 0 ? extras.inlineDiff : null;
     this.#reviewProfile = typeof extras?.reviewProfile === 'string' ? extras.reviewProfile : null;
     this.#fileClasses = Array.isArray(extras?.fileClasses) ? extras.fileClasses : [];
     this.#reportPath = typeof extras?.reportPath === 'string' && extras.reportPath.length > 0 ? extras.reportPath : null;
+    this.#contextPackPath = typeof extras?.contextPackPath === 'string' && extras.contextPackPath.length > 0 ? extras.contextPackPath : null;
+    this.#hunterShardsText = typeof extras?.hunterShardsText === 'string' ? extras.hunterShardsText : '';
     this.#riskLanes = Array.isArray(extras?.riskLanes) && extras.riskLanes.length > 0 ? extras.riskLanes.filter((l) => typeof l === 'string' && l.length > 0) : null;
   }
 
@@ -137,6 +143,12 @@ export class ReviewPrompt {
         ...classLines,
       );
     }
+    if (this.#contextPackPath) {
+      lines.push(
+        `A deterministic context pack for the scout is at \`${this.#contextPackPath}\`: changed files, changed symbols with who references them, and the test-file mapping, all built by the runner from the staged snapshot.`,
+        'Pass that path to the context scout in its task text: the scout starts from the pack and finishes in a few batches of tool calls instead of sweeping the repository. The pack is read-only input; never write to it.',
+      );
+    }
     if (this.#suspicionMapText) {
       lines.push('', this.#suspicionMapText);
     }
@@ -146,10 +158,14 @@ export class ReviewPrompt {
     if (this.#roundContextText) {
       lines.push('', this.#roundContextText);
     }
+    if (this.#scoutBaselineText) {
+      lines.push('', 'Embed the SCOUT BASELINE block below verbatim in the context scout task text only (not in the hunter or verifier tasks):', this.#scoutBaselineText);
+    }
     lines.push(`The staged diff hash for this hook invocation is ${this.#diffHash}.`);
     if (this.#reportPath) lines.push(`The durable per-run report path for this review is \`${this.#reportPath}\`. Instruct the reviewer-kit task to write its complete final report verbatim to that path before yielding, as a best-effort durable copy: if a project policy guard denies the write, the task must not retry or work around it, because the runner recovers the report from the task session artifacts. It is the only path the task may write.`);
     if (this.#reviewProfile) lines.push(`Review profile for this diff: ${this.#reviewProfile}.`);
     if (Array.isArray(this.#riskLanes)) lines.push(`Risk lanes for this diff: ${JSON.stringify(this.#riskLanes)}.`);
+    if (this.#hunterShardsText) lines.push(this.#hunterShardsText);
     return lines.join('\n');
   }
 
@@ -181,6 +197,18 @@ export class ReviewPrompt {
 
   get executionEvidenceText() {
     return this.#executionEvidenceText;
+  }
+
+  get contextPackPath() {
+    return this.#contextPackPath;
+  }
+
+  get scoutBaselineText() {
+    return this.#scoutBaselineText;
+  }
+
+  get hunterShardsText() {
+    return this.#hunterShardsText;
   }
 
   get roundContextText() {

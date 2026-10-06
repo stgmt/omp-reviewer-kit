@@ -21,6 +21,7 @@ When your task text includes an execution evidence block, apply its interpretati
 - `staged fail + reverted pass`: the staged change breaks the project's own checks; emit a mandatory P1 correctness candidate.
 - `staged pass + reverted pass` with modified test files: the staged tests do not discriminate the change; emit a P2 correctness candidate.
 - `unavailable`: execution evidence is absent; absence proves nothing.
+When your task text names a shard (`Shard i/N` with a file list), hunt only defects located in that shard's files, emit candidate ids `<lane>-s<shard>-<ordinal>`, and limit `coverage_gaps` and the assertion pass to the scout `coverage_map` entries and assertions of those files. You may read any other staged file to verify a cross-file contract of your shard's changes, but a candidate located only in another shard's files belongs to that shard's hunter: leave it out. The shared digest in your task text names the cross-shard contracts; treat it as context, not as a finding.
 Stay within the tool-call budget specified in your task text (default ~30): analyze the diff hunks, read each changed file once from the snapshot, verify only the callers that decide a candidate, and emit. Do not re-read files already read or sweep the tree for unrelated context.
 
 ## Anti-Noise Prohibitions

@@ -119,3 +119,42 @@ export async function summarizeStageTranscripts(sessionDir) {
   }
   return stages.sort((a, b) => a.startedAtMs - b.startedAtMs);
 }
+
+const STAGE_RESULT_MAX_BYTES = 2 * 1024 * 1024;
+
+/**
+ * Newest stage result artifact (`<artifacts>/<Parent>/<Parent>.<Stage>.md`)
+ * whose stage label matches `labelPattern`, as text; empty when none exists.
+ * Never throws.
+ *
+ * @param {string|null|undefined} sessionDir
+ * @param {RegExp} labelPattern
+ * @returns {Promise<string>}
+ */
+export async function readStageResult(sessionDir, labelPattern) {
+  if (typeof sessionDir !== 'string' || sessionDir.length === 0) return '';
+  let best = null;
+  try {
+    for (const artifacts of await readdir(sessionDir, { withFileTypes: true }).catch(() => [])) {
+      if (!artifacts.isDirectory()) continue;
+      const artifactsDir = path.join(sessionDir, artifacts.name);
+      for (const entry of await readdir(artifactsDir, { withFileTypes: true }).catch(() => [])) {
+        if (!entry.isDirectory()) continue;
+        const nested = path.join(artifactsDir, entry.name);
+        for (const inner of await readdir(nested, { withFileTypes: true }).catch(() => [])) {
+          if (!inner.isFile() || !inner.name.endsWith('.md')) continue;
+          if (!labelPattern.test(stageLabelFromTranscript(inner.name.replace(/\.md$/i, '.jsonl')))) continue;
+          const full = path.join(nested, inner.name);
+          const info = await stat(full).catch(() => null);
+          if (!info || info.size === 0 || info.size > STAGE_RESULT_MAX_BYTES) continue;
+          if (!best || info.mtimeMs > best.mtimeMs || (full > best.file && info.mtimeMs === best.mtimeMs)) {
+            best = { file: full, mtimeMs: info.mtimeMs };
+          }
+        }
+      }
+    }
+    return best ? await readFile(best.file, 'utf8') : '';
+  } catch {
+    return '';
+  }
+}

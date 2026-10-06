@@ -38,17 +38,19 @@ test('Given a consistent tree, check-layout passes', async () => {
   }
 });
 
-test('check-layout rejects a tree that lacks the stage transcript statistics module', async () => {
-  const fx = await layoutFixture();
-  try {
-    await rm(path.join(fx.dir, 'src', 'infra', 'stage-transcript-stats.mjs'));
-    const result = fx.check();
-    assert.notEqual(result.status, 0);
-    assert.match(failure(result), /stage-transcript-stats\.mjs/);
-  } finally {
-    await fx.cleanup();
-  }
-});
+for (const name of ['infra/stage-transcript-stats.mjs', 'domain/context-pack.mjs', 'domain/scout-baseline.mjs', 'domain/hunter-shards.mjs']) {
+  test(`check-layout rejects a tree that lacks src/${name}`, async () => {
+    const fx = await layoutFixture();
+    try {
+      await rm(path.join(fx.dir, 'src', ...name.split('/')));
+      const result = fx.check();
+      assert.notEqual(result.status, 0);
+      assert.match(failure(result), new RegExp(name.split('/')[1].replace(/\./g, '\\.')));
+    } finally {
+      await fx.cleanup();
+    }
+  });
+}
 
 test('check-layout rejects a runner without the version marker or with a stale version', async () => {
   const fx = await layoutFixture();

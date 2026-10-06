@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { ReviewRejectionEnvelope } from '../domain/review-rejection-envelope.mjs';
 import { ReviewPrompt } from '../domain/review-prompt.mjs';
+import { buildContextPack } from '../domain/context-pack.mjs';
+import { formatHunterShards, planHunterShards } from '../domain/hunter-shards.mjs';
 import { ReviewReport } from '../domain/review-report.mjs';
 import { ReviewRound, roundFindingsFromEnvelope, roundFindingsTotal } from '../domain/review-round.mjs';
 import { ReviewExecutionResult } from '../domain/review-execution-result.mjs';
@@ -169,6 +171,10 @@ export class ReviewWorkflowService {
     // dispatcher would reproduce verbatim); the pid tail feeds the
     // orphan-sweep owner check (`-<pid>.md$`).
     const runReportPath = path.join(tmpdir(), `reviewer-kit-report-${runId}-${REPORT_SEQ++}-${randomBytes(8).toString('hex')}-${process.pid}.md`);
+    // Deterministic scout context pack, written next to the report (same
+    // `reviewer-kit-report-` prefix and `-<pid>.md` tail, so the orphan sweep owns it).
+    const contextPackPath = path.join(tmpdir(), path.basename(runReportPath).replace('reviewer-kit-report-', 'reviewer-kit-report-ctx-'));
+    let contextPackWritten = false;
     let telemetry;
     try {
       telemetry = safeRunTelemetry(this.#telemetryPort.forRun({ repoRoot, runId }));
@@ -200,6 +206,7 @@ export class ReviewWorkflowService {
         });
       }
       await rm(runReportPath, { force: true }).catch(() => {});
+      await rm(contextPackPath, { force: true }).catch(() => {});
     };
     const uninstall = installRunSignalGuard({ telemetry, runId, cleanup: cleanupSnapshots });
     await telemetry.updateLastRun({
@@ -331,6 +338,23 @@ export class ReviewWorkflowService {
       // otherwise the throw leaks a foreign-live lease for its 24h TTL.
       const reviewProfile = reviewProfileFor(fileClasses);
       const riskLanes = riskLanesFor(reviewProfile, process.env);
+      // A large diff splits the correctness hunt into parallel shards: the
+      // hunter is the longest stage and grows with the diff.
+      let hunterShardsText = '';
+      if (reviewProfile === 'full' && riskLanes.includes('correctness')) {
+        const plan = planHunterShards({
+          diffText: diff.bytes.toString('utf8'),
+          thresholdBytes: configuredInteger(process.env.OMP_REVIEW_KIT_SHARD_BYTES, 40_000, 0),
+          maxShards: configuredInteger(process.env.OMP_REVIEW_KIT_MAX_SHARDS, 3, 2),
+        });
+        if (plan) {
+          hunterShardsText = formatHunterShards(plan);
+          await telemetry.record('hunter_shards_planned', {
+            diffBytes: plan.totalBytes,
+            shards: plan.shards.map((shard) => ({ files: shard.files.length, bytes: shard.bytes })),
+          });
+        }
+      }
       const reuseDir = path.join(tmpdir(), `reviewer-kit-snapshot-${diff.hash.slice(0, 24)}`);
       const snapshotDir = await this.#snapshotStorePort.create(snapshot, {
         diffBytes: diff.bytes,
@@ -496,16 +520,35 @@ export class ReviewWorkflowService {
         }
       }
 
+      try {
+        const pack = buildContextPack({
+          files: snapshot.files,
+          diffText: diff.bytes.toString('utf8'),
+          changedPaths: diff.changedPaths,
+          fileClasses: fileClassRows,
+          testPathPatterns: this.#testPathPatterns,
+        });
+        await writeFile(contextPackPath, pack.text, { mode: 0o600 });
+        contextPackWritten = true;
+        await telemetry.record('context_pack_built', { bytes: Buffer.byteLength(pack.text), ...pack.stats });
+      } catch {
+        // The pack is an accelerator for the scout, never a gate.
+        contextPackWritten = false;
+      }
+
       let execResult;
       try {
         const prompt = ReviewPrompt.forDiff(diff, snapshotDir, diff.changedPaths, {
           suspicionMapText: suspicionMap.toPromptText(),
           executionEvidenceText: executionEvidence ? executionEvidence.toPromptText() : '',
           roundContextText: reviewRound ? reviewRound.toPromptText() : '',
+          scoutBaselineText: reviewRound ? reviewRound.toScoutBaselineText() : '',
           reviewProfile,
           riskLanes,
+          hunterShardsText,
           fileClasses: fileClassRows,
           reportPath: runReportPath,
+          contextPackPath: contextPackWritten ? contextPackPath : '',
           // ~50KB ≈ 12K tokens — cheaper than four read round-trips per subagent.
           inlineDiff: diff.length <= 50_000 ? diff.bytes.toString('utf8') : '',
         });
@@ -535,6 +578,7 @@ export class ReviewWorkflowService {
         // The dispatcher consumed the durable report (or never needed it);
         // remove this run's copy so per-run fallbacks never accumulate.
         await rm(runReportPath, { force: true }).catch(() => {});
+        await rm(contextPackPath, { force: true }).catch(() => {});
       }
 
       let combinedOutput = execResult.combined ?? `${execResult.stdout ?? ''}\n${execResult.stderr ?? ''}`;
@@ -716,6 +760,7 @@ ${reemitResult.stderr ?? ''}`;
               envelopeKind: envelope.kind,
               findings: roundFindingsFromEnvelope(envelope.toJSON()),
               findingsTotal: roundFindingsTotal(envelope.toJSON()),
+              ...((execResult.scoutBaseline ?? reviewRound?.scoutBaseline) ? { scout: execResult.scoutBaseline ?? reviewRound.scoutBaseline } : {}),
               ...(diffText.length <= ROUND_MAX_DIFF_CHARS ? { diffText } : {}),
             });
           }
