@@ -103,3 +103,27 @@ test('Given a repair that reports failure or throws, Then the repository is list
     await ws.cleanup();
   }
 });
+
+test('Given another tool\'s hook next to ours, Then a stale runner is refreshed only while .githooks is already the hooks path', async () => {
+  const ws = await workspace();
+  try {
+    const live = await ws.makeRepo('live-hooks');
+    await writeFile(path.join(live, '.githooks', 'pre-push'), '#!/bin/sh\necho theirs\n', { mode: 0o755 });
+    await ws.makeStale(live);
+    const dormant = await ws.makeRepo('dormant-hooks');
+    spawnSync('git', ['config', '--unset', 'core.hooksPath'], { cwd: dormant, windowsHide: true });
+    await writeFile(path.join(dormant, '.githooks', 'pre-push'), '#!/bin/sh\necho theirs\n', { mode: 0o755 });
+    await ws.makeStale(dormant);
+    for (const repo of [live, dormant]) await ws.registry.add(repo);
+
+    const summary = await ws.installer.healTargets();
+
+    assert.deepEqual(summary.healed, [path.resolve(live)], 'already running .githooks: only the runner is refreshed');
+    assert.equal(await readFile(ws.runnerOf(live), 'utf8'), CANONICAL_RUNNER);
+    assert.equal(await readFile(path.join(live, '.githooks', 'pre-push'), 'utf8'), '#!/bin/sh\necho theirs\n');
+    assert.equal(await readFile(ws.runnerOf(dormant), 'utf8'), STALE_RUNNER, 'activating .githooks would start their hook: left alone');
+    assert.equal((await ws.installer.status(dormant)).state, 'conflict');
+  } finally {
+    await ws.cleanup();
+  }
+});
