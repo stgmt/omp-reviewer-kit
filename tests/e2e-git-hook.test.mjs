@@ -476,9 +476,9 @@ describe('Feature: Real Git Pre-commit Hook E2E Integration', () => {
   });
 
 
-  it('kit-gated self-sync: diverged .omp runner is replaced by the canonical scripts copy before exec (r36 coverage)', async () => {
+  it('kit-gated direct run: the kit repository executes scripts/run-review.mjs and never the diverged .omp copy (r36 coverage)', async () => {
     // The session-start plugin installer overwrites .omp/review-kit/ with a
-    // possibly-stale installed copy mid-review; the hook must resync from
+    // possibly-stale installed copy mid-review; the hook must run the canonical
     // scripts/run-review.mjs when package.json names omp-reviewer-kit.
     const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-hook-sync-'));
     const repoDir = path.join(baseDir, 'repo');
@@ -488,7 +488,7 @@ describe('Feature: Real Git Pre-commit Hook E2E Integration', () => {
       assert.equal(git(['init']).status, 0);
       git(['config', 'user.name', 'E2E Test']);
       git(['config', 'user.email', 'e2e@test.local']);
-      // Hook: the repo template (kit-gated self-sync version).
+      // Hook: the repo template (kit-gated direct-run version).
       await mkdir(path.join(repoDir, '.githooks'), { recursive: true });
       const hook = await readFile('templates/githooks/pre-commit', 'utf8');
       await writeFile(path.join(repoDir, '.githooks', 'pre-commit'), hook, 'utf8');
@@ -505,10 +505,10 @@ describe('Feature: Real Git Pre-commit Hook E2E Integration', () => {
         'process.exit(42);\n', 'utf8');
       await writeFile(path.join(repoDir, 'x.txt'), 'x\n', 'utf8');
       git(['add', 'x.txt']);
-      const res = git(['commit', '-m', 'self-sync test']);
+      const res = git(['commit', '-m', 'direct-run test']);
       assert.equal(res.status, 0, `synced canonical runner exits 0: ${res.stderr}`);
-      const synced = await readFile(path.join(repoDir, '.omp', 'review-kit', 'run-review.mjs'), 'utf8');
-      assert.match(synced, /canonical runner ran/, 'hook must overwrite the stale .omp copy');
+      const vendored = await readFile(path.join(repoDir, '.omp', 'review-kit', 'run-review.mjs'), 'utf8');
+      assert.equal(vendored, 'process.exit(42);\n', 'the stale .omp copy is neither executed nor rewritten by the hook');
 
       // Negative: a consumer repo (different package name) never syncs —
       // the stale .omp copy must run as-is (exit 42).

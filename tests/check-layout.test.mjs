@@ -131,3 +131,25 @@ test('check-layout rejects an extra file in the Claude shell and an oversized pa
     await big.cleanup();
   }
 });
+
+test('check-layout rejects a hook template whose marker is missing, stale, or no longer matches its body', async () => {
+  const edited = await layoutFixture();
+  try {
+    await edited.edit('templates/githooks/pre-commit', (text) => text.replace('set -eu', 'set -eu\n# edited after stamping'));
+    const result = edited.check();
+    assert.notEqual(result.status, 0);
+    assert.match(failure(result), /stamp-hook\.mjs/);
+  } finally {
+    await edited.cleanup();
+  }
+
+  const stale = await layoutFixture();
+  try {
+    await stale.edit('templates/githooks/pre-commit', (text) => text.replace(/hook v\d+\.\d+\.\d+/, 'hook v0.0.1'));
+    const result = stale.check();
+    assert.notEqual(result.status, 0);
+    assert.match(failure(result), /stamp-hook\.mjs/);
+  } finally {
+    await stale.cleanup();
+  }
+});

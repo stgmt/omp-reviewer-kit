@@ -1,6 +1,8 @@
 import { access, readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 
+import { isOwnedHook, parseHookMarker } from '../src/domain/hook-template.mjs';
+
 // The Claude Code shell ships only these files; everything else (runner,
 // installer, agents, tests) is deliberately absent so the plugin cache stays small.
 const CLAUDE_PLUGIN_FILES = [
@@ -22,6 +24,8 @@ const required = [
   'src/domain/runner-version.mjs',
   'src/infra/vendored-kit-files.mjs',
   'src/domain/target-policy.mjs',
+  'src/domain/hook-template.mjs',
+  'scripts/stamp-hook.mjs',
   'src/infra/target-registry.mjs',
   'src/infra/stage-transcript-stats.mjs',
   'src/domain/context-pack.mjs',
@@ -83,6 +87,13 @@ const pkg = JSON.parse(await readFile('package.json', 'utf8'));
 const runnerMarker = /^\/\/ omp-reviewer-kit runner v(\d+\.\d+\.\d+)\r?\n/.exec(distRunner);
 if (!runnerMarker || runnerMarker[1] !== pkg.version) {
   throw new Error(`scripts/run-review.mjs must start with "// omp-reviewer-kit runner v${pkg.version}".`);
+}
+
+// The hook template carries the marker of the release that ships it (see src/domain/hook-template.mjs):
+// installed repositories recognise an unedited hook by that marker, so a stale or missing one is fatal.
+const hookTemplate = await readFile('templates/githooks/pre-commit', 'utf8');
+if (!isOwnedHook(hookTemplate) || parseHookMarker(hookTemplate).version !== pkg.version) {
+  throw new Error(`templates/githooks/pre-commit must carry the marker of v${pkg.version}; run node scripts/stamp-hook.mjs.`);
 }
 
 // The Claude shell: version-synchronized, exact file set, small payload.

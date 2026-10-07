@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.20.0] - 2026-10-08
+
+Hook updates no longer need a hand-kept list. Before this release, every change to `templates/githooks/pre-commit` required adding the previous template to `LEGACY_HOOK_TEMPLATES` by hand, or repositories on the old hook stopped receiving new runners.
+
+### Changed
+- **The hook template carries a self-verifying marker.** Line 2 of `templates/githooks/pre-commit` is `# omp-reviewer-kit hook v0.20.0 body-sha256:<digest>`, and the digest covers every other line. A hook whose marker matches its body is the kit's own whichever release wrote it, so later template changes reach every repository without editing any list. A hook whose body was edited while keeping the marker is still a conflict. `node scripts/stamp-hook.mjs` writes the marker after each template edit, and `check-layout` rejects a template whose marker is missing, stale or wrong.
+- **A hook from a newer kit release is never downgraded**, the same rule that already protects a newer runner.
+- **The kit repository runs `scripts/run-review.mjs` directly** instead of first copying it over `.omp/review-kit/run-review.mjs`, so the template body no longer depends on the copy. Consumer repositories are unchanged: they keep running their vendored copy.
+- Hooks from releases 0.1.0 to 0.3.x, 0.4.0 to 0.12.x and 0.13.0 to 0.19.1 are recognised through frozen digests (`LEGACY_HOOK_DIGESTS`), one per template revision; their files live in `tests/fixtures/hooks/`. The list is never extended: every release from 0.20.0 carries a marker.
+
 ## [0.19.1] - 2026-10-08
 
 ### Fixed

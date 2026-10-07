@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { isRunnerNewer } from '../domain/runner-version.mjs';
+import { hookBodyDigest, isHookNewer, isOwnedHook } from '../domain/hook-template.mjs';
 import { FileTargetRegistry } from '../infra/target-registry.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -39,8 +40,12 @@ const GIT_HOOK_NAMES = new Set([
   'sendemail-validate',
   'update',
 ]);
-const LEGACY_HOOK_TEMPLATES = Object.freeze([
-  '#!/bin/sh\nset -eu\n\nroot=$(git rev-parse --show-toplevel)\nexec node "$root/.omp/review-kit/run-review.mjs"',
+// Digests (src/domain/hook-template.mjs) of the hook templates that releases shipped before
+// markers existed. Frozen: every release from 0.20.0 on carries a marker, so nothing is added here.
+export const LEGACY_HOOK_DIGESTS = Object.freeze([
+  '1f60aad321d840308d67438071f003e62d79277a78b0320ae1fc2c0a2af9eda8', // f50bc80, 0.4.0 era
+  '5b2bf3606edba4342c0fc8d39b2f4b572c940e6c16629fef90b464edb9eb70c6', // cd6f1af, 0.4.0 release
+  '979502496b2721d79966a5a48f3ce28c96aa78cd2ca7079bb8f294b4264d101a', // 566c59e, 0.13.0 to 0.19.1
 ]);
 const CHAINED_HOOK_DIR = 'pre-commit.d';
 const CHAINED_HOOK_PREFIX = '00-';
@@ -585,6 +590,7 @@ export class PluginInstallerService {
     let hookFilePresent = false;
     let hookOwned = false;
     let hookCurrent = false;
+    let hookNewer = false;
     let hookChained = false;
     let hookExecutable = process.platform === 'win32';
     const hookSymlinkPath = await this.#findSymlinkComponent(repoRoot, hookPath);
@@ -606,10 +612,11 @@ export class PluginInstallerService {
         } else {
           const hookContent = await readFile(hookPath, 'utf8');
           const normalizedHook = normalizeLineEndings(hookContent);
-          hookCurrent = normalizedHook === normalizeLineEndings(canonicalHookTemplate);
-          hookOwned = hookCurrent || LEGACY_HOOK_TEMPLATES.some(
-            (template) => normalizedHook === normalizeLineEndings(template),
-          );
+          // An unedited hook of a newer release is ours and is left in place, as a newer runner is.
+          hookNewer = isHookNewer(hookContent, canonicalHookTemplate);
+          hookCurrent = hookNewer || normalizedHook === normalizeLineEndings(canonicalHookTemplate);
+          hookOwned = hookCurrent || isOwnedHook(hookContent)
+            || LEGACY_HOOK_DIGESTS.includes(hookBodyDigest(hookContent));
           if (!hookOwned) {
             hookChained = CHAINED_HOOK_RE.test(normalizedHook);
             if (!hookChained && !conflictReason) {
@@ -719,6 +726,7 @@ export class PluginInstallerService {
       hookFilePresent,
       hookOwned,
       hookCurrent,
+      hookNewer,
       hookChained,
       chainedHookPresent,
       chainedHookCurrent,
@@ -796,7 +804,7 @@ export class PluginInstallerService {
         }
       }
     } else {
-      hookWritten = await this.#writeIfChanged(repoRoot, hookPath, canonicalHookTemplate, 0o755);
+      hookWritten = inspection.hookNewer ? false : await this.#writeIfChanged(repoRoot, hookPath, canonicalHookTemplate, 0o755);
       if (hookWritten) {
         if (!inspection.hookFilePresent) {
           installed = true;
