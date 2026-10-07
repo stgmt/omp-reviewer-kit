@@ -5,15 +5,16 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isRunnerNewer } from '../src/domain/runner-version.mjs';
+import { isSkippedTarget } from '../src/domain/target-policy.mjs';
+import { FileTargetRegistry } from '../src/infra/target-registry.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const SKIPPED = [/^tp-/, /^omp-reviewer-kit-release$/];
 const FILES = [
   { from: 'scripts/run-review.mjs', to: '.omp/review-kit/run-review.mjs' },
   { from: 'templates/githooks/pre-commit', to: '.githooks/pre-commit' },
 ];
 
-export const isSkippedTarget = (repo) => SKIPPED.some((pattern) => pattern.test(path.basename(repo)));
+export { isSkippedTarget };
 export const sha256 = (buffer) => createHash('sha256').update(buffer).digest('hex');
 
 const exists = (file) => access(file).then(() => true, () => false);
@@ -46,9 +47,13 @@ export async function syncTarget(repo, { apply = false, source = root } = {}) {
 export async function loadTargets(argv, configPath) {
   const explicit = argv.filter((arg) => !arg.startsWith('--'));
   if (explicit.length) return explicit.map((repo) => path.resolve(repo));
-  const config = JSON.parse(await readFile(configPath, 'utf8'));
+  const config = await readFile(configPath, 'utf8').then(JSON.parse, (error) => {
+    if (error.code === 'ENOENT') return [];
+    throw error;
+  });
   if (!Array.isArray(config)) throw new Error(`${configPath} must contain a JSON array of repository paths`);
-  return config.map((repo) => path.resolve(String(repo)));
+  // the owner's file plus the repositories sessions registered next to it
+  return new FileTargetRegistry({ filePath: configPath, ignoreTemp: false }).list();
 }
 
 async function main() {

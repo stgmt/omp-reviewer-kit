@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { isRunnerNewer } from '../domain/runner-version.mjs';
+import { FileTargetRegistry } from '../infra/target-registry.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -336,10 +337,12 @@ export function reconcileLastRun(lastRun, killFn = process.kill) {
 export class PluginInstallerService {
   #pluginRoot;
   #killFn;
+  #targets;
 
-  constructor({ pluginRoot = PLUGIN_ROOT, killFn = process.kill } = {}) {
+  constructor({ pluginRoot = PLUGIN_ROOT, killFn = process.kill, targetRegistry = new FileTargetRegistry() } = {}) {
     this.#pluginRoot = pluginRoot;
     this.#killFn = killFn;
+    this.#targets = targetRegistry;
   }
 
   /**
@@ -839,6 +842,88 @@ export class PluginInstallerService {
   }
 
   /**
+   * Remembers a repository whose review hook is installed so that later runner
+   * releases reach it without a manual sync. Never throws.
+   *
+   * @param {string|null|undefined} repoRoot
+   * @returns {Promise<boolean>} true when the repository was newly registered
+   */
+  async registerTarget(repoRoot) {
+    if (!repoRoot) return false;
+    try {
+      return await this.#targets.add(repoRoot);
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Repairs every registered repository whose installed hook or runner went stale
+   * (typically after this plugin was updated). Repositories that are not stale,
+   * not installed, in conflict, or carry a newer runner are left alone; entries
+   * that stopped being Git repositories are dropped. Never throws.
+   *
+   * @param {{ exceptRoot?: string|null, budgetMs?: number }} [options]
+   * @returns {Promise<{ checked: number, healed: string[], failed: string[], pruned: string[] }>}
+   */
+  async healTargets({ exceptRoot = null, budgetMs = 8000 } = {}) {
+    const summary = { checked: 0, healed: [], failed: [], pruned: [] };
+    if (process.env.OMP_REVIEW_KIT_AUTO_SYNC === '0') return summary;
+    let targets;
+    try {
+      targets = await this.#targets.list();
+    } catch {
+      return summary;
+    }
+    const except = exceptRoot ? path.resolve(exceptRoot) : null;
+    const same = (a, b) => (process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b);
+    const deadline = Date.now() + budgetMs;
+    for (const repo of targets) {
+      if (Date.now() > deadline) break;
+      if (except && same(repo, except)) continue;
+      try {
+        const info = await this.#inspectInstallation(repo);
+        if (!info.isGitRepo) {
+          if (await this.#targets.remove(repo)) summary.pruned.push(repo);
+          continue;
+        }
+        summary.checked += 1;
+        if (info.state !== 'stale') continue;
+        const result = await this.setup(repo);
+        (result.success ? summary.healed : summary.failed).push(repo);
+      } catch {
+        summary.failed.push(repo);
+      }
+    }
+    return summary;
+  }
+
+  /**
+   * Session-start routine for hosts that do not run `setup()` themselves: repairs
+   * the current repository when its installed hook is stale, registers it, and
+   * heals every other registered repository.
+   *
+   * @param {string} cwd
+   * @param {{ budgetMs?: number }} [options] time allowed for healing the other repositories
+   * @returns {Promise<{ current: object|null, targets: { checked: number, healed: string[], failed: string[], pruned: string[] } }>}
+   */
+  async refreshAtSessionStart(cwd, { budgetMs = 8000 } = {}) {
+    let current = null;
+    let repoRoot = null;
+    try {
+      const info = await this.#inspectInstallation(cwd);
+      if (info.isGitRepo && (info.state === 'stale' || info.state === 'active')) {
+        repoRoot = info.repoRoot;
+        if (info.state === 'stale' && process.env.OMP_REVIEW_KIT_AUTO_SYNC !== '0') current = await this.setup(cwd);
+        await this.registerTarget(repoRoot);
+      }
+    } catch {
+      // the other repositories are still worth healing
+    }
+    return { current, targets: await this.healTargets({ exceptRoot: repoRoot, budgetMs }) };
+  }
+
+  /**
    * Inspects the current review hook status in a repository.
    *
    * @param {string} targetDir
@@ -1016,6 +1101,26 @@ export class PluginInstallerService {
           message: 'Hook not configured in repository.',
         });
       }
+    }
+
+    try {
+      const targets = await this.#targets.list();
+      if (targets.length > 0) {
+        let stale = 0;
+        for (const repo of targets) {
+          const info = await this.#inspectInstallation(repo).catch(() => null);
+          if (info?.isGitRepo && info.state === 'stale') stale += 1;
+        }
+        checks.push({
+          name: 'Registered repositories',
+          status: stale > 0 ? 'WARN' : 'OK',
+          message: stale > 0
+            ? `${stale} of ${targets.length} registered repositories carry a stale hook or runner; they are repaired when a session starts in any repository`
+            : `${targets.length} registered, all current`,
+        });
+      }
+    } catch {
+      // the registry is a convenience; an unreadable one is not a diagnosis
     }
 
     const hasFailure = checks.some((c) => c.status === 'FAIL');

@@ -14,7 +14,7 @@
    - `/reviewer-kit:setup`: configures the Git pre-commit hook in the active project (`core.hooksPath .githooks`).
    - `/reviewer-kit:status`: reports active repository hook status and latest review verdict.
    - `/reviewer-kit:doctor`: checks Node.js, Git, OMP CLI, and hook integrity.
-   - `session_start` lifecycle hook: provides transparent status bar state (`reviewer-kit: active` / `unconfigured`).
+   - `session_start` lifecycle hook: provides transparent status bar state (`reviewer-kit: active` / `unconfigured`), registers the repository in the target registry (`FileTargetRegistry`: one file per repository in `<registry file>.d/` so concurrent sessions never rewrite shared state, plus the owner-edited `~/.omp/review-kit-targets.json` or `OMP_REVIEW_KIT_TARGETS` that is only read; `src/domain/target-policy.mjs` keeps `tp-*` and the release checkout out, `PluginInstallerService.registerTarget`) and heals every other registered repository whose hook or runner is stale (`healTargets`, state `stale` only, never a downgrade, copy-only, time-budgeted, `OMP_REVIEW_KIT_AUTO_SYNC=0` disables). The Claude Code SessionStart hook calls `refreshAtSessionStart` from the installed plugin for the same effect and repairs the current repository instead of only reporting it. `/reviewer-kit:doctor` reports stale registered repositories.
 3. **Pre-Commit Multi-Stage Review Flow**:
    - `.githooks/pre-commit` resolves repository root and executes `.omp/review-kit/run-review.mjs` with Node.js.
    - The runner queries `GitPort` (`SubprocessGitAdapter`) for `git diff --cached --binary --no-ext-diff --`. Empty staged changes exit with code 0 immediately without invoking OMP.

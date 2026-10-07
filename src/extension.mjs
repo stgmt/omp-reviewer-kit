@@ -491,14 +491,21 @@ export default function initExtension(pi) {
   // Lifecycle Events
   // =========================================================================
 
+  // A new plugin release must reach every repository that already runs the hook, not only
+  // the one this session happens to be in.
+  const healOtherRepositories = (exceptRoot) => installer.healTargets({ exceptRoot }).then(() => undefined, () => undefined);
+
   pi.on('session_start', async (_event, ctx) => {
     try {
       const info = await installer.status(ctx.cwd);
       if (info.state === 'not-git' || !info.isGitRepo) {
+        await healOtherRepositories(null);
         return;
       }
 
       const result = await installer.setup(ctx.cwd);
+      if (result.success) await installer.registerTarget(info.repoRoot);
+      await healOtherRepositories(info.repoRoot);
       if (ctx.ui?.setStatus) {
         if (result.success) {
           let text = 'reviewer-kit: active';

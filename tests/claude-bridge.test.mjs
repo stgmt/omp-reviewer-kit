@@ -8,6 +8,7 @@ import test from 'node:test';
 
 import {
   EXIT,
+  HEAL_BUDGET_MS,
   OMP_PROBE_TIMEOUT_MS,
   PLUGIN_LIST_TIMEOUT_MS,
   assess,
@@ -103,7 +104,7 @@ test('Given the shipped Claude shell, Then it contains only the whitelisted file
   // The hook budget (seconds) must exceed the probes a session run can chain: omp --version, then plugin list.
   const budgetMs = hooks.hooks.SessionStart[0].hooks[0].timeout * 1000;
   assert.equal(hooks.hooks.SessionStart[0].hooks[0].timeout, 30);
-  assert.ok(budgetMs > OMP_PROBE_TIMEOUT_MS + PLUGIN_LIST_TIMEOUT_MS, `${budgetMs} ms must exceed the chained probe timeouts`);
+  assert.ok(budgetMs > OMP_PROBE_TIMEOUT_MS + PLUGIN_LIST_TIMEOUT_MS + HEAL_BUDGET_MS, `${budgetMs} ms must exceed the chained probe timeouts and the heal budget`);
 });
 
 test('Given the slash commands, Then only read-only commands pre-approve node and install-omp asks the user', async () => {
@@ -534,20 +535,45 @@ test('SessionStart names a hook conflict together with its reason', async () => 
   }
 });
 
-test('SessionStart reports a stale vendored runner and points at setup', async () => {
+test('SessionStart repairs a stale vendored runner instead of only reporting it', async () => {
   const { home, cleanup } = await tempHome();
   const repo = await tempRepo();
   try {
     await setup({ cwd: repo.dir, env: pluginEnv(home), exec: healthyExec(), out: () => {}, err: () => {} });
-    await writeFile(path.join(repo.dir, '.omp', 'review-kit', 'run-review.mjs'), '// omp-reviewer-kit runner v0.0.1\nold\n');
+    const runner = path.join(repo.dir, '.omp', 'review-kit', 'run-review.mjs');
+    await writeFile(runner, '// omp-reviewer-kit runner v0.0.1\nold\n');
     const sink = collect();
     await session({ cwd: repo.dir, env: pluginEnv(home), exec: healthyExec(), out: sink.out });
-    assert.equal(sink.lines.length, 1);
-    const context = JSON.parse(sink.lines[0]).hookSpecificOutput.additionalContext;
-    assert.match(context, /stale/);
-    assert.match(context, /\/omp-reviewer-kit:setup/);
+    assert.deepEqual(sink.lines, [], 'a repaired repository is silent');
+    assert.equal(await readFile(runner, 'utf8'), await readFile(path.join(PLUGIN_DIR, 'scripts', 'run-review.mjs'), 'utf8'));
   } finally {
     await repo.cleanup();
+    await cleanup();
+  }
+});
+
+test('SessionStart asks the plugin to refresh registered repositories within the heal budget, and tolerates a plugin without that method', async () => {
+  const { home, cleanup } = await tempHome();
+  try {
+    const refreshing = await stubPlugin(home, `export class PluginInstallerService {
+      async refreshAtSessionStart(cwd, options) { (globalThis.__refreshCalls ??= []).push({ cwd, options }); throw new Error('a failing refresh must not break the session'); }
+      async status() { return { isGitRepo: true, state: 'stale' }; }
+    }\n`);
+    globalThis.__refreshCalls = [];
+    const sink = collect();
+    assert.equal(await session({ cwd: home, env: envFor(home, { OMP_REVIEW_KIT_PLUGIN_DIR: refreshing }), exec: healthyExec(), out: sink.out }), EXIT.ok);
+    assert.deepEqual(globalThis.__refreshCalls, [{ cwd: home, options: { budgetMs: HEAL_BUDGET_MS } }]);
+    assert.match(JSON.parse(sink.lines[0]).hookSpecificOutput.additionalContext, /stale/, 'the diagnosis still runs after a failed refresh');
+
+    const old = path.join(home, 'old-plugin');
+    await mkdir(path.join(old, 'src', 'application'), { recursive: true });
+    await writeFile(path.join(old, 'package.json'), JSON.stringify({ name: 'omp-reviewer-kit', version: WANTED }));
+    await writeFile(path.join(old, 'src', 'application', 'installer-service.mjs'), "export class PluginInstallerService { async status() { return { isGitRepo: true, state: 'stale' }; } }\n");
+    const legacy = collect();
+    assert.equal(await session({ cwd: home, env: envFor(home, { OMP_REVIEW_KIT_PLUGIN_DIR: old }), exec: healthyExec(), out: legacy.out }), EXIT.ok);
+    assert.match(JSON.parse(legacy.lines[0]).hookSpecificOutput.additionalContext, /stale/);
+  } finally {
+    delete globalThis.__refreshCalls;
     await cleanup();
   }
 });

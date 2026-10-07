@@ -13,9 +13,11 @@ const PLUGIN_NAME = 'omp-reviewer-kit';
 const PLUGIN_REPO = 'github:stgmt/omp-reviewer-kit';
 const OMP_PACKAGE = '@oh-my-pi/pi-coding-agent';
 export const EXIT = Object.freeze({ ok: 0, fail: 1, infra: 2 });
-// The SessionStart hook budget in hooks.json must cover both probes it can run in sequence.
+// The SessionStart hook budget in hooks.json must cover both probes it can run in sequence plus the heal budget.
 export const OMP_PROBE_TIMEOUT_MS = 5000;
 export const PLUGIN_LIST_TIMEOUT_MS = 15000;
+// Time the SessionStart hook may spend repairing other registered repositories after a plugin update.
+export const HEAL_BUDGET_MS = 5000;
 
 const SETUP_HINT = 'Run /omp-reviewer-kit:install-omp.';
 
@@ -151,6 +153,11 @@ async function collectProblems(cwd, assessment) {
   const messages = assessment.problems.map((p) => p.message);
   if (assessment.ok) {
     const installer = await loadInstaller(assessment.plugin);
+    // A plugin update must reach every repository that runs the hook, not only this one; plugins
+    // from before 0.19.0 lack the method.
+    if (typeof installer.refreshAtSessionStart === 'function') {
+      await installer.refreshAtSessionStart(cwd, { budgetMs: HEAL_BUDGET_MS }).catch(() => undefined);
+    }
     const message = repoProblem(await installer.status(cwd));
     if (message) messages.push(message);
   }

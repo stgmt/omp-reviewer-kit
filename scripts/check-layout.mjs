@@ -21,6 +21,8 @@ const required = [
   ...CLAUDE_PLUGIN_FILES.map((file) => `claude-plugin/${file}`),
   'src/domain/runner-version.mjs',
   'src/infra/vendored-kit-files.mjs',
+  'src/domain/target-policy.mjs',
+  'src/infra/target-registry.mjs',
   'src/infra/stage-transcript-stats.mjs',
   'src/domain/context-pack.mjs',
   'src/domain/scout-baseline.mjs',
