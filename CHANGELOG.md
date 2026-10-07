@@ -7,7 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [0.18.0] - 2026-10-04
+## [0.19.0] - 2026-10-07
+
+Automatic runner propagation. A new release used to reach only the repository a session happened to be in; every other repository kept a stale vendored runner until someone ran `scripts/sync-targets.mjs` by hand. The kit now keeps itself rolled out.
+
+### Added
+- **Target registry.** Every repository where the hook is set up is remembered as one small file in `~/.omp/review-kit-targets.json.d/`, next to the owner-edited `~/.omp/review-kit-targets.json` that the kit only reads (`OMP_REVIEW_KIT_TARGETS` overrides the path; `sync-targets` reads both). `tp-*` and the release checkout are never registered (the same skip list as `sync-targets`), nor are repositories under the OS temp directory, nonexistent paths or duplicates; the registry holds about 200 entries at most. One file per repository means sessions registering at the same time cannot drop each other's entry
+- **Healing at session start.** When a session starts, in the OMP extension and in the Claude Code SessionStart hook, every registered repository whose installed hook or runner went stale is repaired by the same `setup` the session would run in it, within a time budget. A repository that is not stale, never installed the hook, carries a foreign hook, or has a runner newer than the plugin is left alone, and an entry that stopped being a Git repository is dropped. The Claude Code hook also repairs the current repository instead of only reporting it. `OMP_REVIEW_KIT_AUTO_SYNC=0` turns all of it off.
+- `/reviewer-kit:doctor` reports how many registered repositories are stale.
+
+### Changed
+- `isSkippedTarget` moved to `src/domain/target-policy.mjs`, shared by `sync-targets` and the registry.
+- Healing only copies the runner and hook; a repository that tracks them sees ordinary modified files and commits them through its own hook, where the vendored-file exemption leaves them out of the review.
+
 
 Review speed. A hook review round took one to one and a half hours; measured over 535 finished runs, a stage lasts (model turns) x (about 100 seconds per turn), so this release cuts turns, repeated work and the biggest stage instead of touching models.
 

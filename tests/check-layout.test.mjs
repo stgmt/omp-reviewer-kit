@@ -38,7 +38,7 @@ test('Given a consistent tree, check-layout passes', async () => {
   }
 });
 
-for (const name of ['infra/stage-transcript-stats.mjs', 'domain/context-pack.mjs', 'domain/scout-baseline.mjs', 'domain/hunter-shards.mjs']) {
+for (const name of ['infra/stage-transcript-stats.mjs', 'domain/context-pack.mjs', 'domain/scout-baseline.mjs', 'domain/hunter-shards.mjs', 'domain/target-policy.mjs', 'infra/target-registry.mjs']) {
   test(`check-layout rejects a tree that lacks src/${name}`, async () => {
     const fx = await layoutFixture();
     try {
