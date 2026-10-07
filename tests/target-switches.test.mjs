@@ -6,7 +6,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import initExtension from '../src/extension.mjs';
-import { CANONICAL_RUNNER, STALE_RUNNER, workspace } from './target-workspace.mjs';
+import { CANONICAL_RUNNER, STALE_RUNNER, realPaths, workspace } from './target-workspace.mjs';
 
 test('Given OMP_REVIEW_KIT_AUTO_SYNC=0 or an exhausted budget, Then nothing is healed', async () => {
   const ws = await workspace();
@@ -48,7 +48,7 @@ test('Given the OMP extension, When a session starts in a hooked repository, The
 
     assert.equal(await readFile(ws.runnerOf(other), 'utf8'), CANONICAL_RUNNER, 'the other repository was healed');
     assert.equal(await readFile(ws.runnerOf(here), 'utf8'), CANONICAL_RUNNER, 'the current repository was set up as before');
-    assert.deepEqual((await ws.registry.list()).sort(), [path.resolve(other), path.resolve(here)].sort());
+    assert.deepEqual(realPaths(await ws.registry.list()), realPaths([other, here]));
 
     await ws.makeStale(other);
     const outside = await mkdtemp(path.join(tmpdir(), 'omp-not-git-'));

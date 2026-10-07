@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { CANONICAL_RUNNER, workspace } from './target-workspace.mjs';
+import { CANONICAL_RUNNER, realPaths, workspace } from './target-workspace.mjs';
 
 test('Given a session in a stale repository, When the session starts, Then it is repaired, registered, and the other registered repositories are healed', async () => {
   const ws = await workspace();
@@ -21,7 +21,7 @@ test('Given a session in a stale repository, When the session starts, Then it is
     assert.deepEqual(outcome.targets.healed, [path.resolve(other)]);
     assert.equal(await readFile(ws.runnerOf(here), 'utf8'), CANONICAL_RUNNER);
     assert.equal(await readFile(ws.runnerOf(other), 'utf8'), CANONICAL_RUNNER);
-    assert.deepEqual((await ws.registry.list()).sort(), [path.resolve(other), path.resolve(here)].sort());
+    assert.deepEqual(realPaths(await ws.registry.list()), realPaths([other, here]));
   } finally {
     await ws.cleanup();
   }
