@@ -2586,6 +2586,22 @@ const MUTANTS = [
     replacement: "if (false) return [];",
     description: "sync-targets fails when only session registrations exist",
   },
+  {
+    id: "installer-foreign-hooks-block-live-hookspath",
+    file: "src/application/installer-service.mjs",
+    testFile: "tests/target-heal.test.mjs",
+    original: "if (foreignHooksReason && !hooksPathConfigured && !conflictReason)",
+    replacement: "if (foreignHooksReason && !conflictReason)",
+    description: "Another tool's hook keeps a repository that already runs .githooks from being refreshed",
+  },
+  {
+    id: "installer-foreign-hooks-never-conflict",
+    file: "src/application/installer-service.mjs",
+    testFile: "tests/target-heal.test.mjs",
+    original: "if (foreignHooksReason && !hooksPathConfigured && !conflictReason)",
+    replacement: "if (false)",
+    description: "Setup activates .githooks next to another tool's hooks without a conflict",
+  },
 ];
 
 const DIRECTORIES_TO_COPY = ['src', 'scripts', 'agents', 'skills', 'tests', 'templates', '.omp-plugin', '.omp/review-kit', '.claude-plugin', 'claude-plugin', '.github'];

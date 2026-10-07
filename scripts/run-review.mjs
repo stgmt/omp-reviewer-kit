@@ -1,4 +1,4 @@
-// omp-reviewer-kit runner v0.19.0
+// omp-reviewer-kit runner v0.19.1
 import { createHash, randomBytes } from 'node:crypto';
 import { appendFile, chmod, lstat, mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';

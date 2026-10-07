@@ -532,12 +532,14 @@ export class PluginInstallerService {
     const expectedGithooksDir = path.join(repoRoot, '.githooks');
     let hooksPathConfigured = false;
     let conflictReason = null;
+    // Hooks of other tools next to ours only matter while activating .githooks would start running them.
+    let foreignHooksReason = null;
 
         try {
           const entries = await readdir(expectedGithooksDir);
           const foreignHooks = entries.filter((name) => name !== 'pre-commit' && GIT_HOOK_NAMES.has(name));
           if (foreignHooks.length > 0) {
-            conflictReason = 'Existing unrelated hooks found in .githooks (' + foreignHooks.join(', ') + '); refusing to activate them';
+            foreignHooksReason = 'Existing unrelated hooks found in .githooks (' + foreignHooks.join(', ') + '); refusing to activate them';
           }
         } catch (error) {
           if (error?.code !== 'ENOENT') {
@@ -576,6 +578,8 @@ export class PluginInstallerService {
         }
       }
     }
+
+    if (foreignHooksReason && !hooksPathConfigured && !conflictReason) conflictReason = foreignHooksReason;
 
     const hookPath = path.join(expectedGithooksDir, 'pre-commit');
     let hookFilePresent = false;

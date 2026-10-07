@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.19.1] - 2026-10-08
+
+### Fixed
+- **Automatic propagation skipped repositories that run another tool's hook.** A `pre-push` (or any other) hook in `.githooks` next to ours made `setup` refuse the repository as a conflict even when `core.hooksPath` already pointed at `.githooks` and ours was the current pre-commit, so its runner was never refreshed. Other tools' hooks now count as a conflict only while `core.hooksPath` is not yet `.githooks`, that is, only when setting up would start running them.
+
 ## [0.19.0] - 2026-10-07
 
 Automatic runner propagation. A new release used to reach only the repository a session happened to be in; every other repository kept a stale vendored runner until someone ran `scripts/sync-targets.mjs` by hand. The kit now keeps itself rolled out.
