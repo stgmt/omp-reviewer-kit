@@ -168,6 +168,16 @@ A PASS is reused when the staged tree and diff hash are identical to an earlier 
 
 After a BLOCK with confirmed findings, the next review of a changed diff (within 12 hours) is told which findings were raised and which lines changed since, must verify each previous finding, and only raises new P2 findings inside that delta (new P1 anywhere). A PASS resets the chain. Set `OMP_REVIEW_KIT_ROUNDS=0` to review every diff from scratch.
 
+## Review Speed
+
+A review stage lasts (model turns) x (the model's per-turn latency), so the runner removes turns instead of changing models:
+
+- **Context pack**: the runner writes a deterministic pack (changed files, changed symbols with their references, test-file mapping) and points the scout at it; the scout reads it with the diff and the changed files in one batch.
+- **Scout baseline**: after a BLOCK the next round reuses the scout's `coverage_map` and only re-derives what the delta touches, so coverage stops drifting between rounds. `OMP_REVIEW_KIT_ROUNDS=0` disables it together with delta rounds.
+- **Hunter shards**: a diff above `OMP_REVIEW_KIT_SHARD_BYTES` (default 40000; `0` disables) is split into at most `OMP_REVIEW_KIT_MAX_SHARDS` (default 3) file groups hunted in parallel.
+- **No suite runs by agents**: the dispatcher supplies the execution evidence; the agents only read.
+- **Telemetry**: `stage_stats` events in `runs.jsonl` (turns, tool calls, turn latency per stage), printed by `npm run analyze-review`.
+
 ## Models
 
 reviewer-kit does not choose, pass, or fall back between models. OMP is your

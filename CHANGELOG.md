@@ -7,7 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [0.17.2] - 2026-10-04
+## [0.18.0] - 2026-10-04
+
+Review speed. A hook review round took one to one and a half hours; measured over 535 finished runs, a stage lasts (model turns) x (about 100 seconds per turn), so this release cuts turns, repeated work and the biggest stage instead of touching models.
+
+### Added
+- **Stage statistics in the run telemetry.** Each attempt records a `stage_stats` event with, per stage (scout, hunter, verifier, orchestrator), the model turns, tool calls by kind, span, turn-gap median/p90/max and the model, read from the session transcripts before the per-attempt session directory is removed. `npm run analyze-review` prints it, so slow stages no longer have to be guessed.
+- **Deterministic context pack for the scout.** The runner builds a pack from the staged snapshot (changed files with +/- counts, changed symbols with who references them across the snapshot, a test-file mapping) into a per-run file next to the report and names it in the prompt; the scout starts from it and is told to finish in one parallel batch plus at most one gap batch instead of about 30 tool calls. The file is removed with the run (`context_pack_built` telemetry).
+- **Scout baseline across rounds.** The scout's `coverage_map` and waived items are read from the session artifacts and stored with the BLOCK round; the next round's scout gets a `SCOUT BASELINE` block, keeps entries that are untouched by the delta and covered, and re-derives the rest. This stops the map from being rebuilt differently every round, which kept finding one or two new coverage items per round. A BLOCK without a fresh scout report carries the earlier baseline on.
+- **Hunter shards for large diffs.** A `full`-profile diff above `OMP_REVIEW_KIT_SHARD_BYTES` (default 40000, `0` disables) is split into up to `OMP_REVIEW_KIT_MAX_SHARDS` (default 3) groups of files, a source file staying with its tests, and the orchestrator runs one correctness hunter per group in parallel, with one shared digest and `correctness-s<shard>-<ordinal>` candidate ids, then merges the lists for the verifier (`hunter_shards_planned` telemetry).
+
+### Changed
+- In the kit repository the self-hosted `.omp/review-kit/run-review.mjs` is left out of the reviewed diff when it equals the staged `scripts/run-review.mjs` (same mode rules and CRLF normalisation as the vendored-file exemption), cutting the diff by about a tenth.
+- The scout, hunter and verifier agents must not run the project's test, build, lint or mutation suites; the dispatcher runs them and supplies the execution evidence. Hunters used to spend two to four minutes on `node --test`.
+- `getStagedDiff` now always issues one `git diff --cached --raw` listing before the diff call.
+
 
 ### Fixed
 - The review hook of a target repository no longer reviews the vendored kit files. A staged `.omp/review-kit/run-review.mjs` or `.githooks/pre-commit` that is byte-identical (line endings aside) to the copy in the installed OMP plugin is left out of the reviewed diff, and a commit made only of such files is skipped. Before, the changed runner was reviewed as the committer's code and blocked on "required test coverage" because the kit's tests live in the kit repository, so the documented rollout (`sync-targets --apply`, then commit through the target's own hook) could not pass in a repository with its own test harness. A hand-edited copy, or any doubt (no installed plugin), still goes through review.
