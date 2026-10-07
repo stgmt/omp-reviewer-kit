@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { GitPort } from '../application/ports.mjs';
 import { DiffIdentity } from '../domain/diff-identity.mjs';
 import { StagedSnapshot } from '../domain/staged-snapshot.mjs';
+import { VENDORED_RUNNER_MIRROR } from './vendored-kit-files.mjs';
 
 /**
  * Infrastructure adapter executing Git via child processes.
@@ -82,38 +83,49 @@ export class SubprocessGitAdapter extends GitPort {
   /**
    * Staged vendored kit files (runner, hook) that are byte-identical to the
    * installed kit's canonical copy: they are the review plugin, not the
-   * committer's work, so the review diff leaves them out. Any doubt (no
-   * canonical copy, unreadable blob, different bytes) keeps the file in review.
+   * committer's work, so the review diff leaves them out. In the kit repository
+   * itself the self-hosted runner is a byte-identical mirror of the staged
+   * `scripts/run-review.mjs`, which stays in review, so the mirror is left out
+   * too. Any doubt (no canonical copy, unreadable blob, different bytes) keeps
+   * the file in review.
    *
    * @param {string} repoRoot
    * @returns {Promise<string[]>}
    */
   async #identicalVendoredPaths(repoRoot) {
-    if (typeof this.#vendoredFiles !== 'function') return [];
-    let canonical;
-    try {
-      canonical = await this.#vendoredFiles();
-    } catch {
-      return [];
+    let canonical = new Map();
+    if (typeof this.#vendoredFiles === 'function') {
+      try {
+        const loaded = await this.#vendoredFiles();
+        if (loaded instanceof Map) canonical = loaded;
+      } catch {
+        canonical = new Map();
+      }
     }
-    if (!(canonical instanceof Map) || canonical.size === 0) return [];
     const fields = (await this.#runner(['diff', '--cached', '--raw', '--no-renames', '-z', '--'], repoRoot))
       .toString('utf8').split('\0');
     const normalize = (text) => String(text).replace(/\r\n/g, '\n');
     const regularModes = new Set(['100644', '100755']);
+    const stagedText = async (name) => (await this.#runner(['show', `:${name}`], repoRoot)).toString('utf8');
     const identical = [];
     for (let i = 0; i + 1 < fields.length; i += 2) {
       const meta = /^:(\d{6}) (\d{6}) [0-9a-f]+ [0-9a-f]+ ([A-Z])\d*$/.exec(fields[i]);
       const name = fields[i + 1];
-      if (!meta || !canonical.has(name)) continue;
+      if (!meta) continue;
+      const isMirror = name === VENDORED_RUNNER_MIRROR.target;
+      if (!canonical.has(name) && !isMirror) continue;
       // A mode change (the hook losing its executable bit, a symlink in place
       // of the file) changes behaviour even when the bytes are canonical.
       const [, oldMode, newMode, status] = meta;
       const modeOk = status === 'M' ? oldMode === newMode : status === 'A' && regularModes.has(newMode);
       if (!modeOk) continue;
       try {
-        const staged = (await this.#runner(['show', `:${name}`], repoRoot)).toString('utf8');
-        if (normalize(staged) === normalize(canonical.get(name))) identical.push(name);
+        const staged = normalize(await stagedText(name));
+        if (canonical.has(name) && staged === normalize(canonical.get(name))) {
+          identical.push(name);
+        } else if (isMirror && staged === normalize(await stagedText(VENDORED_RUNNER_MIRROR.source))) {
+          identical.push(name);
+        }
       } catch {
         // unreadable staged blob stays in review
       }

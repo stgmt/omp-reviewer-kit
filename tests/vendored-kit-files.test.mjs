@@ -125,15 +125,64 @@ describe('Feature: the vendored kit files are not part of the reviewed diff', ()
         assert.deepEqual(pathsOf(diff).sort(), ['docs/run-review.mjs', 'tools/.githooks/pre-commit']);
       });
 
-      it('Given the injected git runner, Then the unexempted call keeps the exact original arguments and issues no extra git calls', async () => {
+      it('Given the injected git runner and nothing to exempt, Then the diff call keeps the exact original arguments after one raw listing', async () => {
+        const rawListing = ['diff', '--cached', '--raw', '--no-renames', '-z', '--'];
         const calls = [];
         const adapter = new Adapter((args) => { calls.push(args); return Buffer.from(''); });
         await adapter.getStagedDiff('/repo');
-        assert.deepEqual(calls, [['diff', '--cached', '--binary', '--no-ext-diff', '--']]);
+        assert.deepEqual(calls, [rawListing, ['diff', '--cached', '--binary', '--no-ext-diff', '--']]);
 
         calls.length = 0;
         await new Adapter((args) => { calls.push(args); return Buffer.from(''); }, { vendoredFiles: async () => new Map() }).getStagedDiff('/repo');
-        assert.deepEqual(calls, [['diff', '--cached', '--binary', '--no-ext-diff', '--']]);
+        assert.deepEqual(calls, [rawListing, ['diff', '--cached', '--binary', '--no-ext-diff', '--']]);
+      });
+
+      describe('the self-hosted runner mirror of the kit repository', () => {
+        const SOURCE = 'scripts/run-review.mjs';
+        const MIRROR_BODY = '// omp-reviewer-kit runner v9.9.9\nexport const mirrored = 1;\n';
+
+        it('Given the mirror equals the staged source and no canonical copy exists, Then only the source is reviewed', async () => {
+          const repo = await makeRepo({ [SOURCE]: MIRROR_BODY, [RUNNER]: MIRROR_BODY, 'src/a.mjs': 'export const a = 1;\n' });
+          const diff = await new Adapter(undefined).getStagedDiff(repo);
+          assert.deepEqual(pathsOf(diff).sort(), [SOURCE, 'src/a.mjs']);
+        });
+
+        it('Given the mirror differs from the staged source, Then both stay in review', async () => {
+          const repo = await makeRepo({ [SOURCE]: MIRROR_BODY, [RUNNER]: `${MIRROR_BODY}export const extra = 2;\n` });
+          const diff = await new Adapter(undefined).getStagedDiff(repo);
+          assert.deepEqual(pathsOf(diff).sort(), [RUNNER, SOURCE]);
+        });
+
+        it('Given the mirror differs from the source only by CRLF line endings, Then it is still exempted', async () => {
+          const repo = await makeRepo({ [SOURCE]: MIRROR_BODY, [RUNNER]: MIRROR_BODY.replace(/\n/g, '\r\n') });
+          const diff = await new Adapter(undefined).getStagedDiff(repo);
+          assert.deepEqual(pathsOf(diff), [SOURCE]);
+        });
+
+        it('Given the staged source is absent from the index, Then the mirror is reviewed', async () => {
+          const repo = await makeRepo({ [RUNNER]: MIRROR_BODY, 'src/a.mjs': 'export const a = 1;\n' });
+          const diff = await new Adapter(undefined).getStagedDiff(repo);
+          assert.deepEqual(pathsOf(diff).sort(), [RUNNER, 'src/a.mjs']);
+        });
+
+        it('Given a symlink staged as the mirror whose target text equals the source, Then it stays in review', async () => {
+          const repo = await makeRepo({ [SOURCE]: 'target.txt' });
+          await mkdir(path.join(repo, '.omp/review-kit'), { recursive: true });
+          const blob = spawnSync('git', ['hash-object', '-w', '--stdin'], { cwd: repo, input: 'target.txt', encoding: 'utf8' }).stdout.trim();
+          git(repo, 'update-index', '--add', '--cacheinfo', `120000,${blob},${RUNNER}`);
+          const diff = await new Adapter(undefined).getStagedDiff(repo);
+          assert.deepEqual(pathsOf(diff).sort(), [RUNNER, SOURCE]);
+        });
+
+        it('Given a committed mirror modified to equal a modified source with the mode unchanged, Then only the source is reviewed', async () => {
+          const repo = await makeRepo({ [SOURCE]: 'old\n', [RUNNER]: 'old\n' });
+          git(repo, 'commit', '-q', '-m', 'base');
+          await writeFile(path.join(repo, SOURCE), MIRROR_BODY);
+          await writeFile(path.join(repo, RUNNER), MIRROR_BODY);
+          git(repo, 'add', '-A');
+          const diff = await new Adapter(undefined).getStagedDiff(repo);
+          assert.deepEqual(pathsOf(diff), [SOURCE]);
+        });
       });
 
       it('Given an unreadable staged blob of a vendored path, Then it is not exempted', async () => {

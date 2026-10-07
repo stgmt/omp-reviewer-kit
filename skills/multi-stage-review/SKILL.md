@@ -83,6 +83,7 @@ The snapshot also carries the review inputs under `.review/`: `diff.patch` holds
 - **Constraint**: Must NOT generate defect findings or verdict markers (`REVIEW_RESULT=...`).
 
 ### Stage 2: Parallel Risk Hunters (`review-risk-hunter`)
+- **Sharding**: when the dispatcher prompt carries a `HUNTER SHARDS` block (large diffs), the correctness lane is split into one blocking task per shard, in the same batch; candidate ids become `correctness-s<shard>-<ordinal>`, each hunter covers the `coverage_map` entries and assertions of its shard files, and the orchestrator merges all shards' candidates and `coverage_gaps` before stage 3.
 - **Role**: Generates focused defect candidates — ONE blocking task per lane named in the dispatcher's `Risk lanes for this diff:` list (default: `correctness` only; the `security` lane is opt-in via `OMP_REVIEW_KIT_LANES`; `spec-docs` profile names `content-risk` and nothing else). Lane semantics:
   - `lane: "correctness"`: Boundary conditions, absence/default/failure values, side effects, determinism, resource/handle leaks, behavior-test gaps, and control infrastructure that duplicates an existing mechanism without adding product capability.
   - `lane: "security"`: Attacker-controlled input source, dangerous sink, missing/bypassed controls, credential leakage, permission bypass.

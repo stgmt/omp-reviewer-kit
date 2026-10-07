@@ -13,6 +13,15 @@ export const VENDORED_KIT_FILES = Object.freeze([
 ]);
 
 /**
+ * The kit repository keeps a self-hosted copy of its own runner next to the
+ * source. When that copy equals the staged source, only the source is reviewed.
+ */
+export const VENDORED_RUNNER_MIRROR = Object.freeze({
+  target: '.omp/review-kit/run-review.mjs',
+  source: 'scripts/run-review.mjs',
+});
+
+/**
  * Reads the canonical vendored files from the installed OMP plugin
  * (OMP_REVIEW_KIT_PLUGIN_DIR first, then ~/.omp/plugins/node_modules).
  * Any problem yields an empty map, so nothing is exempted from review.

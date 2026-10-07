@@ -5,6 +5,8 @@ import path from 'node:path';
 import { ReviewerPort } from '../application/ports.mjs';
 import { ReviewVerdict } from '../domain/review-verdict.mjs';
 import { NULL_RUN_TELEMETRY, formatProviderOutageError, safeRunTelemetry } from './filesystem-telemetry-adapter.mjs';
+import { parseScoutBaseline } from '../domain/scout-baseline.mjs';
+import { readStageResult, summarizeStageTranscripts } from './stage-transcript-stats.mjs';
 
 /**
  * Reads only the last `maxTailBytes` of a (possibly multi-MB) log file via a
@@ -696,6 +698,13 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
           outcome = { ...result, stdout: recovered.text };
         }
       }
+      // Per-stage turn and tool-call counts: a stage lasts turns x turn latency,
+      // so this is what explains a slow review. Read before the session dir goes.
+      const stages = await summarizeStageTranscripts(sessionDir);
+      if (stages.length > 0) await telemetry.record('stage_stats', { attemptIndex, pid: record.pid, stages });
+      // The scout's map is carried to the next round so coverage does not drift.
+      const scoutBaseline = parseScoutBaseline(await readStageResult(sessionDir, /scout$/i));
+      if (scoutBaseline) outcome = { ...outcome, scoutBaseline };
       await telemetry.record('review_attempt_finished', { ...record });
       return outcome;
     } finally {
@@ -966,6 +975,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       modelsTried: [],
       attempts,
       probes,
+      ...(result.scoutBaseline ? { scoutBaseline: result.scoutBaseline } : {}),
     };
   }
 

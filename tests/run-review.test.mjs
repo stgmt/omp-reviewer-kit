@@ -386,7 +386,7 @@ test('excludes unstaged working-tree changes from the reviewed hash', async () =
   const expectedHash = createHash('sha256').update(stagedDiff).digest('hex');
 
   assert.equal(result.exitCode, 0);
-  assert.deepEqual(calls[1], ['diff', '--cached', '--binary', '--no-ext-diff', '--']);
+  assert.deepEqual(calls.find((call) => call.includes('--binary')), ['diff', '--cached', '--binary', '--no-ext-diff', '--']);
   assert.match(prompt, new RegExp(expectedHash));
   assert.match(await readFile(result.reportPath, 'utf8'), new RegExp(expectedHash));
 });

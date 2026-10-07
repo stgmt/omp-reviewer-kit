@@ -1,4 +1,4 @@
-// omp-reviewer-kit runner v0.17.2
+// omp-reviewer-kit runner v0.18.0
 import { createHash, randomBytes } from 'node:crypto';
 import { appendFile, chmod, lstat, mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
@@ -1473,6 +1473,285 @@ export function sanitizePromptToken(value) {
   });
 }
 
+const MAX_SYMBOLS = 40;
+const MIN_SYMBOL_LENGTH = 4;
+const MAX_FILE_BYTES = 400 * 1024;
+const MAX_SCAN_BYTES = 32 * 1024 * 1024;
+const MAX_HITS_PER_SYMBOL = 5;
+const MAX_TESTS_PER_FILE = 6;
+const MAX_LINE_CHARS = 140;
+const MAX_PACK_CHARS = 60_000;
+
+const SYMBOL_STOP_WORDS = new Set([
+  'function', 'constructor', 'return', 'static', 'async', 'await', 'export', 'default', 'import', 'from',
+  'class', 'const', 'else', 'this', 'true', 'false', 'null', 'undefined', 'void', 'main', 'test', 'describe',
+  'expect', 'assert', 'switch', 'catch', 'while', 'yield', 'typeof', 'self', 'args', 'data', 'result', 'value',
+  'index', 'name', 'path', 'text', 'type', 'error', 'items', 'list', 'file', 'files', 'line', 'lines',
+]);
+
+// One pattern per declaration style; group 1 is the declared name.
+const DECLARATION_PATTERNS = [
+  /\bfunction\*?\s+([A-Za-z_$][\w$]*)/,
+  /\bclass\s+([A-Za-z_$][\w$]*)/,
+  /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=/,
+  /^\s*(?:export\s+)?(?:static\s+)?(?:async\s+)?(?:get\s+|set\s+)?#?([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{\s*$/,
+  /\bdef\s+([A-Za-z_]\w*)\s*\(/,
+  /\bfunc\s+(?:\([^)]*\)\s*)?([A-Za-z_]\w*)\s*\(/,
+  /\bfn\s+([A-Za-z_]\w*)/,
+  /\binterface\s+([A-Za-z_$][\w$]*)/,
+  /\btype\s+([A-Za-z_$][\w$]*)\s*=/,
+];
+
+function symbolsFromLine(line) {
+  const found = [];
+  for (const pattern of DECLARATION_PATTERNS) {
+    const match = pattern.exec(line);
+    if (match) found.push(match[1]);
+  }
+  return found;
+}
+
+function acceptableSymbol(name) {
+  return name.length >= MIN_SYMBOL_LENGTH && !SYMBOL_STOP_WORDS.has(name.toLowerCase());
+}
+
+function escapeRegex(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Names declared, changed or removed by the diff: the symbols whose users the
+ * reviewer has to look at. Taken from added and removed declaration lines and
+ * from the enclosing-scope text git prints after `@@` hunk headers.
+ *
+ * @param {string} diffText
+ * @returns {{ name: string, path: string }[]}
+ */
+export function changedSymbols(diffText) {
+  const seen = new Map();
+  const add = (name, path) => {
+    if (seen.size >= MAX_SYMBOLS || !acceptableSymbol(name) || seen.has(name)) return;
+    seen.set(name, path);
+  };
+  for (const block of parseDiffBlocks(diffText)) {
+    for (const line of [...block.addedLines, ...block.removedLines]) {
+      for (const name of symbolsFromLine(line)) add(name, block.path);
+    }
+  }
+  // Hunk-header scope text names the function a hunk sits in, which a body
+  // edit never declares.
+  for (const raw of diffText.split(/^diff --git /m).slice(1)) {
+    const { oldPath, newPath } = diffBlockPaths(raw);
+    const path = newPath ?? oldPath;
+    if (!path) continue;
+    for (const header of raw.matchAll(/^@@ [^@]*@@ ?(.*)$/gm)) {
+      for (const name of symbolsFromLine(header[1])) add(name, path);
+    }
+  }
+  return [...seen].map(([name, path]) => ({ name, path }));
+}
+
+function lineNumberAt(text, index, cursor) {
+  let { line, offset } = cursor;
+  for (let i = offset; i < index; i += 1) if (text.charCodeAt(i) === 10) line += 1;
+  cursor.line = line;
+  cursor.offset = index;
+  return line;
+}
+
+function clip(line) {
+  const trimmed = line.trim();
+  return trimmed.length > MAX_LINE_CHARS ? `${trimmed.slice(0, MAX_LINE_CHARS)}...` : trimmed;
+}
+
+/**
+ * Deterministic context for the scout: what changed, who uses the changed
+ * symbols, and which tests touch the changed files. Built from the staged
+ * snapshot alone, no model involved, so it is identical for identical input.
+ *
+ * @param {{ files: { path: string, content: Buffer }[], diffText: string, changedPaths: string[], fileClasses?: { path: string, fileClass: string }[], testPathPatterns?: string[] }} input
+ * @returns {{ text: string, stats: { symbols: number, referencedSymbols: number, mappedFiles: number, truncated: boolean } }}
+ */
+export function buildContextPack({ files, diffText, changedPaths, fileClasses = [], testPathPatterns } = {}) {
+  const classByPath = new Map(fileClasses.map((entry) => [entry.path, entry.fileClass]));
+  const isTest = (p) => isTestPath(p, testPathPatterns);
+  const blocks = new Map(parseDiffBlocks(diffText).map((block) => [block.path, block]));
+  const contentByPath = new Map();
+  let scanned = 0;
+  let scanTruncated = false;
+  for (const file of files) {
+    if (file.path.startsWith('.review/')) continue;
+    if (file.content.length > MAX_FILE_BYTES || file.content.includes(0)) continue;
+    if (scanned + file.content.length > MAX_SCAN_BYTES) {
+      scanTruncated = true;
+      break;
+    }
+    scanned += file.content.length;
+    contentByPath.set(file.path, file.content.toString('utf8'));
+  }
+
+  const lines = [
+    '# Review context pack',
+    '',
+    'Deterministic input built by the runner from the staged snapshot (no model involved). Start here: it replaces broad repository sweeps. Verify a hit against the file before relying on it.',
+    '',
+    '## Changed files',
+    '| path | class | status | +added / -removed | lines |',
+    '| --- | --- | --- | --- | --- |',
+  ];
+  for (const changed of changedPaths) {
+    const block = blocks.get(changed);
+    const content = contentByPath.get(changed);
+    const status = block?.deleted ? 'deleted' : content === undefined ? 'binary-or-large' : 'present';
+    lines.push(`| \`${changed}\` | ${classByPath.get(changed) ?? '-'} | ${status} | +${block?.addedLines.length ?? 0} / -${block?.removedLines.length ?? 0} | ${content === undefined ? '-' : content.split('\n').length} |`);
+  }
+
+  const symbols = changedSymbols(diffText);
+  lines.push('', '## Changed symbols and who references them', '');
+  if (symbols.length === 0) {
+    lines.push('No declared symbol was added, changed or removed by the diff.');
+  }
+  const definingPaths = new Map(symbols.map((s) => [s.name, s.path]));
+  const hits = new Map(symbols.map((s) => [s.name, { total: 0, files: new Set(), shown: [], tests: [] }]));
+  if (symbols.length > 0) {
+    const combined = new RegExp(`(?<![\\w$])(?:${symbols.map((s) => escapeRegex(s.name)).join('|')})(?![\\w$])`, 'g');
+    for (const [filePath, text] of contentByPath) {
+      const cursor = { line: 1, offset: 0 };
+      for (const match of text.matchAll(combined)) {
+        const entry = hits.get(match[0]);
+        entry.total += 1;
+        entry.files.add(filePath);
+        if (filePath === definingPaths.get(match[0])) continue;
+        const target = isTest(filePath) ? entry.tests : entry.shown;
+        if (target.length >= MAX_HITS_PER_SYMBOL || target.some((hit) => hit.path === filePath)) continue;
+        const lineNo = lineNumberAt(text, match.index, cursor);
+        const lineStart = text.lastIndexOf('\n', match.index - 1) + 1;
+        const lineEnd = text.indexOf('\n', match.index);
+        target.push({ path: filePath, line: lineNo, text: clip(text.slice(lineStart, lineEnd === -1 ? undefined : lineEnd)) });
+      }
+    }
+  }
+  let referenced = 0;
+  for (const { name, path } of symbols) {
+    const entry = hits.get(name);
+    if (entry.total > 0) referenced += 1;
+    lines.push(`- \`${name}\` (declared in \`${path}\`): ${entry.total} reference(s) in ${entry.files.size} file(s)`);
+    for (const hit of entry.shown) lines.push(`  - \`${hit.path}:${hit.line}\` ${hit.text}`);
+    for (const hit of entry.tests) lines.push(`  - test \`${hit.path}:${hit.line}\` ${hit.text}`);
+  }
+
+  lines.push('', '## Test mapping', '');
+  const testFiles = [...contentByPath.keys()].filter(isTest);
+  const symbolsByPath = new Map();
+  for (const { name, path } of symbols) symbolsByPath.set(path, [...(symbolsByPath.get(path) ?? []), name]);
+  let mapped = 0;
+  for (const changed of changedPaths) {
+    if (isTest(changed)) continue;
+    const stem = changed.split('/').pop().replace(/\.[^.]+$/, '');
+    const needles = [stem, ...(symbolsByPath.get(changed) ?? [])].filter((n) => n.length >= 3);
+    const covering = [];
+    for (const testPath of testFiles) {
+      if (testPath === changed) continue;
+      const text = contentByPath.get(testPath);
+      const matched = needles.find((needle) => new RegExp(`(?<![\\w$])${escapeRegex(needle)}(?![\\w$])`).test(text));
+      if (matched) covering.push({ testPath, matched });
+      if (covering.length >= MAX_TESTS_PER_FILE) break;
+    }
+    mapped += covering.length > 0 ? 1 : 0;
+    lines.push(covering.length > 0
+      ? `- \`${changed}\` is referenced by: ${covering.map((c) => `\`${c.testPath}\` (via \`${c.matched}\`)`).join(', ')}`
+      : `- \`${changed}\`: no test file in the snapshot mentions it or its changed symbols`);
+  }
+  const changedTests = changedPaths.filter(isTest);
+  if (changedTests.length > 0) lines.push('', `Changed test files: ${changedTests.map((p) => `\`${p}\``).join(', ')}`);
+  if (scanTruncated) lines.push('', `Note: the snapshot scan stopped at ${MAX_SCAN_BYTES} bytes; references from unscanned files are missing.`);
+
+  let text = `${lines.join('\n')}\n`;
+  const truncated = text.length > MAX_PACK_CHARS;
+  if (truncated) text = `${text.slice(0, MAX_PACK_CHARS)}\n\n[context pack truncated at ${MAX_PACK_CHARS} characters]\n`;
+  return { text, stats: { symbols: symbols.length, referencedSymbols: referenced, truncated, mappedFiles: mapped } };
+}
+
+const GENERIC_STEMS = new Set(['index', 'main', 'mod', 'init', '__init__', 'readme', 'package', 'config', 'types', 'utils', 'helpers']);
+
+/**
+ * Grouping key of a changed file: a source file and its tests share one key
+ * (`src/total.mjs`, `tests/total.test.mjs`, `test_total.py` -> `total`), so a
+ * shard keeps a behavior and the tests that pin it together. Generic names
+ * never merge across directories.
+ *
+ * @param {string} filePath
+ * @returns {string}
+ */
+export function shardGroupKey(filePath) {
+  const parts = filePath.split('/');
+  const base = parts.pop().toLowerCase();
+  const stem = base
+    .replace(/\.[^.]+$/, '')
+    .replace(/[._-](?:test|tests|spec)$/, '')
+    .replace(/^test[._-]/, '');
+  return GENERIC_STEMS.has(stem) ? filePath.toLowerCase() : stem;
+}
+
+/**
+ * Splits a large diff into file groups of similar size so several hunters can
+ * work in parallel. Deterministic: same diff, same plan. Returns null when the
+ * diff is small enough for one hunter, when sharding is disabled, or when the
+ * files form fewer than two groups.
+ *
+ * @param {{ diffText: string, thresholdBytes: number, maxShards: number }} input
+ * @returns {{ totalBytes: number, shards: { index: number, files: string[], bytes: number }[] }|null}
+ */
+export function planHunterShards({ diffText, thresholdBytes, maxShards }) {
+  if (!Number.isInteger(thresholdBytes) || thresholdBytes <= 0 || !Number.isInteger(maxShards) || maxShards < 2) return null;
+  const text = String(diffText ?? '');
+  const totalBytes = Buffer.byteLength(text);
+  if (totalBytes <= thresholdBytes) return null;
+
+  const groups = new Map();
+  for (const raw of text.split(/^diff --git /m).slice(1)) {
+    const { oldPath, newPath } = diffBlockPaths(raw);
+    const filePath = newPath ?? oldPath;
+    if (!filePath) continue;
+    const key = shardGroupKey(filePath);
+    const group = groups.get(key) ?? { files: new Set(), bytes: 0 };
+    group.files.add(filePath);
+    group.bytes += Buffer.byteLength(raw);
+    groups.set(key, group);
+  }
+  const ordered = [...groups.values()]
+    .map((group) => ({ files: [...group.files].sort(), bytes: group.bytes }))
+    .sort((a, b) => b.bytes - a.bytes || (a.files[0] < b.files[0] ? -1 : 1));
+  const shardCount = Math.min(maxShards, Math.ceil(totalBytes / thresholdBytes), ordered.length);
+  if (shardCount < 2) return null;
+
+  const shards = Array.from({ length: shardCount }, () => ({ files: [], bytes: 0 }));
+  for (const group of ordered) {
+    const lightest = shards.reduce((best, shard) => (shard.bytes < best.bytes ? shard : best));
+    lightest.files.push(...group.files);
+    lightest.bytes += group.bytes;
+  }
+  return {
+    totalBytes,
+    shards: shards.map((shard, i) => ({ index: i + 1, files: shard.files.sort(), bytes: shard.bytes })),
+  };
+}
+
+/**
+ * Prompt block instructing the orchestrator to run one correctness hunter per shard.
+ *
+ * @param {{ totalBytes: number, shards: { index: number, files: string[], bytes: number }[] }} plan
+ * @returns {string}
+ */
+export function formatHunterShards(plan) {
+  const count = plan.shards.length;
+  return [
+    `HUNTER SHARDS for the correctness lane (the staged diff is ${plan.totalBytes} bytes, too large for one hunter): spawn ${count} blocking review-risk-hunter tasks for the correctness lane instead of one, all in the same batch as the other lanes, one per shard below. Every hunter task text carries its shard header, the full scout report, and the shared digest.`,
+    ...plan.shards.map((shard) => `- Shard ${shard.index}/${count} (${shard.bytes} diff bytes): ${shard.files.map((f) => sanitizePromptToken(f)).join(', ')}`),
+    `Shard rules: (1) Each hunter hunts defects whose location is in its shard files and emits \`candidate_id\` values of the form \`correctness-s<shard>-<ordinal>\` (for example \`correctness-s2-1\`); (2) a hunter may read any other staged file to verify a cross-file contract of its shard's changes, but must not emit a candidate located only in another shard's files; (3) \`coverage_gaps\` and the Neuroslop pass cover only the scout coverage_map entries and assertions of the hunter's own shard files; (4) the shared digest is a single block you write once before spawning, at most 15 lines, listing every changed path with its shard number and the cross-shard contracts from the scout report (callers and callees whose files sit in different shards), and every hunter task embeds it verbatim; (5) after the batch returns, merge the candidate lists and coverage_gaps of all shards into one list for the verifier, dropping exact duplicates (same file, line range and defect), and tell the verifier which shard each candidate came from.`,
+  ].join('\n');
+}
+
 /**
  * Domain specification and builder for reviewer agent prompt instructions.
  */
@@ -1486,8 +1765,11 @@ export class ReviewPrompt {
   #fileClasses;
   #executionEvidenceText;
   #roundContextText;
+  #scoutBaselineText;
   #reportPath;
+  #contextPackPath;
   #riskLanes;
+  #hunterShardsText;
   #reemitOutput;
   #repairEnvelope = false;
 
@@ -1507,10 +1789,13 @@ export class ReviewPrompt {
     this.#suspicionMapText = typeof extras?.suspicionMapText === 'string' ? extras.suspicionMapText : '';
     this.#executionEvidenceText = typeof extras?.executionEvidenceText === 'string' ? extras.executionEvidenceText : '';
     this.#roundContextText = typeof extras?.roundContextText === 'string' ? extras.roundContextText : '';
+    this.#scoutBaselineText = typeof extras?.scoutBaselineText === 'string' ? extras.scoutBaselineText : '';
     this.#inlineDiff = typeof extras?.inlineDiff === 'string' && extras.inlineDiff.length > 0 ? extras.inlineDiff : null;
     this.#reviewProfile = typeof extras?.reviewProfile === 'string' ? extras.reviewProfile : null;
     this.#fileClasses = Array.isArray(extras?.fileClasses) ? extras.fileClasses : [];
     this.#reportPath = typeof extras?.reportPath === 'string' && extras.reportPath.length > 0 ? extras.reportPath : null;
+    this.#contextPackPath = typeof extras?.contextPackPath === 'string' && extras.contextPackPath.length > 0 ? extras.contextPackPath : null;
+    this.#hunterShardsText = typeof extras?.hunterShardsText === 'string' ? extras.hunterShardsText : '';
     this.#riskLanes = Array.isArray(extras?.riskLanes) && extras.riskLanes.length > 0 ? extras.riskLanes.filter((l) => typeof l === 'string' && l.length > 0) : null;
   }
   static forDiff(target, snapshotDir = '', changedPaths = [], extras = {}) {
@@ -1580,6 +1865,12 @@ export class ReviewPrompt {
         ...classLines,
       );
     }
+    if (this.#contextPackPath) {
+      lines.push(
+        `A deterministic context pack for the scout is at \`${this.#contextPackPath}\`: changed files, changed symbols with who references them, and the test-file mapping, all built by the runner from the staged snapshot.`,
+        'Pass that path to the context scout in its task text: the scout starts from the pack and finishes in a few batches of tool calls instead of sweeping the repository. The pack is read-only input; never write to it.',
+      );
+    }
     if (this.#suspicionMapText) {
       lines.push('', this.#suspicionMapText);
     }
@@ -1589,10 +1880,14 @@ export class ReviewPrompt {
     if (this.#roundContextText) {
       lines.push('', this.#roundContextText);
     }
+    if (this.#scoutBaselineText) {
+      lines.push('', 'Embed the SCOUT BASELINE block below verbatim in the context scout task text only (not in the hunter or verifier tasks):', this.#scoutBaselineText);
+    }
     lines.push(`The staged diff hash for this hook invocation is ${this.#diffHash}.`);
     if (this.#reportPath) lines.push(`The durable per-run report path for this review is \`${this.#reportPath}\`. Instruct the reviewer-kit task to write its complete final report verbatim to that path before yielding, as a best-effort durable copy: if a project policy guard denies the write, the task must not retry or work around it, because the runner recovers the report from the task session artifacts. It is the only path the task may write.`);
     if (this.#reviewProfile) lines.push(`Review profile for this diff: ${this.#reviewProfile}.`);
     if (Array.isArray(this.#riskLanes)) lines.push(`Risk lanes for this diff: ${JSON.stringify(this.#riskLanes)}.`);
+    if (this.#hunterShardsText) lines.push(this.#hunterShardsText);
     return lines.join('\n');
   }
 
@@ -1624,6 +1919,18 @@ export class ReviewPrompt {
 
   get executionEvidenceText() {
     return this.#executionEvidenceText;
+  }
+
+  get contextPackPath() {
+    return this.#contextPackPath;
+  }
+
+  get scoutBaselineText() {
+    return this.#scoutBaselineText;
+  }
+
+  get hunterShardsText() {
+    return this.#hunterShardsText;
   }
 
   get roundContextText() {
@@ -2242,6 +2549,10 @@ export class ReviewWorkflowService {
     // dispatcher would reproduce verbatim); the pid tail feeds the
     // orphan-sweep owner check (`-<pid>.md$`).
     const runReportPath = path.join(tmpdir(), `reviewer-kit-report-${runId}-${REPORT_SEQ++}-${randomBytes(8).toString('hex')}-${process.pid}.md`);
+    // Deterministic scout context pack, written next to the report (same
+    // `reviewer-kit-report-` prefix and `-<pid>.md` tail, so the orphan sweep owns it).
+    const contextPackPath = path.join(tmpdir(), path.basename(runReportPath).replace('reviewer-kit-report-', 'reviewer-kit-report-ctx-'));
+    let contextPackWritten = false;
     let telemetry;
     try {
       telemetry = safeRunTelemetry(this.#telemetryPort.forRun({ repoRoot, runId }));
@@ -2270,6 +2581,7 @@ export class ReviewWorkflowService {
         });
       }
       await rm(runReportPath, { force: true }).catch(() => {});
+      await rm(contextPackPath, { force: true }).catch(() => {});
     };
     const uninstall = installRunSignalGuard({ telemetry, runId, cleanup: cleanupSnapshots });
     await telemetry.updateLastRun({
@@ -2401,6 +2713,23 @@ export class ReviewWorkflowService {
       // otherwise the throw leaks a foreign-live lease for its 24h TTL.
       const reviewProfile = reviewProfileFor(fileClasses);
       const riskLanes = riskLanesFor(reviewProfile, process.env);
+      // A large diff splits the correctness hunt into parallel shards: the
+      // hunter is the longest stage and grows with the diff.
+      let hunterShardsText = '';
+      if (reviewProfile === 'full' && riskLanes.includes('correctness')) {
+        const plan = planHunterShards({
+          diffText: diff.bytes.toString('utf8'),
+          thresholdBytes: configuredInteger(process.env.OMP_REVIEW_KIT_SHARD_BYTES, 40_000, 0),
+          maxShards: configuredInteger(process.env.OMP_REVIEW_KIT_MAX_SHARDS, 3, 2),
+        });
+        if (plan) {
+          hunterShardsText = formatHunterShards(plan);
+          await telemetry.record('hunter_shards_planned', {
+            diffBytes: plan.totalBytes,
+            shards: plan.shards.map((shard) => ({ files: shard.files.length, bytes: shard.bytes })),
+          });
+        }
+      }
       const reuseDir = path.join(tmpdir(), `reviewer-kit-snapshot-${diff.hash.slice(0, 24)}`);
       const snapshotDir = await this.#snapshotStorePort.create(snapshot, {
         diffBytes: diff.bytes,
@@ -2564,16 +2893,35 @@ export class ReviewWorkflowService {
         }
       }
 
+      try {
+        const pack = buildContextPack({
+          files: snapshot.files,
+          diffText: diff.bytes.toString('utf8'),
+          changedPaths: diff.changedPaths,
+          fileClasses: fileClassRows,
+          testPathPatterns: this.#testPathPatterns,
+        });
+        await writeFile(contextPackPath, pack.text, { mode: 0o600 });
+        contextPackWritten = true;
+        await telemetry.record('context_pack_built', { bytes: Buffer.byteLength(pack.text), ...pack.stats });
+      } catch {
+        // The pack is an accelerator for the scout, never a gate.
+        contextPackWritten = false;
+      }
+
       let execResult;
       try {
         const prompt = ReviewPrompt.forDiff(diff, snapshotDir, diff.changedPaths, {
           suspicionMapText: suspicionMap.toPromptText(),
           executionEvidenceText: executionEvidence ? executionEvidence.toPromptText() : '',
           roundContextText: reviewRound ? reviewRound.toPromptText() : '',
+          scoutBaselineText: reviewRound ? reviewRound.toScoutBaselineText() : '',
           reviewProfile,
           riskLanes,
+          hunterShardsText,
           fileClasses: fileClassRows,
           reportPath: runReportPath,
+          contextPackPath: contextPackWritten ? contextPackPath : '',
           inlineDiff: diff.length <= 50_000 ? diff.bytes.toString('utf8') : '',
         });
         execResult = await this.#reviewerPort.executeReview({
@@ -2602,6 +2950,7 @@ export class ReviewWorkflowService {
         // The dispatcher consumed the durable report (or never needed it);
         // remove this run's copy so per-run fallbacks never accumulate.
         await rm(runReportPath, { force: true }).catch(() => {});
+        await rm(contextPackPath, { force: true }).catch(() => {});
       }
 
       let combinedOutput = execResult.combined ?? `${execResult.stdout ?? ''}\n${execResult.stderr ?? ''}`;
@@ -2794,6 +3143,7 @@ ${reemitResult.stderr ?? ''}`;
               envelopeKind: envelope.kind,
               findings: roundFindingsFromEnvelope(envelope.toJSON()),
               findingsTotal: roundFindingsTotal(envelope.toJSON()),
+              ...((execResult.scoutBaseline ?? reviewRound?.scoutBaseline) ? { scout: execResult.scoutBaseline ?? reviewRound.scoutBaseline } : {}),
               ...(diffText.length <= ROUND_MAX_DIFF_CHARS ? { diffText } : {}),
             });
           }
@@ -2854,6 +3204,15 @@ export const VENDORED_KIT_FILES = Object.freeze([
   Object.freeze({ target: '.omp/review-kit/run-review.mjs', source: 'scripts/run-review.mjs' }),
   Object.freeze({ target: '.githooks/pre-commit', source: 'templates/githooks/pre-commit' }),
 ]);
+
+/**
+ * The kit repository keeps a self-hosted copy of its own runner next to the
+ * source. When that copy equals the staged source, only the source is reviewed.
+ */
+export const VENDORED_RUNNER_MIRROR = Object.freeze({
+  target: '.omp/review-kit/run-review.mjs',
+  source: 'scripts/run-review.mjs',
+});
 
 /**
  * Reads the canonical vendored files from the installed OMP plugin
@@ -2937,38 +3296,49 @@ export class SubprocessGitAdapter extends GitPort {
   /**
    * Staged vendored kit files (runner, hook) that are byte-identical to the
    * installed kit's canonical copy: they are the review plugin, not the
-   * committer's work, so the review diff leaves them out. Any doubt (no
-   * canonical copy, unreadable blob, different bytes) keeps the file in review.
+   * committer's work, so the review diff leaves them out. In the kit repository
+   * itself the self-hosted runner is a byte-identical mirror of the staged
+   * `scripts/run-review.mjs`, which stays in review, so the mirror is left out
+   * too. Any doubt (no canonical copy, unreadable blob, different bytes) keeps
+   * the file in review.
    *
    * @param {string} repoRoot
    * @returns {Promise<string[]>}
    */
   async #identicalVendoredPaths(repoRoot) {
-    if (typeof this.#vendoredFiles !== 'function') return [];
-    let canonical;
-    try {
-      canonical = await this.#vendoredFiles();
-    } catch {
-      return [];
+    let canonical = new Map();
+    if (typeof this.#vendoredFiles === 'function') {
+      try {
+        const loaded = await this.#vendoredFiles();
+        if (loaded instanceof Map) canonical = loaded;
+      } catch {
+        canonical = new Map();
+      }
     }
-    if (!(canonical instanceof Map) || canonical.size === 0) return [];
     const fields = (await this.#runner(['diff', '--cached', '--raw', '--no-renames', '-z', '--'], repoRoot))
       .toString('utf8').split('\0');
     const normalize = (text) => String(text).replace(/\r\n/g, '\n');
     const regularModes = new Set(['100644', '100755']);
+    const stagedText = async (name) => (await this.#runner(['show', `:${name}`], repoRoot)).toString('utf8');
     const identical = [];
     for (let i = 0; i + 1 < fields.length; i += 2) {
       const meta = /^:(\d{6}) (\d{6}) [0-9a-f]+ [0-9a-f]+ ([A-Z])\d*$/.exec(fields[i]);
       const name = fields[i + 1];
-      if (!meta || !canonical.has(name)) continue;
+      if (!meta) continue;
+      const isMirror = name === VENDORED_RUNNER_MIRROR.target;
+      if (!canonical.has(name) && !isMirror) continue;
       // A mode change (the hook losing its executable bit, a symlink in place
       // of the file) changes behaviour even when the bytes are canonical.
       const [, oldMode, newMode, status] = meta;
       const modeOk = status === 'M' ? oldMode === newMode : status === 'A' && regularModes.has(newMode);
       if (!modeOk) continue;
       try {
-        const staged = (await this.#runner(['show', `:${name}`], repoRoot)).toString('utf8');
-        if (normalize(staged) === normalize(canonical.get(name))) identical.push(name);
+        const staged = normalize(await stagedText(name));
+        if (canonical.has(name) && staged === normalize(canonical.get(name))) {
+          identical.push(name);
+        } else if (isMirror && staged === normalize(await stagedText(VENDORED_RUNNER_MIRROR.source))) {
+          identical.push(name);
+        }
       } catch {
         // unreadable staged blob stays in review
       }
@@ -3551,6 +3921,164 @@ async function terminateProcessTree(proc) {
   await waitForExit(250);
 }
 
+const TRANSCRIPT_MAX_BYTES = 64 * 1024 * 1024;
+const MAX_TRANSCRIPTS = 40;
+
+function percentile(sortedValues, fraction) {
+  if (sortedValues.length === 0) return null;
+  return sortedValues[Math.min(sortedValues.length - 1, Math.floor(sortedValues.length * fraction))];
+}
+
+/**
+ * Stage label from a transcript file name: `ReviewerKit.Scout.jsonl` -> `Scout`,
+ * the orchestrator's own `ReviewerKit.jsonl` keeps its name.
+ *
+ * @param {string} fileName
+ * @returns {string}
+ */
+export function stageLabelFromTranscript(fileName) {
+  const stem = String(fileName).replace(/\.jsonl$/i, '');
+  const dot = stem.indexOf('.');
+  return dot >= 0 ? stem.slice(dot + 1) : stem;
+}
+
+/**
+ * Condenses one OMP session transcript (JSONL) into latency counters: how many
+ * model turns and tool calls a stage took and how long a turn takes. Lines
+ * that are not JSON are ignored.
+ *
+ * @param {string} text
+ * @param {string} stage
+ * @returns {{ stage: string, turns: number, toolCalls: number, tools: Record<string, number>, startedAtMs: number, spanMs: number, turnGapMedianMs: number|null, turnGapP90Ms: number|null, turnGapMaxMs: number|null, model: string|null }}
+ */
+export function summarizeTranscript(text, stage) {
+  const tools = {};
+  const turnTimes = [];
+  let firstAt = Infinity;
+  let lastAt = -Infinity;
+  let model = null;
+  let subagentModel = null;
+  let toolCalls = 0;
+  for (const line of String(text).split('\n')) {
+    if (!line.trim()) continue;
+    let entry;
+    try {
+      entry = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (!entry || typeof entry !== 'object') continue;
+    const at = Date.parse(entry.timestamp);
+    if (Number.isFinite(at)) {
+      if (at < firstAt) firstAt = at;
+      if (at > lastAt) lastAt = at;
+    }
+    if (entry.type === 'model_change' && typeof entry.model === 'string') {
+      if (String(entry.role ?? '').startsWith('subagent:')) subagentModel ??= entry.model;
+      else model ??= entry.model;
+    }
+    if (entry.type !== 'message' || entry.message?.role !== 'assistant') continue;
+    if (Number.isFinite(at)) turnTimes.push(at);
+    for (const item of Array.isArray(entry.message.content) ? entry.message.content : []) {
+      if (item?.type !== 'toolCall' && item?.type !== 'tool_use') continue;
+      toolCalls += 1;
+      const name = String(item.name ?? item.toolName ?? 'unknown');
+      tools[name] = (tools[name] ?? 0) + 1;
+    }
+  }
+  const gaps = [];
+  for (let i = 1; i < turnTimes.length; i += 1) gaps.push(turnTimes[i] - turnTimes[i - 1]);
+  gaps.sort((a, b) => a - b);
+  return {
+    stage,
+    turns: turnTimes.length,
+    toolCalls,
+    tools,
+    startedAtMs: Number.isFinite(firstAt) ? firstAt : 0,
+    spanMs: lastAt > firstAt ? lastAt - firstAt : 0,
+    turnGapMedianMs: percentile(gaps, 0.5),
+    turnGapP90Ms: percentile(gaps, 0.9),
+    turnGapMaxMs: gaps.length > 0 ? gaps[gaps.length - 1] : null,
+    model: subagentModel ?? model,
+  };
+}
+
+/**
+ * Summarises every stage transcript an OMP review child left in its
+ * `--session-dir` (`<session>/<artifacts>/<Parent>/<Parent>.<Stage>.jsonl`, plus the
+ * orchestrator's `<artifacts>/<Parent>.jsonl`). Never throws: telemetry must
+ * not be able to change a verdict.
+ *
+ * @param {string|null|undefined} sessionDir
+ * @returns {Promise<ReturnType<typeof summarizeTranscript>[]>}
+ */
+export async function summarizeStageTranscripts(sessionDir) {
+  if (typeof sessionDir !== 'string' || sessionDir.length === 0) return [];
+  const stages = [];
+  try {
+    for (const artifacts of await readdir(sessionDir, { withFileTypes: true })) {
+      if (!artifacts.isDirectory()) continue;
+      const artifactsDir = path.join(sessionDir, artifacts.name);
+      const files = [];
+      for (const entry of await readdir(artifactsDir, { withFileTypes: true })) {
+        if (entry.isFile() && entry.name.endsWith('.jsonl')) files.push(path.join(artifactsDir, entry.name));
+        if (!entry.isDirectory()) continue;
+        const nested = path.join(artifactsDir, entry.name);
+        for (const inner of await readdir(nested, { withFileTypes: true })) {
+          if (inner.isFile() && inner.name.endsWith('.jsonl')) files.push(path.join(nested, inner.name));
+        }
+      }
+      for (const file of files.slice(0, MAX_TRANSCRIPTS)) {
+        const info = await stat(file).catch(() => null);
+        if (!info || info.size === 0 || info.size > TRANSCRIPT_MAX_BYTES) continue;
+        stages.push(summarizeTranscript(await readFile(file, 'utf8'), stageLabelFromTranscript(path.basename(file))));
+      }
+    }
+  } catch {
+    // keep whatever was read before the failure
+  }
+  return stages.sort((a, b) => a.startedAtMs - b.startedAtMs);
+}
+
+const STAGE_RESULT_MAX_BYTES = 2 * 1024 * 1024;
+
+/**
+ * Newest stage result artifact (`<artifacts>/<Parent>/<Parent>.<Stage>.md`)
+ * whose stage label matches `labelPattern`, as text; empty when none exists.
+ * Never throws.
+ *
+ * @param {string|null|undefined} sessionDir
+ * @param {RegExp} labelPattern
+ * @returns {Promise<string>}
+ */
+export async function readStageResult(sessionDir, labelPattern) {
+  if (typeof sessionDir !== 'string' || sessionDir.length === 0) return '';
+  let best = null;
+  try {
+    for (const artifacts of await readdir(sessionDir, { withFileTypes: true }).catch(() => [])) {
+      if (!artifacts.isDirectory()) continue;
+      const artifactsDir = path.join(sessionDir, artifacts.name);
+      for (const entry of await readdir(artifactsDir, { withFileTypes: true }).catch(() => [])) {
+        if (!entry.isDirectory()) continue;
+        const nested = path.join(artifactsDir, entry.name);
+        for (const inner of await readdir(nested, { withFileTypes: true }).catch(() => [])) {
+          if (!inner.isFile() || !inner.name.endsWith('.md')) continue;
+          if (!labelPattern.test(stageLabelFromTranscript(inner.name.replace(/\.md$/i, '.jsonl')))) continue;
+          const full = path.join(nested, inner.name);
+          const info = await stat(full).catch(() => null);
+          if (!info || info.size === 0 || info.size > STAGE_RESULT_MAX_BYTES) continue;
+          if (!best || info.mtimeMs > best.mtimeMs || (full > best.file && info.mtimeMs === best.mtimeMs)) {
+            best = { file: full, mtimeMs: info.mtimeMs };
+          }
+        }
+      }
+    }
+    return best ? await readFile(best.file, 'utf8') : '';
+  } catch {
+    return '';
+  }
+}
+
 /**
  * Infrastructure adapter running headless OMP CLI reviews.
  */
@@ -3712,6 +4240,13 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
           outcome = { ...result, stdout: recovered.text };
         }
       }
+      // Per-stage turn and tool-call counts: a stage lasts turns x turn latency,
+      // so this is what explains a slow review. Read before the session dir goes.
+      const stages = await summarizeStageTranscripts(sessionDir);
+      if (stages.length > 0) await telemetry.record('stage_stats', { attemptIndex, pid: record.pid, stages });
+      // The scout's map is carried to the next round so coverage does not drift.
+      const scoutBaseline = parseScoutBaseline(await readStageResult(sessionDir, /scout$/i));
+      if (scoutBaseline) outcome = { ...outcome, scoutBaseline };
       await telemetry.record('review_attempt_finished', { ...record });
       return outcome;
     } finally {
@@ -3982,6 +4517,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       modelsTried: [],
       attempts,
       probes,
+      ...(result.scoutBaseline ? { scoutBaseline: result.scoutBaseline } : {}),
     };
   }
 
@@ -5208,6 +5744,113 @@ export class FileSystemVerdictCacheAdapter extends VerdictCachePort {
   }
 }
 
+const MAX_COVERAGE_ENTRIES = 60;
+const MAX_NON_COVERABLE_ENTRIES = 20;
+const MAX_TEXT_CHARS = 200;
+const MAX_REPORT_CHARS = 2_000_000;
+
+const clipText = (value, limit = MAX_TEXT_CHARS) => String(value ?? '').slice(0, limit);
+const positiveLine = (value) => (Number.isInteger(value) && value > 0 ? value : null);
+
+function decodeScoutReport(text) {
+  const raw = String(text ?? '').slice(0, MAX_REPORT_CHARS).trim();
+  const attempts = [raw];
+  const open = raw.indexOf('{');
+  const close = raw.lastIndexOf('}');
+  if (open >= 0 && close > open) attempts.push(raw.slice(open, close + 1));
+  for (const candidate of attempts) {
+    try {
+      let value = JSON.parse(candidate);
+      if (typeof value === 'string') value = JSON.parse(value);
+      if (value && typeof value === 'object' && !Array.isArray(value)) return value;
+    } catch {
+      // a prefix-trimmed attempt may still parse
+    }
+  }
+  return null;
+}
+
+/**
+ * Extracts the stable part of a scout report (the `coverage_map`, the waived
+ * `non_coverable_items`, and the harness verdict) so the next review round can
+ * reuse it instead of rebuilding a different map from scratch.
+ *
+ * @param {string} text - the scout's result artifact
+ * @returns {{ coverageMap: object[], nonCoverable: object[], testHarness: string }|null}
+ */
+export function parseScoutBaseline(text) {
+  const report = decodeScoutReport(text);
+  if (!report || !Array.isArray(report.coverage_map)) return null;
+  const coverageMap = report.coverage_map
+    .filter((entry) => entry && typeof entry === 'object' && typeof entry.file_path === 'string' && typeof entry.behavior === 'string')
+    .slice(0, MAX_COVERAGE_ENTRIES)
+    .map((entry) => ({
+      behavior: clipText(entry.behavior),
+      file_path: clipText(entry.file_path, 400),
+      line_start: positiveLine(entry.line_start),
+      line_end: positiveLine(entry.line_end),
+      covering_test: typeof entry.covering_test === 'string' && entry.covering_test.length > 0 ? clipText(entry.covering_test, 400) : null,
+    }));
+  const nonCoverable = (Array.isArray(report.non_coverable_items) ? report.non_coverable_items : [])
+    .filter((entry) => entry && typeof entry === 'object' && typeof entry.file_path === 'string')
+    .slice(0, MAX_NON_COVERABLE_ENTRIES)
+    .map((entry) => ({
+      file_path: clipText(entry.file_path, 400),
+      line_start: positiveLine(entry.line_start),
+      line_end: positiveLine(entry.line_end),
+      reason: clipText(entry.reason),
+    }));
+  const harness = String(report.test_harness ?? '').toLowerCase();
+  return {
+    coverageMap,
+    nonCoverable,
+    testHarness: harness.startsWith('present') ? 'present' : harness.startsWith('absent') ? 'absent' : 'unknown',
+  };
+}
+
+/**
+ * Validates a baseline read back from the round store.
+ *
+ * @param {unknown} value
+ * @returns {{ coverageMap: object[], nonCoverable: object[], testHarness: string }|null}
+ */
+export function normalizeStoredBaseline(value) {
+  if (!value || typeof value !== 'object' || !Array.isArray(value.coverageMap)) return null;
+  const parsed = parseScoutBaseline(JSON.stringify({
+    coverage_map: value.coverageMap,
+    non_coverable_items: value.nonCoverable,
+    test_harness: value.testHarness,
+  }));
+  return parsed && parsed.coverageMap.length > 0 ? parsed : null;
+}
+
+const locationOf = (entry) => `${sanitizePromptToken(entry.file_path)}${entry.line_start ? `:${entry.line_start}${entry.line_end && entry.line_end !== entry.line_start ? `-${entry.line_end}` : ''}` : ''}`;
+
+/**
+ * Prompt block handing the previous round's scout baseline to the scout.
+ *
+ * @param {{ baseline: object, deltaPaths: string[], round: number }} input
+ * @returns {string}
+ */
+export function formatScoutBaseline({ baseline, deltaPaths, round }) {
+  const lines = [
+    `SCOUT BASELINE (review round ${round}): the previous round's scout map, carried so the coverage_map stays stable between rounds. Test harness then: ${baseline.testHarness}.`,
+    'coverage_map entries of the previous round:',
+    ...baseline.coverageMap.map((entry) => `- ${locationOf(entry)} | ${sanitizePromptToken(entry.behavior)} | covering_test: ${entry.covering_test ? sanitizePromptToken(entry.covering_test) : 'null'}`),
+  ];
+  if (baseline.nonCoverable.length > 0) {
+    lines.push(
+      'non_coverable_items of the previous round:',
+      ...baseline.nonCoverable.map((entry) => `- ${locationOf(entry)} | ${sanitizePromptToken(entry.reason)}`),
+    );
+  }
+  lines.push(
+    `Files with lines added since then (the round delta): ${deltaPaths.length > 0 ? deltaPaths.map((p) => sanitizePromptToken(p)).join(', ') : 'none'}.`,
+    'Scout rules for this baseline: (1) keep an entry exactly as listed (same behavior and covering_test) when its file_path is outside the round delta, its covering_test is not null, and the file named in covering_test is outside the round delta; (2) re-derive every other entry from the staged snapshot, in particular entries with covering_test null and entries whose source or test file is in the delta, and say in `unknowns` when a baseline entry could not be re-verified; (3) add entries only for executable behaviors that are new in the delta, and drop entries whose behavior no longer exists; (4) do not re-scan unchanged files for new behaviors; (5) emit the full merged coverage_map.',
+  );
+  return lines.join('\n');
+}
+
 const ROUND_SCHEMA = 'review-round@1';
 const MAX_FINDINGS = 20;
 const MAX_DELTA_FILES = 40;
@@ -5311,14 +5954,16 @@ export class ReviewRound {
   #findings;
   #omitted;
   #delta;
+  #scoutBaseline;
 
-  constructor({ number, previousHash, previousAt, findings, omitted = 0, delta }) {
+  constructor({ number, previousHash, previousAt, findings, omitted = 0, delta, scoutBaseline = null }) {
     this.#number = number;
     this.#previousHash = previousHash;
     this.#previousAt = previousAt;
     this.#findings = findings;
     this.#omitted = omitted;
     this.#delta = delta;
+    this.#scoutBaseline = scoutBaseline;
   }
 
   /**
@@ -5342,6 +5987,7 @@ export class ReviewRound {
           - Math.min(record.findings.length, MAX_FINDINGS),
       ),
       delta: typeof record.diffText === 'string' ? deltaSincePrevious(record.diffText, currentDiffText) : null,
+      scoutBaseline: normalizeStoredBaseline(record.scout),
     });
   }
 
@@ -5365,6 +6011,26 @@ export class ReviewRound {
   /** @returns {{ path: string, newLines: number }[]|null} null when the previous diff was not retained */
   get delta() {
     return this.#delta;
+  }
+
+  /** @returns {object|null} the previous round's scout map, when one was stored */
+  get scoutBaseline() {
+    return this.#scoutBaseline;
+  }
+
+  /**
+   * Prompt block for the scout only. Empty when no baseline was stored or the
+   * previous diff was not retained (the delta, and so what to keep, is unknown).
+   *
+   * @returns {string}
+   */
+  toScoutBaselineText() {
+    if (!this.#scoutBaseline || this.#delta === null) return '';
+    return formatScoutBaseline({
+      baseline: this.#scoutBaseline,
+      deltaPaths: this.#delta.map((d) => d.path),
+      round: this.#number,
+    });
   }
 
   toPromptText() {

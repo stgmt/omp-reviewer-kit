@@ -1,4 +1,5 @@
 import { sanitizePromptToken } from './review-prompt.mjs';
+import { formatScoutBaseline, normalizeStoredBaseline } from './scout-baseline.mjs';
 
 const ROUND_SCHEMA = 'review-round@1';
 const MAX_FINDINGS = 20;
@@ -103,14 +104,16 @@ export class ReviewRound {
   #findings;
   #omitted;
   #delta;
+  #scoutBaseline;
 
-  constructor({ number, previousHash, previousAt, findings, omitted = 0, delta }) {
+  constructor({ number, previousHash, previousAt, findings, omitted = 0, delta, scoutBaseline = null }) {
     this.#number = number;
     this.#previousHash = previousHash;
     this.#previousAt = previousAt;
     this.#findings = findings;
     this.#omitted = omitted;
     this.#delta = delta;
+    this.#scoutBaseline = scoutBaseline;
   }
 
   /**
@@ -134,6 +137,7 @@ export class ReviewRound {
           - Math.min(record.findings.length, MAX_FINDINGS),
       ),
       delta: typeof record.diffText === 'string' ? deltaSincePrevious(record.diffText, currentDiffText) : null,
+      scoutBaseline: normalizeStoredBaseline(record.scout),
     });
   }
 
@@ -157,6 +161,26 @@ export class ReviewRound {
   /** @returns {{ path: string, newLines: number }[]|null} null when the previous diff was not retained */
   get delta() {
     return this.#delta;
+  }
+
+  /** @returns {object|null} the previous round's scout map, when one was stored */
+  get scoutBaseline() {
+    return this.#scoutBaseline;
+  }
+
+  /**
+   * Prompt block for the scout only. Empty when no baseline was stored or the
+   * previous diff was not retained (the delta, and so what to keep, is unknown).
+   *
+   * @returns {string}
+   */
+  toScoutBaselineText() {
+    if (!this.#scoutBaseline || this.#delta === null) return '';
+    return formatScoutBaseline({
+      baseline: this.#scoutBaseline,
+      deltaPaths: this.#delta.map((d) => d.path),
+      round: this.#number,
+    });
   }
 
   toPromptText() {
