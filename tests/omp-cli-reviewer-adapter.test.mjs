@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { appendFile, chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { appendFile, chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import test from 'node:test';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -812,6 +812,45 @@ test('stage poller dedups repeated stages and never regresses on log truncation'
     assert.equal(stages.length, 1, 'no regression and no duplicate stage reports');
     assert.equal(stages[0].stage, 'synthesis');
     assert.equal(stages[0].completed, 3);
+  } finally {
+    if (previousCommand === undefined) delete process.env.OMP_REVIEW_KIT_OMP;
+    else process.env.OMP_REVIEW_KIT_OMP = previousCommand;
+    await rm(baseDir, { recursive: true, force: true });
+  }
+});
+test('stage poller forwards the child log time to onActivity while the review runs', async () => {
+  // Coverage gap h: childLogAt, the activity signal behind the quiet judgement, reaches
+  // telemetry only through this production poller; the adapter tests inject a mock runner.
+  const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-activity-poller-'));
+  const logDir = path.join(baseDir, 'logs');
+  await mkdir(logDir, { recursive: true });
+  const commandPath = path.join(baseDir, isWindows ? 'fake-omp.cmd' : 'fake-omp.sh');
+  const command = isWindows
+    ? '@echo off\nnode -e "setTimeout(() => {}, 1500)"\necho REVIEW_RESULT=PASS\nexit /b 0\n'
+    : '#!/bin/sh\nsleep 1.5\nprintf "REVIEW_RESULT=PASS\\n"\n';
+  const previousCommand = process.env.OMP_REVIEW_KIT_OMP;
+  process.env.OMP_REVIEW_KIT_OMP = commandPath;
+  try {
+    await writeFile(commandPath, command, 'utf8');
+    if (!isWindows) await chmod(commandPath, 0o755);
+
+    const activity = [];
+    let childPid = 0;
+    const runPromise = OmpCliReviewerAdapter.defaultRunner('probe', cwd, 15000, {
+      stagePollMs: 50,
+      logDir,
+      onSpawn: (pid) => { childPid = pid; },
+      onStage: () => {},
+      onActivity: (logAt) => { activity.push(logAt); },
+    });
+    while (!childPid) await new Promise((r) => setTimeout(r, 10));
+    const logFile = path.join(logDir, `omp.2099-01-01.${childPid}.log`);
+    await writeFile(logFile, `${JSON.stringify({ message: 'subagent launch timing', agent: 'review-context-scout' })}\n`, 'utf8');
+    const review = await runPromise;
+
+    assert.equal(review.status, 0, review.stderr);
+    const expectedAt = new Date((await stat(logFile)).mtimeMs).toISOString();
+    assert.ok(activity.includes(expectedAt), `the poller reports the log time ${expectedAt}; got ${JSON.stringify(activity)}`);
   } finally {
     if (previousCommand === undefined) delete process.env.OMP_REVIEW_KIT_OMP;
     else process.env.OMP_REVIEW_KIT_OMP = previousCommand;

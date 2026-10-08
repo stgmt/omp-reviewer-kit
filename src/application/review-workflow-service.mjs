@@ -209,11 +209,23 @@ export class ReviewWorkflowService {
       await rm(contextPackPath, { force: true }).catch(() => {});
     };
     const uninstall = installRunSignalGuard({ telemetry, runId, cleanup: cleanupSnapshots });
+    // HEAD at hook time is the commit's parent: `review-progress --commit` matches
+    // a commit to its run through it. Optional capability, never a review input.
+    let parentSha = null;
+    try {
+      parentSha = typeof this.#gitPort.getHeadSha === 'function' ? await this.#gitPort.getHeadSha(repoRoot) : null;
+    } catch {
+      parentSha = null;
+    }
     await telemetry.updateLastRun({
       state: 'started',
       runId,
       repoRoot,
       startedAt: new Date(startedAt).toISOString(),
+      progressAt: new Date(startedAt).toISOString(),
+      diffHash: diff.hash,
+      excludedPaths: [...(diff.excludedPaths ?? [])],
+      parentSha,
     }, { force: true });
 
     try {
@@ -239,6 +251,7 @@ export class ReviewWorkflowService {
       await telemetry.record('diff_collected', {
         diffHash: diff.hash,
         diffBytes: diff.length,
+        excludedPaths: [...(diff.excludedPaths ?? [])],
       });
 
       // PASS reuse: an identical staged tree + diff that already passed review

@@ -73,24 +73,30 @@ export function diffBlockPaths(blockText) {
 export class DiffIdentity {
   #bytes;
   #hash;
+  #excludedPaths;
 
   /**
    * @param {Buffer} buffer
+   * @param {{ excludedPaths?: string[] }} [options] - vendored kit paths left out of
+   *   `buffer`; recorded with the run, never part of the hash
    */
-  constructor(buffer) {
+  constructor(buffer, { excludedPaths = [] } = {}) {
     if (!Buffer.isBuffer(buffer)) {
       throw new TypeError('DiffIdentity expects a Buffer');
     }
     this.#bytes = buffer;
     this.#hash = createHash('sha256').update(buffer).digest('hex');
+    this.#excludedPaths = Object.freeze([...excludedPaths]);
   }
+
 
   /**
    * @param {Buffer} buffer
+   * @param {{ excludedPaths?: string[] }} [options]
    * @returns {DiffIdentity}
    */
-  static fromBuffer(buffer) {
-    return new DiffIdentity(buffer);
+  static fromBuffer(buffer, options) {
+    return new DiffIdentity(buffer, options);
   }
 
   /**
@@ -127,6 +133,14 @@ export class DiffIdentity {
    */
   get length() {
     return this.#bytes.length;
+  }
+
+  /**
+   * Vendored kit paths that the staged diff left out of review (see SubprocessGitAdapter).
+   * @returns {readonly string[]}
+   */
+  get excludedPaths() {
+    return this.#excludedPaths;
   }
 
   /**

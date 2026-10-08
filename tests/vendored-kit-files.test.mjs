@@ -130,11 +130,11 @@ describe('Feature: the vendored kit files are not part of the reviewed diff', ()
         const calls = [];
         const adapter = new Adapter((args) => { calls.push(args); return Buffer.from(''); });
         await adapter.getStagedDiff('/repo');
-        assert.deepEqual(calls, [rawListing, ['diff', '--cached', '--binary', '--no-ext-diff', '--']]);
+        assert.deepEqual(calls, [rawListing, ['diff', '--cached', '--binary', '--no-ext-diff', '--no-color', '--src-prefix=a/', '--dst-prefix=b/', '--']]);
 
         calls.length = 0;
         await new Adapter((args) => { calls.push(args); return Buffer.from(''); }, { vendoredFiles: async () => new Map() }).getStagedDiff('/repo');
-        assert.deepEqual(calls, [rawListing, ['diff', '--cached', '--binary', '--no-ext-diff', '--']]);
+        assert.deepEqual(calls, [rawListing, ['diff', '--cached', '--binary', '--no-ext-diff', '--no-color', '--src-prefix=a/', '--dst-prefix=b/', '--']]);
       });
 
       describe('the self-hosted runner mirror of the kit repository', () => {
@@ -194,7 +194,7 @@ describe('Feature: the vendored kit files are not part of the reviewed diff', ()
           return Buffer.from('');
         }, { vendoredFiles: async () => canonical() });
         await adapter.getStagedDiff('/repo');
-        assert.deepEqual(calls.at(-1), ['diff', '--cached', '--binary', '--no-ext-diff', '--']);
+        assert.deepEqual(calls.at(-1), ['diff', '--cached', '--binary', '--no-ext-diff', '--no-color', '--src-prefix=a/', '--dst-prefix=b/', '--']);
       });
     });
   }

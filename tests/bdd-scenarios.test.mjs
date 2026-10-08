@@ -256,7 +256,7 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
 
     // Then
     assert.equal(result.exitCode, 0);
-    assert.deepEqual(calls.find((call) => call.includes('--binary')), ['diff', '--cached', '--binary', '--no-ext-diff', '--']);
+    assert.deepEqual(calls.find((call) => call.includes('--binary')), ['diff', '--cached', '--binary', '--no-ext-diff', '--no-color', '--src-prefix=a/', '--dst-prefix=b/', '--']);
   });
 
   it('Scenario 8: Given consecutive reviews, When reviews finish, Then each report is uniquely preserved', async () => {
@@ -866,7 +866,7 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
     });
     const diff = await adapter.getStagedDiff('/repo');
     assert.equal(passedArgs.includes('--cached'), true);
-    assert.deepEqual(passedArgs, ['diff', '--cached', '--binary', '--no-ext-diff', '--']);
+    assert.deepEqual(passedArgs, ['diff', '--cached', '--binary', '--no-ext-diff', '--no-color', '--src-prefix=a/', '--dst-prefix=b/', '--']);
     assert.equal(diff.isEmpty(), false);
   });
   it('ReviewExecutionResult invariant: rejects a non-array model trace', () => {

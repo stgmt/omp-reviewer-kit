@@ -153,26 +153,39 @@ const STAGE_AGENT_IDS = Object.freeze({
 });
 
 // `Configured subagent …` events carry DISPLAY names (`role: "subagent:<Parent>.<Display>"`),
-// never the agent-type id — only `subagent launch timing` events do. Map the
-// observed display suffixes to stages and, as a positional fallback, pair
-// Configured events with launch-timing events in chronological order.
-const STAGE_ROLE_DISPLAYS = Object.freeze({
-  ContextScout: 'scout',
-  CorrectnessHunter: 'risk',
-  SecurityHunter: 'risk',
-  ContentRiskHunter: 'risk',
-  FindingVerifier: 'verifier',
-});
+// never the agent-type id — only `subagent launch timing` events do. The
+// orchestrator picks display names at run time (CorrectnessHunter, HunterS1,
+// HunterS2, …), so the stage word inside the name decides. Those names map by
+// pattern, and a name with no stage word (the orchestrator's own row) maps to
+// nothing and never pins a stage.
+const STAGE_DISPLAY_PATTERNS = Object.freeze([
+  [/Scout/, 'scout'],
+  [/Hunter/, 'risk'],
+  [/Verifier/, 'verifier'],
+]);
+
+/**
+ * @param {string} display
+ * @returns {string|undefined}
+ */
+function stageForDisplay(display) {
+  for (const [pattern, stage] of STAGE_DISPLAY_PATTERNS) {
+    if (pattern.test(display)) return stage;
+  }
+  return undefined;
+}
 
 /**
  * Best-effort stage derivation from the child OMP log. Reads the newest
  * `omp.<date>.<pid>.log`, scans for `Configured subagent` (stage start) and
  * `subagent launch timing` (stage end) JSON entries, and returns the current
- * stage label for `last-run.json`. Never throws: an unreadable or absent log
- * yields `undefined`, leaving the caller to keep the prior stage value.
+ * stage label for `last-run.json`. `logAt` is the log's modification time: the
+ * activity signal behind the quiet judgement, not a stage change. Never throws:
+ * an unreadable or absent log yields `undefined`, leaving the caller to keep the
+ * prior stage value.
  *
  * @param {{ logDir?: string, pid?: number, maxTailBytes?: number }} [opts]
- * @returns {Promise<{stage: string, completed: number}|undefined>}
+ * @returns {Promise<{stage: string, completed: number, logAt: string}|undefined>}
  */
 export async function childLogReadStage({ logDir, pid, maxTailBytes = 262_144 } = {}) {
   if (!Number.isInteger(pid) || pid <= 0) return undefined;
@@ -183,7 +196,9 @@ export async function childLogReadStage({ logDir, pid, maxTailBytes = 262_144 } 
     const matches = entries.filter((name) => name.startsWith('omp.') && name.endsWith(suffix));
     if (matches.length === 0) return undefined;
     matches.sort().reverse();
-    const tail = await readLogTail(path.join(dir, matches[0]), maxTailBytes);
+    const logFile = path.join(dir, matches[0]);
+    const logAt = new Date((await stat(logFile)).mtimeMs).toISOString();
+    const tail = await readLogTail(logFile, maxTailBytes);
     const configuredRoles = [];
     const launchedAgents = [];
     for (const line of tail.split(/\r?\n/)) {
@@ -208,7 +223,7 @@ export async function childLogReadStage({ logDir, pid, maxTailBytes = 262_144 } 
     const dispatchQueueByStage = new Map();
     for (const role of configuredRoles) {
       const display = (role ?? '').split('.').pop() ?? '';
-      const stage = STAGE_ROLE_DISPLAYS[display];
+      const stage = stageForDisplay(display);
       if (!stage) continue;
       const queue = dispatchQueueByStage.get(stage) ?? [];
       queue.push(role);
@@ -220,7 +235,7 @@ export async function childLogReadStage({ logDir, pid, maxTailBytes = 262_144 } 
       const queue = agentStage ? (dispatchQueueByStage.get(agentStage) ?? []) : [];
       const dispatch = queue.length > 0 ? queue.shift() : undefined;
       const display = (dispatch ?? '').split('.').pop() ?? '';
-      const stage = STAGE_ROLE_DISPLAYS[display] ?? agentStage;
+      const stage = stageForDisplay(display) ?? agentStage;
       if (stage) started.push(stage);
     }
     // Configured-but-never-launched stages (dispatch issued, launch event
@@ -269,7 +284,7 @@ export async function childLogReadStage({ logDir, pid, maxTailBytes = 262_144 } 
     const expectedByStage = new Map();
     for (const role of configuredRoles) {
       const disp = (role ?? '').split('.').pop() ?? '';
-      const st = STAGE_ROLE_DISPLAYS[disp];
+      const st = stageForDisplay(disp);
       if (st) expectedByStage.set(st, (expectedByStage.get(st) ?? 0) + 1);
     }
     const completedStages = new Set();
@@ -277,7 +292,7 @@ export async function childLogReadStage({ logDir, pid, maxTailBytes = 262_144 } 
       const expected = Math.max(expectedByStage.get(s) ?? 0, startedCounts.get(s) ?? 0);
       if (n >= expected && expected > 0) completedStages.add(s);
     }
-    return { stage, completed: completedStages.size };
+    return { stage, completed: completedStages.size, logAt };
   } catch {
     return undefined;
   }
@@ -593,6 +608,8 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
     const startedAt = Date.now();
     const record = { attemptIndex, startedAt: new Date(startedAt).toISOString() };
     const stageHistory = [];
+    // Latest mtime of the OMP child's log: the activity signal behind the quiet judgement.
+    let childLogAt = null;
     attempts.push(record);
     let responseObserved = false;
     let workingSignalObserved = false;
@@ -605,6 +622,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       void telemetry.updateLastRun({
         state: 'reviewing',
         pid: record.pid,
+        ...(childLogAt ? { childLogAt } : {}),
         elapsedMs: Date.now() - startedAt,
       });
     };
@@ -659,6 +677,9 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
             });
           }
         },
+        onActivity: (logAt) => {
+          childLogAt = logAt;
+        },
         onStage: ({ stage, completed }) => {
           if (!stage) return;
           stageHistory.push({ stage, completed, at: new Date().toISOString(), elapsedMs: Date.now() - startedAt });
@@ -673,8 +694,9 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
             stage,
             stagesCompleted: completed,
             stageHistory,
+            progressAt: new Date().toISOString(),
             elapsedMs: Date.now() - startedAt,
-          });
+          }, { force: true });
         },
       });
       record.status = result?.status;
@@ -758,10 +780,10 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
    * @param {string} prompt
    * @param {string} cwd
    * @param {number} [timeout]
-   * @param {{ noTools?: boolean, maxTime?: string|null, stagePollMs?: number, logDir?: string|null, onOutput?: (chunk: unknown, stream: 'stdout'|'stderr') => void, onSpawn?: (pid: number|undefined) => void, onStage?: (info: { stage: string, completed: number }) => void, registryEnv?: string|null, sessionDir?: string, env?: Record<string, string> }} [options]
+   * @param {{ noTools?: boolean, maxTime?: string|null, stagePollMs?: number, logDir?: string|null, onOutput?: (chunk: unknown, stream: 'stdout'|'stderr') => void, onSpawn?: (pid: number|undefined) => void, onStage?: (info: { stage: string, completed: number }) => void, onActivity?: (logAt: string) => void, registryEnv?: string|null, sessionDir?: string, env?: Record<string, string> }} [options]
    * @returns {Promise<{ status: number, stdout: string, stderr: string, pid?: number }>}
    */
-  static defaultRunner(prompt, cwd, timeout, { noTools = false, maxTime, stagePollMs = 10_000, logDir = null, onOutput, onSpawn, onStage, registryEnv, sessionDir, env: extraEnv } = {}) {
+  static defaultRunner(prompt, cwd, timeout, { noTools = false, maxTime, stagePollMs = 10_000, logDir = null, onOutput, onSpawn, onStage, onActivity, registryEnv, sessionDir, env: extraEnv } = {}) {
     return new Promise((resolve) => {
       const command = process.env.OMP_REVIEW_KIT_OMP ?? 'omp';
       const isWindowsWrapper = /\.(cmd|bat)$/i.test(command);
@@ -851,6 +873,10 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
               // must not deliver stage updates — updateLastRun would regress
               // the terminal state back to 'reviewing'.
               if (settled) return;
+              // Child-log activity feeds the quiet judgement; it is not a stage change.
+              if (stageInfo?.logAt) {
+                try { onActivity?.(stageInfo.logAt); } catch {}
+              }
               if (stageInfo) {
                 // Monotonic progress: a truncated tail can make the log look
                 // earlier than it is; never report a regression — neither the

@@ -74,10 +74,12 @@ export class SubprocessGitAdapter extends GitPort {
    */
   async getStagedDiff(repoRoot) {
     const excluded = await this.#identicalVendoredPaths(repoRoot);
-    const args = ['diff', '--cached', '--binary', '--no-ext-diff', '--'];
+    // Pinned: the review diff must not depend on the committer's git configuration.
+    // diff.mnemonicPrefix renames the a/ and b/ prefixes, color.diff adds escape codes.
+    const args = ['diff', '--cached', '--binary', '--no-ext-diff', '--no-color', '--src-prefix=a/', '--dst-prefix=b/', '--'];
     if (excluded.length > 0) args.push('.', ...excluded.map((p) => `:(exclude,literal)${p}`));
     const output = await this.#runner(args, repoRoot);
-    return DiffIdentity.fromBuffer(output);
+    return DiffIdentity.fromBuffer(output, { excludedPaths: excluded });
   }
 
   /**
@@ -140,6 +142,22 @@ export class SubprocessGitAdapter extends GitPort {
   async getIndexTree(repoRoot) {
     try {
       const id = (await this.#runner(['write-tree'], repoRoot)).toString('utf8').trim();
+      return /^[0-9a-f]{40}$|^[0-9a-f]{64}$/.test(id) ? id : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * HEAD commit id, or null on an unborn branch. The commit under review is
+   * HEAD's child, so this is the parent that `review-progress --commit` matches on.
+   *
+   * @param {string} repoRoot
+   * @returns {Promise<string|null>}
+   */
+  async getHeadSha(repoRoot) {
+    try {
+      const id = (await this.#runner(['rev-parse', '--verify', '--quiet', 'HEAD'], repoRoot)).toString('utf8').trim();
       return /^[0-9a-f]{40}$|^[0-9a-f]{64}$/.test(id) ? id : null;
     } catch {
       return null;

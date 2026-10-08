@@ -79,20 +79,25 @@ function diffBlockPaths(blockText) {
 export class DiffIdentity {
   #bytes;
   #hash;
+  #excludedPaths;
 
   /**
    * @param {Buffer} buffer
+   * @param {{ excludedPaths?: string[] }} [options] - vendored kit paths left out of
+   *   `buffer`; recorded with the run, never part of the hash
    */
-  constructor(buffer) {
+  constructor(buffer, { excludedPaths = [] } = {}) {
     if (!Buffer.isBuffer(buffer)) {
       throw new TypeError('DiffIdentity expects a Buffer');
     }
     this.#bytes = buffer;
     this.#hash = createHash('sha256').update(buffer).digest('hex');
+    this.#excludedPaths = Object.freeze([...excludedPaths]);
   }
 
-  static fromBuffer(buffer) {
-    return new DiffIdentity(buffer);
+
+  static fromBuffer(buffer, options) {
+    return new DiffIdentity(buffer, options);
   }
 
   static fromString(text) {
@@ -113,6 +118,14 @@ export class DiffIdentity {
 
   get length() {
     return this.#bytes.length;
+  }
+
+  /**
+   * Vendored kit paths that the staged diff left out of review (see SubprocessGitAdapter).
+   * @returns {readonly string[]}
+   */
+  get excludedPaths() {
+    return this.#excludedPaths;
   }
 
   /**
@@ -2196,6 +2209,16 @@ export class GitPort {
   getIndexTree(repoRoot) {
     throw new Error('GitPort.getIndexTree must be implemented');
   }
+
+  /**
+   * HEAD commit id, or null on an unborn branch. Optional capability.
+   *
+   * @param {string} repoRoot
+   * @returns {Promise<string|null>|string|null}
+   */
+  getHeadSha(repoRoot) {
+    throw new Error('GitPort.getHeadSha must be implemented');
+  }
 }
 
 export class SnapshotStorePort {
@@ -2584,11 +2607,23 @@ export class ReviewWorkflowService {
       await rm(contextPackPath, { force: true }).catch(() => {});
     };
     const uninstall = installRunSignalGuard({ telemetry, runId, cleanup: cleanupSnapshots });
+    // HEAD at hook time is the commit's parent: `review-progress --commit` matches
+    // a commit to its run through it. Optional capability, never a review input.
+    let parentSha = null;
+    try {
+      parentSha = typeof this.#gitPort.getHeadSha === 'function' ? await this.#gitPort.getHeadSha(repoRoot) : null;
+    } catch {
+      parentSha = null;
+    }
     await telemetry.updateLastRun({
       state: 'started',
       runId,
       repoRoot,
       startedAt: new Date(startedAt).toISOString(),
+      progressAt: new Date(startedAt).toISOString(),
+      diffHash: diff.hash,
+      excludedPaths: [...(diff.excludedPaths ?? [])],
+      parentSha,
     }, { force: true });
 
     try {
@@ -2614,6 +2649,7 @@ export class ReviewWorkflowService {
       await telemetry.record('diff_collected', {
         diffHash: diff.hash,
         diffBytes: diff.length,
+        excludedPaths: [...(diff.excludedPaths ?? [])],
       });
 
       // PASS reuse: an identical staged tree + diff that already passed review
@@ -3287,10 +3323,12 @@ export class SubprocessGitAdapter extends GitPort {
 
   async getStagedDiff(repoRoot) {
     const excluded = await this.#identicalVendoredPaths(repoRoot);
-    const args = ['diff', '--cached', '--binary', '--no-ext-diff', '--'];
+    // Pinned: the review diff must not depend on the committer's git configuration.
+    // diff.mnemonicPrefix renames the a/ and b/ prefixes, color.diff adds escape codes.
+    const args = ['diff', '--cached', '--binary', '--no-ext-diff', '--no-color', '--src-prefix=a/', '--dst-prefix=b/', '--'];
     if (excluded.length > 0) args.push('.', ...excluded.map((p) => `:(exclude,literal)${p}`));
     const output = await this.#runner(args, repoRoot);
-    return DiffIdentity.fromBuffer(output);
+    return DiffIdentity.fromBuffer(output, { excludedPaths: excluded });
   }
 
   /**
@@ -3353,6 +3391,22 @@ export class SubprocessGitAdapter extends GitPort {
   async getIndexTree(repoRoot) {
     try {
       const id = (await this.#runner(['write-tree'], repoRoot)).toString('utf8').trim();
+      return /^[0-9a-f]{40}$|^[0-9a-f]{64}$/.test(id) ? id : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * HEAD commit id, or null on an unborn branch. The commit under review is
+   * HEAD's child, so this is the parent that `review-progress --commit` matches on.
+   *
+   * @param {string} repoRoot
+   * @returns {Promise<string|null>}
+   */
+  async getHeadSha(repoRoot) {
+    try {
+      const id = (await this.#runner(['rev-parse', '--verify', '--quiet', 'HEAD'], repoRoot)).toString('utf8').trim();
       return /^[0-9a-f]{40}$|^[0-9a-f]{64}$/.test(id) ? id : null;
     } catch {
       return null;
@@ -3540,23 +3594,36 @@ const STAGE_AGENT_IDS = Object.freeze({
 });
 
 // `Configured subagent …` events carry DISPLAY names (`role: "subagent:<Parent>.<Display>"`),
-// never the agent-type id — only `subagent launch timing` events do. Map the
-// observed display suffixes to stages and, as a positional fallback, pair
-// Configured events with launch-timing events in chronological order.
-const STAGE_ROLE_DISPLAYS = Object.freeze({
-  ContextScout: 'scout',
-  CorrectnessHunter: 'risk',
-  SecurityHunter: 'risk',
-  ContentRiskHunter: 'risk',
-  FindingVerifier: 'verifier',
-});
+// never the agent-type id — only `subagent launch timing` events do. The
+// orchestrator picks display names at run time (CorrectnessHunter, HunterS1,
+// HunterS2, …), so the stage word inside the name decides. Those names map by
+// pattern, and a name with no stage word (the orchestrator's own row) maps to
+// nothing and never pins a stage.
+const STAGE_DISPLAY_PATTERNS = Object.freeze([
+  [/Scout/, 'scout'],
+  [/Hunter/, 'risk'],
+  [/Verifier/, 'verifier'],
+]);
+
+/**
+ * @param {string} display
+ * @returns {string|undefined}
+ */
+function stageForDisplay(display) {
+  for (const [pattern, stage] of STAGE_DISPLAY_PATTERNS) {
+    if (pattern.test(display)) return stage;
+  }
+  return undefined;
+}
 
 /**
  * Best-effort stage derivation from the child OMP log. Reads the newest
  * `omp.<date>.<pid>.log`, scans for `Configured subagent` (stage start) and
  * `subagent launch timing` (stage end) JSON entries, and returns the current
- * stage label for `last-run.json`. Never throws: an unreadable or absent log
- * yields `undefined`, leaving the caller to keep the prior stage value.
+ * stage label for `last-run.json`. `logAt` is the log's modification time: the
+ * activity signal behind the quiet judgement, not a stage change. Never throws:
+ * an unreadable or absent log yields `undefined`, leaving the caller to keep the
+ * prior stage value.
  */
 export async function childLogReadStage({ logDir, pid, maxTailBytes = 262_144 } = {}) {
   if (!Number.isInteger(pid) || pid <= 0) return undefined;
@@ -3567,7 +3634,9 @@ export async function childLogReadStage({ logDir, pid, maxTailBytes = 262_144 } 
     const matches = entries.filter((name) => name.startsWith('omp.') && name.endsWith(suffix));
     if (matches.length === 0) return undefined;
     matches.sort().reverse();
-    const tail = await readLogTail(path.join(dir, matches[0]), maxTailBytes);
+    const logFile = path.join(dir, matches[0]);
+    const logAt = new Date((await stat(logFile)).mtimeMs).toISOString();
+    const tail = await readLogTail(logFile, maxTailBytes);
     const configuredRoles = [];
     const launchedAgents = [];
     for (const line of tail.split(/\r?\n/)) {
@@ -3592,7 +3661,7 @@ export async function childLogReadStage({ logDir, pid, maxTailBytes = 262_144 } 
     const dispatchQueueByStage = new Map();
     for (const role of configuredRoles) {
       const display = (role ?? '').split('.').pop() ?? '';
-      const stage = STAGE_ROLE_DISPLAYS[display];
+      const stage = stageForDisplay(display);
       if (!stage) continue;
       const queue = dispatchQueueByStage.get(stage) ?? [];
       queue.push(role);
@@ -3604,7 +3673,7 @@ export async function childLogReadStage({ logDir, pid, maxTailBytes = 262_144 } 
       const queue = agentStage ? (dispatchQueueByStage.get(agentStage) ?? []) : [];
       const dispatch = queue.length > 0 ? queue.shift() : undefined;
       const display = (dispatch ?? '').split('.').pop() ?? '';
-      const stage = STAGE_ROLE_DISPLAYS[display] ?? agentStage;
+      const stage = stageForDisplay(display) ?? agentStage;
       if (stage) started.push(stage);
     }
     // Configured-but-never-launched stages (dispatch issued, launch event
@@ -3653,7 +3722,7 @@ export async function childLogReadStage({ logDir, pid, maxTailBytes = 262_144 } 
     const expectedByStage = new Map();
     for (const role of configuredRoles) {
       const disp = (role ?? '').split('.').pop() ?? '';
-      const st = STAGE_ROLE_DISPLAYS[disp];
+      const st = stageForDisplay(disp);
       if (st) expectedByStage.set(st, (expectedByStage.get(st) ?? 0) + 1);
     }
     const completedStages = new Set();
@@ -3661,7 +3730,7 @@ export async function childLogReadStage({ logDir, pid, maxTailBytes = 262_144 } 
       const expected = Math.max(expectedByStage.get(s) ?? 0, startedCounts.get(s) ?? 0);
       if (n >= expected && expected > 0) completedStages.add(s);
     }
-    return { stage, completed: completedStages.size };
+    return { stage, completed: completedStages.size, logAt };
   } catch {
     return undefined;
   }
@@ -4135,6 +4204,8 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
     const startedAt = Date.now();
     const record = { attemptIndex, startedAt: new Date(startedAt).toISOString() };
     const stageHistory = [];
+    // Latest mtime of the OMP child's log: the activity signal behind the quiet judgement.
+    let childLogAt = null;
     attempts.push(record);
     let responseObserved = false;
     let workingSignalObserved = false;
@@ -4147,6 +4218,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       void telemetry.updateLastRun({
         state: 'reviewing',
         pid: record.pid,
+        ...(childLogAt ? { childLogAt } : {}),
         elapsedMs: Date.now() - startedAt,
       });
     };
@@ -4201,6 +4273,9 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
             });
           }
         },
+        onActivity: (logAt) => {
+          childLogAt = logAt;
+        },
         onStage: ({ stage, completed }) => {
           if (!stage) return;
           stageHistory.push({ stage, completed, at: new Date().toISOString(), elapsedMs: Date.now() - startedAt });
@@ -4215,8 +4290,9 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
             stage,
             stagesCompleted: completed,
             stageHistory,
+            progressAt: new Date().toISOString(),
             elapsedMs: Date.now() - startedAt,
-          });
+          }, { force: true });
         },
       });
       record.status = result?.status;
@@ -4300,10 +4376,10 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
    * @param {string} prompt
    * @param {string} cwd
    * @param {number} [timeout]
-   * @param {{ noTools?: boolean, maxTime?: string|null, stagePollMs?: number, logDir?: string|null, onOutput?: (chunk: unknown, stream: 'stdout'|'stderr') => void, onSpawn?: (pid: number|undefined) => void, onStage?: (info: { stage: string, completed: number }) => void, registryEnv?: string|null, sessionDir?: string, env?: Record<string, string> }} [options]
+   * @param {{ noTools?: boolean, maxTime?: string|null, stagePollMs?: number, logDir?: string|null, onOutput?: (chunk: unknown, stream: 'stdout'|'stderr') => void, onSpawn?: (pid: number|undefined) => void, onStage?: (info: { stage: string, completed: number }) => void, onActivity?: (logAt: string) => void, registryEnv?: string|null, sessionDir?: string, env?: Record<string, string> }} [options]
    * @returns {Promise<{ status: number, stdout: string, stderr: string, pid?: number }>}
    */
-  static defaultRunner(prompt, cwd, timeout, { noTools = false, maxTime, stagePollMs = 10_000, logDir = null, onOutput, onSpawn, onStage, registryEnv, sessionDir, env: extraEnv } = {}) {
+  static defaultRunner(prompt, cwd, timeout, { noTools = false, maxTime, stagePollMs = 10_000, logDir = null, onOutput, onSpawn, onStage, onActivity, registryEnv, sessionDir, env: extraEnv } = {}) {
     return new Promise((resolve) => {
       const command = process.env.OMP_REVIEW_KIT_OMP ?? 'omp';
       const isWindowsWrapper = /\.(cmd|bat)$/i.test(command);
@@ -4393,6 +4469,10 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
               // must not deliver stage updates — updateLastRun would regress
               // the terminal state back to 'reviewing'.
               if (settled) return;
+              // Child-log activity feeds the quiet judgement; it is not a stage change.
+              if (stageInfo?.logAt) {
+                try { onActivity?.(stageInfo.logAt); } catch {}
+              }
               if (stageInfo) {
                 // Monotonic progress: a truncated tail can make the log look
                 // earlier than it is; never report a regression — neither the
@@ -5437,6 +5517,11 @@ export class FileSystemReportStoreAdapter extends ReportStorePort {
 const REVIEW_EVENT_SCHEMA = 'review-run-event@1';
 const REVIEW_LAST_RUN_SCHEMA = 'review-last-run@1';
 const LAST_RUN_THROTTLE_MS = 2_000;
+export const REVIEW_RUN_RECORD_SCHEMA = 'review-run-record@1';
+const RUN_RECORD_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+const RUN_RECORD_PRUNE_LIMIT = 2_000;
+/** States that never change again: a record in one of them has finished. */
+export const TERMINAL_RUN_STATES = new Set(['passed', 'blocked', 'failed', 'skipped', 'interrupted']);
 
 /**
  * Non-terminal last-run states: a live run must keep the recorded pid alive.
@@ -5530,31 +5615,68 @@ export class NullTelemetryAdapter extends TelemetryPort {
   }
 }
 
+// `d:runs` names a folder of drive D's current directory, not of home, so it has no fixed location.
+const DRIVE_RELATIVE_OVERRIDE = /^[A-Za-z]:(?![\\/])/;
+
+/**
+ * Per-run records live outside any repository, so `review-progress` can list
+ * every run of every session at once. Overridable for tests and sandboxes. A
+ * relative override is resolved against the home directory, never the working
+ * directory: the hook and `review-progress` run from different folders and must
+ * still agree on one place. A drive-relative override falls back to the default.
+ *
+ * @param {NodeJS.ProcessEnv} [env]
+ * @param {string} [home]
+ * @returns {string}
+ */
+function resolveRunsDir(env = process.env, home = homedir()) {
+  const override = typeof env.OMP_REVIEW_KIT_RUNS_DIR === 'string' ? env.OMP_REVIEW_KIT_RUNS_DIR.trim() : '';
+  if (!override || DRIVE_RELATIVE_OVERRIDE.test(override)) return path.join(home, '.omp', 'review-kit-runs');
+  return path.resolve(home, override);
+}
+
+/**
+ * Session tag exported by the Claude Code SessionStart hook as
+ * `OMP_REVIEW_KIT_RUN_TAG`. Anything that is not a plain token is dropped.
+ *
+ * @param {NodeJS.ProcessEnv} [env]
+ * @returns {string|null}
+ */
+function runTagFromEnv(env = process.env) {
+  const raw = typeof env.OMP_REVIEW_KIT_RUN_TAG === 'string' ? env.OMP_REVIEW_KIT_RUN_TAG.trim() : '';
+  return /^[A-Za-z0-9._:-]{1,200}$/.test(raw) ? raw : null;
+}
+
 /**
  * Run-scoped telemetry sink. Appends one JSONL event per record() call to
  * <reportDir>/runs.jsonl and maintains <reportDir>/last-run.json as the live
- * state channel (throttled, last-writer-wins). All failures are swallowed:
- * telemetry must never change the review verdict or exit code.
+ * state channel (throttled, last-writer-wins), plus this run's own record in
+ * the runs directory (see resolveRunsDir). All failures are swallowed: telemetry
+ * must never change the review verdict or exit code.
  */
 class RunTelemetry {
   #eventsFile;
   #lastRunFile;
+  #runRecordFile;
   #runId;
-  #base;
+  #doc;
   #lastWriteAt = 0;
   #pendingWrite = Promise.resolve();
 
-  constructor({ reportDir, runId, base }) {
+  constructor({ reportDir, runsDir = null, runId, base }) {
     this.#eventsFile = path.join(reportDir, 'runs.jsonl');
     this.#lastRunFile = path.join(reportDir, 'last-run.json');
+    this.#runRecordFile = runsDir ? path.join(runsDir, `${runId}.json`) : null;
     this.#runId = runId;
-    this.#base = base;
+    // The state document of this run, merged field by field (see updateLastRun).
+    this.#doc = { runId, ...base };
     // A previous run that died without a finish event leaves last-run.json
     // stuck in a live state forever — readers then keep showing "reviewing".
     // Tombstone it before this run's own writes land (state:'started' would
     // otherwise clobber the evidence).
     this.#pendingWrite = this.#pendingWrite
       .then(() => this.#sweepStaleLastRun())
+      .then(() => this.#pruneRunRecords(runsDir))
       .catch(() => {});
   }
 
@@ -5570,6 +5692,34 @@ class RunTelemetry {
       await mkdir(path.dirname(this.#eventsFile), { recursive: true });
       await appendFile(this.#eventsFile, `${JSON.stringify(event)}\n`, 'utf8');
     });
+  }
+
+  /**
+   * Drops per-run records that can no longer matter: finished ones, and
+   * abandoned ones (runner gone) past the retention window. A live record is
+   * never removed, whatever its age.
+   */
+  async #pruneRunRecords(runsDir) {
+    if (!runsDir) return;
+    let names;
+    try {
+      names = await readdir(runsDir);
+    } catch {
+      return; // No runs directory yet: nothing to prune.
+    }
+    const cutoff = Date.now() - RUN_RECORD_RETENTION_MS;
+    for (const name of names.filter((entry) => entry.endsWith('.json')).slice(0, RUN_RECORD_PRUNE_LIMIT)) {
+      const file = path.join(runsDir, name);
+      try {
+        if ((await stat(file)).mtimeMs > cutoff) continue;
+        const record = JSON.parse(await readFile(file, 'utf8'));
+        if (TERMINAL_RUN_STATES.has(record?.state) || pidLiveness(record?.runnerPid) === 'dead') {
+          await rm(file, { force: true });
+        }
+      } catch {
+        // Unreadable, or racing with another run: a later sweep decides.
+      }
+    }
   }
 
   async #sweepStaleLastRun() {
@@ -5611,18 +5761,25 @@ class RunTelemetry {
 
   updateLastRun(state, { force = false } = {}) {
     const now = Date.now();
+    // Merge, never replace: a field this update leaves out keeps its last value,
+    // so a heartbeat cannot erase the stage that an earlier write recorded.
+    Object.assign(this.#doc, state);
     if (!force && now - this.#lastWriteAt < LAST_RUN_THROTTLE_MS) {
       return Promise.resolve();
     }
     this.#lastWriteAt = now;
     const doc = {
+      ...this.#doc,
       schema: REVIEW_LAST_RUN_SCHEMA,
-      runId: this.#runId,
-      ...this.#base,
       updatedAt: new Date(now).toISOString(),
-      ...state,
     };
     return this.#enqueue(async () => {
+      if (this.#runRecordFile) {
+        // The per-run record is what review-progress reads. A failure there must
+        // not stop the pointer file below, and the other way round.
+        await mkdir(path.dirname(this.#runRecordFile), { recursive: true }).catch(() => {});
+        await writeFile(this.#runRecordFile, `${JSON.stringify({ ...doc, schema: REVIEW_RUN_RECORD_SCHEMA }, null, 2)}\n`, 'utf8').catch(() => {});
+      }
       await mkdir(path.dirname(this.#lastRunFile), { recursive: true });
       await writeFile(this.#lastRunFile, `${JSON.stringify(doc, null, 2)}\n`, 'utf8');
     });
@@ -5652,8 +5809,9 @@ export class FileSystemTelemetryAdapter extends TelemetryPort {
       : path.join(repoRoot, this.#relativeDir);
     return new RunTelemetry({
       reportDir,
+      runsDir: resolveRunsDir(),
       runId,
-      base: { repoRoot, runnerPid: process.pid },
+      base: { repoRoot, runnerPid: process.pid, tag: runTagFromEnv() },
     });
   }
 }
