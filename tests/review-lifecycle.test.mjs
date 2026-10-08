@@ -82,6 +82,11 @@ test('lease heartbeat: clearLeaseTimer drains an in-flight tick before release()
   const { cbs, restore } = captureIntervals();
   const order = [];
   let deferredResolve;
+  // execute() counts the other runs of the repository in the runs folder before the reviewer call. The wait below
+  // counts event-loop turns, so this test gives that count an empty folder of its own.
+  const runsDir = await mkdtemp(path.join(tmpdir(), 'lifecycle-runs-'));
+  const previousRunsDir = process.env.OMP_REVIEW_KIT_RUNS_DIR;
+  process.env.OMP_REVIEW_KIT_RUNS_DIR = runsDir;
   try {
     const store = {
       create: async (_snap, { reuseDir }) => reuseDir, // retained -> release path
@@ -107,9 +112,10 @@ test('lease heartbeat: clearLeaseTimer drains an in-flight tick before release()
     });
     const resultPromise = service.execute({ cwd: '/mock/root' });
     // Wait until the tick fires inside executeReview — execute() runs many
-    // awaits before the reviewer call, so a fixed microtask count races.
-    for (let i = 0; i < 2000 && !order.includes('tick-start'); i += 1) {
-      await new Promise((resolve) => setImmediate(resolve));
+    // awaits before the reviewer call, so a fixed turn count races. The wait is bounded by time, not by turns.
+    const deadline = Date.now() + 10_000;
+    while (!order.includes('tick-start') && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 1));
     }
     assert.deepEqual(order, ['tick-start'], 'tick must be in-flight');
     assert.equal(order.includes('release'), false, 'release must not run while the tick is pending');
@@ -119,6 +125,9 @@ test('lease heartbeat: clearLeaseTimer drains an in-flight tick before release()
     assert.deepEqual(order, ['tick-start', 'tick-end', 'release'], 'release must run only after the drained tick');
   } finally {
     restore();
+    if (previousRunsDir === undefined) delete process.env.OMP_REVIEW_KIT_RUNS_DIR;
+    else process.env.OMP_REVIEW_KIT_RUNS_DIR = previousRunsDir;
+    await rm(runsDir, { recursive: true, force: true });
   }
 });
 

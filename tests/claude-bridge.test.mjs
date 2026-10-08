@@ -11,6 +11,8 @@ import {
   HEAL_BUDGET_MS,
   OMP_PROBE_TIMEOUT_MS,
   PLUGIN_LIST_TIMEOUT_MS,
+  PROGRESS_SUMMARY_TIMEOUT_MS,
+  STDIN_TIMEOUT_MS,
   assess,
   chooseOmpInstall,
   compareVersions,
@@ -19,6 +21,8 @@ import {
   installOmp,
   main,
   probeOmp,
+  progress,
+  readHookInput,
   review,
   run,
   session,
@@ -96,7 +100,7 @@ test('Given the shipped Claude shell, Then it contains only the whitelisted file
   for (const file of files) bytes += (await stat(file)).size;
   assert.deepEqual(
     files.map((file) => path.relative('claude-plugin', file).split(path.sep).join('/')).sort(),
-    ['.claude-plugin/plugin.json', 'commands/doctor.md', 'commands/install-omp.md', 'commands/review.md', 'commands/setup.md', 'hooks/hooks.json', 'scripts/bridge.mjs'],
+    ['.claude-plugin/plugin.json', 'commands/doctor.md', 'commands/install-omp.md', 'commands/review.md', 'commands/setup.md', 'hooks/hooks.json', 'scripts/bridge.mjs', 'skills/review-progress/SKILL.md'],
   );
   assert.ok(bytes < 100 * 1024, `payload is ${bytes} bytes`);
   const hooks = JSON.parse(await readFile('claude-plugin/hooks/hooks.json', 'utf8'));
@@ -104,7 +108,8 @@ test('Given the shipped Claude shell, Then it contains only the whitelisted file
   // The hook budget (seconds) must exceed the probes a session run can chain: omp --version, then plugin list.
   const budgetMs = hooks.hooks.SessionStart[0].hooks[0].timeout * 1000;
   assert.equal(hooks.hooks.SessionStart[0].hooks[0].timeout, 30);
-  assert.ok(budgetMs > OMP_PROBE_TIMEOUT_MS + PLUGIN_LIST_TIMEOUT_MS + HEAL_BUDGET_MS, `${budgetMs} ms must exceed the chained probe timeouts and the heal budget`);
+  const chained = STDIN_TIMEOUT_MS + OMP_PROBE_TIMEOUT_MS + PLUGIN_LIST_TIMEOUT_MS + HEAL_BUDGET_MS + PROGRESS_SUMMARY_TIMEOUT_MS;
+  assert.ok(budgetMs > chained, `${budgetMs} ms must exceed the chained stdin, probe, list, heal and summary budgets (${chained} ms)`);
 });
 
 test('Given the slash commands, Then only read-only commands pre-approve node and install-omp asks the user', async () => {
@@ -368,7 +373,7 @@ test('setup installs the single hook through the OMP installer, is idempotent, a
     assert.equal(git(repo.dir, 'config', 'core.hooksPath').trim(), '.githooks');
     const hook = await readFile(path.join(repo.dir, '.githooks', 'pre-commit'), 'utf8');
     assert.equal(hook, await readFile('templates/githooks/pre-commit', 'utf8'));
-    assert.equal(await readFile(path.join(repo.dir, '.omp', 'review-kit', 'run-review.mjs'), 'utf8'), await readFile('scripts/run-review.mjs', 'utf8'));
+    assert.equal(await readFile(path.join(repo.dir, '.omp', 'review-kit', 'run-review.mjs'), 'utf8'), await readFile('templates/review-kit/run-review.mjs', 'utf8'));
     assert.equal(await setup({ cwd: repo.dir, env: pluginEnv(home), exec: healthyExec(), out: sink.out, err: sink.err }), EXIT.ok);
     assert.match(sink.lines.at(-1), /already active|active/i);
   } finally {
@@ -405,6 +410,59 @@ test('setup stops with the infrastructure code when OMP is missing', async () =>
   }
 });
 
+test('SessionStart shows the progress line only when the reader succeeds', async () => {
+  const { home, cleanup } = await tempHome();
+  const repo = await tempRepo();
+  try {
+    const summary = 'reviewer-kit: 1 review running in this repository';
+    const readerExec = (status) => fakeExec({
+      'omp --version': { stdout: 'omp/18.2.11\n' },
+      node: { status, stdout: `${summary}\n` },
+    });
+
+    const reading = collect();
+    assert.equal(await session({ cwd: repo.dir, env: pluginEnv(home), exec: readerExec(0), out: reading.out }), EXIT.ok);
+    assert.ok(reading.lines.join('\n').includes(summary));
+
+    const failing = collect();
+    assert.equal(await session({ cwd: repo.dir, env: pluginEnv(home), exec: readerExec(1), out: failing.out }), EXIT.ok);
+    assert.ok(!failing.lines.join('\n').includes(summary), 'a reader that exits non-zero contributes no line');
+  } finally {
+    await repo.cleanup();
+    await cleanup();
+  }
+});
+
+test('bridge.mjs routes progress to the installed reader with its arguments, and lists it in the usage line', async () => {
+  const { home, cleanup } = await tempHome();
+  const plugin = await mkdtemp(path.join(tmpdir(), 'omp-bridge-reader-'));
+  try {
+    await writeFile(path.join(plugin, 'package.json'), JSON.stringify({ name: 'omp-reviewer-kit', version: WANTED }));
+    await mkdir(path.join(plugin, 'scripts'), { recursive: true });
+    await writeFile(path.join(plugin, 'scripts', 'review-progress.mjs'), [
+      'process.stdout.write(`argv:${process.argv.slice(2).join(\',\')}\\n`);',
+      'process.exitCode = 2;',
+    ].join('\n'));
+
+    const routed = spawnSync(process.execPath, ['claude-plugin/scripts/bridge.mjs', 'progress', '--bogus'], {
+      encoding: 'utf8',
+      env: envFor(home, { OMP_REVIEW_KIT_PLUGIN_DIR: plugin }),
+    });
+    assert.equal(routed.status, 2);
+    assert.match(routed.stdout, /argv:--bogus/);
+
+    const usage = spawnSync(process.execPath, ['claude-plugin/scripts/bridge.mjs', 'nonsense'], {
+      encoding: 'utf8',
+      env: envFor(home),
+    });
+    assert.equal(usage.status, 1);
+    assert.match(usage.stderr, /progress \[--mine/);
+  } finally {
+    await rm(plugin, { recursive: true, force: true });
+    await cleanup();
+  }
+});
+
 test('Given a newer vendored runner, setup keeps it and status marks it newer', async () => {
   const { home, cleanup } = await tempHome();
   const repo = await tempRepo();
@@ -429,7 +487,7 @@ test('Given a newer vendored runner, setup keeps it and status marks it newer', 
 
     await writeFile(runnerPath, '// omp-reviewer-kit runner v0.0.1\nold\n');
     await setup({ cwd: repo.dir, env: pluginEnv(home), exec: healthyExec(), out: () => {}, err: () => {} });
-    assert.equal(await readFile(runnerPath, 'utf8'), await readFile('scripts/run-review.mjs', 'utf8'), 'an older runner is upgraded');
+    assert.equal(await readFile(runnerPath, 'utf8'), await readFile('templates/review-kit/run-review.mjs', 'utf8'), 'an older runner is replaced by the stub');
   } finally {
     await repo.cleanup();
     await cleanup();
@@ -545,7 +603,7 @@ test('SessionStart repairs a stale vendored runner instead of only reporting it'
     const sink = collect();
     await session({ cwd: repo.dir, env: pluginEnv(home), exec: healthyExec(), out: sink.out });
     assert.deepEqual(sink.lines, [], 'a repaired repository is silent');
-    assert.equal(await readFile(runner, 'utf8'), await readFile(path.join(PLUGIN_DIR, 'scripts', 'run-review.mjs'), 'utf8'));
+    assert.equal(await readFile(runner, 'utf8'), await readFile(path.join(PLUGIN_DIR, 'templates', 'review-kit', 'run-review.mjs'), 'utf8'));
   } finally {
     await repo.cleanup();
     await cleanup();

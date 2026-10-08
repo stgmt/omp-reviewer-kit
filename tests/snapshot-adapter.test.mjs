@@ -701,11 +701,10 @@ test('foreign same-PID markers survive release/refreshLease across ALL adapter c
   // #ownMarkerIn must return null when neither the per-dir mapped lease nor
   // #leaseName exists — never fall back to a same-PID scan: a foreign
   // adapter instance's .live-<pid>-<hex> is not ours to unlink. Pin on every
-  // runnable copy (src module + distributable runner + deployed .omp copy).
+  // runnable copy (src module + distributable runner).
   const modules = [
     ['src', '../src/infra/filesystem-snapshot-adapter.mjs'],
     ['runner', '../scripts/run-review.mjs'],
-    ['omp-copy', '../.omp/review-kit/run-review.mjs'],
   ];
   const { writeFile } = await import('node:fs/promises');
   const { existsSync } = await import('node:fs');
@@ -730,10 +729,10 @@ test('sequential create()s on one adapter reclaim the recorded lease; foreign sa
   // #markLive reclaims ONLY the lease this instance previously recorded for
   // the dir: a second create() must remove the earlier own marker, while a
   // same-PID marker stamped by a foreign adapter instance survives.
-  // src adapter + deployed .omp copy both exercised via the public surface.
+  // src adapter and the distributable runner are both exercised via the public surface.
   const modules = [
     ['src', '../src/infra/filesystem-snapshot-adapter.mjs', '../src/domain/staged-snapshot.mjs'],
-    ['omp', '../.omp/review-kit/run-review.mjs', '../.omp/review-kit/run-review.mjs'],
+    ['runner', '../scripts/run-review.mjs', '../scripts/run-review.mjs'],
   ];
   const { writeFile } = await import('node:fs/promises');
   const { existsSync, readdirSync } = await import('node:fs');
@@ -773,15 +772,14 @@ test('sequential create()s on one adapter reclaim the recorded lease; foreign sa
 test('create() gate serializes across src + .omp copies; deferred binding on src adapter (r12 coverage)', async () => {
   // src adapter: #createGate survives a rejected run and serializes; the
   // deferred #leaseByDir binding makes release() on an unstamped dir a
-  // no-op. .omp copy gets its own create-serialization pin (importable
-  // module, not covered by the runner import above).
+  // no-op. The runner copy gets its own create-serialization pin.
   const { existsSync, readdirSync } = await import('node:fs');
   const { FileSystemSnapshotAdapter: SrcAdapter } =
     await import('../src/infra/filesystem-snapshot-adapter.mjs');
   const { StagedSnapshot: SrcSnap } =
     await import('../src/domain/staged-snapshot.mjs');
   const { FileSystemSnapshotAdapter: OmpAdapter, StagedSnapshot: OmpSnap } =
-    await import('../.omp/review-kit/run-review.mjs');
+    await import('../scripts/run-review.mjs');
 
   // src: serialized create()s + deferred binding
   const reuseDir = await mkdtemp(path.join(tmpdir(), 'omp-srcgate-'));
@@ -801,7 +799,7 @@ test('create() gate serializes across src + .omp copies; deferred binding on src
     await rm(reuseDir, { recursive: true, force: true }).catch(() => {});
   }
 
-  // .omp copy: same serialization contract
+  // runner copy: same serialization contract
   const ompDir = await mkdtemp(path.join(tmpdir(), 'omp-ompgate-'));
   const ompAdapter = new OmpAdapter();
   try {
@@ -812,7 +810,7 @@ test('create() gate serializes across src + .omp copies; deferred binding on src
     assert.equal(d1, ompDir);
     assert.equal(d2, ompDir);
     const live = readdirSync(ompDir).filter((n) => /^\.live-\d+-[0-9a-f]+$/.test(n));
-    assert.equal(live.length, 1, `.omp adapter: one marker, got ${JSON.stringify(live)}`);
+    assert.equal(live.length, 1, `runner adapter: one marker, got ${JSON.stringify(live)}`);
   } finally {
     await ompAdapter.release?.(ompDir).catch(() => {});
     await rm(ompDir, { recursive: true, force: true }).catch(() => {});

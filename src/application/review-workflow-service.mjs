@@ -148,6 +148,27 @@ export class ReviewWorkflowService {
   }
 
   /**
+   * Tells the committer which run to follow and how many other reviews of this
+   * repository are live. Concurrent reviews never block each other, so this only
+   * informs; a count that cannot be read counts as none. Without a recorded run
+   * (telemetry off) there is nothing to follow, so nothing is announced.
+   */
+  async #announceRun(repoRoot, runId, recorded) {
+    if (!recorded) return;
+    let others = 0;
+    try {
+      const counted = await this.#telemetryPort.countOtherLiveRuns?.({ repoRoot, runId });
+      others = Number.isInteger(counted) && counted > 0 ? counted : 0;
+    } catch {
+      others = 0;
+    }
+    this.#logger.error(`reviewer-kit run ${runId}: follow it with review-progress --run ${runId} --follow\n`);
+    if (others > 0) {
+      this.#logger.error(`reviewer-kit: ${others} other review(s) running in this repository; they do not block this commit\n`);
+    }
+  }
+
+  /**
    * Executes the complete review lifecycle.
    *
    * @param {{ cwd?: string }} [options]
@@ -247,6 +268,8 @@ export class ReviewWorkflowService {
         }, { force: true });
         return ReviewExecutionResult.skipped();
       }
+
+      await this.#announceRun(repoRoot, runId, telemetry.recorded);
 
       await telemetry.record('diff_collected', {
         diffHash: diff.hash,

@@ -8,7 +8,8 @@ import path from 'node:path';
 import { PluginInstallerService } from '../src/application/installer-service.mjs';
 import { FileTargetRegistry } from '../src/infra/target-registry.mjs';
 
-export const CANONICAL_RUNNER = await readFile('scripts/run-review.mjs', 'utf8');
+// The vendored runner is the thin stub the installer writes; the algorithm lives in the plugin.
+export const CANONICAL_RUNNER = await readFile('templates/review-kit/run-review.mjs', 'utf8');
 // Windows temp directories have a short 8.3 and a long spelling; git reports the long one.
 export const realPaths = (paths) => paths.map((entry) => realpathSync.native(entry)).sort();
 export const STALE_RUNNER = '// omp-reviewer-kit runner v0.0.1\nold\n';

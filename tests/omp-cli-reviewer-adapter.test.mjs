@@ -16,6 +16,8 @@ import {
   parseReviewProgress,
   sanitizeReviewerOutput,
 } from '../src/infra/omp-cli-reviewer-adapter.mjs';
+import { ReviewVerdict } from '../src/domain/review-verdict.mjs';
+import * as runnerBundle from '../scripts/run-review.mjs';
 
 const prompt = 'review this staged change';
 const cwd = process.cwd();
@@ -444,6 +446,26 @@ test('sanitizeReviewerOutput removes Working... lines and normalizes CRLF to LF'
   assert.equal(sanitizeReviewerOutput(null), '');
 });
 
+const MCP_WARNING = 'Warning: MCP server "context-mode" failed to connect: MCP subprocess closed stdout before responding; its tools are unavailable for this run.\n';
+
+test('sanitizeReviewerOutput drops the MCP connection warning in both implementations and keeps mid-line mentions', () => {
+  // Given
+  const mentioned = 'note: Warning: MCP server "context-mode" failed to connect\n';
+  const mixed = `Working...\n${MCP_WARNING}Warnings detected\n`;
+
+  for (const sanitize of [sanitizeReviewerOutput, runnerBundle.sanitizeReviewerOutput]) {
+    // When
+    const cleanWarning = sanitize(MCP_WARNING);
+    const cleanMixed = sanitize(mixed);
+    const cleanMention = sanitize(mentioned);
+
+    // Then
+    assert.equal(cleanWarning, '');
+    assert.equal(cleanMixed, 'Warnings detected\n');
+    assert.equal(cleanMention, mentioned);
+  }
+});
+
 test('S6: stderr "Working...\\n" + clean stdout with standalone marker => combined has marker and no "Working"', async () => {
   // Given
   const adapter = new OmpCliReviewerAdapter({
@@ -488,6 +510,42 @@ test('E9: literal "Working..." line inside STDOUT report body => preserved byte-
   assert.equal(review.status, 0);
   assert.equal(review.stdout, stdoutBody);
   assert.ok(review.combined.includes(stdoutBody));
+});
+
+test('MCP warning after a PASS verdict on stderr keeps the verdict PASS in both adapters', async () => {
+  // Given
+  const stdout = '### Review coverage\nAll tests passed.\nREVIEW_RESULT=PASS\n';
+
+  for (const [Adapter, Verdict] of [[OmpCliReviewerAdapter, ReviewVerdict], [runnerBundle.OmpCliReviewerAdapter, runnerBundle.ReviewVerdict]]) {
+    const adapter = new Adapter({
+      runner: async () => result(0, stdout, MCP_WARNING),
+    });
+
+    // When
+    const review = await adapter.executeReview({ prompt, cwd });
+
+    // Then
+    assert.equal(review.status, 0);
+    assert.equal(Verdict.fromOutput(review.combined).isPass(), true);
+    assert.doesNotMatch(review.combined, /MCP server/);
+  }
+});
+
+test('MCP warning after a BLOCK verdict on stderr keeps the explicit block in both adapters', async () => {
+  // Given
+  const stdout = '### Findings\nP1 the guard is missing\nREVIEW_RESULT=BLOCK\n';
+
+  for (const [Adapter, Verdict] of [[OmpCliReviewerAdapter, ReviewVerdict], [runnerBundle.OmpCliReviewerAdapter, runnerBundle.ReviewVerdict]]) {
+    const adapter = new Adapter({
+      runner: async () => result(0, stdout, MCP_WARNING),
+    });
+
+    // When
+    const review = await adapter.executeReview({ prompt, cwd });
+
+    // Then
+    assert.equal(Verdict.fromOutput(review.combined).reason, 'explicit_block');
+  }
 });
 
 test('isModelProviderFailure delegates marker detection to ReviewVerdict invariant', () => {

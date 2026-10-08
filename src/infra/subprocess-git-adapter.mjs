@@ -2,7 +2,6 @@ import { spawn } from 'node:child_process';
 import { GitPort } from '../application/ports.mjs';
 import { DiffIdentity } from '../domain/diff-identity.mjs';
 import { StagedSnapshot } from '../domain/staged-snapshot.mjs';
-import { VENDORED_RUNNER_MIRROR } from './vendored-kit-files.mjs';
 
 /**
  * Infrastructure adapter executing Git via child processes.
@@ -83,13 +82,10 @@ export class SubprocessGitAdapter extends GitPort {
   }
 
   /**
-   * Staged vendored kit files (runner, hook) that are byte-identical to the
+   * Staged vendored kit files (runner stub, hook) that are byte-identical to the
    * installed kit's canonical copy: they are the review plugin, not the
-   * committer's work, so the review diff leaves them out. In the kit repository
-   * itself the self-hosted runner is a byte-identical mirror of the staged
-   * `scripts/run-review.mjs`, which stays in review, so the mirror is left out
-   * too. Any doubt (no canonical copy, unreadable blob, different bytes) keeps
-   * the file in review.
+   * committer's work, so the review diff leaves them out. Any doubt (no
+   * canonical copy, unreadable blob, different bytes) keeps the file in review.
    *
    * @param {string} repoRoot
    * @returns {Promise<string[]>}
@@ -114,8 +110,7 @@ export class SubprocessGitAdapter extends GitPort {
       const meta = /^:(\d{6}) (\d{6}) [0-9a-f]+ [0-9a-f]+ ([A-Z])\d*$/.exec(fields[i]);
       const name = fields[i + 1];
       if (!meta) continue;
-      const isMirror = name === VENDORED_RUNNER_MIRROR.target;
-      if (!canonical.has(name) && !isMirror) continue;
+      if (!canonical.has(name)) continue;
       // A mode change (the hook losing its executable bit, a symlink in place
       // of the file) changes behaviour even when the bytes are canonical.
       const [, oldMode, newMode, status] = meta;
@@ -123,11 +118,7 @@ export class SubprocessGitAdapter extends GitPort {
       if (!modeOk) continue;
       try {
         const staged = normalize(await stagedText(name));
-        if (canonical.has(name) && staged === normalize(canonical.get(name))) {
-          identical.push(name);
-        } else if (isMirror && staged === normalize(await stagedText(VENDORED_RUNNER_MIRROR.source))) {
-          identical.push(name);
-        }
+        if (staged === normalize(canonical.get(name))) identical.push(name);
       } catch {
         // unreadable staged blob stays in review
       }

@@ -530,9 +530,12 @@ export class PluginInstallerService {
     }
 
     const canonicalHookPath = path.join(this.#pluginRoot, 'templates', 'githooks', 'pre-commit');
-    const canonicalRunnerPath = path.join(this.#pluginRoot, 'scripts', 'run-review.mjs');
+    const canonicalRunnerPath = path.join(this.#pluginRoot, 'templates', 'review-kit', 'run-review.mjs');
+    const pluginRunnerPath = path.join(this.#pluginRoot, 'scripts', 'run-review.mjs');
     const canonicalHookTemplate = await readFile(canonicalHookPath, 'utf8');
     const canonicalRunnerContent = await readFile(canonicalRunnerPath, 'utf8');
+    // The release marker lives in the plugin's algorithm, not in the stub: it decides whether a vendored runner is newer.
+    const pluginRunnerContent = await readFile(pluginRunnerPath, 'utf8');
 
     const expectedGithooksDir = path.join(repoRoot, '.githooks');
     let hooksPathConfigured = false;
@@ -687,7 +690,7 @@ export class PluginInstallerService {
           }
         } else {
           const runnerContent = await readFile(runnerPath, 'utf8');
-          runnerNewer = isRunnerNewer(runnerContent, canonicalRunnerContent);
+          runnerNewer = isRunnerNewer(runnerContent, pluginRunnerContent);
           runnerCurrent = runnerNewer || runnerContent === canonicalRunnerContent;
         }
       } catch (error) {
@@ -815,7 +818,7 @@ export class PluginInstallerService {
     }
 
     // 2. Deploy / ensure runner script
-    const canonicalRunnerPath = path.join(this.#pluginRoot, 'scripts', 'run-review.mjs');
+    const canonicalRunnerPath = path.join(this.#pluginRoot, 'templates', 'review-kit', 'run-review.mjs');
     const canonicalRunnerContent = await readFile(canonicalRunnerPath, 'utf8');
     const targetRunnerPath = path.join(runnerDir, 'run-review.mjs');
     const runnerWritten = inspection.runnerNewer

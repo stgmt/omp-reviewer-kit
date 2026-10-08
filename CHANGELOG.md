@@ -9,13 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.20.0] - 2026-10-08
 
-Hook updates no longer need a hand-kept list. Before this release, every change to `templates/githooks/pre-commit` required adding the previous template to `LEGACY_HOOK_TEMPLATES` by hand, or repositories on the old hook stopped receiving new runners.
+Hook updates no longer need a hand-kept list. Before this release, every change to `templates/githooks/pre-commit` required adding the previous template to `LEGACY_HOOK_TEMPLATES` by hand, or repositories on the old hook stopped receiving new runners. A commit review can also be followed while it runs, from a shell, from OMP, or from Claude Code.
+
+### Added
+- **Review progress for agents and people.** Each commit review writes its own run record, `~/.omp/review-kit-runs/<runId>.json`, so reviews running at the same time (in one repository, or in several sessions) no longer overwrite one shared status file. `scripts/review-progress.mjs` lists and follows the records (`--mine`, `--all`, `--run`, `--follow`, `--commit`, `--json`) without changing anything. `/reviewer-kit:progress` shows the active repository's runs in OMP, and the Claude Code plugin adds a `review-progress` skill plus a line of session context when a run needs attention. A run with no activity for `OMP_REVIEW_KIT_QUIET_MS` (default 10 minutes) is reported as quiet and is never stopped. When a review starts, the hook prints its run id, the command that follows it, and how many other live reviews the repository has.
+- **Session tag on runs.** The Claude Code SessionStart hook exports `OMP_REVIEW_KIT_RUN_TAG` through `CLAUDE_ENV_FILE`, so `--mine` lists the reviews of commits made in that session.
 
 ### Changed
+- **The vendored runner is a thin stub.** `.omp/review-kit/run-review.mjs` is now the same few lines (`templates/review-kit/run-review.mjs`) in every repository. It runs the algorithm of the installed OMP plugin with the same arguments, forwards the exit code, and fails closed with `reviewer-kit INFRA_ERROR` when no plugin is installed. Repositories no longer carry a copy of the review logic, so an older copy can no longer disagree with the plugin about its version. A repository that still holds a 0.19.x runner is updated by `setup`, `sync-targets --apply`, or the session-start healing; the replacement is the plugin's own file and is left out of the review like the hook.
+- **The kit repository keeps no mirror of the algorithm.** `scripts/run-review.mjs` is the only copy of the algorithm, `.omp/review-kit/run-review.mjs` is the stub, and `check-layout` requires the vendored copy to match the stub and the algorithm to carry its version marker. The vendored-file exemption compares against the stub of the installed plugin.
 - **The hook template carries a self-verifying marker.** Line 2 of `templates/githooks/pre-commit` is `# omp-reviewer-kit hook v0.20.0 body-sha256:<digest>`, and the digest covers every other line. A hook whose marker matches its body is the kit's own whichever release wrote it, so later template changes reach every repository without editing any list. A hook whose body was edited while keeping the marker is still a conflict. `node scripts/stamp-hook.mjs` writes the marker after each template edit, and `check-layout` rejects a template whose marker is missing, stale or wrong.
 - **A hook from a newer kit release is never downgraded**, the same rule that already protects a newer runner.
 - **The kit repository runs `scripts/run-review.mjs` directly** instead of first copying it over `.omp/review-kit/run-review.mjs`, so the template body no longer depends on the copy. Consumer repositories are unchanged: they keep running their vendored copy.
 - Hooks from releases 0.1.0 to 0.3.x, 0.4.0 to 0.12.x and 0.13.0 to 0.19.1 are recognised through frozen digests (`LEGACY_HOOK_DIGESTS`), one per template revision; their files live in `tests/fixtures/hooks/`. The list is never extended: every release from 0.20.0 carries a marker.
+
+### Fixed
+- **Risk stage and heartbeat.** Hunter lanes that OMP dispatches as `ReviewerKit.HunterS1` or `ReviewerKit.HunterS2` were not recognised, so a review in its risk stage kept showing the stage it had last been recognised in. The progress heartbeat also rewrote the status without the stage. Both are fixed.
+- **The review reads the staged diff whatever the git display settings.** A committer's `color.diff=always` put escape codes into the diff a review read and hashed, and `diff.mnemonicPrefix` changed the `a/` and `b/` prefixes of the staged diff. The staged diff now uses fixed prefixes without colour, and `--commit` computes its hash the same way.
+- **The OMP warning about a failed MCP server no longer hides the verdict.** OMP can print `Warning: MCP server "…" failed to connect` on stderr after the verdict line. That line was read as the last line of the output, so a PASS or BLOCK became a missing-marker BLOCK. The reviewer's stderr sanitizer now drops that line.
+- **The registry heal never replaces a hook from a newer kit release.** `sync-targets --apply` judged the hook without a version, so it overwrote a newer hook. The hook is now judged by its own marker, as the installer judges it.
+- **The run-record sweep removes only kit records.** It removed any old finished JSON file in the runs folder; it now removes only files with the run-record schema.
 
 ## [0.19.1] - 2026-10-08
 

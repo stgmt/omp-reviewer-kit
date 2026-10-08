@@ -3,7 +3,7 @@
 // the hook installer and the hook template all come from the OMP plugin, so
 // the git hook of a repository has exactly one owner (PluginInstallerService).
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -18,6 +18,12 @@ export const OMP_PROBE_TIMEOUT_MS = 5000;
 export const PLUGIN_LIST_TIMEOUT_MS = 15000;
 // Time the SessionStart hook may spend repairing other registered repositories after a plugin update.
 export const HEAL_BUDGET_MS = 5000;
+// The review-progress summary and the stdin read run inside the same SessionStart budget:
+// stdin + probe + plugin list + heal + summary must stay under hooks.json's 30 seconds.
+export const PROGRESS_SUMMARY_TIMEOUT_MS = 2000;
+export const STDIN_TIMEOUT_MS = 1000;
+// Same token rule as the runner's run tag: safe to write into a shell environment file.
+const SESSION_TAG_PATTERN = /^[A-Za-z0-9._:-]{1,200}$/;
 
 const SETUP_HINT = 'Run /omp-reviewer-kit:install-omp.';
 
@@ -164,10 +170,31 @@ async function collectProblems(cwd, assessment) {
   return messages;
 }
 
-/** SessionStart hook: silent when healthy, one context message otherwise. Never fails the session. */
-export async function session({ cwd, env = process.env, exec = run, root = SHELL_ROOT, out = console.log } = {}) {
+/**
+ * SessionStart hook: silent when healthy, one context message otherwise. Never fails the session.
+ * The session id becomes the run tag of every review commit made in this session (through
+ * CLAUDE_ENV_FILE), so `progress --mine` can find them.
+ */
+export async function session({
+  cwd,
+  env = process.env,
+  exec = run,
+  root = SHELL_ROOT,
+  out = console.log,
+  sessionId = null,
+  envFile = env.CLAUDE_ENV_FILE,
+} = {}) {
+  const tag = SESSION_TAG_PATTERN.test(String(sessionId ?? '')) ? String(sessionId) : null;
   try {
-    const messages = await collectProblems(cwd, assess({ env, exec, root }));
+    if (tag && envFile) appendFileSync(envFile, `export OMP_REVIEW_KIT_RUN_TAG="${tag}"\n`);
+  } catch {
+    // no environment file: the runs still show per repository
+  }
+  try {
+    const assessment = assess({ env, exec, root });
+    const messages = await collectProblems(cwd, assessment);
+    const progressLine = progressSummary({ assessment, cwd, env, exec, tag });
+    if (progressLine) messages.push(progressLine);
     if (messages.length) {
       out(JSON.stringify({
         hookSpecificOutput: {
@@ -180,6 +207,56 @@ export async function session({ cwd, env = process.env, exec = run, root = SHELL
     // a diagnostic hook must never break the session
   }
   return EXIT.ok;
+}
+
+/** One line about review runs that still need attention; '' when none or the reader is unavailable. */
+function progressSummary({ assessment, cwd, env, exec, tag }) {
+  const script = assessment.plugin ? path.join(assessment.plugin.dir, 'scripts', 'review-progress.mjs') : null;
+  if (!script || !existsSync(script)) return '';
+  const result = exec(process.execPath, [script, '--summary'], {
+    cwd,
+    env: { ...env, OMP_REVIEW_KIT_RUN_TAG: tag ?? '' },
+    timeout: PROGRESS_SUMMARY_TIMEOUT_MS,
+  });
+  return result.status === 0 ? String(result.stdout ?? '').trim() : '';
+}
+
+/** Claude Code sends the SessionStart input as JSON on stdin. Waits at most `timeoutMs`. */
+export async function readHookInput(stdin = process.stdin, timeoutMs = STDIN_TIMEOUT_MS) {
+  if (stdin.isTTY) return {};
+  let timer;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(''), timeoutMs);
+  });
+  const reading = (async () => {
+    let data = '';
+    for await (const chunk of stdin) data += chunk;
+    return data;
+  })().catch(() => '');
+  const text = await Promise.race([reading, timeout]);
+  clearTimeout(timer);
+  try {
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Runs the review-progress reader of the installed OMP plugin, passing the arguments through. */
+export function progress({ argv = [], cwd, env = process.env, exec = run, err = console.error } = {}) {
+  const plugin = findPlugin(env, ompCommandOf(env), exec);
+  if (!plugin) {
+    err(`The OMP plugin ${PLUGIN_NAME} is not installed. ${SETUP_HINT}`);
+    return EXIT.infra;
+  }
+  const script = path.join(plugin.dir, 'scripts', 'review-progress.mjs');
+  if (!existsSync(script)) {
+    err(`OMP plugin ${PLUGIN_NAME} ${plugin.version} has no review progress reader (0.20.0 or newer is needed). ${SETUP_HINT}`);
+    return EXIT.infra;
+  }
+  const result = exec(process.execPath, [script, ...argv], { cwd, env, inherit: true });
+  return result.status >= 0 ? result.status : EXIT.infra;
 }
 
 export async function setup({ cwd, env = process.env, exec = run, root = SHELL_ROOT, out = console.log, err = console.error } = {}) {
@@ -344,13 +421,14 @@ export async function main(argv = process.argv.slice(2), env = process.env, cwd 
 
 async function dispatch(command, rest, env, cwd) {
   switch (command) {
-    case 'session': return session({ cwd, env });
+    case 'session': return session({ cwd, env, sessionId: (await readHookInput()).session_id ?? null });
     case 'setup': return setup({ cwd, env });
     case 'review': return review({ cwd, env });
     case 'doctor': return doctor({ cwd, env, argv: rest });
     case 'install-omp': return installOmp({ argv: rest, env });
+    case 'progress': return progress({ argv: rest, cwd, env });
     default:
-      console.error('usage: bridge.mjs <session|setup|review|doctor [--probe]|install-omp [--yes]>');
+      console.error('usage: bridge.mjs <session|setup|review|doctor [--probe]|install-omp [--yes]|progress [--mine|--all|--run <id> [--follow]|--commit <sha>]>');
       return EXIT.fail;
   }
 }

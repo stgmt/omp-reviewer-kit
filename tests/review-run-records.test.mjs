@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { mkdir, mkdtemp, readdir, readFile, rm, utimes, writeFile } from 'node:fs/promises';
@@ -10,7 +10,7 @@ import { after, before, describe, it, test } from 'node:test';
 import { GitPort } from '../src/application/ports.mjs';
 import { ReviewWorkflowService } from '../src/application/review-workflow-service.mjs';
 import { DiffIdentity } from '../src/domain/diff-identity.mjs';
-import { FileSystemTelemetryAdapter, runTagFromEnv } from '../src/infra/filesystem-telemetry-adapter.mjs';
+import { FileSystemTelemetryAdapter, pidLiveness, runTagFromEnv, safeRunTelemetry } from '../src/infra/filesystem-telemetry-adapter.mjs';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const NOW = new Date('2026-10-08T12:00:00.000Z');
@@ -19,8 +19,9 @@ const MIRROR = '.omp/review-kit/run-review.mjs';
 const INSTALLED_COPY = 'runner from the installed plugin\n';
 const runIdOf = (suffix) => `2026-10-08T10-00-00-000Z-${suffix}`;
 const sha256 = (buffer) => createHash('sha256').update(buffer).digest('hex');
-// The pid of a process that has already exited: the liveness check reports it dead.
-const DEAD_PID = spawnSync(process.execPath, ['-e', '0'], { encoding: 'utf8' }).pid;
+// A pid no process can hold: the liveness check reports it dead. An exited child's pid is not used, because
+// Windows reuses pids under load and a reused pid reads as alive.
+const DEAD_PID = 2147483647;
 
 // The modular sources and the self-contained runner copy that the hook executes.
 // Every behaviour is checked against both, so a mutant in either copy is caught.
@@ -170,7 +171,7 @@ async function writeRepoFile(repo, relativePath, text) {
   await writeFile(file, text, 'utf8');
 }
 
-// A repository shaped like the kit itself: a source runner and its self-hosted mirror.
+// A repository shaped like the kit itself: the algorithm and the vendored runner copy next to it.
 async function kitShapedRepo() {
   const repo = await mkdtemp(path.join(tmpdir(), 'omp-run-records-git-'));
   gitIn(repo, ['init', '-q']);
@@ -196,6 +197,27 @@ for (const { label, load } of MODULE_SETS) {
     before(async () => {
       m = await load();
     });
+
+    it('Given a run record already on disk, When a later write cannot reach it, Then the run still counts as recorded', () => isolated(async ({ root, runsDir }) => {
+      const runId = runIdOf('55555555');
+      const telemetry = new m.FileSystemTelemetryAdapter().forRun({ repoRoot: root, runId });
+      await telemetry.updateLastRun({ state: 'started' }, { force: true });
+      assert.equal(telemetry.recorded, true);
+      // A directory takes the record's path, so the next write fails.
+      const recordFile = path.join(runsDir, `${runId}.json`);
+      await rm(recordFile, { force: true });
+      await mkdir(recordFile);
+      await telemetry.updateLastRun({ state: 'reviewing' }, { force: true });
+      assert.equal(telemetry.recorded, true);
+    }));
+
+    it('Given the record cannot be written at all, When the run is updated, Then the run is not counted as recorded', () => isolated(async ({ root, runsDir }) => {
+      const runId = runIdOf('66666666');
+      await mkdir(path.join(runsDir, `${runId}.json`), { recursive: true });
+      const telemetry = new m.FileSystemTelemetryAdapter().forRun({ repoRoot: root, runId });
+      await telemetry.updateLastRun({ state: 'started' }, { force: true });
+      assert.equal(telemetry.recorded, false);
+    }));
 
     it('Given two runs of one repository, When each records its state, Then each run owns a record and neither overwrites the other', () => isolated(async ({ root, runsDir }) => {
       const adapter = new m.FileSystemTelemetryAdapter();
@@ -255,7 +277,7 @@ for (const { label, load } of MODULE_SETS) {
       const old = new Date(Date.now() - 8 * DAY_MS);
       const write = async (name, doc, when) => {
         const file = path.join(runsDir, `${name}.json`);
-        await writeFile(file, JSON.stringify(doc), 'utf8');
+        await writeFile(file, JSON.stringify({ schema: 'review-run-record@1', ...doc }), 'utf8');
         await utimes(file, when, when);
       };
       await write('old-done', { runId: 'old-done', state: 'passed', runnerPid: process.pid }, old);
@@ -298,12 +320,12 @@ for (const { label, load } of MODULE_SETS) {
       assert.match(record.reportPath, /\.md$/);
     }));
 
-    it('Given a staged kit mirror and a PASS, When the review runs in the repository, Then the record names the excluded mirror and its hash equals the commit diff hash', () => isolated(async ({ runsDir }) => {
+    it('Given a staged runner copy identical to the installed copy and a PASS, When the review runs in the repository, Then the record names the excluded copy and its hash equals the commit diff hash', () => isolated(async ({ runsDir }) => {
       const repo = await kitShapedRepo();
       try {
         await writeRepoFile(repo, 'src/app.mjs', 'export const a = 2;\n');
         await writeRepoFile(repo, 'scripts/run-review.mjs', 'runner v2\n');
-        await writeRepoFile(repo, MIRROR, 'runner v2\n');
+        await writeRepoFile(repo, MIRROR, INSTALLED_COPY);
         gitIn(repo, ['add', '-A']);
 
         const result = await m.runReview({
@@ -329,7 +351,7 @@ for (const { label, load } of MODULE_SETS) {
       }
     }));
 
-    it('Given a staged runner mirror equal to the staged source and different from the installed copy, When the staged diff is read, Then the mirror is left out', async () => {
+    it('Given a staged runner copy equal to the staged algorithm but not to the installed copy, When the staged diff is read, Then the copy stays in review', async () => {
       const repo = await kitShapedRepo();
       try {
         await writeRepoFile(repo, 'src/app.mjs', 'export const a = 2;\n');
@@ -342,14 +364,14 @@ for (const { label, load } of MODULE_SETS) {
 
         const identity = await adapter.getStagedDiff(repo);
 
-        assert.deepEqual([...identity.excludedPaths], [MIRROR]);
-        assert.equal(identity.bytes.toString('utf8').includes(`a/${MIRROR}`), false, 'the mirror is not reviewed');
+        assert.deepEqual([...identity.excludedPaths], []);
+        assert.equal(identity.bytes.toString('utf8').includes(MIRROR), true, 'a copy of the algorithm is not the vendored stub');
       } finally {
         await rm(repo, { recursive: true, force: true });
       }
     });
 
-    it('Given a staged runner mirror that matches neither the installed copy nor the staged source, When the staged diff is read, Then the mirror stays in review', async () => {
+    it('Given a staged vendored runner that differs from the installed stub, When the staged diff is read, Then the runner stays in review', async () => {
       const repo = await kitShapedRepo();
       try {
         await writeRepoFile(repo, 'src/app.mjs', 'export const a = 2;\n');
@@ -585,7 +607,7 @@ for (const { label, load } of MODULE_SETS) {
       const cutoff = NOW.getTime() - 7 * DAY_MS;
       const write = async (name, when) => {
         const file = path.join(runsDir, `${name}.json`);
-        await writeFile(file, JSON.stringify({ runId: name, state: 'passed', runnerPid: process.pid }), 'utf8');
+        await writeFile(file, JSON.stringify({ schema: 'review-run-record@1', runId: name, state: 'passed', runnerPid: process.pid }), 'utf8');
         await utimes(file, new Date(when), new Date(when));
       };
       await write('at-cutoff', cutoff);
@@ -602,7 +624,7 @@ for (const { label, load } of MODULE_SETS) {
       const old = new Date(Date.now() - 8 * DAY_MS);
       // The corrupt name sorts first: an unguarded read would end the sweep before the finished record.
       await writeFile(path.join(runsDir, 'a-corrupt.json'), '{not json', 'utf8');
-      await writeFile(path.join(runsDir, 'z-finished.json'), JSON.stringify({ runId: 'z-finished', state: 'passed', runnerPid: process.pid }), 'utf8');
+      await writeFile(path.join(runsDir, 'z-finished.json'), JSON.stringify({ schema: 'review-run-record@1', runId: 'z-finished', state: 'passed', runnerPid: process.pid }), 'utf8');
       await utimes(path.join(runsDir, 'a-corrupt.json'), old, old);
       await utimes(path.join(runsDir, 'z-finished.json'), old, old);
 
@@ -611,8 +633,67 @@ for (const { label, load } of MODULE_SETS) {
 
       assert.deepEqual((await readdir(runsDir)).sort(), ['a-corrupt.json', `${runIdOf('33333333')}.json`].sort());
     }));
+
+    it('Given an old foreign JSON file beside an old finished record, When a run starts, Then the foreign file is kept and the finished one is pruned', () => isolated(async ({ root, runsDir }) => {
+      await mkdir(runsDir, { recursive: true });
+      const old = new Date(Date.now() - 8 * DAY_MS);
+      // Shaped like a finished record but without the kit's schema: it is not a run record, so it is never removed.
+      await writeFile(path.join(runsDir, 'a-foreign.json'), JSON.stringify({ state: 'passed', runnerPid: process.pid }), 'utf8');
+      await writeFile(path.join(runsDir, 'z-finished.json'), JSON.stringify({ schema: 'review-run-record@1', runId: 'z-finished', state: 'passed', runnerPid: process.pid }), 'utf8');
+      await utimes(path.join(runsDir, 'a-foreign.json'), old, old);
+      await utimes(path.join(runsDir, 'z-finished.json'), old, old);
+
+      await new m.FileSystemTelemetryAdapter().forRun({ repoRoot: root, runId: runIdOf('44444444') })
+        .updateLastRun({ state: 'started' }, { force: true });
+
+      assert.deepEqual((await readdir(runsDir)).sort(), ['a-foreign.json', `${runIdOf('44444444')}.json`].sort());
+    }));
   });
 }
+
+describe('Feature: a telemetry sink never changes a review, and pid liveness is read exactly', () => {
+  it('Given a sink without updateLastRun, When it is wrapped, Then it reports not recorded and its calls resolve', async () => {
+    const wrapped = safeRunTelemetry({ record: async () => {} });
+
+    assert.equal(wrapped.recorded, false);
+    await assert.doesNotReject(wrapped.record('started', {}));
+    await assert.doesNotReject(wrapped.updateLastRun({ state: 'started' }, { force: true }));
+  });
+
+  it('Given a sink whose record throws synchronously, When a record is written, Then the call resolves instead of throwing', async () => {
+    const wrapped = safeRunTelemetry({
+      record: () => { throw new Error('disk gone'); },
+      updateLastRun: async () => {},
+    });
+
+    await assert.doesNotReject(async () => wrapped.record('started', {}));
+  });
+
+  it('Given a sink whose updateLastRun rejects, When the state is written, Then the rejection never reaches the review', async () => {
+    const wrapped = safeRunTelemetry({
+      record: async () => {},
+      updateLastRun: () => Promise.reject(new Error('locked')),
+    });
+
+    await assert.doesNotReject(wrapped.updateLastRun({ state: 'passed' }, { force: true }));
+  });
+
+  it('Given a live process, a dead pid, a non-integer, and probes that fail, When liveness is read, Then each maps to its state', () => {
+    assert.equal(pidLiveness(process.pid), 'alive');
+    assert.equal(pidLiveness(2147483647), 'dead');
+    assert.equal(pidLiveness('12'), 'unknown');
+
+    const realKill = process.kill;
+    try {
+      process.kill = () => { throw Object.assign(new Error('not permitted'), { code: 'EPERM' }); };
+      assert.equal(pidLiveness(4242), 'alive');
+      process.kill = () => { throw Object.assign(new Error('bad signal'), { code: 'EINVAL' }); };
+      assert.equal(pidLiveness(4242), 'unknown');
+    } finally {
+      process.kill = realKill;
+    }
+  });
+});
 
 test('Given tag values, When read, Then only plain tokens of 1 to 200 characters pass', () => {
   assert.equal(runTagFromEnv({ OMP_REVIEW_KIT_RUN_TAG: '  abc.def:1-2_3  ' }), 'abc.def:1-2_3');
@@ -625,7 +706,7 @@ test('Given tag values, When read, Then only plain tokens of 1 to 200 characters
 
 test('Given more finished records than one sweep examines, When a run starts, Then the sweep examines at most 2000 of them', () => isolated(async ({ root, runsDir }) => {
   await mkdir(runsDir, { recursive: true });
-  const body = JSON.stringify({ runId: 'finished', state: 'passed', runnerPid: process.pid });
+  const body = JSON.stringify({ schema: 'review-run-record@1', runId: 'finished', state: 'passed', runnerPid: process.pid });
   await Promise.all(Array.from({ length: 2_001 }, (_, index) => writeFile(path.join(runsDir, `old-${String(index).padStart(4, '0')}.json`), body, 'utf8')));
 
   // The files were written just now, so a clock eight days ahead makes every one of them old.

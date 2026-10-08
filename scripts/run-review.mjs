@@ -2554,6 +2554,27 @@ export class ReviewWorkflowService {
     };
   }
 
+  /**
+   * Tells the committer which run to follow and how many other reviews of this
+   * repository are live. Concurrent reviews never block each other, so this only
+   * informs; a count that cannot be read counts as none. Without a recorded run
+   * (telemetry off) there is nothing to follow, so nothing is announced.
+   */
+  async #announceRun(repoRoot, runId, recorded) {
+    if (!recorded) return;
+    let others = 0;
+    try {
+      const counted = await this.#telemetryPort.countOtherLiveRuns?.({ repoRoot, runId });
+      others = Number.isInteger(counted) && counted > 0 ? counted : 0;
+    } catch {
+      others = 0;
+    }
+    this.#logger.error(`reviewer-kit run ${runId}: follow it with review-progress --run ${runId} --follow\n`);
+    if (others > 0) {
+      this.#logger.error(`reviewer-kit: ${others} other review(s) running in this repository; they do not block this commit\n`);
+    }
+  }
+
   async execute({ cwd = process.cwd() } = {}) {
     const startedAt = Date.now();
     const repoRoot = (await this.#gitPort.getRepoRoot(cwd)).trim();
@@ -2645,6 +2666,8 @@ export class ReviewWorkflowService {
         }, { force: true });
         return ReviewExecutionResult.skipped();
       }
+
+      await this.#announceRun(repoRoot, runId, telemetry.recorded);
 
       await telemetry.record('diff_collected', {
         diffHash: diff.hash,
@@ -3237,18 +3260,9 @@ ${reemitResult.stderr ?? ''}`;
  * installed kit's canonical file is not reviewed.
  */
 export const VENDORED_KIT_FILES = Object.freeze([
-  Object.freeze({ target: '.omp/review-kit/run-review.mjs', source: 'scripts/run-review.mjs' }),
+  Object.freeze({ target: '.omp/review-kit/run-review.mjs', source: 'templates/review-kit/run-review.mjs' }),
   Object.freeze({ target: '.githooks/pre-commit', source: 'templates/githooks/pre-commit' }),
 ]);
-
-/**
- * The kit repository keeps a self-hosted copy of its own runner next to the
- * source. When that copy equals the staged source, only the source is reviewed.
- */
-export const VENDORED_RUNNER_MIRROR = Object.freeze({
-  target: '.omp/review-kit/run-review.mjs',
-  source: 'scripts/run-review.mjs',
-});
 
 /**
  * Reads the canonical vendored files from the installed OMP plugin
@@ -3332,13 +3346,10 @@ export class SubprocessGitAdapter extends GitPort {
   }
 
   /**
-   * Staged vendored kit files (runner, hook) that are byte-identical to the
+   * Staged vendored kit files (runner stub, hook) that are byte-identical to the
    * installed kit's canonical copy: they are the review plugin, not the
-   * committer's work, so the review diff leaves them out. In the kit repository
-   * itself the self-hosted runner is a byte-identical mirror of the staged
-   * `scripts/run-review.mjs`, which stays in review, so the mirror is left out
-   * too. Any doubt (no canonical copy, unreadable blob, different bytes) keeps
-   * the file in review.
+   * committer's work, so the review diff leaves them out. Any doubt (no
+   * canonical copy, unreadable blob, different bytes) keeps the file in review.
    *
    * @param {string} repoRoot
    * @returns {Promise<string[]>}
@@ -3363,8 +3374,7 @@ export class SubprocessGitAdapter extends GitPort {
       const meta = /^:(\d{6}) (\d{6}) [0-9a-f]+ [0-9a-f]+ ([A-Z])\d*$/.exec(fields[i]);
       const name = fields[i + 1];
       if (!meta) continue;
-      const isMirror = name === VENDORED_RUNNER_MIRROR.target;
-      if (!canonical.has(name) && !isMirror) continue;
+      if (!canonical.has(name)) continue;
       // A mode change (the hook losing its executable bit, a symlink in place
       // of the file) changes behaviour even when the bytes are canonical.
       const [, oldMode, newMode, status] = meta;
@@ -3372,11 +3382,7 @@ export class SubprocessGitAdapter extends GitPort {
       if (!modeOk) continue;
       try {
         const staged = normalize(await stagedText(name));
-        if (canonical.has(name) && staged === normalize(canonical.get(name))) {
-          identical.push(name);
-        } else if (isMirror && staged === normalize(await stagedText(VENDORED_RUNNER_MIRROR.source))) {
-          identical.push(name);
-        }
+        if (staged === normalize(canonical.get(name))) identical.push(name);
       } catch {
         // unreadable staged blob stays in review
       }
@@ -3530,10 +3536,14 @@ export function writeReviewProgress(event) {
   process.stderr.write(formatReviewProgress(event) + '\n');
 }
 
+// OMP reports an MCP server that failed to start on stderr, possibly after the verdict; it is not reviewer output.
+const OMP_MCP_WARNING_RE = /^\s*Warning: MCP server "[^"]*" failed to connect\b/;
+
 /**
  * Sanitizes stderr from reviewer execution:
  * (a) removes every line matching /^\s*Working\.\.\.\s*$/i (OMP print-mode progress noise),
- * (b) normalizes CRLF to LF.
+ * (b) removes every line matching OMP_MCP_WARNING_RE (MCP connection warning, which can follow the verdict),
+ * (c) normalizes CRLF to LF.
  *
  * @param {string} stderr
  * @returns {string}
@@ -3544,6 +3554,7 @@ export function sanitizeReviewerOutput(stderr) {
     .replace(/\r\n/g, '\n')
     .split('\n')
     .filter((line) => !/^\s*Working\.\.\.\s*$/i.test(line))
+    .filter((line) => !OMP_MCP_WARNING_RE.test(line))
     .join('\n');
 }
 
@@ -5579,6 +5590,7 @@ function formatProviderOutageError(lastStderr) {
 }
 
 const NULL_RUN_TELEMETRY = Object.freeze({
+  recorded: false,
   record: async () => {},
   updateLastRun: async () => {},
 });
@@ -5591,7 +5603,12 @@ function safeRunTelemetry(sink) {
   if (!sink || typeof sink.record !== 'function' || typeof sink.updateLastRun !== 'function') {
     return NULL_RUN_TELEMETRY;
   }
+  // Read on every access, not copied once: a run record written after this wrapper exists must count.
+  // Only the null sink reports recorded: false; a sink that does not report it counts as recorded.
   return {
+    get recorded() {
+      return sink.recorded !== false;
+    },
     record: (type, payload) => {
       try {
         return Promise.resolve(sink.record(type, payload)).catch(() => {});
@@ -5662,6 +5679,7 @@ class RunTelemetry {
   #doc;
   #lastWriteAt = 0;
   #pendingWrite = Promise.resolve();
+  #recordWritten = false;
 
   constructor({ reportDir, runsDir = null, runId, base }) {
     this.#eventsFile = path.join(reportDir, 'runs.jsonl');
@@ -5713,7 +5731,9 @@ class RunTelemetry {
       try {
         if ((await stat(file)).mtimeMs > cutoff) continue;
         const record = JSON.parse(await readFile(file, 'utf8'));
-        if (TERMINAL_RUN_STATES.has(record?.state) || pidLiveness(record?.runnerPid) === 'dead') {
+        // Only kit run records are removed: a foreign JSON file in the runs folder is never ours to delete.
+        const isKitRecord = record?.schema === REVIEW_RUN_RECORD_SCHEMA && typeof record.runId === 'string';
+        if (isKitRecord && (TERMINAL_RUN_STATES.has(record.state) || pidLiveness(record.runnerPid) === 'dead')) {
           await rm(file, { force: true });
         }
       } catch {
@@ -5759,6 +5779,11 @@ class RunTelemetry {
   }
 
 
+  /** True once this run's own record is on disk: the only record review-progress can follow. */
+  get recorded() {
+    return this.#recordWritten;
+  }
+
   updateLastRun(state, { force = false } = {}) {
     const now = Date.now();
     // Merge, never replace: a field this update leaves out keeps its last value,
@@ -5778,7 +5803,10 @@ class RunTelemetry {
         // The per-run record is what review-progress reads. A failure there must
         // not stop the pointer file below, and the other way round.
         await mkdir(path.dirname(this.#runRecordFile), { recursive: true }).catch(() => {});
-        await writeFile(this.#runRecordFile, `${JSON.stringify({ ...doc, schema: REVIEW_RUN_RECORD_SCHEMA }, null, 2)}\n`, 'utf8').catch(() => {});
+        const written = await writeFile(this.#runRecordFile, `${JSON.stringify({ ...doc, schema: REVIEW_RUN_RECORD_SCHEMA }, null, 2)}\n`, 'utf8')
+          .then(() => true, () => false);
+        // Sticky: a later failed write does not hide a record that is already on disk.
+        if (written) this.#recordWritten = true;
       }
       await mkdir(path.dirname(this.#lastRunFile), { recursive: true });
       await writeFile(this.#lastRunFile, `${JSON.stringify(doc, null, 2)}\n`, 'utf8');
@@ -5789,6 +5817,16 @@ class RunTelemetry {
     this.#pendingWrite = this.#pendingWrite.then(operation, operation).catch(() => {});
     await this.#pendingWrite;
   }
+}
+
+/** Repository roots may differ in case between sessions on Windows, so they are compared resolved. */
+function sameRepoRoot(left, right) {
+  if (typeof left !== 'string' || typeof right !== 'string') return false;
+  const key = (value) => {
+    const resolved = path.resolve(value);
+    return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+  };
+  return key(left) === key(right);
 }
 
 export class FileSystemTelemetryAdapter extends TelemetryPort {
@@ -5813,6 +5851,40 @@ export class FileSystemTelemetryAdapter extends TelemetryPort {
       runId,
       base: { repoRoot, runnerPid: process.pid, tag: runTagFromEnv() },
     });
+  }
+
+  /**
+   * Live runs of the same repository other than `runId`. A run is live while its
+   * state is non-terminal and its runner process is not dead. Unreadable records
+   * are skipped: the count only informs the committer and never decides a verdict.
+   *
+   * @param {{ repoRoot: string, runId: string }} context
+   * @returns {Promise<number>}
+   */
+  async countOtherLiveRuns({ repoRoot, runId }) {
+    if (process.env.OMP_REVIEW_KIT_TELEMETRY === '0') return 0;
+    const runsDir = resolveRunsDir();
+    let names;
+    try {
+      names = await readdir(runsDir);
+    } catch {
+      return 0;
+    }
+    let count = 0;
+    for (const name of names) {
+      if (!name.endsWith('.json') || name === `${runId}.json`) continue;
+      let record;
+      try {
+        record = JSON.parse(await readFile(path.join(runsDir, name), 'utf8'));
+      } catch {
+        continue;
+      }
+      if (!sameRepoRoot(record?.repoRoot, repoRoot)) continue;
+      if (!LIVE_LAST_RUN_STATES.has(record.state)) continue;
+      if (!Number.isInteger(record.runnerPid) || pidLiveness(record.runnerPid) === 'dead') continue;
+      count += 1;
+    }
+    return count;
   }
 }
 

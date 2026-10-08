@@ -35,7 +35,7 @@ const LIVE_LAST_RUN_STATES = new Set([
  * @param {number} pid
  * @returns {'alive'|'dead'|'unknown'}
  */
-function pidLiveness(pid) {
+export function pidLiveness(pid) {
   if (!Number.isInteger(pid)) return 'unknown';
   try {
     process.kill(pid, 0);
@@ -71,6 +71,7 @@ export function formatProviderOutageError(lastStderr) {
 }
 
 export const NULL_RUN_TELEMETRY = Object.freeze({
+  recorded: false,
   record: async () => {},
   updateLastRun: async () => {},
 });
@@ -80,13 +81,18 @@ export const NULL_RUN_TELEMETRY = Object.freeze({
  * injected doubles) can never change the review verdict or exit code.
  *
  * @param {unknown} sink
- * @returns {{ record: (type: string, payload?: object) => Promise<void>, updateLastRun: (state: object, opts?: { force?: boolean }) => Promise<void> }}
+ * @returns {{ recorded: boolean, record: (type: string, payload?: object) => Promise<void>, updateLastRun: (state: object, opts?: { force?: boolean }) => Promise<void> }}
  */
 export function safeRunTelemetry(sink) {
   if (!sink || typeof sink.record !== 'function' || typeof sink.updateLastRun !== 'function') {
     return NULL_RUN_TELEMETRY;
   }
+  // Read on every access, not copied once: a run record written after this wrapper exists must count.
+  // Only the null sink reports recorded: false; a sink that does not report it counts as recorded.
   return {
+    get recorded() {
+      return sink.recorded !== false;
+    },
     record: (type, payload) => {
       try {
         return Promise.resolve(sink.record(type, payload)).catch(() => {});
@@ -157,6 +163,7 @@ export class RunTelemetry {
   #doc;
   #lastWriteAt = 0;
   #pendingWrite = Promise.resolve();
+  #recordWritten = false;
 
   constructor({ reportDir, runsDir = null, runId, base }) {
     this.#eventsFile = path.join(reportDir, 'runs.jsonl');
@@ -207,7 +214,9 @@ export class RunTelemetry {
       try {
         if ((await stat(file)).mtimeMs > cutoff) continue;
         const record = JSON.parse(await readFile(file, 'utf8'));
-        if (TERMINAL_RUN_STATES.has(record?.state) || pidLiveness(record?.runnerPid) === 'dead') {
+        // Only kit run records are removed: a foreign JSON file in the runs folder is never ours to delete.
+        const isKitRecord = record?.schema === REVIEW_RUN_RECORD_SCHEMA && typeof record.runId === 'string';
+        if (isKitRecord && (TERMINAL_RUN_STATES.has(record.state) || pidLiveness(record.runnerPid) === 'dead')) {
           await rm(file, { force: true });
         }
       } catch {
@@ -252,6 +261,11 @@ export class RunTelemetry {
     }, null, 2)}\n`, 'utf8');
   }
 
+  /** True once this run's own record is on disk: the only record review-progress can follow. */
+  get recorded() {
+    return this.#recordWritten;
+  }
+
   updateLastRun(state, { force = false } = {}) {
     const now = Date.now();
     // Merge, never replace: a field this update leaves out keeps its last value,
@@ -271,7 +285,10 @@ export class RunTelemetry {
         // The per-run record is what review-progress reads. A failure there must
         // not stop the pointer file below, and the other way round.
         await mkdir(path.dirname(this.#runRecordFile), { recursive: true }).catch(() => {});
-        await writeFile(this.#runRecordFile, `${JSON.stringify({ ...doc, schema: REVIEW_RUN_RECORD_SCHEMA }, null, 2)}\n`, 'utf8').catch(() => {});
+        const written = await writeFile(this.#runRecordFile, `${JSON.stringify({ ...doc, schema: REVIEW_RUN_RECORD_SCHEMA }, null, 2)}\n`, 'utf8')
+          .then(() => true, () => false);
+        // Sticky: a later failed write does not hide a record that is already on disk.
+        if (written) this.#recordWritten = true;
       }
       await mkdir(path.dirname(this.#lastRunFile), { recursive: true });
       await writeFile(this.#lastRunFile, `${JSON.stringify(doc, null, 2)}\n`, 'utf8');
@@ -282,6 +299,16 @@ export class RunTelemetry {
     this.#pendingWrite = this.#pendingWrite.then(operation, operation).catch(() => {});
     await this.#pendingWrite;
   }
+}
+
+/** Repository roots may differ in case between sessions on Windows, so they are compared resolved. */
+function sameRepoRoot(left, right) {
+  if (typeof left !== 'string' || typeof right !== 'string') return false;
+  const key = (value) => {
+    const resolved = path.resolve(value);
+    return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+  };
+  return key(left) === key(right);
 }
 
 export class FileSystemTelemetryAdapter extends TelemetryPort {
@@ -306,5 +333,39 @@ export class FileSystemTelemetryAdapter extends TelemetryPort {
       runId,
       base: { repoRoot, runnerPid: process.pid, tag: runTagFromEnv() },
     });
+  }
+
+  /**
+   * Live runs of the same repository other than `runId`. A run is live while its
+   * state is non-terminal and its runner process is not dead. Unreadable records
+   * are skipped: the count only informs the committer and never decides a verdict.
+   *
+   * @param {{ repoRoot: string, runId: string }} context
+   * @returns {Promise<number>}
+   */
+  async countOtherLiveRuns({ repoRoot, runId }) {
+    if (process.env.OMP_REVIEW_KIT_TELEMETRY === '0') return 0;
+    const runsDir = resolveRunsDir();
+    let names;
+    try {
+      names = await readdir(runsDir);
+    } catch {
+      return 0;
+    }
+    let count = 0;
+    for (const name of names) {
+      if (!name.endsWith('.json') || name === `${runId}.json`) continue;
+      let record;
+      try {
+        record = JSON.parse(await readFile(path.join(runsDir, name), 'utf8'));
+      } catch {
+        continue;
+      }
+      if (!sameRepoRoot(record?.repoRoot, repoRoot)) continue;
+      if (!LIVE_LAST_RUN_STATES.has(record.state)) continue;
+      if (!Number.isInteger(record.runnerPid) || pidLiveness(record.runnerPid) === 'dead') continue;
+      count += 1;
+    }
+    return count;
   }
 }

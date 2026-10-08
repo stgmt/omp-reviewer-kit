@@ -18,7 +18,7 @@ async function layoutFixture() {
     await writeFile(path.join(dir, file), await readFile(file));
   }
   await mkdir(path.join(dir, '.omp', 'review-kit'), { recursive: true });
-  await writeFile(path.join(dir, '.omp', 'review-kit', 'run-review.mjs'), await readFile('scripts/run-review.mjs'));
+  await writeFile(path.join(dir, '.omp', 'review-kit', 'run-review.mjs'), await readFile('templates/review-kit/run-review.mjs'));
   const check = () => spawnSync(process.execPath, [path.resolve('scripts/check-layout.mjs')], { cwd: dir, encoding: 'utf8' });
   const edit = async (file, mutate) => {
     const target = path.join(dir, file);
@@ -38,11 +38,12 @@ test('Given a consistent tree, check-layout passes', async () => {
   }
 });
 
-for (const name of ['infra/stage-transcript-stats.mjs', 'domain/context-pack.mjs', 'domain/scout-baseline.mjs', 'domain/hunter-shards.mjs', 'domain/target-policy.mjs', 'infra/target-registry.mjs']) {
+for (const name of ['infra/stage-transcript-stats.mjs', 'domain/context-pack.mjs', 'domain/scout-baseline.mjs', 'domain/hunter-shards.mjs', 'domain/target-policy.mjs', 'infra/target-registry.mjs', 'infra/review-run-records.mjs']) {
   test(`check-layout rejects a tree that lacks src/${name}`, async () => {
     const fx = await layoutFixture();
     try {
-      await rm(path.join(fx.dir, 'src', ...name.split('/')));
+      // force: a gate that stopped requiring the file also stops copying it, so the removal must not be the failure.
+      await rm(path.join(fx.dir, 'src', ...name.split('/')), { force: true });
       const result = fx.check();
       assert.notEqual(result.status, 0);
       assert.match(failure(result), new RegExp(name.split('/')[1].replace(/\./g, '\\.')));
@@ -52,12 +53,66 @@ for (const name of ['infra/stage-transcript-stats.mjs', 'domain/context-pack.mjs
   });
 }
 
+test('check-layout rejects a tree that lacks scripts/review-progress.mjs', async () => {
+  const fx = await layoutFixture();
+  try {
+    await rm(path.join(fx.dir, 'scripts', 'review-progress.mjs'), { force: true });
+    const result = fx.check();
+    assert.notEqual(result.status, 0);
+    assert.match(failure(result), /review-progress\.mjs/);
+  } finally {
+    await fx.cleanup();
+  }
+});
+
+test('check-layout rejects a vendored runner that is not the thin stub', async () => {
+  const fx = await layoutFixture();
+  try {
+    await fx.edit('.omp/review-kit/run-review.mjs', (text) => `${text}// edited in place\n`);
+    const result = fx.check();
+    assert.notEqual(result.status, 0);
+    assert.match(failure(result), /must be identical to templates\/review-kit\/run-review\.mjs/);
+  } finally {
+    await fx.cleanup();
+  }
+});
+
+test('check-layout rejects a stub without its marker line', async () => {
+  const fx = await layoutFixture();
+  try {
+    // Both copies change together, so the identity check passes and the stub's own marker guard is what fails.
+    const unmarked = (text) => text.replace('// omp-reviewer-kit runner stub', '// another runner');
+    await fx.edit('templates/review-kit/run-review.mjs', unmarked);
+    await fx.edit('.omp/review-kit/run-review.mjs', unmarked);
+    const result = fx.check();
+    assert.notEqual(result.status, 0);
+    assert.match(failure(result), /its marker line/);
+  } finally {
+    await fx.cleanup();
+  }
+});
+
+test('check-layout rejects a stub larger than 4 KB', async () => {
+  const fx = await layoutFixture();
+  try {
+    // Both copies grow together, so the identity check passes and the size guard is what fails.
+    const stub = await readFile('templates/review-kit/run-review.mjs', 'utf8');
+    const oversized = `${stub}${'/'.repeat(4097 - Buffer.byteLength(stub))}`;
+    await fx.edit('templates/review-kit/run-review.mjs', () => oversized);
+    await fx.edit('.omp/review-kit/run-review.mjs', () => oversized);
+    const result = fx.check();
+    assert.notEqual(result.status, 0);
+    assert.match(failure(result), /at most 4 KB/);
+  } finally {
+    await fx.cleanup();
+  }
+});
+
 test('check-layout rejects a runner without the version marker or with a stale version', async () => {
   const fx = await layoutFixture();
   try {
     const strip = (text) => text.slice(text.indexOf('\n') + 1);
     await fx.edit('scripts/run-review.mjs', strip);
-    await fx.edit('.omp/review-kit/run-review.mjs', strip);
     let result = fx.check();
     assert.notEqual(result.status, 0);
     assert.match(failure(result), /must start with "\/\/ omp-reviewer-kit runner v/);

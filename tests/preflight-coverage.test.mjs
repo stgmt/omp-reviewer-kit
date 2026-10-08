@@ -11,7 +11,8 @@ const isWindows = process.platform === 'win32';
 const cwd = process.cwd();
 const result = (status, stdout = '', stderr = '') => ({ status, stdout, stderr });
 
-for (const copy of ['../scripts/run-review.mjs', '../.omp/review-kit/run-review.mjs']) {
+// The algorithm is the only runnable copy: the repository's vendored runner is the thin stub.
+for (const copy of ['../scripts/run-review.mjs']) {
   test(`${copy.replace('../', '')}: a failed model-less health call blocks before the runner is invoked`, async () => {
     const { OmpCliReviewerAdapter: Adapter } = await import(copy);
     let runnerCalls = 0;

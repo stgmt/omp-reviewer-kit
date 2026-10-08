@@ -13,6 +13,7 @@ const CLAUDE_PLUGIN_FILES = [
   'commands/setup.md',
   'hooks/hooks.json',
   'scripts/bridge.mjs',
+  'skills/review-progress/SKILL.md',
 ];
 const CLAUDE_PLUGIN_MAX_BYTES = 100 * 1024;
 
@@ -42,6 +43,7 @@ const required = [
   'agents/review-risk-hunter.md',
   'agents/review-finding-verifier.md',
   'templates/githooks/pre-commit',
+  'templates/review-kit/run-review.mjs',
   'scripts/run-review.mjs',
   'scripts/setup-hook.mjs',
   'scripts/install-hook.ps1',
@@ -59,6 +61,8 @@ const required = [
   'src/domain/execution-evidence.mjs',
   'src/domain/reverted-snapshot.mjs',
   'src/infra/subprocess-execution-adapter.mjs',
+  'src/infra/review-run-records.mjs',
+  'scripts/review-progress.mjs',
   'scripts/audit-range.mjs',
   'skills/range-audit/SKILL.md',
   'agents/review-range-auditor.md',
@@ -74,17 +78,20 @@ for (const file of required) {
   await access(file);
 }
 
-// Assert runner synchronization between source and self-hosted copy
-const distRunner = await readFile('scripts/run-review.mjs', 'utf8');
+// The repository's runner is the thin stub the installer writes: byte-identical to its template, never a copy of the algorithm.
+const stubRunner = await readFile('templates/review-kit/run-review.mjs', 'utf8');
 const localRunner = await readFile('.omp/review-kit/run-review.mjs', 'utf8');
-
-if (distRunner !== localRunner) {
-  throw new Error('Drift detected: scripts/run-review.mjs and .omp/review-kit/run-review.mjs must be identical.');
+if (localRunner !== stubRunner) {
+  throw new Error('.omp/review-kit/run-review.mjs must be identical to templates/review-kit/run-review.mjs (the thin stub).');
+}
+if (!/^\/\/ omp-reviewer-kit runner stub\r?\n/.test(stubRunner) || Buffer.byteLength(stubRunner) > 4096) {
+  throw new Error('templates/review-kit/run-review.mjs must be the thin stub: its marker line, at most 4 KB.');
 }
 
-// The runner carries its own version marker; installers refuse to downgrade by it.
+// The algorithm carries the release marker; installers refuse to downgrade a vendored runner by it.
 const pkg = JSON.parse(await readFile('package.json', 'utf8'));
-const runnerMarker = /^\/\/ omp-reviewer-kit runner v(\d+\.\d+\.\d+)\r?\n/.exec(distRunner);
+const algorithm = await readFile('scripts/run-review.mjs', 'utf8');
+const runnerMarker = /^\/\/ omp-reviewer-kit runner v(\d+\.\d+\.\d+)\r?\n/.exec(algorithm);
 if (!runnerMarker || runnerMarker[1] !== pkg.version) {
   throw new Error(`scripts/run-review.mjs must start with "// omp-reviewer-kit runner v${pkg.version}".`);
 }
@@ -124,4 +131,4 @@ if (shellBytes > CLAUDE_PLUGIN_MAX_BYTES) {
   throw new Error(`claude-plugin/ is ${shellBytes} bytes; the limit is ${CLAUDE_PLUGIN_MAX_BYTES}.`);
 }
 
-console.log(`layout ok: ${required.length} files verified and runner copies synchronized`);
+console.log(`layout ok: ${required.length} files verified; vendored runner is the stub and the algorithm carries its version marker`);

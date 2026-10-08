@@ -115,10 +115,14 @@ export function writeReviewProgress(event) {
   process.stderr.write(formatReviewProgress(event) + '\n');
 }
 
+// OMP reports an MCP server that failed to start on stderr, possibly after the verdict; it is not reviewer output.
+const OMP_MCP_WARNING_RE = /^\s*Warning: MCP server "[^"]*" failed to connect\b/;
+
 /**
  * Sanitizes stderr from reviewer execution:
  * (a) removes every line matching /^\s*Working\.\.\.\s*$/i (OMP print-mode progress noise),
- * (b) normalizes CRLF to LF.
+ * (b) removes every line matching OMP_MCP_WARNING_RE (MCP connection warning, which can follow the verdict),
+ * (c) normalizes CRLF to LF.
  *
  * @param {string} stderr
  * @returns {string}
@@ -127,7 +131,9 @@ export function sanitizeReviewerOutput(stderr) {
   if (typeof stderr !== 'string') return '';
   const normalized = stderr.replace(/\r\n/g, '\n');
   const lines = normalized.split('\n');
-  const filtered = lines.filter((line) => !/^\s*Working\.\.\.\s*$/i.test(line));
+  const filtered = lines
+    .filter((line) => !/^\s*Working\.\.\.\s*$/i.test(line))
+    .filter((line) => !OMP_MCP_WARNING_RE.test(line));
   return filtered.join('\n');
 }
 
