@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { realpathSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -74,8 +75,10 @@ async function writeRecord(runsDir, overrides = {}) {
   return value;
 }
 
+// Git reports a repository by its resolved path. On Windows CI the temp folder is an 8.3 alias (C:\Users\RUNNER~1\...),
+// so the fixtures use the resolved folder too, as the records the runner writes do.
 async function tempDir(prefix = 'review-progress-') {
-  return mkdtemp(path.join(tmpdir(), prefix));
+  return mkdtemp(path.join(realpathSync.native(tmpdir()), prefix));
 }
 
 function git(cwd, args, input) {
