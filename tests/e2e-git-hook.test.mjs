@@ -4,11 +4,14 @@ import { spawnSync } from 'node:child_process';
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test, { after, describe, it } from 'node:test';
 
 import { PluginInstallerService } from '../src/application/installer-service.mjs';
 
 const isWindows = process.platform === 'win32';
+// The checkout under test: its own algorithm runs the hook, never whatever plugin this machine has installed.
+const KIT_ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 /**
  * Creates a clean isolated git repository with configured pre-commit hook using PluginInstallerService.
@@ -24,6 +27,12 @@ async function setupE2eRepo() {
       encoding: 'utf8',
       windowsHide: true,
       ...options,
+      // The hook runs this checkout's algorithm, and its run records stay in the temporary folder.
+      env: {
+        ...(options.env ?? process.env),
+        OMP_REVIEW_KIT_PLUGIN_DIR: KIT_ROOT,
+        OMP_REVIEW_KIT_RUNS_DIR: path.join(baseDir, 'runs'),
+      },
     });
   };
 
