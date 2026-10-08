@@ -132,24 +132,35 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
     };
 
     // When
-    const result = await runReview({
-      cwd: repoRoot,
-      git,
-      omp: () => ({
-        status: 0,
-        stdout: rejectionOutput('bad diff content'),
-        stderr: '',
-      }),
-      now: new Date('2026-09-04T10:05:00.000Z'),
-      logger,
-    });
+    // The run is announced only while telemetry records runs, so the scenario pins telemetry on instead of inheriting it.
+    const previousTelemetry = process.env.OMP_REVIEW_KIT_TELEMETRY;
+    process.env.OMP_REVIEW_KIT_TELEMETRY = '1';
+    let result;
+    try {
+      result = await runReview({
+        cwd: repoRoot,
+        git,
+        omp: () => ({
+          status: 0,
+          stdout: rejectionOutput('bad diff content'),
+          stderr: '',
+        }),
+        now: new Date('2026-09-04T10:05:00.000Z'),
+        logger,
+      });
+    } finally {
+      if (previousTelemetry === undefined) delete process.env.OMP_REVIEW_KIT_TELEMETRY;
+      else process.env.OMP_REVIEW_KIT_TELEMETRY = previousTelemetry;
+    }
 
     // Then
     assert.equal(result.exitCode, 1);
     assert.equal(result.verdict, 'BLOCK');
-    assert.equal(logs.length, 2);
-    assert.match(logs[0], /^reviewer-kit BLOCK: .+\n$/);
-    assert.match(logs[1], /^REVIEW_REJECTION_REPORT=.+\n$/);
+    // The run to follow is announced first, then the verdict lines.
+    assert.equal(logs.length, 3);
+    assert.match(logs[0], /^reviewer-kit run .+: follow it with review-progress --run .+ --follow\n$/);
+    assert.match(logs[1], /^reviewer-kit BLOCK: .+\n$/);
+    assert.match(logs[2], /^REVIEW_REJECTION_REPORT=.+\n$/);
     assert.equal(result.envelope.kind, 'confirmed_findings');
   });
 
@@ -256,7 +267,7 @@ describe('Feature: Staged Change Review Gate (BDD Scenarios)', () => {
 
     // Then
     assert.equal(result.exitCode, 0);
-    assert.deepEqual(calls.find((call) => call.includes('--binary')), ['diff', '--cached', '--binary', '--no-ext-diff', '--']);
+    assert.deepEqual(calls.find((call) => call.includes('--binary')), ['diff', '--cached', '--binary', '--no-ext-diff', '--no-color', '--src-prefix=a/', '--dst-prefix=b/', '--']);
   });
 
   it('Scenario 8: Given consecutive reviews, When reviews finish, Then each report is uniquely preserved', async () => {
@@ -373,15 +384,12 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
     // independent modules, not covered by the src import above.
   });
 
-  it('ReviewVerdict epilogue back-scan holds in runner + .omp copies (r12 coverage)', async () => {
-    const { ReviewVerdict: RVrunner } = await import('../scripts/run-review.mjs');
-    const { ReviewVerdict: RVomp } = await import('../.omp/review-kit/run-review.mjs');
-    for (const [label, RV] of [['runner', RVrunner], ['omp', RVomp]]) {
-      assert.equal(RV.fromOutput('r\nREVIEW_RESULT=BLOCK\nWorking...\n').reason, 'explicit_block', label);
-      assert.equal(RV.fromOutput('r\nREVIEW_RESULT=PASS\n  thinking...  \n').isPass(), true, label);
-      assert.equal(RV.fromOutput('REVIEW_RESULT=PASS\nr\nREVIEW_RESULT=BLOCK\nWorking...\n').reason, 'multiple_verdict_markers', label);
-      assert.equal(RV.fromOutput('r\nREVIEW_RESULT=PASS\nreal text\n').reason, 'missing_verdict_marker', label);
-    }
+  it('ReviewVerdict epilogue back-scan holds in the runner (r12 coverage)', async () => {
+    const { ReviewVerdict: RV } = await import('../scripts/run-review.mjs');
+    assert.equal(RV.fromOutput('r\nREVIEW_RESULT=BLOCK\nWorking...\n').reason, 'explicit_block');
+    assert.equal(RV.fromOutput('r\nREVIEW_RESULT=PASS\n  thinking...  \n').isPass(), true);
+    assert.equal(RV.fromOutput('REVIEW_RESULT=PASS\nr\nREVIEW_RESULT=BLOCK\nWorking...\n').reason, 'multiple_verdict_markers');
+    assert.equal(RV.fromOutput('r\nREVIEW_RESULT=PASS\nreal text\n').reason, 'missing_verdict_marker');
   });
 
 
@@ -866,7 +874,7 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
     });
     const diff = await adapter.getStagedDiff('/repo');
     assert.equal(passedArgs.includes('--cached'), true);
-    assert.deepEqual(passedArgs, ['diff', '--cached', '--binary', '--no-ext-diff', '--']);
+    assert.deepEqual(passedArgs, ['diff', '--cached', '--binary', '--no-ext-diff', '--no-color', '--src-prefix=a/', '--dst-prefix=b/', '--']);
     assert.equal(diff.isEmpty(), false);
   });
   it('ReviewExecutionResult invariant: rejects a non-array model trace', () => {

@@ -84,6 +84,7 @@ Once installed, manage the review hook directly inside your OMP session without 
 
 - `/reviewer-kit:setup` — Automatically configures the pre-commit review hook in the active Git repository (`core.hooksPath .githooks`).
 - `/reviewer-kit:status` — Displays current hook configuration, runner integrity, and the latest review verdict.
+- `/reviewer-kit:progress` — Lists the review runs of the active repository with their state, stage, time since the last activity, and verdict. Read-only.
 - `/reviewer-kit:doctor` — Runs environment and toolchain health checks (Node.js, Git, OMP CLI, hook permissions).
 
 The plugin also observes `session_start`: opening any Git repository in OMP auto-installs the review hook in the background (manual `/reviewer-kit:setup` remains as fallback), and updates the OMP status bar indicator (`reviewer-kit: active` or `reviewer-kit: unconfigured`).
@@ -156,9 +157,11 @@ Keep the exemption narrow (single heredoc, target equal to `OMP_REVIEW_KIT_REPOR
 
 ## Claude Code Plugin and Target Sync
 
-The Claude Code plugin is a thin shell over the OMP plugin (the review always runs on OMP): `/plugin marketplace add stgmt/omp-reviewer-kit`, `/plugin install omp-reviewer-kit`, then `/omp-reviewer-kit:install-omp` (checks what is already installed, shows the plan, and installs OMP and the OMP plugin only after your confirmation), `/omp-reviewer-kit:setup` for the current repository, and `/omp-reviewer-kit:review` before committing. `/omp-reviewer-kit:doctor` diagnoses the setup. Installing the OMP plugin does not install the Claude plugin; removing the Claude plugin does not remove a repository's hook.
+The Claude Code plugin is a thin shell over the OMP plugin (the review always runs on OMP): `/plugin marketplace add stgmt/omp-reviewer-kit`, `/plugin install omp-reviewer-kit`, then `/omp-reviewer-kit:install-omp` (checks what is already installed, shows the plan, and installs OMP and the OMP plugin only after your confirmation), `/omp-reviewer-kit:setup` for the current repository, and `/omp-reviewer-kit:review` before committing. `/omp-reviewer-kit:doctor` diagnoses the setup. The plugin also ships the read-only `review-progress` skill, which lets an agent check the runs of its own commit reviews. Installing the OMP plugin does not install the Claude plugin; removing the Claude plugin does not remove a repository's hook.
 
-A repository has exactly one git hook and one vendored runner (`.omp/review-kit/run-review.mjs`). They are written only by the OMP plugin's installer, whichever channel invoked it, and an installed runner newer than the installer's own is never replaced. `/omp-reviewer-kit:review` runs that same runner file, so it agrees with the hook. To roll a new runner out to several repositories run `node scripts/sync-targets.mjs` (dry run) or `--apply`, then commit each repository through its own hook. The vendored runner and hook are the review plugin, not the committer's work: when the staged `.omp/review-kit/run-review.mjs` or `.githooks/pre-commit` is byte-identical (line endings aside) to the copy in the installed OMP plugin (`OMP_REVIEW_KIT_PLUGIN_DIR`, else `~/.omp/plugins/node_modules/omp-reviewer-kit`), the hook leaves it out of the reviewed diff, and a commit made only of such files is skipped (`reviewer-kit SKIPPED: no reviewable staged changes`). A hand-edited copy, or any doubt (no installed plugin, unreadable blob), keeps the file in review.
+A repository has exactly one git hook and one vendored runner (`.omp/review-kit/run-review.mjs`). The vendored runner is a thin stub: the same few lines in every repository, never edited. It finds the installed OMP plugin (`OMP_REVIEW_KIT_PLUGIN_DIR`, else `~/.omp/plugins/node_modules/omp-reviewer-kit`), runs that plugin's `scripts/run-review.mjs` with the same arguments, and forwards the exit code; without a plugin it fails closed with `reviewer-kit INFRA_ERROR`. The review algorithm therefore lives only in the installed plugin, so a plugin update changes every repository's review without touching a repository file, and no repository can hold an older copy of the algorithm. The hook and the stub are written only by the OMP plugin's installer, whichever channel invoked it, and an installed runner whose version marker is newer than the installer's own algorithm is never replaced. `/omp-reviewer-kit:review` runs that same runner file, so it agrees with the hook. To roll a new runner out to several repositories run `node scripts/sync-targets.mjs` (dry run) or `--apply`, then commit each repository through its own hook. The vendored runner and hook are the review plugin, not the committer's work: when the staged `.omp/review-kit/run-review.mjs` is byte-identical (line endings aside) to the stub `templates/review-kit/run-review.mjs` of the installed OMP plugin, or the staged `.githooks/pre-commit` to that plugin's `templates/githooks/pre-commit`, the hook leaves it out of the reviewed diff, and a commit made only of such files is skipped (`reviewer-kit SKIPPED: no reviewable staged changes`). A hand-edited copy, a runner from an earlier release that still holds the algorithm, or any doubt (no installed plugin, unreadable blob), keeps the file in review.
+
+**Hook ownership.** The hook template's second line carries a marker, `# omp-reviewer-kit hook v<version> body-sha256:<digest>`, whose digest covers every other line. A hook whose body still matches its marker is the kit's own, whatever release wrote it, so a plugin update replaces an older kit hook without anyone listing past versions. A hook whose body was edited under an unchanged marker is a conflict and is left alone; a hook from a newer release is never downgraded. Maintainers run `node scripts/stamp-hook.mjs` after every edit of `templates/githooks/pre-commit`; `npm run check` fails until the marker matches the body and the package version. In the kit repository itself the hook runs `scripts/run-review.mjs` directly.
 
 **Automatic propagation.** Setting up the hook remembers the repository as a small file in `~/.omp/review-kit-targets.json.d/` next to the owner-edited `~/.omp/review-kit-targets.json` (`OMP_REVIEW_KIT_TARGETS` overrides the path; both are read, so a hand-written list of repositories works too). Whenever a session starts, in OMP or in Claude Code, every registered repository whose hook or runner is stale is repaired within a few seconds, so a plugin update reaches all of them without running `sync-targets` by hand; the Claude Code SessionStart hook also repairs the current repository. Repositories without the hook, with a foreign hook, or with a newer runner are left alone, `tp-*` and the release checkout are never registered, and `OMP_REVIEW_KIT_AUTO_SYNC=0` switches it off. Repairing only rewrites the two vendored files; a repository that tracks them commits the change through its own hook, which skips a commit made only of unchanged vendored files. `/reviewer-kit:doctor` shows how many registered repositories are stale.
 
@@ -201,7 +204,10 @@ OMP_REVIEW_KIT_PREFLIGHT_TIMEOUT_MS # health-call timeout (default: 90000)
 OMP_REVIEW_KIT_MAX_TIME         # opt-in child-side bound via omp --max-time (default: off; 600|10m|1h shapes)
 OMP_REVIEW_KIT_SKILLS           # extra skill globs the review child lists via omp --skills, added to the always-included plugin skills (default extras: *reviewer-kit*,*review-kit*; all = full catalog)
 OMP_REVIEW_KIT_OMP              # path/name of the omp executable
-OMP_REVIEW_KIT_TELEMETRY=0      # disable run telemetry writes
+OMP_REVIEW_KIT_TELEMETRY=0      # disable run telemetry (runs.jsonl, last-run.json, run records)
+OMP_REVIEW_KIT_RUNS_DIR         # directory for per-run records (default: ~/.omp/review-kit-runs)
+OMP_REVIEW_KIT_RUN_TAG          # session tag recorded with a run (set by the Claude Code SessionStart hook)
+OMP_REVIEW_KIT_QUIET_MS         # silence before a running review is shown as quiet (default: 600000; never stopped)
 OMP_REVIEW_KIT_ASSERT_PATTERNS    # comma-separated regexes identifying assert statements (suspicion map)
 OMP_REVIEW_KIT_TEST_PATH_PATTERNS # comma-separated regexes identifying test file paths (suspicion map)
 OMP_REVIEW_KIT_EXECUTE=1          # enable opt-in pre-review check execution (default: 0)
@@ -245,7 +251,7 @@ Every run appends `review-run-event@1` records to
 `audit-reports/commit-reviews/runs.jsonl` (attempts, probes, PIDs, timings,
 verdict) and maintains `last-run.json` as the live status channel — the OMP
 status bar polls it while a commit is running, and `/reviewer-kit:status`
-surfaces the last run.
+surfaces the last run. Each run also writes its own record, `~/.omp/review-kit-runs/<runId>.json` (`review-run-record@1`), which the progress views read, so concurrent reviews never share a file.
 
 ```sh
 npm run analyze-review            # latest run: per-attempt timing + OMP log trace
@@ -255,6 +261,22 @@ node scripts/analyze-review-run.mjs --log ~/.omp/logs/omp.<date>.<pid>.log
 
 See `audit-reports/review-observability-domain-spec.md` for the domain spec and
 `.devin/skills/omp-review-incidents/SKILL.md` for the investigation playbook.
+
+### Review progress
+
+Several commit reviews can run at once, in one repository or across sessions. Each review writes its own run record, so none of them overwrites another's status. When a review starts, the hook prints its run id with the command that follows it, and how many other reviews of the repository are running. They never block the commit.
+
+```sh
+node scripts/review-progress.mjs                  # runs of this repository
+node scripts/review-progress.mjs --all            # runs of every repository in the records
+node scripts/review-progress.mjs --mine           # runs tagged with this Claude Code session
+node scripts/review-progress.mjs --run <runId>    # one run; add --follow to wait for its end
+node scripts/review-progress.mjs --commit <sha>   # the run that reviewed that commit
+```
+
+`--commit` matches on the commit's parent and its diff hash, so it reports nothing when no run reviewed exactly that diff. `--json` prints machine-readable output; `--commit` with no match prints `[]`. A record that changed within the quiet period and cannot be read yet ends a lookup with exit 3 instead of "not reviewed", and `--run` on a record that exists but cannot be read exits 3 too. `/reviewer-kit:progress` in OMP shows the active repository's runs. In Claude Code, the `review-progress` skill runs the same reader, and a session that starts in a repository with runs that need attention gets one line of context about them.
+
+A run is `active` while its review child logs or changes stage. It is `quiet` once `OMP_REVIEW_KIT_QUIET_MS` (default 600000) passes without activity while its runner still lives, and `orphaned` when its runner has exited without recording a result. Quiet runs are only reported: the kit never stops a review on a timer. For a quiet run the detail view prints the command that would stop the review process (`taskkill` on Windows, `kill` elsewhere) and says that nothing in the kit stops it. `--follow` exits 0 when the commit may go ahead (PASS or a skipped review), 1 when the review blocked, failed or was interrupted, and 3 while the run is still quiet or orphaned.
 
 ## Development & Testing
 

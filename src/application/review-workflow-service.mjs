@@ -148,6 +148,27 @@ export class ReviewWorkflowService {
   }
 
   /**
+   * Tells the committer which run to follow and how many other reviews of this
+   * repository are live. Concurrent reviews never block each other, so this only
+   * informs; a count that cannot be read counts as none. Without a recorded run
+   * (telemetry off) there is nothing to follow, so nothing is announced.
+   */
+  async #announceRun(repoRoot, runId, recorded) {
+    if (!recorded) return;
+    let others = 0;
+    try {
+      const counted = await this.#telemetryPort.countOtherLiveRuns?.({ repoRoot, runId });
+      others = Number.isInteger(counted) && counted > 0 ? counted : 0;
+    } catch {
+      others = 0;
+    }
+    this.#logger.error(`reviewer-kit run ${runId}: follow it with review-progress --run ${runId} --follow\n`);
+    if (others > 0) {
+      this.#logger.error(`reviewer-kit: ${others} other review(s) running in this repository; they do not block this commit\n`);
+    }
+  }
+
+  /**
    * Executes the complete review lifecycle.
    *
    * @param {{ cwd?: string }} [options]
@@ -209,11 +230,23 @@ export class ReviewWorkflowService {
       await rm(contextPackPath, { force: true }).catch(() => {});
     };
     const uninstall = installRunSignalGuard({ telemetry, runId, cleanup: cleanupSnapshots });
+    // HEAD at hook time is the commit's parent: `review-progress --commit` matches
+    // a commit to its run through it. Optional capability, never a review input.
+    let parentSha = null;
+    try {
+      parentSha = typeof this.#gitPort.getHeadSha === 'function' ? await this.#gitPort.getHeadSha(repoRoot) : null;
+    } catch {
+      parentSha = null;
+    }
     await telemetry.updateLastRun({
       state: 'started',
       runId,
       repoRoot,
       startedAt: new Date(startedAt).toISOString(),
+      progressAt: new Date(startedAt).toISOString(),
+      diffHash: diff.hash,
+      excludedPaths: [...(diff.excludedPaths ?? [])],
+      parentSha,
     }, { force: true });
 
     try {
@@ -236,9 +269,12 @@ export class ReviewWorkflowService {
         return ReviewExecutionResult.skipped();
       }
 
+      await this.#announceRun(repoRoot, runId, telemetry.recorded);
+
       await telemetry.record('diff_collected', {
         diffHash: diff.hash,
         diffBytes: diff.length,
+        excludedPaths: [...(diff.excludedPaths ?? [])],
       });
 
       // PASS reuse: an identical staged tree + diff that already passed review

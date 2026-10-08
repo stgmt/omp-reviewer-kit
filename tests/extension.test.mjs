@@ -120,7 +120,7 @@ describe('Feature: Native OMP Extension & Installer Service', () => {
       assert.match(hookContent, /run-review\.mjs/);
 
       const runnerContent = await readFile(path.join(repoDir, '.omp', 'review-kit', 'run-review.mjs'), 'utf8');
-      assert.match(runnerContent, /runReview/);
+      assert.equal(runnerContent, await readFile('templates/review-kit/run-review.mjs', 'utf8'));
 
       const configRes = git(['config', '--get', 'core.hooksPath']);
       assert.equal(configRes.stdout.trim(), '.githooks');
@@ -179,7 +179,7 @@ describe('Feature: Native OMP Extension & Installer Service', () => {
       assert.equal(ctx.getStatus(), 'reviewer-kit: active');
 
       const updatedRunner = await readFile(runnerPath, 'utf8');
-      assert.match(updatedRunner, /runReview/);
+      assert.equal(updatedRunner, await readFile('templates/review-kit/run-review.mjs', 'utf8'));
 
       const finalStatus = await installer.status(repoDir);
       assert.equal(finalStatus.state, 'active');
@@ -268,7 +268,7 @@ describe('Feature: Native OMP Extension & Installer Service', () => {
       assert.match(chainedContent, /run-review\.mjs/);
 
       const runnerContent = await readFile(path.join(repoDir, '.omp', 'review-kit', 'run-review.mjs'), 'utf8');
-      assert.match(runnerContent, /runReview/);
+      assert.equal(runnerContent, await readFile('templates/review-kit/run-review.mjs', 'utf8'));
       assert.equal(git(['config', '--get', 'core.hooksPath']).stdout.trim(), '.githooks');
 
       const status = await new PluginInstallerService().status(repoDir);

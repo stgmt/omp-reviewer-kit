@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { appendFile, chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { appendFile, chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import test from 'node:test';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -16,6 +16,8 @@ import {
   parseReviewProgress,
   sanitizeReviewerOutput,
 } from '../src/infra/omp-cli-reviewer-adapter.mjs';
+import { ReviewVerdict } from '../src/domain/review-verdict.mjs';
+import * as runnerBundle from '../scripts/run-review.mjs';
 
 const prompt = 'review this staged change';
 const cwd = process.cwd();
@@ -444,6 +446,26 @@ test('sanitizeReviewerOutput removes Working... lines and normalizes CRLF to LF'
   assert.equal(sanitizeReviewerOutput(null), '');
 });
 
+const MCP_WARNING = 'Warning: MCP server "context-mode" failed to connect: MCP subprocess closed stdout before responding; its tools are unavailable for this run.\n';
+
+test('sanitizeReviewerOutput drops the MCP connection warning in both implementations and keeps mid-line mentions', () => {
+  // Given
+  const mentioned = 'note: Warning: MCP server "context-mode" failed to connect\n';
+  const mixed = `Working...\n${MCP_WARNING}Warnings detected\n`;
+
+  for (const sanitize of [sanitizeReviewerOutput, runnerBundle.sanitizeReviewerOutput]) {
+    // When
+    const cleanWarning = sanitize(MCP_WARNING);
+    const cleanMixed = sanitize(mixed);
+    const cleanMention = sanitize(mentioned);
+
+    // Then
+    assert.equal(cleanWarning, '');
+    assert.equal(cleanMixed, 'Warnings detected\n');
+    assert.equal(cleanMention, mentioned);
+  }
+});
+
 test('S6: stderr "Working...\\n" + clean stdout with standalone marker => combined has marker and no "Working"', async () => {
   // Given
   const adapter = new OmpCliReviewerAdapter({
@@ -488,6 +510,42 @@ test('E9: literal "Working..." line inside STDOUT report body => preserved byte-
   assert.equal(review.status, 0);
   assert.equal(review.stdout, stdoutBody);
   assert.ok(review.combined.includes(stdoutBody));
+});
+
+test('MCP warning after a PASS verdict on stderr keeps the verdict PASS in both adapters', async () => {
+  // Given
+  const stdout = '### Review coverage\nAll tests passed.\nREVIEW_RESULT=PASS\n';
+
+  for (const [Adapter, Verdict] of [[OmpCliReviewerAdapter, ReviewVerdict], [runnerBundle.OmpCliReviewerAdapter, runnerBundle.ReviewVerdict]]) {
+    const adapter = new Adapter({
+      runner: async () => result(0, stdout, MCP_WARNING),
+    });
+
+    // When
+    const review = await adapter.executeReview({ prompt, cwd });
+
+    // Then
+    assert.equal(review.status, 0);
+    assert.equal(Verdict.fromOutput(review.combined).isPass(), true);
+    assert.doesNotMatch(review.combined, /MCP server/);
+  }
+});
+
+test('MCP warning after a BLOCK verdict on stderr keeps the explicit block in both adapters', async () => {
+  // Given
+  const stdout = '### Findings\nP1 the guard is missing\nREVIEW_RESULT=BLOCK\n';
+
+  for (const [Adapter, Verdict] of [[OmpCliReviewerAdapter, ReviewVerdict], [runnerBundle.OmpCliReviewerAdapter, runnerBundle.ReviewVerdict]]) {
+    const adapter = new Adapter({
+      runner: async () => result(0, stdout, MCP_WARNING),
+    });
+
+    // When
+    const review = await adapter.executeReview({ prompt, cwd });
+
+    // Then
+    assert.equal(Verdict.fromOutput(review.combined).reason, 'explicit_block');
+  }
 });
 
 test('isModelProviderFailure delegates marker detection to ReviewVerdict invariant', () => {
@@ -812,6 +870,45 @@ test('stage poller dedups repeated stages and never regresses on log truncation'
     assert.equal(stages.length, 1, 'no regression and no duplicate stage reports');
     assert.equal(stages[0].stage, 'synthesis');
     assert.equal(stages[0].completed, 3);
+  } finally {
+    if (previousCommand === undefined) delete process.env.OMP_REVIEW_KIT_OMP;
+    else process.env.OMP_REVIEW_KIT_OMP = previousCommand;
+    await rm(baseDir, { recursive: true, force: true });
+  }
+});
+test('stage poller forwards the child log time to onActivity while the review runs', async () => {
+  // Coverage gap h: childLogAt, the activity signal behind the quiet judgement, reaches
+  // telemetry only through this production poller; the adapter tests inject a mock runner.
+  const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-activity-poller-'));
+  const logDir = path.join(baseDir, 'logs');
+  await mkdir(logDir, { recursive: true });
+  const commandPath = path.join(baseDir, isWindows ? 'fake-omp.cmd' : 'fake-omp.sh');
+  const command = isWindows
+    ? '@echo off\nnode -e "setTimeout(() => {}, 1500)"\necho REVIEW_RESULT=PASS\nexit /b 0\n'
+    : '#!/bin/sh\nsleep 1.5\nprintf "REVIEW_RESULT=PASS\\n"\n';
+  const previousCommand = process.env.OMP_REVIEW_KIT_OMP;
+  process.env.OMP_REVIEW_KIT_OMP = commandPath;
+  try {
+    await writeFile(commandPath, command, 'utf8');
+    if (!isWindows) await chmod(commandPath, 0o755);
+
+    const activity = [];
+    let childPid = 0;
+    const runPromise = OmpCliReviewerAdapter.defaultRunner('probe', cwd, 15000, {
+      stagePollMs: 50,
+      logDir,
+      onSpawn: (pid) => { childPid = pid; },
+      onStage: () => {},
+      onActivity: (logAt) => { activity.push(logAt); },
+    });
+    while (!childPid) await new Promise((r) => setTimeout(r, 10));
+    const logFile = path.join(logDir, `omp.2099-01-01.${childPid}.log`);
+    await writeFile(logFile, `${JSON.stringify({ message: 'subagent launch timing', agent: 'review-context-scout' })}\n`, 'utf8');
+    const review = await runPromise;
+
+    assert.equal(review.status, 0, review.stderr);
+    const expectedAt = new Date((await stat(logFile)).mtimeMs).toISOString();
+    assert.ok(activity.includes(expectedAt), `the poller reports the log time ${expectedAt}; got ${JSON.stringify(activity)}`);
   } finally {
     if (previousCommand === undefined) delete process.env.OMP_REVIEW_KIT_OMP;
     else process.env.OMP_REVIEW_KIT_OMP = previousCommand;

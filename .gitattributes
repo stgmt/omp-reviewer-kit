@@ -1,2 +1,4 @@
 scripts/run-review.mjs text eol=lf
 .omp/review-kit/run-review.mjs text eol=lf
+templates/review-kit/run-review.mjs text eol=lf
+templates/githooks/pre-commit text eol=lf

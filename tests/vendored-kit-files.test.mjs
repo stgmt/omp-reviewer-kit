@@ -130,42 +130,37 @@ describe('Feature: the vendored kit files are not part of the reviewed diff', ()
         const calls = [];
         const adapter = new Adapter((args) => { calls.push(args); return Buffer.from(''); });
         await adapter.getStagedDiff('/repo');
-        assert.deepEqual(calls, [rawListing, ['diff', '--cached', '--binary', '--no-ext-diff', '--']]);
+        assert.deepEqual(calls, [rawListing, ['diff', '--cached', '--binary', '--no-ext-diff', '--no-color', '--src-prefix=a/', '--dst-prefix=b/', '--']]);
 
         calls.length = 0;
         await new Adapter((args) => { calls.push(args); return Buffer.from(''); }, { vendoredFiles: async () => new Map() }).getStagedDiff('/repo');
-        assert.deepEqual(calls, [rawListing, ['diff', '--cached', '--binary', '--no-ext-diff', '--']]);
+        assert.deepEqual(calls, [rawListing, ['diff', '--cached', '--binary', '--no-ext-diff', '--no-color', '--src-prefix=a/', '--dst-prefix=b/', '--']]);
       });
 
-      describe('the self-hosted runner mirror of the kit repository', () => {
+      describe('the runner copy of the kit repository is reviewed like any other file', () => {
+        // There is no self-hosted mirror: the repository's copy is the thin stub, and the algorithm is never copied into it.
         const SOURCE = 'scripts/run-review.mjs';
-        const MIRROR_BODY = '// omp-reviewer-kit runner v9.9.9\nexport const mirrored = 1;\n';
+        const ALGORITHM_BODY = '// omp-reviewer-kit runner v9.9.9\nexport const algorithm = 1;\n';
 
-        it('Given the mirror equals the staged source and no canonical copy exists, Then only the source is reviewed', async () => {
-          const repo = await makeRepo({ [SOURCE]: MIRROR_BODY, [RUNNER]: MIRROR_BODY, 'src/a.mjs': 'export const a = 1;\n' });
+        it('Given the runner copy equals the staged algorithm and no canonical copy exists, Then both stay in review', async () => {
+          const repo = await makeRepo({ [SOURCE]: ALGORITHM_BODY, [RUNNER]: ALGORITHM_BODY, 'src/a.mjs': 'export const a = 1;\n' });
           const diff = await new Adapter(undefined).getStagedDiff(repo);
-          assert.deepEqual(pathsOf(diff).sort(), [SOURCE, 'src/a.mjs']);
+          assert.deepEqual(pathsOf(diff).sort(), [RUNNER, SOURCE, 'src/a.mjs']);
         });
 
-        it('Given the mirror differs from the staged source, Then both stay in review', async () => {
-          const repo = await makeRepo({ [SOURCE]: MIRROR_BODY, [RUNNER]: `${MIRROR_BODY}export const extra = 2;\n` });
+        it('Given the runner copy differs from the staged algorithm, Then both stay in review', async () => {
+          const repo = await makeRepo({ [SOURCE]: ALGORITHM_BODY, [RUNNER]: `${ALGORITHM_BODY}export const extra = 2;\n` });
           const diff = await new Adapter(undefined).getStagedDiff(repo);
           assert.deepEqual(pathsOf(diff).sort(), [RUNNER, SOURCE]);
         });
 
-        it('Given the mirror differs from the source only by CRLF line endings, Then it is still exempted', async () => {
-          const repo = await makeRepo({ [SOURCE]: MIRROR_BODY, [RUNNER]: MIRROR_BODY.replace(/\n/g, '\r\n') });
-          const diff = await new Adapter(undefined).getStagedDiff(repo);
-          assert.deepEqual(pathsOf(diff), [SOURCE]);
-        });
-
-        it('Given the staged source is absent from the index, Then the mirror is reviewed', async () => {
-          const repo = await makeRepo({ [RUNNER]: MIRROR_BODY, 'src/a.mjs': 'export const a = 1;\n' });
+        it('Given the staged algorithm is absent from the index, Then the runner copy is reviewed', async () => {
+          const repo = await makeRepo({ [RUNNER]: ALGORITHM_BODY, 'src/a.mjs': 'export const a = 1;\n' });
           const diff = await new Adapter(undefined).getStagedDiff(repo);
           assert.deepEqual(pathsOf(diff).sort(), [RUNNER, 'src/a.mjs']);
         });
 
-        it('Given a symlink staged as the mirror whose target text equals the source, Then it stays in review', async () => {
+        it('Given a symlink staged as the runner copy whose target text equals the algorithm, Then it stays in review', async () => {
           const repo = await makeRepo({ [SOURCE]: 'target.txt' });
           await mkdir(path.join(repo, '.omp/review-kit'), { recursive: true });
           const blob = spawnSync('git', ['hash-object', '-w', '--stdin'], { cwd: repo, input: 'target.txt', encoding: 'utf8' }).stdout.trim();
@@ -174,14 +169,14 @@ describe('Feature: the vendored kit files are not part of the reviewed diff', ()
           assert.deepEqual(pathsOf(diff).sort(), [RUNNER, SOURCE]);
         });
 
-        it('Given a committed mirror modified to equal a modified source with the mode unchanged, Then only the source is reviewed', async () => {
+        it('Given a committed runner copy edited to equal an edited algorithm, Then both stay in review', async () => {
           const repo = await makeRepo({ [SOURCE]: 'old\n', [RUNNER]: 'old\n' });
           git(repo, 'commit', '-q', '-m', 'base');
-          await writeFile(path.join(repo, SOURCE), MIRROR_BODY);
-          await writeFile(path.join(repo, RUNNER), MIRROR_BODY);
+          await writeFile(path.join(repo, SOURCE), ALGORITHM_BODY);
+          await writeFile(path.join(repo, RUNNER), ALGORITHM_BODY);
           git(repo, 'add', '-A');
           const diff = await new Adapter(undefined).getStagedDiff(repo);
-          assert.deepEqual(pathsOf(diff), [SOURCE]);
+          assert.deepEqual(pathsOf(diff).sort(), [RUNNER, SOURCE]);
         });
       });
 
@@ -194,7 +189,7 @@ describe('Feature: the vendored kit files are not part of the reviewed diff', ()
           return Buffer.from('');
         }, { vendoredFiles: async () => canonical() });
         await adapter.getStagedDiff('/repo');
-        assert.deepEqual(calls.at(-1), ['diff', '--cached', '--binary', '--no-ext-diff', '--']);
+        assert.deepEqual(calls.at(-1), ['diff', '--cached', '--binary', '--no-ext-diff', '--no-color', '--src-prefix=a/', '--dst-prefix=b/', '--']);
       });
     });
   }
@@ -203,10 +198,10 @@ describe('Feature: the vendored kit files are not part of the reviewed diff', ()
 describe('Feature: canonical vendored files come from the installed kit plugin', () => {
   const makePlugin = async ({ name = 'omp-reviewer-kit', runner = RUNNER_BODY, hook = HOOK_BODY } = {}) => {
     const dir = await mkdtemp(path.join(tmpdir(), 'omp-plugin-'));
-    await mkdir(path.join(dir, 'scripts'), { recursive: true });
+    await mkdir(path.join(dir, 'templates', 'review-kit'), { recursive: true });
     await mkdir(path.join(dir, 'templates', 'githooks'), { recursive: true });
     await writeFile(path.join(dir, 'package.json'), JSON.stringify({ name, version: '9.9.9' }));
-    if (runner !== null) await writeFile(path.join(dir, 'scripts', 'run-review.mjs'), runner);
+    if (runner !== null) await writeFile(path.join(dir, 'templates', 'review-kit', 'run-review.mjs'), runner);
     if (hook !== null) await writeFile(path.join(dir, 'templates', 'githooks', 'pre-commit'), hook);
     return dir;
   };
@@ -214,7 +209,7 @@ describe('Feature: canonical vendored files come from the installed kit plugin',
 
   it('maps the vendored targets to the plugin sources', () => {
     assert.deepEqual(VENDORED_KIT_FILES.map((f) => [f.target, f.source]), [
-      [RUNNER, 'scripts/run-review.mjs'],
+      [RUNNER, 'templates/review-kit/run-review.mjs'],
       [HOOK, 'templates/githooks/pre-commit'],
     ]);
   });
@@ -230,10 +225,10 @@ describe('Feature: canonical vendored files come from the installed kit plugin',
       it('falls back to the OMP plugin directory under the home folder', async () => {
         const home = await emptyHome();
         const dir = path.join(home, '.omp', 'plugins', 'node_modules', 'omp-reviewer-kit');
-        await mkdir(path.join(dir, 'scripts'), { recursive: true });
+        await mkdir(path.join(dir, 'templates', 'review-kit'), { recursive: true });
         await mkdir(path.join(dir, 'templates', 'githooks'), { recursive: true });
         await writeFile(path.join(dir, 'package.json'), JSON.stringify({ name: 'omp-reviewer-kit' }));
-        await writeFile(path.join(dir, 'scripts', 'run-review.mjs'), RUNNER_BODY);
+        await writeFile(path.join(dir, 'templates', 'review-kit', 'run-review.mjs'), RUNNER_BODY);
         await writeFile(path.join(dir, 'templates', 'githooks', 'pre-commit'), HOOK_BODY);
         assert.equal((await load({ env: {}, home })).get(RUNNER), RUNNER_BODY);
       });
@@ -241,10 +236,10 @@ describe('Feature: canonical vendored files come from the installed kit plugin',
       it('keeps searching: a foreign or incomplete first candidate falls through to the plugin under the home folder', async () => {
         const home = await emptyHome();
         const dir = path.join(home, '.omp', 'plugins', 'node_modules', 'omp-reviewer-kit');
-        await mkdir(path.join(dir, 'scripts'), { recursive: true });
+        await mkdir(path.join(dir, 'templates', 'review-kit'), { recursive: true });
         await mkdir(path.join(dir, 'templates', 'githooks'), { recursive: true });
         await writeFile(path.join(dir, 'package.json'), JSON.stringify({ name: 'omp-reviewer-kit' }));
-        await writeFile(path.join(dir, 'scripts', 'run-review.mjs'), RUNNER_BODY);
+        await writeFile(path.join(dir, 'templates', 'review-kit', 'run-review.mjs'), RUNNER_BODY);
         await writeFile(path.join(dir, 'templates', 'githooks', 'pre-commit'), HOOK_BODY);
         for (const first of [await makePlugin({ name: 'other' }), await makePlugin({ hook: null }), path.join(home, 'absent')]) {
           const files = await load({ env: { OMP_REVIEW_KIT_PLUGIN_DIR: first }, home });
@@ -269,10 +264,10 @@ describe('Feature: a commit of only vendored kit files is skipped by the workflo
   for (const [label, runReview] of [['modular', modularRunReview], ['bundled', bundle.runReview]]) {
     it(`(${label}) Given identical vendored files only, Then the reviewer is not invoked and the run is skipped; a real change is still reviewed`, async () => {
       const dir = await mkdtemp(path.join(tmpdir(), 'omp-plugin-'));
-      await mkdir(path.join(dir, 'scripts'), { recursive: true });
+      await mkdir(path.join(dir, 'templates', 'review-kit'), { recursive: true });
       await mkdir(path.join(dir, 'templates', 'githooks'), { recursive: true });
       await writeFile(path.join(dir, 'package.json'), JSON.stringify({ name: 'omp-reviewer-kit' }));
-      await writeFile(path.join(dir, 'scripts', 'run-review.mjs'), RUNNER_BODY);
+      await writeFile(path.join(dir, 'templates', 'review-kit', 'run-review.mjs'), RUNNER_BODY);
       await writeFile(path.join(dir, 'templates', 'githooks', 'pre-commit'), HOOK_BODY);
       const vendoredFiles = () => loadCanonicalVendoredFiles({ env: { OMP_REVIEW_KIT_PLUGIN_DIR: dir }, home: dir });
       let invoked = 0;
@@ -296,10 +291,10 @@ describe('Feature: a commit of only vendored kit files is skipped by the workflo
 describe('Feature: the pre-commit entrypoint wires the canonical-file loader', () => {
   it('Given a commit of only identical vendored files, When scripts/run-review.mjs runs as the hook does, Then it exits 0 as skipped without calling OMP', async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'omp-plugin-'));
-    await mkdir(path.join(dir, 'scripts'), { recursive: true });
+    await mkdir(path.join(dir, 'templates', 'review-kit'), { recursive: true });
     await mkdir(path.join(dir, 'templates', 'githooks'), { recursive: true });
     await writeFile(path.join(dir, 'package.json'), JSON.stringify({ name: 'omp-reviewer-kit' }));
-    await writeFile(path.join(dir, 'scripts', 'run-review.mjs'), RUNNER_BODY);
+    await writeFile(path.join(dir, 'templates', 'review-kit', 'run-review.mjs'), RUNNER_BODY);
     await writeFile(path.join(dir, 'templates', 'githooks', 'pre-commit'), HOOK_BODY);
     const repo = await makeRepo({ [RUNNER]: RUNNER_BODY, [HOOK]: HOOK_BODY });
     const result = spawnSync(process.execPath, [path.resolve('scripts/run-review.mjs')], {

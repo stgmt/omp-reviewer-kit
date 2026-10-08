@@ -6,7 +6,6 @@ import test from 'node:test';
 
 import * as srcAdapter from '../src/infra/omp-cli-reviewer-adapter.mjs';
 import * as runnerAdapter from '../scripts/run-review.mjs';
-import * as pluginAdapter from '../.omp/review-kit/run-review.mjs';
 import { FileSystemSnapshotAdapter as SrcSnapshotAdapter } from '../src/infra/filesystem-snapshot-adapter.mjs';
 import { StagedSnapshot } from '../src/domain/staged-snapshot.mjs';
 import { ReviewPrompt } from '../src/domain/review-prompt.mjs';
@@ -43,13 +42,11 @@ async function writeTaskArtifact(sessionDir, text, { taskId = 'ReviewerKit', nes
 const ADAPTERS = [
   ['src adapter', srcAdapter],
   ['runner copy', runnerAdapter],
-  ['plugin copy', pluginAdapter],
 ];
 
 const SNAPSHOT_ADAPTERS = [
   ['src snapshot adapter', SrcSnapshotAdapter],
   ['runner copy snapshot adapter', runnerAdapter.FileSystemSnapshotAdapter],
-  ['plugin copy snapshot adapter', pluginAdapter.FileSystemSnapshotAdapter],
 ];
 
 function promptClassOf(mod) {

@@ -8,18 +8,9 @@ import path from 'node:path';
  * installed kit's canonical file is not reviewed.
  */
 export const VENDORED_KIT_FILES = Object.freeze([
-  Object.freeze({ target: '.omp/review-kit/run-review.mjs', source: 'scripts/run-review.mjs' }),
+  Object.freeze({ target: '.omp/review-kit/run-review.mjs', source: 'templates/review-kit/run-review.mjs' }),
   Object.freeze({ target: '.githooks/pre-commit', source: 'templates/githooks/pre-commit' }),
 ]);
-
-/**
- * The kit repository keeps a self-hosted copy of its own runner next to the
- * source. When that copy equals the staged source, only the source is reviewed.
- */
-export const VENDORED_RUNNER_MIRROR = Object.freeze({
-  target: '.omp/review-kit/run-review.mjs',
-  source: 'scripts/run-review.mjs',
-});
 
 /**
  * Reads the canonical vendored files from the installed OMP plugin

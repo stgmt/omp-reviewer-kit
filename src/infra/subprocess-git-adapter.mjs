@@ -2,7 +2,6 @@ import { spawn } from 'node:child_process';
 import { GitPort } from '../application/ports.mjs';
 import { DiffIdentity } from '../domain/diff-identity.mjs';
 import { StagedSnapshot } from '../domain/staged-snapshot.mjs';
-import { VENDORED_RUNNER_MIRROR } from './vendored-kit-files.mjs';
 
 /**
  * Infrastructure adapter executing Git via child processes.
@@ -74,20 +73,19 @@ export class SubprocessGitAdapter extends GitPort {
    */
   async getStagedDiff(repoRoot) {
     const excluded = await this.#identicalVendoredPaths(repoRoot);
-    const args = ['diff', '--cached', '--binary', '--no-ext-diff', '--'];
+    // Pinned: the review diff must not depend on the committer's git configuration.
+    // diff.mnemonicPrefix renames the a/ and b/ prefixes, color.diff adds escape codes.
+    const args = ['diff', '--cached', '--binary', '--no-ext-diff', '--no-color', '--src-prefix=a/', '--dst-prefix=b/', '--'];
     if (excluded.length > 0) args.push('.', ...excluded.map((p) => `:(exclude,literal)${p}`));
     const output = await this.#runner(args, repoRoot);
-    return DiffIdentity.fromBuffer(output);
+    return DiffIdentity.fromBuffer(output, { excludedPaths: excluded });
   }
 
   /**
-   * Staged vendored kit files (runner, hook) that are byte-identical to the
+   * Staged vendored kit files (runner stub, hook) that are byte-identical to the
    * installed kit's canonical copy: they are the review plugin, not the
-   * committer's work, so the review diff leaves them out. In the kit repository
-   * itself the self-hosted runner is a byte-identical mirror of the staged
-   * `scripts/run-review.mjs`, which stays in review, so the mirror is left out
-   * too. Any doubt (no canonical copy, unreadable blob, different bytes) keeps
-   * the file in review.
+   * committer's work, so the review diff leaves them out. Any doubt (no
+   * canonical copy, unreadable blob, different bytes) keeps the file in review.
    *
    * @param {string} repoRoot
    * @returns {Promise<string[]>}
@@ -112,8 +110,7 @@ export class SubprocessGitAdapter extends GitPort {
       const meta = /^:(\d{6}) (\d{6}) [0-9a-f]+ [0-9a-f]+ ([A-Z])\d*$/.exec(fields[i]);
       const name = fields[i + 1];
       if (!meta) continue;
-      const isMirror = name === VENDORED_RUNNER_MIRROR.target;
-      if (!canonical.has(name) && !isMirror) continue;
+      if (!canonical.has(name)) continue;
       // A mode change (the hook losing its executable bit, a symlink in place
       // of the file) changes behaviour even when the bytes are canonical.
       const [, oldMode, newMode, status] = meta;
@@ -121,11 +118,7 @@ export class SubprocessGitAdapter extends GitPort {
       if (!modeOk) continue;
       try {
         const staged = normalize(await stagedText(name));
-        if (canonical.has(name) && staged === normalize(canonical.get(name))) {
-          identical.push(name);
-        } else if (isMirror && staged === normalize(await stagedText(VENDORED_RUNNER_MIRROR.source))) {
-          identical.push(name);
-        }
+        if (staged === normalize(canonical.get(name))) identical.push(name);
       } catch {
         // unreadable staged blob stays in review
       }
@@ -140,6 +133,22 @@ export class SubprocessGitAdapter extends GitPort {
   async getIndexTree(repoRoot) {
     try {
       const id = (await this.#runner(['write-tree'], repoRoot)).toString('utf8').trim();
+      return /^[0-9a-f]{40}$|^[0-9a-f]{64}$/.test(id) ? id : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * HEAD commit id, or null on an unborn branch. The commit under review is
+   * HEAD's child, so this is the parent that `review-progress --commit` matches on.
+   *
+   * @param {string} repoRoot
+   * @returns {Promise<string|null>}
+   */
+  async getHeadSha(repoRoot) {
+    try {
+      const id = (await this.#runner(['rev-parse', '--verify', '--quiet', 'HEAD'], repoRoot)).toString('utf8').trim();
       return /^[0-9a-f]{40}$|^[0-9a-f]{64}$/.test(id) ? id : null;
     } catch {
       return null;

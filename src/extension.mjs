@@ -3,6 +3,15 @@ import path from 'node:path';
 import { PluginInstallerService } from './application/installer-service.mjs';
 import { SlopPrompt } from './domain/slop-prompt.mjs';
 import { parseReviewProgress } from './infra/omp-cli-reviewer-adapter.mjs';
+import { resolveRunsDir } from './infra/filesystem-telemetry-adapter.mjs';
+import {
+  formatRunDetail,
+  formatRunTable,
+  quietThresholdMs,
+  readRunRecords,
+  selectRuns,
+  summarizeRun,
+} from './infra/review-run-records.mjs';
 
 const REVIEW_STATUS_KEY = 'reviewer-kit';
 const COMMIT_VALUE_OPTIONS = new Set([
@@ -271,6 +280,7 @@ function finalReviewStatus(output, isError) {
  * - Subscribes to `session_start` for non-intrusive automatic hook setup in Git repositories.
  * - Registers `/reviewer-kit:setup` for explicit hook initialization.
  * - Registers `/reviewer-kit:status` for inspecting review gate state.
+ * - Registers `/reviewer-kit:progress` for the review runs of the active project (read-only).
  * - Registers `/reviewer-kit:doctor` for running environment diagnostics.
  *
  * @param {import('@oh-my-pi/pi-coding-agent').ExtensionAPI} pi
@@ -447,6 +457,34 @@ export default function initExtension(pi) {
         ctx.ui.notify(lines.join('\n'), notifyLevel);
       } catch (err) {
         ctx.ui.notify(`reviewer-kit status check failed: ${err instanceof Error ? err.message : String(err)}`, 'error');
+      }
+    },
+  });
+
+  pi.registerCommand('reviewer-kit:progress', {
+    description: 'List review runs of the active project: running, quiet, orphaned and recent verdicts',
+    handler: async (_args, ctx) => {
+      try {
+        const info = await installer.status(ctx.cwd);
+        if (!info.isGitRepo) {
+          ctx.ui.notify('reviewer-kit: active directory is not a Git repository.', 'warning');
+          return;
+        }
+        const quietMs = quietThresholdMs(process.env);
+        const records = await readRunRecords(resolveRunsDir(process.env));
+        const summaries = selectRuns(records, { repoRoot: info.repoRoot }).map((record) => summarizeRun(record, { quietMs }));
+        if (summaries.length === 0) {
+          ctx.ui.notify('reviewer-kit: no review runs recorded for this project.', 'info');
+          return;
+        }
+        // The kit never stops a run; quiet and orphaned runs are listed so a person can decide.
+        const open = summaries.filter((summary) => summary.classification !== 'done');
+        const lines = [formatRunTable(summaries.slice(0, 10))];
+        for (const summary of open) lines.push('', formatRunDetail(summary));
+        const level = open.some((summary) => summary.classification !== 'active') ? 'warning' : 'info';
+        ctx.ui.notify(lines.join('\n'), level);
+      } catch (err) {
+        ctx.ui.notify(`reviewer-kit progress check failed: ${err instanceof Error ? err.message : String(err)}`, 'error');
       }
     },
   });

@@ -62,6 +62,16 @@ export class GitPort {
   getIndexTree(repoRoot) {
     throw new Error('GitPort.getIndexTree must be implemented');
   }
+
+  /**
+   * HEAD commit id, or null on an unborn branch. Optional capability.
+   *
+   * @param {string} repoRoot
+   * @returns {Promise<string|null>|string|null}
+   */
+  getHeadSha(repoRoot) {
+    throw new Error('GitPort.getHeadSha must be implemented');
+  }
 }
 
 /**

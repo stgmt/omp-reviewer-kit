@@ -34,7 +34,7 @@ test('sync-targets reports drift read-only, applies on request, and skips protec
 
     const applied = await syncTarget(repo, { apply: true });
     assert.equal(applied.status, 'synced');
-    assert.equal(await readFile(path.join(repo, '.omp', 'review-kit', 'run-review.mjs'), 'utf8'), await readFile('scripts/run-review.mjs', 'utf8'));
+    assert.equal(await readFile(path.join(repo, '.omp', 'review-kit', 'run-review.mjs'), 'utf8'), await readFile('templates/review-kit/run-review.mjs', 'utf8'));
     assert.equal((await syncTarget(repo)).status, 'synced');
 
     assert.ok(isSkippedTarget('E:/repos/tp-foo'));
@@ -63,7 +63,7 @@ test('check-layout requires every Claude plugin and sync file and passes when al
   const source = await readFile('scripts/check-layout.mjs', 'utf8');
   const listed = (start) => { const from = source.indexOf(start); return [...source.slice(from, source.indexOf('];', from)).matchAll(/'([^']+)'/g)].map((m) => m[1]); };
   const required = [...listed('const required'), ...listed('const CLAUDE_PLUGIN_FILES').map((file) => 'claude-plugin/' + file)];
-  const mustBeListed = ['.claude-plugin/marketplace.json', 'claude-plugin/.claude-plugin/plugin.json', 'claude-plugin/commands/review.md', 'claude-plugin/scripts/bridge.mjs', 'src/domain/runner-version.mjs', 'src/infra/vendored-kit-files.mjs', 'scripts/sync-targets.mjs'];
+  const mustBeListed = ['.claude-plugin/marketplace.json', 'claude-plugin/.claude-plugin/plugin.json', 'claude-plugin/commands/review.md', 'claude-plugin/scripts/bridge.mjs', 'src/domain/runner-version.mjs', 'src/infra/vendored-kit-files.mjs', 'scripts/sync-targets.mjs', 'templates/review-kit/run-review.mjs'];
   const dir = await mkdtemp(path.join(tmpdir(), 'omp-layout-'));
   try {
     for (const file of required) {
@@ -71,7 +71,7 @@ test('check-layout requires every Claude plugin and sync file and passes when al
       await writeFile(path.join(dir, file), await readFile(file));
     }
     await mkdir(path.join(dir, '.omp', 'review-kit'), { recursive: true });
-    await writeFile(path.join(dir, '.omp', 'review-kit', 'run-review.mjs'), await readFile('scripts/run-review.mjs'));
+    await writeFile(path.join(dir, '.omp', 'review-kit', 'run-review.mjs'), await readFile('templates/review-kit/run-review.mjs'));
     const check = () => spawnSync(process.execPath, [path.resolve('scripts/check-layout.mjs')], { cwd: dir, encoding: 'utf8' });
     assert.equal(check().status, 0, check().stderr);
     for (const file of mustBeListed) {
