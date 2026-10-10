@@ -7,7 +7,7 @@ import {
   resolveRunsDir,
 } from './filesystem-telemetry-adapter.mjs';
 
-/** A live run silent for longer than this is reported as quiet. It is never stopped. */
+/** A live run silent for longer than this is reported as quiet. It is never stopped for being quiet. */
 export const DEFAULT_QUIET_MS = 10 * 60 * 1000;
 
 const RUN_ID_PATTERN = /^[A-Za-z0-9._-]{1,200}$/;
@@ -132,7 +132,7 @@ export function lastActivityMs(record) {
 
 /**
  * How a run looks right now. Read-only: a quiet or orphaned run is reported,
- * never stopped or changed.
+ * never stopped or changed here.
  *
  * @param {object} record
  * @param {{ now?: number, quietMs?: number, liveness?: (pid: unknown) => string }} [options]
@@ -282,7 +282,9 @@ export function formatRunTable(summaries, { withRepo = false } = {}) {
 
 /**
  * Multi-line view of one run. Quiet and orphaned runs get the facts a person
- * needs to decide what to do; the kit itself never stops anything.
+ * needs to decide what to do; the kit never stops a quiet or orphaned run. A
+ * run on an older runner is stopped when a newer plugin starts (see
+ * superseded-run-stopper).
  *
  * @param {object} summary from summarizeRun
  * @param {{ followCommand?: string }} [options] command that follows this run

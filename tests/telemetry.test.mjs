@@ -1,10 +1,14 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, stat } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { cp, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { promisify } from 'node:util';
 
-import { runReview } from '../scripts/run-review.mjs';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+import { FileSystemTelemetryAdapter as RunnerTelemetryAdapter, runReview } from '../scripts/run-review.mjs';
 import {
   FileSystemTelemetryAdapter,
   NullTelemetryAdapter,
@@ -229,6 +233,29 @@ test('FileSystemTelemetryAdapter writes into the report directory', async () => 
   assert.equal(lastRun.runId, 'test-run-1');
 });
 
+test('Given the runner marker, When the src adapter and the runner mirror each write a run record, Then both carry runnerVersion equal to the marker', async () => {
+  const marker = /^\/\/ omp-reviewer-kit runner v(\d+\.\d+\.\d+)\r?\n/.exec(
+    await readFile(fileURLToPath(new URL('../scripts/run-review.mjs', import.meta.url)), 'utf8'),
+  );
+  assert.ok(marker, 'the runner starts with its version marker');
+  const savedRunsDir = process.env.OMP_REVIEW_KIT_RUNS_DIR;
+  const runsDir = await mkdtemp(path.join(tmpdir(), 'omp-telemetry-runs-'));
+  process.env.OMP_REVIEW_KIT_RUNS_DIR = runsDir;
+  try {
+    const root = await makeRoot();
+    for (const [name, Adapter] of [['src', FileSystemTelemetryAdapter], ['runner', RunnerTelemetryAdapter]]) {
+      const sink = new Adapter().forRun({ repoRoot: root, runId: `version-${name}` });
+      await sink.updateLastRun({ state: 'reviewing' }, { force: true });
+      const written = JSON.parse(await readFile(path.join(runsDir, `version-${name}.json`), 'utf8'));
+      assert.equal(written.runnerVersion, marker[1], `${name} record carries the runner version`);
+      assert.equal(written.runnerPid, process.pid);
+    }
+  } finally {
+    if (savedRunsDir === undefined) delete process.env.OMP_REVIEW_KIT_RUNS_DIR;
+    else process.env.OMP_REVIEW_KIT_RUNS_DIR = savedRunsDir;
+  }
+});
+
 test('throttled last-run updates can be forced', async () => {
   const root = await makeRoot();
   const adapter = new FileSystemTelemetryAdapter();
@@ -378,3 +405,161 @@ for (const state of ['started', 'executing', 'probing', 'reemitting']) {
     assert.equal(lastRun.runnerPid, process.pid);
   });
 }
+
+const execFileAsync = promisify(execFile);
+const RUNNER_SOURCE_FILE = fileURLToPath(new URL('../scripts/run-review.mjs', import.meta.url));
+const SRC_DIR = fileURLToPath(new URL('../src', import.meta.url));
+
+/** Copies src/ into a throw-away plugin folder, so the adapter's sibling scripts/run-review.mjs is under the test's control. */
+async function makeSiblingPlugin() {
+  const pluginRoot = await mkdtemp(path.join(tmpdir(), 'omp-telemetry-plugin-'));
+  await cp(SRC_DIR, path.join(pluginRoot, 'src'), { recursive: true });
+  return {
+    pluginRoot,
+    adapterUrl: pathToFileURL(path.join(pluginRoot, 'src', 'infra', 'filesystem-telemetry-adapter.mjs')).href,
+    runnerFile: path.join(pluginRoot, 'scripts', 'run-review.mjs'),
+  };
+}
+
+/**
+ * Runs `script` as an ES module in a fresh node process (siblingRunnerVersion caches
+ * for the process lifetime) and returns the JSON it prints.
+ */
+async function runChild(script, args, runsDir) {
+  const scriptDir = await mkdtemp(path.join(tmpdir(), 'omp-telemetry-child-'));
+  const scriptFile = path.join(scriptDir, 'child.mjs');
+  await writeFile(scriptFile, script, 'utf8');
+  const env = { ...process.env, OMP_REVIEW_KIT_RUNS_DIR: runsDir };
+  delete env.OMP_REVIEW_KIT_TELEMETRY;
+  delete env.OMP_REVIEW_KIT_TELEMETRY_DIR;
+  const { stdout } = await execFileAsync(process.execPath, [scriptFile, ...args], { env });
+  return JSON.parse(stdout);
+}
+
+const WRITE_RECORD_CHILD = `
+const [adapterUrl, repoRoot, runId] = process.argv.slice(2);
+const { FileSystemTelemetryAdapter } = await import(adapterUrl);
+const sink = new FileSystemTelemetryAdapter().forRun({ repoRoot, runId });
+await sink.record('run_started', {});
+await sink.updateLastRun({ state: 'reviewing' }, { force: true });
+console.log(JSON.stringify({ done: true }));
+`;
+
+const SIBLING_VERSION_CHILD = `
+import { mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+const [adapterUrl, runnerFile, laterContent] = process.argv.slice(2);
+const { siblingRunnerVersion } = await import(adapterUrl);
+const first = siblingRunnerVersion();
+const second = siblingRunnerVersion();
+await mkdir(path.dirname(runnerFile), { recursive: true });
+await writeFile(runnerFile, laterContent, 'utf8');
+console.log(JSON.stringify({ first, second, third: siblingRunnerVersion() }));
+`;
+
+test('Given a sibling runner without a version marker, When the src adapter writes a run record, Then the record has no runnerVersion key', async () => {
+  // Given a plugin whose scripts/run-review.mjs has no marker on its first line
+  const { adapterUrl, runnerFile } = await makeSiblingPlugin();
+  await mkdir(path.dirname(runnerFile), { recursive: true });
+  await writeFile(runnerFile, '// a runner from before version markers\nexport {};\n', 'utf8');
+  const runsDir = await mkdtemp(path.join(tmpdir(), 'omp-telemetry-runs-'));
+  const root = await makeRoot();
+
+  // When a fresh process writes a run record through that copy of the adapter
+  await runChild(WRITE_RECORD_CHILD, [adapterUrl, root, 'sibling-no-marker'], runsDir);
+
+  // Then the record carries the runner pid but no runnerVersion key at all
+  const written = JSON.parse(await readFile(path.join(runsDir, 'sibling-no-marker.json'), 'utf8'));
+  assert.equal(written.runId, 'sibling-no-marker');
+  assert.equal(typeof written.runnerPid, 'number');
+  assert.equal(Object.hasOwn(written, 'runnerVersion'), false, 'no marker means no runnerVersion key');
+});
+
+for (const [label, initial] of [
+  ['the sibling runner file is missing', null],
+  ['the sibling runner file has no version marker', '// not a marker\nexport {};\n'],
+]) {
+  test(`Given ${label}, When siblingRunnerVersion is called and a marker file appears later, Then the null stays cached for the process lifetime`, async () => {
+    // Given a plugin whose sibling runner cannot yield a version
+    const { adapterUrl, runnerFile } = await makeSiblingPlugin();
+    if (initial !== null) {
+      await mkdir(path.dirname(runnerFile), { recursive: true });
+      await writeFile(runnerFile, initial, 'utf8');
+    }
+    const runsDir = await mkdtemp(path.join(tmpdir(), 'omp-telemetry-runs-'));
+
+    // When it is asked twice, the file then gains a valid marker, and it is asked again
+    const result = await runChild(
+      SIBLING_VERSION_CHILD,
+      [adapterUrl, runnerFile, '// omp-reviewer-kit runner v0.20.1\nexport {};\n'],
+      runsDir,
+    );
+
+    // Then every answer is null: the first outcome was cached, not re-read
+    assert.deepEqual(result, { first: null, second: null, third: null });
+  });
+}
+
+test('Given a sibling runner with a marker, When siblingRunnerVersion is called, Then it returns the marker version', async () => {
+  // Given a plugin whose runner starts with the marker
+  const { adapterUrl, runnerFile } = await makeSiblingPlugin();
+  await mkdir(path.dirname(runnerFile), { recursive: true });
+  await writeFile(runnerFile, '// omp-reviewer-kit runner v1.2.3\nexport {};\n', 'utf8');
+  const runsDir = await mkdtemp(path.join(tmpdir(), 'omp-telemetry-runs-'));
+
+  // When a fresh process asks for the version
+  const result = await runChild(SIBLING_VERSION_CHILD, [adapterUrl, runnerFile, '// changed\n'], runsDir);
+
+  // Then it is the marker's x.y.z, and the later edit does not change it
+  assert.deepEqual(result, { first: '1.2.3', second: '1.2.3', third: '1.2.3' });
+});
+
+/** Imports a private copy of the runner (its own module instance, so its version cache is fresh). */
+async function importRunnerCopy({ dropFirstLine }) {
+  const dir = await mkdtemp(path.join(tmpdir(), 'omp-telemetry-runner-'));
+  const source = await readFile(RUNNER_SOURCE_FILE, 'utf8');
+  const file = path.join(dir, 'plugin', 'scripts', 'run-review.mjs');
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(file, dropFirstLine ? source.slice(source.indexOf('\n') + 1) : source, 'utf8');
+  return { file, mod: await import(pathToFileURL(file).href) };
+}
+
+async function writeRunnerRecord(RunnerAdapter, runId) {
+  const savedRunsDir = process.env.OMP_REVIEW_KIT_RUNS_DIR;
+  const runsDir = await mkdtemp(path.join(tmpdir(), 'omp-telemetry-runs-'));
+  process.env.OMP_REVIEW_KIT_RUNS_DIR = runsDir;
+  try {
+    const sink = new RunnerAdapter().forRun({ repoRoot: await makeRoot(), runId });
+    await sink.updateLastRun({ state: 'reviewing' }, { force: true });
+    return JSON.parse(await readFile(path.join(runsDir, `${runId}.json`), 'utf8'));
+  } finally {
+    if (savedRunsDir === undefined) delete process.env.OMP_REVIEW_KIT_RUNS_DIR;
+    else process.env.OMP_REVIEW_KIT_RUNS_DIR = savedRunsDir;
+  }
+}
+
+test('Given a runner copy whose first line has no marker, When it writes a run record, Then the record has no runnerVersion property', async () => {
+  // Given a runner copy without its marker line
+  const { mod } = await importRunnerCopy({ dropFirstLine: true });
+
+  // When it builds its telemetry and writes a record
+  const written = await writeRunnerRecord(mod.FileSystemTelemetryAdapter, 'runner-no-marker');
+
+  // Then no runnerVersion is recorded, not even a placeholder
+  assert.equal(written.runId, 'runner-no-marker');
+  assert.equal(written.runnerPid, process.pid);
+  assert.equal(Object.hasOwn(written, 'runnerVersion'), false, 'no marker means no runnerVersion property');
+});
+
+test('Given a runner copy whose own file cannot be read, When it writes a run record, Then the record has no runnerVersion property', async () => {
+  // Given a runner copy that is imported and then removed from disk
+  const { file, mod } = await importRunnerCopy({ dropFirstLine: false });
+  await rm(file);
+
+  // When it builds its telemetry (the first read of its own source fails) and writes a record
+  const written = await writeRunnerRecord(mod.FileSystemTelemetryAdapter, 'runner-unreadable');
+
+  // Then no runnerVersion is recorded, not even a placeholder
+  assert.equal(written.runId, 'runner-unreadable');
+  assert.equal(Object.hasOwn(written, 'runnerVersion'), false, 'an unreadable source means no runnerVersion property');
+});

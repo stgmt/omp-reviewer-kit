@@ -1,12 +1,17 @@
-// Runs the test suite (`npm test`) with review run records kept in a throwaway
-// folder, so test runs never add records to the per-user runs directory.
+// Runs the test suite (`npm test`) with review run records and the target registry kept in a
+// throwaway folder, so test runs never add records to the per-user runs directory or heal and
+// register the user's repositories.
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 const runsDir = mkdtempSync(path.join(tmpdir(), 'omp-test-runs-'));
-const env = { ...process.env, OMP_REVIEW_KIT_RUNS_DIR: runsDir };
+const env = {
+  ...process.env,
+  OMP_REVIEW_KIT_RUNS_DIR: runsDir,
+  OMP_REVIEW_KIT_TARGETS: path.join(runsDir, 'review-kit-targets.json'),
+};
 // Set by an outer test run; a runner that inherits it exits 0 even when a test fails.
 delete env.NODE_TEST_CONTEXT;
 try {

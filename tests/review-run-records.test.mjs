@@ -717,14 +717,14 @@ test('Given more finished records than one sweep examines, When a run starts, Th
   assert.equal(names.length, 2, 'one finished record survives the sweep, next to the new run record');
 }));
 
-test('Given the mutation gate, When a mutant runs its suite, Then the suite keeps its run records inside the temp copy', async () => {
+test('Given the mutation gate, When a mutant runs its suite, Then the suite keeps its run records and target registry inside the temp copy', async () => {
   // Matched across a real line break: the gate's mutant table quotes this line with an
   // escaped \n, so a plain substring match would pass on the table entry itself.
   const gate = await readFile(new URL('../scripts/run-mutation-tests.mjs', import.meta.url), 'utf8');
   assert.match(
     gate,
-    /timeout: 15_000,\s+env: \{ \.\.\.process\.env, OMP_REVIEW_KIT_RUNS_DIR: path\.join\(tempDir, 'runs'\) \},/,
-    'the mutant spawn env points the runs directory into the temp copy',
+    /timeout: 120_000,\s+env: \{ \.\.\.process\.env, OMP_REVIEW_KIT_RUNS_DIR: path\.join\(tempDir, 'runs'\), OMP_REVIEW_KIT_TARGETS: path\.join\(tempDir, 'review-kit-targets\.json'\) \},/,
+    'the mutant spawn env points the runs directory and the target registry into the temp copy',
   );
 });
 

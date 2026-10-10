@@ -1,10 +1,11 @@
-// omp-reviewer-kit runner v0.20.0
+// omp-reviewer-kit runner v0.20.1
 import { createHash, randomBytes } from 'node:crypto';
 import { appendFile, chmod, lstat, mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { spawn, spawnSync } from 'node:child_process';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 function unquoteGitPath(quoted) {
   const inner = quoted.slice(1, -1);
@@ -5534,6 +5535,26 @@ const RUN_RECORD_PRUNE_LIMIT = 2_000;
 /** States that never change again: a record in one of them has finished. */
 export const TERMINAL_RUN_STATES = new Set(['passed', 'blocked', 'failed', 'skipped', 'interrupted']);
 
+let ownRunnerVersionCache;
+
+/**
+ * The 'x.y.z' of the marker on the first line of this very file, so the run
+ * record can never name a version other than the one that wrote it.
+ *
+ * @returns {string|null} null when the source cannot be read
+ */
+function ownRunnerVersion() {
+  if (ownRunnerVersionCache !== undefined) return ownRunnerVersionCache;
+  try {
+    const head = readFileSync(fileURLToPath(import.meta.url), 'utf8').slice(0, 120);
+    const match = /^\/\/ omp-reviewer-kit runner v(\d+\.\d+\.\d+)\r?\n/.exec(head);
+    ownRunnerVersionCache = match ? match[1] : null;
+  } catch {
+    ownRunnerVersionCache = null;
+  }
+  return ownRunnerVersionCache;
+}
+
 /**
  * Non-terminal last-run states: a live run must keep the recorded pid alive.
  * Kept in sync with LIVE_LAST_RUN_STATES in
@@ -5849,7 +5870,7 @@ export class FileSystemTelemetryAdapter extends TelemetryPort {
       reportDir,
       runsDir: resolveRunsDir(),
       runId,
-      base: { repoRoot, runnerPid: process.pid, tag: runTagFromEnv() },
+      base: { repoRoot, runnerPid: process.pid, runnerVersion: ownRunnerVersion() ?? undefined, tag: runTagFromEnv() },
     });
   }
 

@@ -19,6 +19,6 @@ Run the reader through the plugin shell:
 Rules:
 1. Start with `--mine`. If it lists no runs, say so. Do not guess a runId.
 2. Do not start a second commit in a repository while one of this session's runs there is still active. Ask the user first.
-3. A quiet run may still be working. An orphaned run has no runner process left and did not complete. Report the runId, runner pid, review pid and the OMP log folder (`~/.omp/logs`). Never stop a process and never restart a review yourself; the user decides.
+3. A quiet run may still be working. An orphaned run has no runner process left and did not complete. Report the runId, runner pid, review pid and the OMP log folder (`~/.omp/logs`). Never stop a process and never restart a review yourself; the user decides. A quiet run is never stopped by a timer. Only a newer plugin stops live runs on an older runner (at session start, or `scripts/stop-superseded-runs.mjs`); the user then commits again.
 4. For a blocked commit, report its verdict and the report path from the run record. The findings are in that report.
 5. Keep the answer short: state, stage, time silent, verdict.

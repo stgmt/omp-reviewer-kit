@@ -1,5 +1,5 @@
 #!/bin/sh
-# omp-reviewer-kit hook v0.20.0 body-sha256:8f92aac0641246e2b3682d2be130fc9a76ef25b014fe69972ccb8144470a01d8
+# omp-reviewer-kit hook v0.20.1 body-sha256:8f92aac0641246e2b3682d2be130fc9a76ef25b014fe69972ccb8144470a01d8
 set -eu
 
 hook_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)

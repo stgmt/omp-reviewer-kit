@@ -53,6 +53,23 @@ for (const name of ['infra/stage-transcript-stats.mjs', 'domain/context-pack.mjs
   });
 }
 
+for (const file of ['src/domain/superseded-runs.mjs', 'src/infra/process-table.mjs', 'src/application/superseded-run-stopper.mjs', 'scripts/stop-superseded-runs.mjs']) {
+  test(`check-layout rejects a tree that lacks ${file}`, async () => {
+    // Given: the consistent tree the other cases build
+    const fx = await layoutFixture();
+    try {
+      // When: the file is removed (force: a gate that stopped requiring it also stops copying it, so the removal must not be the failure)
+      await rm(path.join(fx.dir, ...file.split('/')), { force: true });
+      const result = fx.check();
+      // Then: the gate fails and names the file
+      assert.notEqual(result.status, 0);
+      assert.match(failure(result), new RegExp(file.replace(/[./]/g, (char) => (char === '/' ? '[\\\\/]' : '\\.'))));
+    } finally {
+      await fx.cleanup();
+    }
+  });
+}
+
 test('check-layout rejects a tree that lacks scripts/review-progress.mjs', async () => {
   const fx = await layoutFixture();
   try {
@@ -81,12 +98,28 @@ test('check-layout rejects a stub without its marker line', async () => {
   const fx = await layoutFixture();
   try {
     // Both copies change together, so the identity check passes and the stub's own marker guard is what fails.
-    const unmarked = (text) => text.replace('// omp-reviewer-kit runner stub', '// another runner');
+    const unmarked = (text) => text.replace('// omp-reviewer-kit runner v1.0.0', '// another runner');
     await fx.edit('templates/review-kit/run-review.mjs', unmarked);
     await fx.edit('.omp/review-kit/run-review.mjs', unmarked);
     const result = fx.check();
     assert.notEqual(result.status, 0);
     assert.match(failure(result), /its marker line/);
+  } finally {
+    await fx.cleanup();
+  }
+});
+
+test('check-layout rejects a stub whose marker does not outrank the algorithm', async () => {
+  const fx = await layoutFixture();
+  try {
+    // The stub claims the algorithm's own version: an installer that predates the stub would then overwrite it with the algorithm.
+    const { version } = JSON.parse(await readFile('package.json', 'utf8'));
+    const sameVersion = (text) => text.replace('// omp-reviewer-kit runner v1.0.0', `// omp-reviewer-kit runner v${version}`);
+    await fx.edit('templates/review-kit/run-review.mjs', sameVersion);
+    await fx.edit('.omp/review-kit/run-review.mjs', sameVersion);
+    const result = fx.check();
+    assert.notEqual(result.status, 0);
+    assert.match(failure(result), /marker above the algorithm/);
   } finally {
     await fx.cleanup();
   }

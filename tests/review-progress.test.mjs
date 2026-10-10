@@ -165,6 +165,17 @@ function sinks() {
   return { out: [], err: [] };
 }
 
+// A sleep for --follow tests. A follow that never reaches its end throws after a few polls, so a broken exit condition
+// fails the test at once instead of spinning until the mutation gate gives up on it.
+function pollsAtMost(limit, onPoll = async () => {}) {
+  let polls = 0;
+  return async () => {
+    polls += 1;
+    if (polls > limit) throw new Error(`--follow still waiting after ${limit} polls`);
+    await onPoll(polls);
+  };
+}
+
 // A throwaway home: the bridge looks for the installed OMP plugin under the home, which must never be the real one.
 async function sandbox(extra = {}) {
   const home = await tempDir('review-progress-home-');
@@ -456,7 +467,7 @@ test('Given a run that already passed, When it is followed, Then its final state
 test('Given a run that blocked, When it is followed, Then the reader exits 1', async () => {
   const runsDir = await tempDir('review-progress-runs-');
   await writeRecord(runsDir, { runId: 'done-block', state: 'blocked' });
-  const code = await main(['--run', 'done-block', '--follow'], { cwd: await tempDir(), env: {}, runsDir, now: () => NOW, sleep: async () => {}, out: () => {}, err: () => {} });
+  const code = await main(['--run', 'done-block', '--follow'], { cwd: await tempDir(), env: {}, runsDir, now: () => NOW, sleep: pollsAtMost(5), out: () => {}, err: () => {} });
   assert.equal(code, 1);
 });
 
@@ -464,7 +475,7 @@ test('Given a run whose runner is gone, When it is followed, Then the reader exi
   const runsDir = await tempDir('review-progress-runs-');
   await writeRecord(runsDir, { runId: 'gone-run', runnerPid: DEAD_PID });
   const sink = sinks();
-  const code = await main(['--run', 'gone-run', '--follow'], { cwd: await tempDir(), env: {}, runsDir, now: () => NOW, sleep: async () => {}, out: (l) => sink.out.push(l), err: (l) => sink.err.push(l) });
+  const code = await main(['--run', 'gone-run', '--follow'], { cwd: await tempDir(), env: {}, runsDir, now: () => NOW, sleep: pollsAtMost(5), out: (l) => sink.out.push(l), err: (l) => sink.err.push(l) });
   assert.equal(code, 3);
   assert.match(sink.out.join('\n'), /orphaned/);
 });
@@ -472,15 +483,13 @@ test('Given a run whose runner is gone, When it is followed, Then the reader exi
 test('Given an active run that finishes while it is followed, When the reader polls, Then it reports each change and exits with the verdict code', async () => {
   const runsDir = await tempDir('review-progress-runs-');
   await writeRecord(runsDir, { runId: 'live-run', stage: 'scout', stagesCompleted: 0 });
-  let polls = 0;
   const sink = sinks();
   const code = await main(['--run', 'live-run', '--follow'], {
     cwd: await tempDir(), env: {}, runsDir, now: () => NOW,
-    sleep: async () => {
-      polls += 1;
+    sleep: pollsAtMost(5, async (polls) => {
       if (polls === 1) await writeRecord(runsDir, { runId: 'live-run', stage: 'risk', stagesCompleted: 1 });
       else await writeRecord(runsDir, { runId: 'live-run', state: 'passed', stage: 'verifier', stagesCompleted: 2 });
-    },
+    }),
     out: (l) => sink.out.push(l), err: (l) => sink.err.push(l),
   });
   assert.equal(code, 0);
@@ -504,9 +513,9 @@ test('Given a record that is half-written while it is followed, When the reader 
   const sink = sinks();
   const code = await main(['--run', 'torn-run', '--follow'], {
     cwd: await tempDir(), env: {}, runsDir, now: () => NOW,
-    sleep: async () => {
+    sleep: pollsAtMost(5, async () => {
       await writeRecord(runsDir, { runId: 'torn-run', state: 'passed', stage: 'verifier', stagesCompleted: 2 });
-    },
+    }),
     out: (l) => sink.out.push(l), err: (l) => sink.err.push(l),
   });
   assert.equal(code, 0);
@@ -708,7 +717,8 @@ test('Given an installed reader, When the session starts, Then its summary is ad
 
 test('Given an installed plugin without the reader, When the session starts, Then the session stays silent about progress', async () => {
   const dir = await tempDir();
-  const pluginDir = await fakePlugin(dir, { reader: null });
+  // The OMP plugin matches this Claude plugin's release: an older one gets the "older than this Claude plugin" notice instead.
+  const pluginDir = await fakePlugin(dir, { version: '0.20.1', reader: null });
   const sink = sinks();
   assert.equal(await session({ cwd: dir, env: await sandbox({ OMP_REVIEW_KIT_PLUGIN_DIR: pluginDir }), exec: fakeOmp, out: (l) => sink.out.push(l), sessionId: 'sess-42' }), BRIDGE_EXIT.ok);
   assert.deepEqual(sink.out, []);
@@ -838,14 +848,12 @@ test('Given a folder outside any repository, When --commit is asked, Then the re
 test('Given a run whose state does not change between polls, When it is followed, Then its active line is printed once', async () => {
   const runsDir = await tempDir('review-progress-runs-');
   await writeRecord(runsDir, { runId: 'steady-run', stage: 'scout', stagesCompleted: 0 });
-  let polls = 0;
   const sink = sinks();
   const code = await main(['--run', 'steady-run', '--follow'], {
     cwd: await tempDir(), env: {}, runsDir, now: () => NOW,
-    sleep: async () => {
-      polls += 1;
+    sleep: pollsAtMost(5, async (polls) => {
       if (polls === 2) await writeRecord(runsDir, { runId: 'steady-run', state: 'passed', stage: 'verifier', stagesCompleted: 2 });
-    },
+    }),
     out: (l) => sink.out.push(l), err: (l) => sink.err.push(l),
   });
   assert.equal(code, 0);

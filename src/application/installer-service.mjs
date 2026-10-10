@@ -4,8 +4,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { isRunnerNewer } from '../domain/runner-version.mjs';
+import { isSkippedTarget } from '../domain/target-policy.mjs';
 import { hookBodyDigest, isHookNewer, isOwnedHook } from '../domain/hook-template.mjs';
 import { FileTargetRegistry } from '../infra/target-registry.mjs';
+import { resolveRunsDir } from '../infra/filesystem-telemetry-adapter.mjs';
+import { readRunnerFileVersion, stopSupersededRuns } from './superseded-run-stopper.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -749,7 +752,7 @@ export class PluginInstallerService {
    * @param {string} targetDir
    * @returns {Promise<{
    *   success: boolean,
-   *   state: 'installed'|'updated'|'active'|'conflict',
+   *   state: 'installed'|'updated'|'active'|'conflict'|'skipped',
    *   repoRoot: string,
    *   message: string
    * }>}
@@ -758,6 +761,15 @@ export class PluginInstallerService {
     const inspection = await this.#inspectInstallation(targetDir);
     if (!inspection.isGitRepo) {
       throw new Error('Directory is not inside a Git repository: ' + targetDir);
+    }
+
+    if (isSkippedTarget(inspection.repoRoot)) {
+      return {
+        success: false,
+        state: 'skipped',
+        repoRoot: inspection.repoRoot,
+        message: 'Not set up: ' + inspection.repoRoot + ' is a disposable omp-tasks worker checkout, which reviewer-kit never writes to',
+      };
     }
 
     if (inspection.state === 'conflict') {
@@ -896,6 +908,7 @@ export class PluginInstallerService {
     for (const repo of targets) {
       if (Date.now() > deadline) break;
       if (except && same(repo, except)) continue;
+      if (isSkippedTarget(repo)) continue;
       try {
         const info = await this.#inspectInstallation(repo);
         if (!info.isGitRepo) {
@@ -920,22 +933,48 @@ export class PluginInstallerService {
    *
    * @param {string} cwd
    * @param {{ budgetMs?: number }} [options] time allowed for healing the other repositories
-   * @returns {Promise<{ current: object|null, targets: { checked: number, healed: string[], failed: string[], pruned: string[] } }>}
+   * @returns {Promise<{ current: object|null, targets: { checked: number, healed: string[], failed: string[], pruned: string[] }, stopped: object[] }>}
+   *   `stopped` lists the live reviews on an older runner that this session start stopped
    */
   async refreshAtSessionStart(cwd, { budgetMs = 8000 } = {}) {
     let current = null;
     let repoRoot = null;
+    let stopped = [];
+    try {
+      // First: a review on the old runner must not outlive the plugin update by one more stage.
+      stopped = (await this.stopSupersededRuns({ automatic: true })).stopped;
+    } catch {
+      stopped = [];
+    }
     try {
       const info = await this.#inspectInstallation(cwd);
       if (info.isGitRepo && (info.state === 'stale' || info.state === 'active')) {
         repoRoot = info.repoRoot;
-        if (info.state === 'stale' && process.env.OMP_REVIEW_KIT_AUTO_SYNC !== '0') current = await this.setup(cwd);
+        if (info.state === 'stale' && process.env.OMP_REVIEW_KIT_AUTO_SYNC !== '0' && !isSkippedTarget(repoRoot)) current = await this.setup(cwd);
         await this.registerTarget(repoRoot);
       }
     } catch {
       // the other repositories are still worth healing
     }
-    return { current, targets: await this.healTargets({ exceptRoot: repoRoot, budgetMs }) };
+    return { current, targets: await this.healTargets({ exceptRoot: repoRoot, budgetMs }), stopped };
+  }
+
+  /**
+   * Stops live review runs whose runner is older than the installed plugin's
+   * runner and marks their records interrupted (see superseded-run-stopper.mjs).
+   * Runs of the same or a newer runner, finished runs and quiet runs on the
+   * current runner are never touched. The automatic call made at session start
+   * honours OMP_REVIEW_KIT_STOP_SUPERSEDED=0; an explicit call never does.
+   *
+   * @param {{ dryRun?: boolean, automatic?: boolean }} [options]
+   * @returns {Promise<{ currentVersion: string|null, dryRun: boolean, stopped: object[], unverified: object[], kept: number, disabled?: true }>}
+   */
+  async stopSupersededRuns({ dryRun = false, automatic = false } = {}) {
+    const nothing = { currentVersion: null, dryRun, stopped: [], unverified: [], kept: 0 };
+    const currentVersion = await readRunnerFileVersion(path.join(PLUGIN_ROOT, 'scripts', 'run-review.mjs'));
+    if (currentVersion === null) return nothing;
+    if (automatic && process.env.OMP_REVIEW_KIT_STOP_SUPERSEDED === '0') return { ...nothing, currentVersion, disabled: true };
+    return stopSupersededRuns({ runsDir: resolveRunsDir(), currentVersion, dryRun });
   }
 
   /**
@@ -1102,13 +1141,14 @@ export class PluginInstallerService {
           message: hookStatus.conflictReason ?? 'Pre-commit hook conflict detected',
         });
       } else if (hookStatus.state === 'stale') {
-        checks.push({
-          name: 'Pre-commit hook',
-          status: 'WARN',
-          message: hookStatus.hookExecutable === false
+        // A skipped worker checkout is never written by the kit: say so instead of promising a repair.
+        const notExecutable = hookStatus.hookExecutable === false;
+        const message = isSkippedTarget(repoRoot)
+          ? `This worker checkout is outside the kit's reach: ${notExecutable ? 'the pre-commit hook is not executable' : 'the review runner script is stale'}, and no session repairs it. Refresh it by hand.`
+          : notExecutable
             ? 'Pre-commit hook is not executable and will be repaired on next session.'
-            : 'Review runner script is stale and will be updated on next session.',
-        });
+            : 'Review runner script is stale and will be updated on next session.';
+        checks.push({ name: 'Pre-commit hook', status: 'WARN', message });
       } else {
         checks.push({
           name: 'Pre-commit hook',
@@ -1119,7 +1159,8 @@ export class PluginInstallerService {
     }
 
     try {
-      const targets = await this.#targets.list();
+      // Skipped worker checkouts are outside the kit's reach: nothing repairs a stale runner there, so none is reported.
+      const targets = (await this.#targets.list()).filter((repo) => !isSkippedTarget(repo));
       if (targets.length > 0) {
         let stale = 0;
         for (const repo of targets) {

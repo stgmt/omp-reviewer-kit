@@ -6,6 +6,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import initExtension from '../src/extension.mjs';
+import { resolveRunsDir } from '../src/infra/filesystem-telemetry-adapter.mjs';
 import { CANONICAL_RUNNER, STALE_RUNNER, realPaths, workspace } from './target-workspace.mjs';
 
 test('Given OMP_REVIEW_KIT_AUTO_SYNC=0 or an exhausted budget, Then nothing is healed', async () => {
@@ -18,7 +19,7 @@ test('Given OMP_REVIEW_KIT_AUTO_SYNC=0 or an exhausted budget, Then nothing is h
 
     process.env.OMP_REVIEW_KIT_AUTO_SYNC = '0';
     assert.deepEqual(await ws.installer.healTargets(), { checked: 0, healed: [], failed: [], pruned: [] });
-    assert.deepEqual(await ws.installer.refreshAtSessionStart(repo), { current: null, targets: { checked: 0, healed: [], failed: [], pruned: [] } });
+    assert.deepEqual(await ws.installer.refreshAtSessionStart(repo), { current: null, targets: { checked: 0, healed: [], failed: [], pruned: [] }, stopped: [] });
     assert.equal(await readFile(ws.runnerOf(repo), 'utf8'), STALE_RUNNER);
     delete process.env.OMP_REVIEW_KIT_AUTO_SYNC;
 
@@ -62,6 +63,26 @@ test('Given the OMP extension, When a session starts in a hooked repository, The
     if (saved === undefined) delete process.env.OMP_REVIEW_KIT_TARGETS;
     else process.env.OMP_REVIEW_KIT_TARGETS = saved;
     await ws.cleanup();
+  }
+});
+
+test('Given a target test workspace, When it is created, Then the run records directory lies inside its temp folder and the previous value returns on cleanup', async () => {
+  // Given: whatever the developer's shell has set, possibly nothing.
+  const before = process.env.OMP_REVIEW_KIT_RUNS_DIR;
+  // When
+  const ws = await workspace();
+  let released = false;
+  try {
+    // Then: the automatic stop at session start resolves its records inside the workspace, never the developer's ~/.omp/review-kit-runs.
+    const inside = path.relative(ws.base, resolveRunsDir());
+    assert.notEqual(inside, '', 'the records directory is a folder inside the workspace');
+    assert.equal(inside.startsWith('..') || path.isAbsolute(inside), false, `the records directory ${resolveRunsDir()} is outside ${ws.base}`);
+    assert.equal(process.env.OMP_REVIEW_KIT_RUNS_DIR, ws.runsDir);
+    await ws.cleanup();
+    released = true;
+    assert.equal(process.env.OMP_REVIEW_KIT_RUNS_DIR, before, 'cleanup restores the previous value');
+  } finally {
+    if (!released) await ws.cleanup();
   }
 });
 

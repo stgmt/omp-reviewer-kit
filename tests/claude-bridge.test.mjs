@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, realpathSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import test, { after } from 'node:test';
 
 import {
   EXIT,
@@ -34,6 +34,17 @@ import { syncTarget } from '../scripts/sync-targets.mjs';
 
 const PLUGIN_DIR = process.cwd();
 const WANTED = shellVersion();
+
+// The session tests load the real plugin, whose session start stops live reviews on an older runner.
+// Without its own records folder that stop reads the developer's ~/.omp/review-kit-runs.
+const savedRunsDir = process.env.OMP_REVIEW_KIT_RUNS_DIR;
+const isolatedRunsBase = mkdtempSync(path.join(tmpdir(), 'omp-bridge-runs-'));
+process.env.OMP_REVIEW_KIT_RUNS_DIR = path.join(isolatedRunsBase, 'runs');
+after(() => {
+  if (savedRunsDir === undefined) delete process.env.OMP_REVIEW_KIT_RUNS_DIR;
+  else process.env.OMP_REVIEW_KIT_RUNS_DIR = savedRunsDir;
+  rmSync(isolatedRunsBase, { recursive: true, force: true });
+});
 
 async function tempHome() {
   const home = await mkdtemp(path.join(tmpdir(), 'omp-bridge-home-'));
@@ -494,6 +505,24 @@ test('Given a newer vendored runner, setup keeps it and status marks it newer', 
   }
 });
 
+test('Given a runner newer than the installed release but older than the stub, When setup runs, Then the runner is kept', async () => {
+  const { home, cleanup } = await tempHome();
+  const repo = await tempRepo();
+  try {
+    await setup({ cwd: repo.dir, env: pluginEnv(home), exec: healthyExec(), out: () => {}, err: () => {} });
+    const runnerPath = path.join(repo.dir, '.omp', 'review-kit', 'run-review.mjs');
+    // One patch above the installed release: only a comparison with the release algorithm keeps it, a comparison with the stub would not.
+    const [major, minor, patch] = JSON.parse(await readFile('package.json', 'utf8')).version.split('.').map(Number);
+    const newer = `// omp-reviewer-kit runner v${major}.${minor}.${patch + 1}\nconsole.log("newer patch");\n`;
+    await writeFile(runnerPath, newer);
+    assert.equal(await setup({ cwd: repo.dir, env: pluginEnv(home), exec: healthyExec(), out: () => {}, err: () => {} }), EXIT.ok);
+    assert.equal(await readFile(runnerPath, 'utf8'), newer, 'a runner newer than the installed release is never replaced');
+  } finally {
+    await repo.cleanup();
+    await cleanup();
+  }
+});
+
 test('review executes the repository runner (the file the hook runs) and passes the exit code through', async () => {
   const { home, cleanup } = await tempHome();
   const repo = await tempRepo();
@@ -671,8 +700,45 @@ test('doctor warns when the repository runner is newer than the installed OMP pl
   }
 });
 
+test('SessionStart adds one line naming the runs the plugin stopped, and says nothing about them when none was stopped', async () => {
+  const { home, cleanup } = await tempHome();
+  try {
+    const stopping = await stubPlugin(home, `export class PluginInstallerService {
+      async refreshAtSessionStart() { return { current: null, targets: {}, stopped: [{ runId: 'run-old-1' }, { runId: 'run-old-2' }] }; }
+      async status() { return { isGitRepo: true, state: 'active' }; }
+    }\n`);
+    const sink = collect();
+    assert.equal(await session({ cwd: home, env: envFor(home, { OMP_REVIEW_KIT_PLUGIN_DIR: stopping }), exec: healthyExec(), out: sink.out }), EXIT.ok);
+    assert.equal(sink.lines.length, 1);
+    const context = JSON.parse(sink.lines[0]).hookSpecificOutput.additionalContext;
+    assert.match(context, /Stopped 2 review\(s\) running on an older runner: run-old-1, run-old-2\./);
+    assert.match(context, /commits were blocked; commit again to review on this runner/);
+
+    const quiet = await stubPlugin(home, `export class PluginInstallerService {
+      async refreshAtSessionStart() { return { current: null, targets: {}, stopped: [] }; }
+      async status() { return { isGitRepo: true, state: 'active' }; }
+    }\n`);
+    const silent = collect();
+    assert.equal(await session({ cwd: home, env: envFor(home, { OMP_REVIEW_KIT_PLUGIN_DIR: quiet }), exec: healthyExec(), out: silent.out }), EXIT.ok);
+    assert.deepEqual(silent.lines, [], 'nothing stopped and nothing wrong: the hook stays silent');
+
+    const malformed = await stubPlugin(home, `export class PluginInstallerService {
+      async refreshAtSessionStart() { return { stopped: 'not a list' }; }
+      async status() { return { isGitRepo: true, state: 'active' }; }
+    }\n`);
+    const ignored = collect();
+    assert.equal(await session({ cwd: home, env: envFor(home, { OMP_REVIEW_KIT_PLUGIN_DIR: malformed }), exec: healthyExec(), out: ignored.out }), EXIT.ok);
+    assert.deepEqual(ignored.lines, []);
+  } finally {
+    await cleanup();
+  }
+});
+
+let stubCounter = 0;
+
 async function stubPlugin(home, installerSource) {
-  const dir = path.join(home, 'stub-plugin');
+  // A fresh folder per call: the ESM loader caches a module by URL, so a reused path keeps the first stub.
+  const dir = path.join(home, `stub-plugin-${(stubCounter += 1)}`);
   await mkdir(path.join(dir, 'src', 'application'), { recursive: true });
   await mkdir(path.join(dir, 'src', 'infra'), { recursive: true });
   await writeFile(path.join(dir, 'package.json'), JSON.stringify({ name: 'omp-reviewer-kit', version: WANTED }));

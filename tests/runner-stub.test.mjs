@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
+import { isRunnerNewer } from '../src/domain/runner-version.mjs';
 
 const STUB = path.resolve('templates/review-kit/run-review.mjs');
 
@@ -110,5 +111,11 @@ describe('Feature: the vendored runner stub hands every review to the installed 
     const result = runStub({ OMP_REVIEW_KIT_PLUGIN_DIR: undefined });
     assert.equal(result.status, 1);
     assert.match(result.stderr, /INFRA_ERROR/);
+  });
+
+  it('Given the installed runner is the stub, When an installer compares it with the algorithm, Then the stub counts as newer and is never overwritten', async () => {
+    const stub = await readFile(STUB, 'utf8');
+    const algorithm = await readFile(path.resolve('scripts/run-review.mjs'), 'utf8');
+    assert.equal(isRunnerNewer(stub, algorithm), true);
   });
 });

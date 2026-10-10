@@ -207,7 +207,8 @@ OMP_REVIEW_KIT_OMP              # path/name of the omp executable
 OMP_REVIEW_KIT_TELEMETRY=0      # disable run telemetry (runs.jsonl, last-run.json, run records)
 OMP_REVIEW_KIT_RUNS_DIR         # directory for per-run records (default: ~/.omp/review-kit-runs)
 OMP_REVIEW_KIT_RUN_TAG          # session tag recorded with a run (set by the Claude Code SessionStart hook)
-OMP_REVIEW_KIT_QUIET_MS         # silence before a running review is shown as quiet (default: 600000; never stopped)
+OMP_REVIEW_KIT_QUIET_MS         # silence before a running review is shown as quiet (default: 600000; a quiet review is never stopped by a timer)
+OMP_REVIEW_KIT_STOP_SUPERSEDED=0 # disable the automatic stop of superseded reviews at session start (the explicit command still works)
 OMP_REVIEW_KIT_ASSERT_PATTERNS    # comma-separated regexes identifying assert statements (suspicion map)
 OMP_REVIEW_KIT_TEST_PATH_PATTERNS # comma-separated regexes identifying test file paths (suspicion map)
 OMP_REVIEW_KIT_EXECUTE=1          # enable opt-in pre-review check execution (default: 0)
@@ -276,7 +277,9 @@ node scripts/review-progress.mjs --commit <sha>   # the run that reviewed that c
 
 `--commit` matches on the commit's parent and its diff hash, so it reports nothing when no run reviewed exactly that diff. `--json` prints machine-readable output; `--commit` with no match prints `[]`. A record that changed within the quiet period and cannot be read yet ends a lookup with exit 3 instead of "not reviewed", and `--run` on a record that exists but cannot be read exits 3 too. `/reviewer-kit:progress` in OMP shows the active repository's runs. In Claude Code, the `review-progress` skill runs the same reader, and a session that starts in a repository with runs that need attention gets one line of context about them.
 
-A run is `active` while its review child logs or changes stage. It is `quiet` once `OMP_REVIEW_KIT_QUIET_MS` (default 600000) passes without activity while its runner still lives, and `orphaned` when its runner has exited without recording a result. Quiet runs are only reported: the kit never stops a review on a timer. For a quiet run the detail view prints the command that would stop the review process (`taskkill` on Windows, `kill` elsewhere) and says that nothing in the kit stops it. `--follow` exits 0 when the commit may go ahead (PASS or a skipped review), 1 when the review blocked, failed or was interrupted, and 3 while the run is still quiet or orphaned.
+A run is `active` while its review child logs or changes stage. It is `quiet` once `OMP_REVIEW_KIT_QUIET_MS` (default 600000) passes without activity while its runner still lives, and `orphaned` when its runner has exited without recording a result. Quiet runs are only reported: the kit never stops a review on a timer. For a quiet run the detail view prints the command that would stop the review process (`taskkill` on Windows, `kill` elsewhere) and says that nothing in the kit stops it.
+
+When you install a newer plugin, reviews that are still running on an older runner are stopped, because they would otherwise finish on outdated review logic. This happens the first time the new plugin starts (a Claude Code or OMP session start), or on demand with `node scripts/stop-superseded-runs.mjs` (`--dry-run` shows what would stop, `--json` prints machine-readable output). Only live reviews on an older runner are stopped: finished reviews, quiet reviews on the current runner, and reviews on the current or a newer runner are left alone, and a review whose process cannot be verified is listed as unverified and not stopped. The commit of a stopped review is blocked; commit again to get a review on the new runner. The stop cannot run inside `omp plugin install` itself, because Bun does not run install scripts. Set `OMP_REVIEW_KIT_STOP_SUPERSEDED=0` to turn off the automatic stop at session start; the explicit command always works. `--follow` exits 0 when the commit may go ahead (PASS or a skipped review), 1 when the review blocked, failed or was interrupted, and 3 while the run is still quiet or orphaned.
 
 ## Development & Testing
 
