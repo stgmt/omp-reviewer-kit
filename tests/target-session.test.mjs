@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { CANONICAL_RUNNER, realPaths, workspace } from './target-workspace.mjs';
+import { CANONICAL_RUNNER, STALE_RUNNER, realPaths, workspace } from './target-workspace.mjs';
 
 test('Given a session in a stale repository, When the session starts, Then it is repaired, registered, and the other registered repositories are healed', async () => {
   const ws = await workspace();
@@ -49,6 +49,21 @@ test('Given a session in a repository without the hook or outside Git, Then it i
     } finally {
       await rm(outside, { recursive: true, force: true });
     }
+  } finally {
+    await ws.cleanup();
+  }
+});
+
+test('Given a stale session inside an omp-tasks worker checkout, When the session starts, Then the checkout is not repaired', async () => {
+  const ws = await workspace();
+  try {
+    const worker = await ws.makeRepo(path.join('omp-tasks', 'task-2', 'wt'));
+    await ws.makeStale(worker);
+
+    const outcome = await ws.installer.refreshAtSessionStart(worker);
+
+    assert.equal(outcome.current, null, 'the session that runs inside a worker checkout does not repair it');
+    assert.equal(await readFile(ws.runnerOf(worker), 'utf8'), STALE_RUNNER);
   } finally {
     await ws.cleanup();
   }

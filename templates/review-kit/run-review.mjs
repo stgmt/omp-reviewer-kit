@@ -1,4 +1,5 @@
-// omp-reviewer-kit runner stub
+// omp-reviewer-kit runner v1.0.0
+// Its version is above every algorithm release on purpose: an installer that predates this stub keeps it instead of copying the algorithm over it.
 // Thin and fixed: this file is identical in every repository and never changes. The installer writes it from
 // templates/review-kit/run-review.mjs. The review runs from the installed OMP plugin (or from the directory named by
 // OMP_REVIEW_KIT_PLUGIN_DIR), so a kit update changes the algorithm without changing this file.

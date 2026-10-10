@@ -162,7 +162,12 @@ async function collectProblems(cwd, assessment) {
     // A plugin update must reach every repository that runs the hook, not only this one; plugins
     // from before 0.19.0 lack the method.
     if (typeof installer.refreshAtSessionStart === 'function') {
-      await installer.refreshAtSessionStart(cwd, { budgetMs: HEAL_BUDGET_MS }).catch(() => undefined);
+      const refreshed = await installer.refreshAtSessionStart(cwd, { budgetMs: HEAL_BUDGET_MS }).catch(() => undefined);
+      // Plugins before 0.20.1 return no `stopped`.
+      const stopped = Array.isArray(refreshed?.stopped) ? refreshed.stopped : [];
+      if (stopped.length > 0) {
+        messages.push(`Stopped ${stopped.length} review(s) running on an older runner: ${stopped.map((run) => run.runId).join(', ')}. Their commits were blocked; commit again to review on this runner.`);
+      }
     }
     const message = repoProblem(await installer.status(cwd));
     if (message) messages.push(message);

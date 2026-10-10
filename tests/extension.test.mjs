@@ -3,8 +3,8 @@ import { existsSync } from 'node:fs';
 import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import test, { describe, it } from 'node:test';
-import { spawnSync } from 'node:child_process';
+import test, { after, before, describe, it } from 'node:test';
+import { spawn, spawnSync } from 'node:child_process';
 
 import { PluginInstallerService } from '../src/application/installer-service.mjs';
 import initExtension from '../src/extension.mjs';
@@ -104,6 +104,27 @@ function createExtensionHarness() {
 }
 
 describe('Feature: Native OMP Extension & Installer Service', () => {
+  // Every session_start below stops reviews on an older runner, registers its repository and heals the
+  // registered ones. Without these settings that reads the developer's ~/.omp/review-kit-runs, can
+  // interrupt a live review, and writes to the developer's target registry.
+  let savedRunsDir;
+  let savedTargets;
+  let isolatedRunsBase;
+  before(async () => {
+    savedRunsDir = process.env.OMP_REVIEW_KIT_RUNS_DIR;
+    savedTargets = process.env.OMP_REVIEW_KIT_TARGETS;
+    isolatedRunsBase = await mkdtemp(path.join(tmpdir(), 'omp-ext-runs-'));
+    process.env.OMP_REVIEW_KIT_RUNS_DIR = path.join(isolatedRunsBase, 'runs');
+    process.env.OMP_REVIEW_KIT_TARGETS = path.join(isolatedRunsBase, 'review-kit-targets.json');
+  });
+  after(async () => {
+    if (savedRunsDir === undefined) delete process.env.OMP_REVIEW_KIT_RUNS_DIR;
+    else process.env.OMP_REVIEW_KIT_RUNS_DIR = savedRunsDir;
+    if (savedTargets === undefined) delete process.env.OMP_REVIEW_KIT_TARGETS;
+    else process.env.OMP_REVIEW_KIT_TARGETS = savedTargets;
+    await rm(isolatedRunsBase, { recursive: true, force: true });
+  });
+
   it('Scenario 1: empty git repo + session_start creates hook and runner, configures core.hooksPath, sets active status', async () => {
     const { baseDir, repoDir, git } = await createTempRepo();
     try {
@@ -482,6 +503,58 @@ describe('Feature: Native OMP Extension & Installer Service', () => {
         await assert.rejects(readFile(path.join(repoDir, '.omp', 'review-kit', 'run-review.mjs'), 'utf8'), { code: 'ENOENT' });
       } finally {
         await rm(baseDir, { recursive: true, force: true });
+      }
+    });
+
+    it('Scenario 4c: an omp-tasks worker checkout keeps its stale runner through session_start and the setup command', async () => {
+      const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-ext-worker-'));
+      const workerDir = path.join(baseDir, 'omp-tasks', 'task-1', 'wt');
+      try {
+        await mkdir(workerDir, { recursive: true });
+        spawnSync('git', ['init'], { cwd: workerDir, windowsHide: true });
+        spawnSync('git', ['config', 'core.hooksPath', '.githooks'], { cwd: workerDir, windowsHide: true });
+        const hookPath = path.join(workerDir, '.githooks', 'pre-commit');
+        const runnerPath = path.join(workerDir, '.omp', 'review-kit', 'run-review.mjs');
+        const canonicalHook = await readFile(path.join('templates', 'githooks', 'pre-commit'), 'utf8');
+        const staleRunner = '// omp-reviewer-kit runner v0.0.1\nold\n';
+        await mkdir(path.dirname(hookPath), { recursive: true });
+        await writeFile(hookPath, canonicalHook);
+        await mkdir(path.dirname(runnerPath), { recursive: true });
+        await writeFile(runnerPath, staleRunner);
+
+        const harness = createExtensionHarness();
+        const sessionCtx = harness.makeCtx(workerDir);
+        await harness.events.get('session_start')({}, sessionCtx);
+
+        assert.equal(await readFile(runnerPath, 'utf8'), staleRunner, 'session_start does not repair the worker checkout');
+        assert.equal(await readFile(hookPath, 'utf8'), canonicalHook);
+        assert.equal(sessionCtx.getStatus(), null, 'and shows no status for it');
+
+        const commandCtx = harness.makeCtx(workerDir);
+        await harness.commands.get('reviewer-kit:setup').handler('', commandCtx);
+
+        assert.equal(commandCtx.notifications.length, 1);
+        assert.equal(commandCtx.notifications[0].type, 'warning');
+        assert.match(commandCtx.notifications[0].msg, /omp-tasks/);
+        assert.equal(await readFile(runnerPath, 'utf8'), staleRunner, 'the setup command refuses it too');
+      } finally {
+        await rm(baseDir, { recursive: true, force: true });
+      }
+    });
+
+    it('Scenario 4e: the setup command reports a directory outside Git with the exact message and an error status', async () => {
+      const dir = await mkdtemp(path.join(tmpdir(), 'omp-ext-nogit-'));
+      try {
+        const harness = createExtensionHarness();
+        const commandCtx = harness.makeCtx(dir);
+        await harness.commands.get('reviewer-kit:setup').handler('', commandCtx);
+
+        assert.equal(commandCtx.notifications.length, 1);
+        assert.equal(commandCtx.notifications[0].type, 'error');
+        assert.equal(commandCtx.notifications[0].msg, `reviewer-kit setup failed: Directory is not inside a Git repository: ${dir}`);
+        assert.equal(commandCtx.getStatus(), 'reviewer-kit: error');
+      } finally {
+        await rm(dir, { recursive: true, force: true });
       }
     });
 
@@ -1012,5 +1085,154 @@ describe('Feature: Native OMP Extension & Installer Service', () => {
     const prompt = sentUserMessages[0].content;
     assert.match(prompt, /The audit target is: src\/x\./);
     assert.doesNotMatch(prompt, /--focus/);
+  });
+});
+
+describe('Feature: installing a newer plugin stops live reviews on an older runner', () => {
+  /** A live review whose runner is a sleeper this test spawned itself, recorded without a runner version. */
+  async function liveOlderRun() {
+    const base = await mkdtemp(path.join(tmpdir(), 'omp-ext-stop-'));
+    const runsDir = path.join(base, 'runs');
+    await mkdir(runsDir, { recursive: true });
+    const runnerFile = path.join(base, 'run-review.mjs');
+    await writeFile(runnerFile, 'setInterval(() => {}, 1000);\n', 'utf8');
+    const child = spawn(process.execPath, [runnerFile], { stdio: 'ignore', windowsHide: true });
+    const record = {
+      schema: 'review-run-record@1',
+      runId: 'ext-stop-run',
+      repoRoot: base,
+      tag: null,
+      runnerPid: child.pid,
+      state: 'reviewing',
+      stage: 'risk',
+      startedAt: new Date().toISOString(),
+    };
+    await writeFile(path.join(runsDir, `${record.runId}.json`), `${JSON.stringify(record, null, 2)}\n`, 'utf8');
+    return { base, runsDir, child, record };
+  }
+
+  const running = (child) => child.exitCode === null && child.signalCode === null;
+  const waitForExit = (child, ms = 20_000) => (running(child)
+    ? new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(false), ms);
+      child.once('exit', () => { clearTimeout(timer); resolve(true); });
+    })
+    : Promise.resolve(true));
+
+  it('Scenario: session_start stops a live sleeper on an older runner, marks its record interrupted and warns', async () => {
+    const { base, runsDir, child, record } = await liveOlderRun();
+    const { baseDir, repoDir } = await createTempRepo();
+    const saved = { runs: process.env.OMP_REVIEW_KIT_RUNS_DIR, stop: process.env.OMP_REVIEW_KIT_STOP_SUPERSEDED };
+    process.env.OMP_REVIEW_KIT_RUNS_DIR = runsDir;
+    delete process.env.OMP_REVIEW_KIT_STOP_SUPERSEDED;
+    try {
+      const harness = createExtensionHarness();
+      const ctx = harness.makeCtx(repoDir);
+      await harness.events.get('session_start')({}, ctx);
+
+      assert.equal(await waitForExit(child), true, 'the sleeper was stopped');
+      const warning = ctx.notifications.find((note) => /stopped 1 review/.test(note.msg));
+      assert.ok(warning, 'the session start warns');
+      assert.equal(warning.type, 'warning');
+      assert.match(warning.msg, /ext-stop-run/);
+      assert.match(warning.msg, /commit again/);
+      const after = JSON.parse(await readFile(path.join(runsDir, `${record.runId}.json`), 'utf8'));
+      assert.equal(after.state, 'interrupted');
+      assert.equal(typeof after.supersededBy, 'string');
+    } finally {
+      if (running(child)) child.kill('SIGKILL');
+      await waitForExit(child, 5_000);
+      if (saved.runs === undefined) delete process.env.OMP_REVIEW_KIT_RUNS_DIR;
+      else process.env.OMP_REVIEW_KIT_RUNS_DIR = saved.runs;
+      if (saved.stop === undefined) delete process.env.OMP_REVIEW_KIT_STOP_SUPERSEDED;
+      else process.env.OMP_REVIEW_KIT_STOP_SUPERSEDED = saved.stop;
+      await rm(baseDir, { recursive: true, force: true });
+      await rm(base, { recursive: true, force: true });
+    }
+  });
+
+  it('Scenario: OMP_REVIEW_KIT_STOP_SUPERSEDED=0 keeps the sleeper running, the record unchanged and the session silent about it', async () => {
+    const { base, runsDir, child, record } = await liveOlderRun();
+    const { baseDir, repoDir } = await createTempRepo();
+    const saved = { runs: process.env.OMP_REVIEW_KIT_RUNS_DIR, stop: process.env.OMP_REVIEW_KIT_STOP_SUPERSEDED };
+    process.env.OMP_REVIEW_KIT_RUNS_DIR = runsDir;
+    process.env.OMP_REVIEW_KIT_STOP_SUPERSEDED = '0';
+    try {
+      const harness = createExtensionHarness();
+      const ctx = harness.makeCtx(repoDir);
+      await harness.events.get('session_start')({}, ctx);
+
+      assert.equal(running(child), true, 'the sleeper still runs');
+      assert.equal(ctx.notifications.some((note) => /stopped \d+ review/.test(note.msg)), false);
+      const after = JSON.parse(await readFile(path.join(runsDir, `${record.runId}.json`), 'utf8'));
+      assert.deepEqual(after, record);
+    } finally {
+      if (running(child)) child.kill('SIGKILL');
+      await waitForExit(child, 5_000);
+      if (saved.runs === undefined) delete process.env.OMP_REVIEW_KIT_RUNS_DIR;
+      else process.env.OMP_REVIEW_KIT_RUNS_DIR = saved.runs;
+      if (saved.stop === undefined) delete process.env.OMP_REVIEW_KIT_STOP_SUPERSEDED;
+      else process.env.OMP_REVIEW_KIT_STOP_SUPERSEDED = saved.stop;
+      await rm(baseDir, { recursive: true, force: true });
+      await rm(base, { recursive: true, force: true });
+    }
+  });
+
+  it('Scenario: an explicit stop ignores OMP_REVIEW_KIT_STOP_SUPERSEDED=0 while the automatic one honours it', async () => {
+    const base = await mkdtemp(path.join(tmpdir(), 'omp-ext-optout-'));
+    const saved = { runs: process.env.OMP_REVIEW_KIT_RUNS_DIR, stop: process.env.OMP_REVIEW_KIT_STOP_SUPERSEDED };
+    process.env.OMP_REVIEW_KIT_RUNS_DIR = path.join(base, 'runs');
+    process.env.OMP_REVIEW_KIT_STOP_SUPERSEDED = '0';
+    try {
+      const installer = new PluginInstallerService();
+      const automatic = await installer.stopSupersededRuns({ automatic: true });
+      assert.equal(automatic.disabled, true);
+      assert.deepEqual(automatic.stopped, []);
+      const explicit = await installer.stopSupersededRuns({ dryRun: true });
+      assert.equal(explicit.disabled, undefined);
+      assert.equal(explicit.dryRun, true);
+      assert.match(explicit.currentVersion, /^\d+\.\d+\.\d+$/);
+    } finally {
+      if (saved.runs === undefined) delete process.env.OMP_REVIEW_KIT_RUNS_DIR;
+      else process.env.OMP_REVIEW_KIT_RUNS_DIR = saved.runs;
+      if (saved.stop === undefined) delete process.env.OMP_REVIEW_KIT_STOP_SUPERSEDED;
+      else process.env.OMP_REVIEW_KIT_STOP_SUPERSEDED = saved.stop;
+      await rm(base, { recursive: true, force: true });
+    }
+  });
+
+  it('Scenario: a rejected automatic stop is swallowed, so session_start still resolves, reads the status and announces no stopped reviews', async () => {
+    // Given: a stop that rejects, a status call that is counted, and records and targets kept inside a temp folder
+    const base = await mkdtemp(path.join(tmpdir(), 'omp-ext-stopfail-'));
+    const { baseDir, repoDir } = await createTempRepo();
+    const saved = { runs: process.env.OMP_REVIEW_KIT_RUNS_DIR, targets: process.env.OMP_REVIEW_KIT_TARGETS };
+    const proto = PluginInstallerService.prototype;
+    const original = { stop: proto.stopSupersededRuns, status: proto.status };
+    const calls = { stop: 0, status: 0 };
+    process.env.OMP_REVIEW_KIT_RUNS_DIR = path.join(base, 'runs');
+    process.env.OMP_REVIEW_KIT_TARGETS = path.join(base, 'targets.json');
+    proto.stopSupersededRuns = async () => { calls.stop += 1; throw new Error('the stop failed'); };
+    proto.status = function status(...args) { calls.status += 1; return original.status.apply(this, args); };
+    try {
+      const harness = createExtensionHarness();
+      const ctx = harness.makeCtx(repoDir);
+
+      // When: the session starts
+      await assert.doesNotReject(() => harness.events.get('session_start')({}, ctx));
+
+      // Then: the stop was tried, the session went on to the status, and nothing about stopped reviews was announced
+      assert.equal(calls.stop, 1);
+      assert.ok(calls.status >= 1, 'the session start reached installer.status');
+      assert.equal(ctx.notifications.some((note) => /stopped/.test(note.msg)), false);
+    } finally {
+      proto.stopSupersededRuns = original.stop;
+      proto.status = original.status;
+      if (saved.runs === undefined) delete process.env.OMP_REVIEW_KIT_RUNS_DIR;
+      else process.env.OMP_REVIEW_KIT_RUNS_DIR = saved.runs;
+      if (saved.targets === undefined) delete process.env.OMP_REVIEW_KIT_TARGETS;
+      else process.env.OMP_REVIEW_KIT_TARGETS = saved.targets;
+      await rm(baseDir, { recursive: true, force: true });
+      await rm(base, { recursive: true, force: true });
+    }
   });
 });

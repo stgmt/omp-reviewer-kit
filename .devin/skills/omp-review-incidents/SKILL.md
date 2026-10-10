@@ -102,7 +102,10 @@ Stage ids observed: `StagedReview.ContextScout`, `.SecurityHunter`,
 - The extension shows live state from `last-run.json` (polled every ~2s during
   an active `git commit` tool call). If the status is stale: check the file's
   `updatedAt` freshness; if absent, the repo runs an outdated runner copy —
-  update `.omp/review-kit/run-review.mjs` (must equal `scripts/run-review.mjs`).
+  update `.omp/review-kit/run-review.mjs` to the thin stub: it must equal the
+  installed plugin's `templates/review-kit/run-review.mjs`, never
+  `scripts/run-review.mjs`, because the algorithm is not vendored. Opening a
+  session in that repository repairs it.
 - Streamed `reviewer-kit progress:` lines are best-effort only; do not rely on
   them for diagnosis — use `runs.jsonl`/`last-run.json`.
 

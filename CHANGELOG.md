@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.20.1] - 2026-10-10
+
+The vendored runner stays the thin stub. Before this release, an installer from 0.19.x found the stub's first line without a version number and wrote the whole review algorithm over the stub, and the 0.20.0 installer wrote the stub back, so the file flipped between the two.
+
+### Added
+- **A newer plugin stops superseded live reviews.** Installing a newer plugin stops live review runs whose runner is older than the installed plugin, when the new plugin first starts (session start in Claude or OMP) and through `scripts/stop-superseded-runs.mjs` (`--dry-run`, `--json`). Quiet runs on the current runner are only reported, never stopped by a timer; finished runs and runs on the current or a newer runner are never touched; a run whose process cannot be verified is listed as unverified and not killed. `OMP_REVIEW_KIT_STOP_SUPERSEDED=0` disables only the automatic stop at session start. The stopped review's commit is blocked and must be committed again for a review on the new runner. The stop does not run inside `omp plugin install`, because Bun does not run install scripts.
+- **Runs record their runner version.** Each run record carries `runnerVersion`, the version of the runner the review ran with.
+
+### Changed
+- **The thin stub carries a version above every algorithm release.** `templates/review-kit/run-review.mjs` opens with `// omp-reviewer-kit runner v1.0.0`, so an installer that predates the stub keeps it instead of copying the algorithm over it. `check-layout` fails when the stub's version does not outrank the algorithm's marker, so a future algorithm release that reaches the stub's version forces a new stub version.
+
+### Fixed
+- **Test runs no longer rewrite registered repositories.** `npm test` and `npm run test:mutation` keep review run records and the target registry in throwaway folders. A test that started a session used to heal the user's registered repositories with the kit's own stub.
+- **Worker checkouts are never written.** Repositories inside an `omp-tasks` folder (disposable checkouts of the task runner) are refused by setup, skipped by the sync, the automatic heal and the session-start repair, and never registered. The automatic heal now honours the same skip list as the sync (`tp-*`, the release checkout).
+- **The mutation gate does not count a timeout as a kill.** `npm run test:mutation` allows each mutant's tests 120 seconds; it allowed 15, less than the suites that start real processes take on Windows, so a timeout looked like a kill. A mutant whose run still reaches the limit is reported as a survivor, so 100% means every mutant made a test fail.
+
 ## [0.20.0] - 2026-10-08
 
 Hook updates no longer need a hand-kept list. Before this release, every change to `templates/githooks/pre-commit` required adding the previous template to `LEGACY_HOOK_TEMPLATES` by hand, or repositories on the old hook stopped receiving new runners. A commit review can also be followed while it runs, from a shell, from OMP, or from Claude Code.

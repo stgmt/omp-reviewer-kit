@@ -10,9 +10,17 @@ import { loadTargets } from '../scripts/sync-targets.mjs';
 import { FileTargetRegistry, defaultTargetRegistryPath } from '../src/infra/target-registry.mjs';
 import { workspace } from './target-workspace.mjs';
 
-test('Given the shared policy, Then only tp-* and the release checkout are skipped and every other repository, tokenplan included, is synced', () => {
+test('Given the shared policy, Then tp-*, the release checkout and worker checkouts under omp-tasks are skipped and every other repository, tokenplan included, is synced', () => {
   assert.equal(isSkippedTarget('E:/repos/tp-foo'), true);
   assert.equal(isSkippedTarget('E:/repos/omp-reviewer-kit-release'), true);
+  assert.equal(isSkippedTarget('E:/tmp/omp-tasks/billing-task/wt'), true);
+  assert.equal(isSkippedTarget('omp-tasks/billing-task/wt'), true, 'a relative path is resolved before the folder is matched');
+  assert.equal(isSkippedTarget('E:/tmp/omp-tasks-archive/wt'), false, 'only the omp-tasks folder itself, not names that merely start with it');
+  assert.equal(isSkippedTarget('E:\\TMP\\OMP-TASKS\\billing-task\\wt'), true, 'backslashes and upper case name the same folder');
+  assert.equal(isSkippedTarget('E:/tmp/Omp-Tasks/billing-task/wt'), true);
+  assert.equal(isSkippedTarget('E:/tmp/omp-tasks'), false, 'the bare folder holds no worker checkout');
+  assert.equal(isSkippedTarget('E:/tmp/omp-tasks/'), false);
+  assert.equal(isSkippedTarget('E:/tmp/omp-tasks/billing-task/'), true, 'a trailing separator does not hide a worker checkout');
   assert.equal(isSkippedTarget('E:/repos/tokenplan'), false);
   assert.equal(isSkippedTarget('E:/repos/omp-spec-kit'), false);
 });

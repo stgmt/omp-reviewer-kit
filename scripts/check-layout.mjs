@@ -2,6 +2,7 @@ import { access, readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 import { isOwnedHook, parseHookMarker } from '../src/domain/hook-template.mjs';
+import { isRunnerNewer } from '../src/domain/runner-version.mjs';
 
 // The Claude Code shell ships only these files; everything else (runner,
 // installer, agents, tests) is deliberately absent so the plugin cache stays small.
@@ -63,6 +64,10 @@ const required = [
   'src/infra/subprocess-execution-adapter.mjs',
   'src/infra/review-run-records.mjs',
   'scripts/review-progress.mjs',
+  'src/domain/superseded-runs.mjs',
+  'src/infra/process-table.mjs',
+  'src/application/superseded-run-stopper.mjs',
+  'scripts/stop-superseded-runs.mjs',
   'scripts/audit-range.mjs',
   'skills/range-audit/SKILL.md',
   'agents/review-range-auditor.md',
@@ -84,7 +89,7 @@ const localRunner = await readFile('.omp/review-kit/run-review.mjs', 'utf8');
 if (localRunner !== stubRunner) {
   throw new Error('.omp/review-kit/run-review.mjs must be identical to templates/review-kit/run-review.mjs (the thin stub).');
 }
-if (!/^\/\/ omp-reviewer-kit runner stub\r?\n/.test(stubRunner) || Buffer.byteLength(stubRunner) > 4096) {
+if (!/^\/\/ omp-reviewer-kit runner v\d+\.\d+\.\d+\r?\n/.test(stubRunner) || Buffer.byteLength(stubRunner) > 4096) {
   throw new Error('templates/review-kit/run-review.mjs must be the thin stub: its marker line, at most 4 KB.');
 }
 
@@ -94,6 +99,11 @@ const algorithm = await readFile('scripts/run-review.mjs', 'utf8');
 const runnerMarker = /^\/\/ omp-reviewer-kit runner v(\d+\.\d+\.\d+)\r?\n/.exec(algorithm);
 if (!runnerMarker || runnerMarker[1] !== pkg.version) {
   throw new Error(`scripts/run-review.mjs must start with "// omp-reviewer-kit runner v${pkg.version}".`);
+}
+
+// The stub's marker must outrank the algorithm's: an installer that predates the stub then keeps the stub instead of writing the algorithm over it.
+if (!isRunnerNewer(stubRunner, algorithm)) {
+  throw new Error(`templates/review-kit/run-review.mjs must carry a runner marker above the algorithm's v${pkg.version}.`);
 }
 
 // The hook template carries the marker of the release that ships it (see src/domain/hook-template.mjs):

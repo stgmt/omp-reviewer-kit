@@ -1,7 +1,10 @@
 import { appendFile, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { TelemetryPort } from '../application/ports.mjs';
+import { runnerVersionString } from '../domain/runner-version.mjs';
 
 export const REVIEW_EVENT_SCHEMA = 'review-run-event@1';
 export const REVIEW_LAST_RUN_SCHEMA = 'review-last-run@1';
@@ -11,6 +14,25 @@ const RUN_RECORD_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const RUN_RECORD_PRUNE_LIMIT = 2_000;
 /** States that never change again: a record in one of them has finished. */
 export const TERMINAL_RUN_STATES = new Set(['passed', 'blocked', 'failed', 'skipped', 'interrupted']);
+
+let runnerVersionCache;
+
+/**
+ * The 'x.y.z' of the sibling `scripts/run-review.mjs` marker: the runner version
+ * that a record written through this adapter belongs to. Read once per process.
+ *
+ * @returns {string|null} null when the runner file is unreadable or carries no marker
+ */
+export function siblingRunnerVersion() {
+  if (runnerVersionCache !== undefined) return runnerVersionCache;
+  try {
+    const runnerFile = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'scripts', 'run-review.mjs');
+    runnerVersionCache = runnerVersionString(readFileSync(runnerFile, 'utf8').slice(0, 120));
+  } catch {
+    runnerVersionCache = null;
+  }
+  return runnerVersionCache;
+}
 
 /**
  * Non-terminal last-run states: a live run must keep the recorded pid alive.
@@ -331,7 +353,7 @@ export class FileSystemTelemetryAdapter extends TelemetryPort {
       reportDir,
       runsDir: resolveRunsDir(),
       runId,
-      base: { repoRoot, runnerPid: process.pid, tag: runTagFromEnv() },
+      base: { repoRoot, runnerPid: process.pid, ...(siblingRunnerVersion() ? { runnerVersion: siblingRunnerVersion() } : {}), tag: runTagFromEnv() },
     });
   }
 

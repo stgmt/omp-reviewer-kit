@@ -15,6 +15,7 @@
 
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { chmod, copyFile, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -81,6 +82,14 @@ if (isDirectExecution) {
     for (const proc of liveOmpProcs) killProcessTree(proc);
     liveOmpProcs.clear();
   });
+}
+
+// Every real OMP process loads the installed plugin, whose session_start stops live reviews on an
+// older runner. Without its own records folder that stop reads the developer's ~/.omp/review-kit-runs.
+if (isLiveE2E && !process.env.OMP_REVIEW_KIT_RUNS_DIR?.trim()) {
+  const liveRunsDir = mkdtempSync(path.join(tmpdir(), 'omp-live-runs-'));
+  process.env.OMP_REVIEW_KIT_RUNS_DIR = liveRunsDir;
+  process.on('exit', () => rmSync(liveRunsDir, { recursive: true, force: true }));
 }
 
 /**

@@ -376,6 +376,8 @@ export default function initExtension(pi) {
           if (ctx.ui?.setStatus) {
             ctx.ui.setStatus('reviewer-kit', 'reviewer-kit: conflict');
           }
+        } else if (result.state === 'skipped') {
+          ctx.ui.notify(result.message, 'warning');
         }
       } catch (err) {
         ctx.ui.notify(`reviewer-kit setup failed: ${err instanceof Error ? err.message : String(err)}`, 'error');
@@ -477,7 +479,7 @@ export default function initExtension(pi) {
           ctx.ui.notify('reviewer-kit: no review runs recorded for this project.', 'info');
           return;
         }
-        // The kit never stops a run; quiet and orphaned runs are listed so a person can decide.
+        // The kit never stops a quiet or orphaned run; a run on an older runner is stopped when a newer plugin starts.
         const open = summaries.filter((summary) => summary.classification !== 'done');
         const lines = [formatRunTable(summaries.slice(0, 10))];
         for (const summary of open) lines.push('', formatRunDetail(summary));
@@ -533,7 +535,24 @@ export default function initExtension(pi) {
   // the one this session happens to be in.
   const healOtherRepositories = (exceptRoot) => installer.healTargets({ exceptRoot }).then(() => undefined, () => undefined);
 
+  // Installing a newer plugin stops live reviews that still run on an older runner. This runs
+  // before anything else touches the repositories, and a failure here never blocks the session.
+  const stopOlderRuns = async (ctx) => {
+    try {
+      const { stopped } = await installer.stopSupersededRuns({ automatic: true });
+      if (stopped.length > 0 && ctx.ui?.notify) {
+        ctx.ui.notify(
+          `reviewer-kit stopped ${stopped.length} review(s) running on an older runner: ${stopped.map((run) => run.runId).join(', ')}. Their commits were blocked; commit again to review on this runner.`,
+          'warning',
+        );
+      }
+    } catch {
+      // the session start goes on without it
+    }
+  };
+
   pi.on('session_start', async (_event, ctx) => {
+    await stopOlderRuns(ctx);
     try {
       const info = await installer.status(ctx.cwd);
       if (info.state === 'not-git' || !info.isGitRepo) {

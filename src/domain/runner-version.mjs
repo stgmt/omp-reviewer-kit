@@ -29,3 +29,34 @@ export function isRunnerNewer(installedContent, canonicalContent) {
   }
   return false;
 }
+
+const VERSION_RE = /^(\d+)\.(\d+)\.(\d+)$/;
+
+/**
+ * The 'x.y.z' string of the marker on the first line of a runner.
+ *
+ * @param {string} content
+ * @returns {string|null} null when the content carries no marker
+ */
+export function runnerVersionString(content) {
+  const parsed = parseRunnerVersion(content);
+  return parsed ? parsed.join('.') : null;
+}
+
+/**
+ * Orders two 'x.y.z' version strings.
+ *
+ * @param {unknown} a
+ * @param {unknown} b
+ * @returns {-1|0|1|null} null when either side is not a plain 'x.y.z' version
+ */
+export function compareRunnerVersions(a, b) {
+  const left = typeof a === 'string' ? VERSION_RE.exec(a) : null;
+  const right = typeof b === 'string' ? VERSION_RE.exec(b) : null;
+  if (!left || !right) return null;
+  for (let i = 1; i <= 3; i += 1) {
+    const diff = Number(left[i]) - Number(right[i]);
+    if (diff !== 0) return diff < 0 ? -1 : 1;
+  }
+  return 0;
+}

@@ -60,3 +60,28 @@ test('Given a test marker inherited from an outer test run, When the wrapper run
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('Given a registry override in the outer environment, When the test wrapper runs a suite, Then the suite gets a throwaway target registry, never the user registry', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'omp-wrapper-registry-'));
+  try {
+    const probeOut = path.join(dir, 'probe.txt');
+    const probe = path.join(dir, 'probe.test.mjs');
+    await writeFile(probe, [
+      "import { writeFileSync } from 'node:fs';",
+      "import { test } from 'node:test';",
+      "test('probe', () => writeFileSync(process.env.PROBE_OUT, process.env.OMP_REVIEW_KIT_TARGETS ?? ''));",
+    ].join('\n'), 'utf8');
+    const userRegistry = path.join(dir, 'user-registry.json');
+    const env = { ...process.env, PROBE_OUT: probeOut, OMP_REVIEW_KIT_TARGETS: userRegistry };
+
+    const result = spawnSync(process.execPath, [WRAPPER, probe], { encoding: 'utf8', env, windowsHide: true });
+
+    assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
+    const registry = readFileSync(probeOut, 'utf8');
+    assert.notEqual(registry, '', 'the suite runs with a target registry set');
+    assert.notEqual(path.resolve(registry), path.resolve(userRegistry), 'the outer override never reaches the suite');
+    assert.equal(existsSync(path.dirname(registry)), false, 'the throwaway registry folder is removed afterwards');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
