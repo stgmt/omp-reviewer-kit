@@ -205,8 +205,7 @@ for (const [label, mod] of ADAPTERS) {
     assert.equal(await recoverTaskReport(''), null);
   });
 
-  test(`${label}: Given a prompt with a report path, When the child is spawned, Then the path is exported and the session dir is removed afterwards`, async () => {
-    const reportPath = path.join(tmpdir(), 'reviewer-kit-report-test.md');
+  test(`${label}: Given reviews run, When the child is spawned, Then its session dir exists during the run and is removed afterwards`, async () => {
     const seen = [];
     const adapter = new OmpCliReviewerAdapter({
       runner: async (text, root, timeoutMs, options) => {
@@ -216,10 +215,9 @@ for (const [label, mod] of ADAPTERS) {
       },
     });
 
-    await adapter.executeReview({ prompt: ReviewPrompt.forDiff('a'.repeat(64), '', [], { reportPath }), cwd });
+    await adapter.executeReview({ prompt: ReviewPrompt.forDiff('a'.repeat(64), '', []), cwd });
     await adapter.executeReview({ prompt: 'plain string prompt', cwd });
 
-    assert.equal(seen[0].env.OMP_REVIEW_KIT_REPORT_PATH, reportPath);
     assert.equal(seen[1].env, undefined);
     assert.match(path.basename(seen[0].sessionDir), new RegExp(`^reviewer-kit-session-${process.pid}-`));
     for (const { sessionDir } of seen) {
@@ -290,23 +288,20 @@ for (const [label, mod] of ADAPTERS) {
     assert.equal(review.stdout, FAILURE_STDOUT);
   });
 
-  test(`${label}: the crash retry keeps the report path and gets its own session dir`, async () => {
-    const reportPath = path.join(tmpdir(), 'reviewer-kit-report-retry.md');
+  test(`${label}: the crash retry gets its own session dir`, async () => {
     const calls = [];
     const adapter = new OmpCliReviewerAdapter({
       runner: async (text, root, timeoutMs, options) => {
-        calls.push({ env: options.env, sessionDir: options.sessionDir });
+        calls.push({ sessionDir: options.sessionDir });
         if (calls.length === 1) return { status: -1, stdout: '', stderr: '' };
         await writeTaskArtifact(options.sessionDir, REPORT);
         return { status: 0, stdout: 'Working...\n', stderr: '' };
       },
     });
 
-    const review = await adapter.executeReview({ prompt: promptClassOf(mod).forDiff('d'.repeat(64), '', [], { reportPath }), cwd });
+    const review = await adapter.executeReview({ prompt: promptClassOf(mod).forDiff('d'.repeat(64), '', []), cwd });
 
     assert.equal(calls.length, 2);
-    assert.equal(calls[0].env.OMP_REVIEW_KIT_REPORT_PATH, reportPath);
-    assert.equal(calls[1].env.OMP_REVIEW_KIT_REPORT_PATH, reportPath);
     assert.notEqual(calls[0].sessionDir, calls[1].sessionDir);
     for (const { sessionDir } of calls) {
       assert.match(path.basename(sessionDir), new RegExp(`^reviewer-kit-session-${process.pid}-`));
@@ -347,17 +342,6 @@ for (const [label, mod] of ADAPTERS) {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
-  });
-
-  test(`${label}: ReviewPrompt carries the report path accessor and the best-effort wording`, () => {
-    const Prompt = promptClassOf(mod);
-    const reportPath = path.join(tmpdir(), 'reviewer-kit-report-accessor.md');
-    const withPath = Prompt.forDiff('b'.repeat(64), '', [], { reportPath });
-    const withoutPath = Prompt.forDiff('b'.repeat(64));
-
-    assert.equal(withPath.reportPath, reportPath);
-    assert.match(withPath.toString(), /best-effort durable copy/);
-    assert.equal(withoutPath.reportPath, null);
   });
 }
 
@@ -490,31 +474,11 @@ for (const [label, SnapshotAdapter] of SNAPSHOT_ADAPTERS) {
   });
 }
 
-test('ReviewPrompt exposes the report path and tells the reviewer the write is best-effort', () => {
-  const reportPath = path.join(tmpdir(), 'reviewer-kit-report-x.md');
-  const withPath = ReviewPrompt.forDiff('b'.repeat(64), '', [], { reportPath });
-  const withoutPath = ReviewPrompt.forDiff('b'.repeat(64));
-
-  assert.equal(withPath.reportPath, reportPath);
-  assert.equal(withoutPath.reportPath, null);
-  assert.match(withPath.toString(), /best-effort durable copy/);
-  assert.match(withPath.toString(), /must not retry or work around it/);
-  assert.equal(withoutPath.toString().includes('durable per-run report path'), false);
-});
-
-test('reviewer-kit agent treats the report write as best-effort and never works around a denial', async () => {
-  const agent = await readFile(new URL('../agents/reviewer-kit.md', import.meta.url), 'utf8');
-
-  assert.match(agent, /best-effort attempt to write/);
-  assert.match(agent, /do not retry, rephrase, or work around it/);
-  assert.match(agent, /the runner recovers the complete report from your yielded task result/);
-});
-
 // End to end through the real defaultRunner: a fake `omp` records its argv and
 // environment, persists the task artifact where the real task tool would, and
 // prints the dispatcher failure the incident produced.
 for (const [label, mod] of ADAPTERS) {
-  test(`${label}: defaultRunner spawns omp with --session-dir (not --no-session) and the exported report path, and recovers the report`, async () => {
+  test(`${label}: defaultRunner spawns omp with --session-dir (not --no-session) and recovers the report`, async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'rk-fake-omp-'));
     const previousOmp = process.env.OMP_REVIEW_KIT_OMP;
     try {
@@ -529,7 +493,7 @@ for (const [label, mod] of ADAPTERS) {
         "process.stdin.on('end', () => {",
         "  if (args.includes('--no-tools')) { process.stdout.write('READY\\n'); return; }",
         "  const at = args.indexOf('--session-dir');",
-        `  writeFileSync(${JSON.stringify(dump)}, JSON.stringify({ args, reportPath: process.env.OMP_REVIEW_KIT_REPORT_PATH ?? null }));`,
+        `  writeFileSync(${JSON.stringify(dump)}, JSON.stringify({ args }));`,
         '  if (at >= 0) {',
         "    const dir = path.join(args[at + 1], 'sess');",
         '    mkdirSync(dir, { recursive: true });',
@@ -544,18 +508,16 @@ for (const [label, mod] of ADAPTERS) {
         : `#!/bin/sh\nexec node "${script}" "$@"\n`);
       if (!isWindows) await chmod(launcher, 0o755);
       process.env.OMP_REVIEW_KIT_OMP = launcher;
-      const reportPath = path.join(tmpdir(), 'reviewer-kit-report-e2e.md');
 
       const adapter = new mod.OmpCliReviewerAdapter({ preflight: null });
       const review = await adapter.executeReview({
-        prompt: ReviewPrompt.forDiff('c'.repeat(64), '', [], { reportPath }),
+        prompt: ReviewPrompt.forDiff('c'.repeat(64), '', []),
         cwd,
       });
 
       const invocation = JSON.parse(await readFile(dump, 'utf8'));
       assert.ok(invocation.args.includes('--session-dir'));
       assert.equal(invocation.args.includes('--no-session'), false);
-      assert.equal(invocation.reportPath, reportPath);
       assert.equal(review.stdout, REPORT);
       const leftovers = (await readdir(tmpdir())).filter((name) => name.startsWith(`reviewer-kit-session-${process.pid}-`));
       assert.deepEqual(leftovers, [], 'the per-attempt session dir must be removed');

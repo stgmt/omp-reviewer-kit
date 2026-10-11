@@ -157,8 +157,8 @@ export class FileSystemSnapshotAdapter extends SnapshotStorePort {
       // Deterministic reuse: identical staged content was materialized before
       // and re-verified byte-for-byte over the WHOLE served index.
       this.#markReused(reuseDir);
-      // The shared cache dir is read-only for the run lifetime: the durable
-      // per-run report lives OUTSIDE it (see ReviewPrompt reportPath), so
+      // The shared cache dir is read-only for the run lifetime: per-run scratch
+      // (the scout context pack) lives OUTSIDE it, so
       // reuse must not create, delete, or overwrite anything inside.
       await this.#touch(reuseDir);
       await this.#sweep(reuseDir);
@@ -481,10 +481,10 @@ export class FileSystemSnapshotAdapter extends SnapshotStorePort {
         if (await this.#isProtected(victim.full)) continue;
         await rm(victim.full, { recursive: true, force: true }).catch(() => {});
       }
-      // Orphan per-run durable reports (crashed runs never reach their
-      // finally): files only, TTL-bounded, and only when the owning pid is
-      // no longer alive — a same-diff concurrent run must never lose its
-      // report fallback mid-flight.
+      // Orphan per-run scratch files (scout context packs of crashed runs never
+      // reach their finally): files only, TTL-bounded, and only when the owning
+      // pid is no longer alive — a same-diff concurrent run must never lose its
+      // scratch file mid-flight.
       for (const name of names) {
         if (!name.startsWith('reviewer-kit-report-') || !name.endsWith('.md')) continue;
         const full = path.join(base, name);

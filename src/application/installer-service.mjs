@@ -9,6 +9,7 @@ import { hookBodyDigest, isHookNewer, isOwnedHook } from '../domain/hook-templat
 import { FileTargetRegistry } from '../infra/target-registry.mjs';
 import { resolveRunsDir } from '../infra/filesystem-telemetry-adapter.mjs';
 import { readRunnerFileVersion, stopSupersededRuns } from './superseded-run-stopper.mjs';
+import { repoReportsDir } from '../infra/filesystem-report-store-adapter.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1012,9 +1013,9 @@ export class PluginInstallerService {
       return inspection;
     }
 
-    // Scan for latest review report
+    // Scan for the latest review report (reports live outside the repository).
     let latestReview;
-    const reportsDir = path.join(inspection.repoRoot, 'audit-reports', 'commit-reviews');
+    const reportsDir = repoReportsDir(inspection.repoRoot);
     try {
       const files = await readdir(reportsDir);
       const mdFiles = files.filter((f) => f.endsWith('.md')).sort().reverse();
@@ -1024,6 +1025,7 @@ export class PluginInstallerService {
         const verdictMatch = content.match(/- result: (PASS|BLOCK)/);
         latestReview = {
           file: latestFile,
+          path: path.join(reportsDir, latestFile),
           verdict: verdictMatch ? verdictMatch[1] : 'UNKNOWN',
           date: latestFile.slice(0, 24).replace(/-/g, (m, offset) => (offset > 18 ? '.' : offset > 10 ? ':' : '-')),
         };
@@ -1036,7 +1038,7 @@ export class PluginInstallerService {
     // malformed files degrade silently (older runner versions lack it).
     let lastRun;
     try {
-      const raw = await readFile(path.join(reportsDir, 'last-run.json'), 'utf8');
+      const raw = await readFile(path.join(inspection.repoRoot, 'audit-reports', 'commit-reviews', 'last-run.json'), 'utf8');
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         lastRun = reconcileLastRun({

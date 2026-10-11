@@ -1,4 +1,4 @@
-// omp-reviewer-kit runner v0.20.1
+// omp-reviewer-kit runner v0.20.2
 import { createHash, randomBytes } from 'node:crypto';
 import { appendFile, chmod, lstat, mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
@@ -1780,7 +1780,6 @@ export class ReviewPrompt {
   #executionEvidenceText;
   #roundContextText;
   #scoutBaselineText;
-  #reportPath;
   #contextPackPath;
   #riskLanes;
   #hunterShardsText;
@@ -1807,7 +1806,6 @@ export class ReviewPrompt {
     this.#inlineDiff = typeof extras?.inlineDiff === 'string' && extras.inlineDiff.length > 0 ? extras.inlineDiff : null;
     this.#reviewProfile = typeof extras?.reviewProfile === 'string' ? extras.reviewProfile : null;
     this.#fileClasses = Array.isArray(extras?.fileClasses) ? extras.fileClasses : [];
-    this.#reportPath = typeof extras?.reportPath === 'string' && extras.reportPath.length > 0 ? extras.reportPath : null;
     this.#contextPackPath = typeof extras?.contextPackPath === 'string' && extras.contextPackPath.length > 0 ? extras.contextPackPath : null;
     this.#hunterShardsText = typeof extras?.hunterShardsText === 'string' ? extras.hunterShardsText : '';
     this.#riskLanes = Array.isArray(extras?.riskLanes) && extras.riskLanes.length > 0 ? extras.riskLanes.filter((l) => typeof l === 'string' && l.length > 0) : null;
@@ -1844,7 +1842,7 @@ export class ReviewPrompt {
       'The task must run exactly the risk lanes named below under "Risk lanes for this diff" (each lane = one blocking review-risk-hunter task in a single batch). A lane list of ["correctness","security"] restores both standard lanes; only the correctness lane inspects focused tests and YAGNI, and only when a concrete reachable P1/P2 impact is proven.',
       'The task must not edit, stage, reset, commit, or delete anything.',
       'Invoke the task with only the supported name, agent, and task fields; omit model, outputSchema, schemaMode, and isolated so the reviewer agent owns its declared schema and model roles.',
-      'After the task returns, reproduce its complete report verbatim; if the result says it was truncated or provides an agent URI, read that URI first, and never summarize or omit a rejection envelope. If the agent URI cannot be read, read the durable report copy at the per-run report path named in this prompt (the orchestrator writes it before yielding — pass that path to the reviewer-kit task in its task text) and reproduce that file verbatim instead.',
+      'After the task returns, reproduce its complete report verbatim; if the result says it was truncated or provides an agent URI, read that URI first, and never summarize or omit a rejection envelope. If the agent URI cannot be read, yield what you have verbatim; the runner recovers the complete report from the task session artifact.',
       'If the task fails, returns empty, or its result cannot be read, do not summarize: emit exactly one review_failure envelope — the line REVIEW_REJECTION_ENVELOPE_BEGIN, then one JSON object {"schema":"review-rejection-envelope@1","kind":"review_failure","diff_hash":"<the staged diff hash from this prompt>","findings":[],"non_coverable_items":[],"failure":{"code":"execution_failure","message":"<the observed task error>"}}, then REVIEW_REJECTION_ENVELOPE_END, then REVIEW_RESULT=BLOCK on its own line.',
       'Reproduce the task report as raw Markdown text exactly as returned; never JSON-encode, wrap, or reformat it.',
       'The verdict contract in this prompt overrides any other format: finish with exactly one standalone REVIEW_RESULT=PASS or REVIEW_RESULT=BLOCK line as the last non-empty line of the output — markers anywhere else are ignored — even if a skill describes a different verdict vocabulary.',
@@ -1898,7 +1896,6 @@ export class ReviewPrompt {
       lines.push('', 'Embed the SCOUT BASELINE block below verbatim in the context scout task text only (not in the hunter or verifier tasks):', this.#scoutBaselineText);
     }
     lines.push(`The staged diff hash for this hook invocation is ${this.#diffHash}.`);
-    if (this.#reportPath) lines.push(`The durable per-run report path for this review is \`${this.#reportPath}\`. Instruct the reviewer-kit task to write its complete final report verbatim to that path before yielding, as a best-effort durable copy: if a project policy guard denies the write, the task must not retry or work around it, because the runner recovers the report from the task session artifacts. It is the only path the task may write.`);
     if (this.#reviewProfile) lines.push(`Review profile for this diff: ${this.#reviewProfile}.`);
     if (Array.isArray(this.#riskLanes)) lines.push(`Risk lanes for this diff: ${JSON.stringify(this.#riskLanes)}.`);
     if (this.#hunterShardsText) lines.push(this.#hunterShardsText);
@@ -1913,10 +1910,6 @@ export class ReviewPrompt {
 
   get diffHash() {
     return this.#diffHash;
-  }
-
-  get reportPath() {
-    return this.#reportPath;
   }
 
   get snapshotDir() {
@@ -2437,9 +2430,9 @@ export function installRunSignalGuard({
   };
 }
 
-// Per-process run sequence so two concurrent execute() calls on identical
-// staged content never share one runReportPath within a millisecond tick.
-let REPORT_SEQ = 0;
+// Per-process sequence so two concurrent execute() calls on identical
+// staged content never share one scratch path within a millisecond tick.
+let SCRATCH_SEQ = 0;
 
 /**
  * Decides how a snapshot dir is disposed when a run ends (normally or by
@@ -2583,20 +2576,11 @@ export class ReviewWorkflowService {
 
     const runStamp = ReviewReport.formatTimestamp(new Date(startedAt));
     const runId = diff.isEmpty() ? `${runStamp}-skipped` : `${runStamp}-${diff.hash.slice(0, 12)}`;
-    // Durable per-run report copy: the dispatcher falls back to it when the
-    // agent URI is unreadable. It lives OUTSIDE the shared content-addressed
-    // snapshot dir (run-unique, not diff-addressed) so concurrent reviews
-    // on identical staged content never share, delete, or overwrite each
-    // other's fallback — the cache dir stays read-only for the run lifetime.
-    // Name: runId(timestamp+hash) + per-process seq + random nonce + pid
-    // tail. The nonce makes the path unpredictable to same-user processes
-    // (a predictable name can be pre-created as a planted PASS report the
-    // dispatcher would reproduce verbatim); the pid tail feeds the
-    // orphan-sweep owner check (`-<pid>.md$`).
-    const runReportPath = path.join(tmpdir(), `reviewer-kit-report-${runId}-${REPORT_SEQ++}-${randomBytes(8).toString('hex')}-${process.pid}.md`);
-    // Deterministic scout context pack, written next to the report (same
-    // `reviewer-kit-report-` prefix and `-<pid>.md` tail, so the orphan sweep owns it).
-    const contextPackPath = path.join(tmpdir(), path.basename(runReportPath).replace('reviewer-kit-report-', 'reviewer-kit-report-ctx-'));
+    // Deterministic scout context pack, written to the OS temp dir. Name:
+    // runId + per-process seq + random nonce + pid tail, so concurrent reviews
+    // never share it. The `reviewer-kit-report-` prefix and `-<pid>.md` tail
+    // let the orphan sweep reclaim it after a crash.
+    const contextPackPath = path.join(tmpdir(), `reviewer-kit-report-ctx-${runId}-${SCRATCH_SEQ++}-${randomBytes(8).toString('hex')}-${process.pid}.md`);
     let contextPackWritten = false;
     let telemetry;
     try {
@@ -2625,7 +2609,6 @@ export class ReviewWorkflowService {
           }).catch(() => {});
         });
       }
-      await rm(runReportPath, { force: true }).catch(() => {});
       await rm(contextPackPath, { force: true }).catch(() => {});
     };
     const uninstall = installRunSignalGuard({ telemetry, runId, cleanup: cleanupSnapshots });
@@ -2980,7 +2963,6 @@ export class ReviewWorkflowService {
           riskLanes,
           hunterShardsText,
           fileClasses: fileClassRows,
-          reportPath: runReportPath,
           contextPackPath: contextPackWritten ? contextPackPath : '',
           inlineDiff: diff.length <= 50_000 ? diff.bytes.toString('utf8') : '',
         });
@@ -3007,9 +2989,7 @@ export class ReviewWorkflowService {
             }).catch(() => {});
           });
         }
-        // The dispatcher consumed the durable report (or never needed it);
-        // remove this run's copy so per-run fallbacks never accumulate.
-        await rm(runReportPath, { force: true }).catch(() => {});
+        // Per-run scratch: the scout context pack goes with the run.
         await rm(contextPackPath, { force: true }).catch(() => {});
       }
 
@@ -3789,9 +3769,9 @@ export function isModelProviderFailure(result) {
 // OMP child with its own `--session-dir`, so the task tool persists every
 // task's complete result as `<session>/<artifacts>/<TaskId>.md`. The
 // dispatcher's stdout can still lose the report (truncated task preview,
-// unreadable `agent://` URI) and the durable per-run report file depends on
-// a bash heredoc that project policy guards may deny; this artifact needs
-// neither, so the runner reads it directly after the child exits.
+// unreadable `agent://` URI). The artifact needs no bash write, so project
+// policy guards that deny shell writes cannot lose the report, and the runner
+// reads it directly after the child exits.
 const TASK_ARTIFACT_MAX_BYTES = 8 * 1024 * 1024;
 const REPORT_MARKER_LINE_RE = /^REVIEW_RESULT=(PASS|BLOCK)\r?$/m;
 const EXECUTION_FAILURE_CODE_RE = /"code"\s*:\s*"execution_failure"/;
@@ -4212,7 +4192,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
     }
   }
 
-  async #runReviewAttempt(promptText, cwd, telemetry, attempts, attemptIndex, { reportPath = null } = {}) {
+  async #runReviewAttempt(promptText, cwd, telemetry, attempts, attemptIndex) {
     const startedAt = Date.now();
     const record = { attemptIndex, startedAt: new Date(startedAt).toISOString() };
     const stageHistory = [];
@@ -4252,9 +4232,6 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       const result = await this.#runner(promptText, cwd, undefined, {
         maxTime: this.#reviewMaxTime.arg,
         ...(sessionDir ? { sessionDir } : {}),
-        // Lets project policy guards recognize the one write the reviewer
-        // may perform (its durable report) without pattern-matching the command.
-        ...(reportPath ? { env: { OMP_REVIEW_KIT_REPORT_PATH: reportPath } } : {}),
         onSpawn: (pid) => {
           record.pid = pid;
           void telemetry.record('review_attempt_started', { ...record, pid });
@@ -4568,7 +4545,6 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       skills: reviewSkillsSelection().label,
     });
     const promptText = typeof prompt === 'string' ? prompt : prompt.toString();
-    const reportPath = typeof prompt === 'object' && typeof prompt?.reportPath === 'string' ? prompt.reportPath : null;
     const attempts = [];
     const probes = [];
 
@@ -4582,11 +4558,11 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
         stderr: formatProviderOutageError(preflightFailure.stderr || preflightFailure.stdout),
       };
     } else {
-      result = await this.#runReviewAttempt(promptText, cwd, telemetry, attempts, 0, { reportPath });
+      result = await this.#runReviewAttempt(promptText, cwd, telemetry, attempts, 0);
       // A hard child crash (Windows 0xC0000409 / -1) with no output is a
       // runtime fault, not a verdict: one more run with the same command.
       if (isChildCrash(result)) {
-        result = await this.#runReviewAttempt(promptText, cwd, telemetry, attempts, 1, { reportPath });
+        result = await this.#runReviewAttempt(promptText, cwd, telemetry, attempts, 1);
       }
       if (isModelProviderFailure(result)) {
         result = {
@@ -4944,8 +4920,8 @@ export class FileSystemSnapshotAdapter extends SnapshotStorePort {
       // Deterministic reuse: identical staged content was materialized before
       // and re-verified byte-for-byte over the WHOLE served index.
       this.lastReused = reuseDir;
-      // The shared cache dir is read-only for the run lifetime: the durable
-      // per-run report lives OUTSIDE it (see ReviewPrompt reportPath), so
+      // The shared cache dir is read-only for the run lifetime: per-run scratch
+      // (the scout context pack) lives OUTSIDE it, so
       // reuse must not create, delete, or overwrite anything inside.
       await this.#touch(reuseDir);
       await this.#sweep(reuseDir);
@@ -5256,10 +5232,10 @@ export class FileSystemSnapshotAdapter extends SnapshotStorePort {
         if (await this.#isProtected(victim.full)) continue;
         await rm(victim.full, { recursive: true, force: true }).catch(() => {});
       }
-      // Orphan per-run durable reports (crashed runs never reach their
-      // finally): files only, TTL-bounded, and only when the owning pid is
-      // no longer alive — a same-diff concurrent run must never lose its
-      // report fallback mid-flight.
+      // Orphan per-run scratch files (scout context packs of crashed runs never
+      // reach their finally): files only, TTL-bounded, and only when the owning
+      // pid is no longer alive — a same-diff concurrent run must never lose its
+      // scratch file mid-flight.
       for (const name of names) {
         if (!name.startsWith('reviewer-kit-report-') || !name.endsWith('.md')) continue;
         const full = path.join(base, name);
@@ -5507,16 +5483,47 @@ export class FileSystemSnapshotAdapter extends SnapshotStorePort {
 }
 
 
-export class FileSystemReportStoreAdapter extends ReportStorePort {
-  #relativeDir;
+export function reportsRootDir({ env = process.env, home = homedir() } = {}) {
+  const override = typeof env.OMP_REVIEW_KIT_REPORTS_DIR === 'string' ? env.OMP_REVIEW_KIT_REPORTS_DIR.trim() : '';
+  if (override.length > 0) return path.resolve(override);
+  return path.join(home, 'Documents', 'omp-reviewer-kit');
+}
 
-  constructor(relativeDir = path.join('audit-reports', 'commit-reviews')) {
+/**
+ * Folder name of one repository's reports: its directory name plus a short hash of its
+ * absolute path, so two checkouts that share a directory name (for example every task
+ * worktree named `wt`) never share a reports folder.
+ *
+ * @param {string} repoRoot
+ * @returns {string}
+ */
+export function repoReportsFolderName(repoRoot) {
+  const resolved = path.resolve(repoRoot);
+  const digest = createHash('sha256').update(resolved).digest('hex').slice(0, 12);
+  return `${path.basename(resolved)}-${digest}`;
+}
+
+/**
+ * The folder holding one repository's reports: `<reports root>/<repository folder name>`.
+ *
+ * @param {string} repoRoot
+ * @param {{ env?: NodeJS.ProcessEnv, home?: string }} [options]
+ * @returns {string}
+ */
+export function repoReportsDir(repoRoot, options = {}) {
+  return path.join(reportsRootDir(options), repoReportsFolderName(repoRoot));
+}
+
+export class FileSystemReportStoreAdapter extends ReportStorePort {
+  #rootDir;
+
+  constructor({ rootDir = reportsRootDir() } = {}) {
     super();
-    this.#relativeDir = relativeDir;
+    this.#rootDir = rootDir;
   }
 
   async saveReport(repoRoot, report) {
-    const reportDir = path.join(repoRoot, this.#relativeDir);
+    const reportDir = path.join(this.#rootDir, repoReportsFolderName(repoRoot));
     await mkdir(reportDir, { recursive: true });
 
     const reportPath = path.join(reportDir, report.filename);
@@ -5601,7 +5608,7 @@ function formatProviderOutageError(lastStderr) {
     'OMP could not get an answer from a model (this is an outage or a configuration problem, not a code verdict).',
     'Fix: reviewer-kit does not choose models. Check the login and the default model role in OMP itself,',
     '  and configure fallbacks there (modelRoles / retry.fallbackChains in ~/.omp/agent/config.yml).',
-    'The detailed report and run telemetry are under audit-reports/commit-reviews/.',
+    'The detailed report is the REVIEW_REJECTION_REPORT path above, outside the repository; run telemetry is under audit-reports/commit-reviews/.',
   ];
   const tail = typeof lastStderr === 'string'
     ? lastStderr.trim().split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(-3).join(' | ')
@@ -5916,10 +5923,10 @@ const OBJECT_ID = /^[0-9a-f]{40}$|^[0-9a-f]{64}$/;
 
 /**
  * Infrastructure adapter remembering PASS verdicts by (index tree, diff hash).
- * Only PASS is reusable: a BLOCK is always re-reviewed. A hit is honored only
- * when the referenced report still exists inside the repository and states the
- * same diff hash and `result: PASS`, so a stale or tampered index line fails closed
- * into a normal full review.
+ * Only PASS is reusable: a BLOCK is always re-reviewed. Reports live outside the
+ * repository, so an entry stores the report's absolute path. A hit is honored only
+ * when that report still exists and states the same diff hash and `result: PASS`;
+ * a repository-relative or stale entry fails closed into a normal full review.
  */
 export class FileSystemVerdictCacheAdapter extends VerdictCachePort {
   #relativeDir;
@@ -5958,9 +5965,8 @@ export class FileSystemVerdictCacheAdapter extends VerdictCachePort {
       if (entry.treeSha !== treeSha || entry.diffHash !== diffHash) continue;
       const age = now - Date.parse(entry.at);
       if (!Number.isFinite(age) || age < 0 || age > this.#ttlMs) continue;
-      const reportPath = path.resolve(repoRoot, String(entry.reportPath ?? ''));
-      const relative = path.relative(repoRoot, reportPath);
-      if (!entry.reportPath || relative.startsWith('..') || path.isAbsolute(relative)) continue;
+      const reportPath = typeof entry.reportPath === 'string' ? entry.reportPath : '';
+      if (!path.isAbsolute(reportPath)) continue;
       let report;
       try {
         report = await readFile(reportPath, 'utf8');
@@ -5988,7 +5994,7 @@ export class FileSystemVerdictCacheAdapter extends VerdictCachePort {
       treeSha,
       diffHash,
       verdict: 'PASS',
-      reportPath: path.relative(repoRoot, reportPath).split(path.sep).join('/'),
+      reportPath: path.resolve(reportPath),
       at: this.#clock().toISOString(),
     });
     await appendFile(path.join(dir, CACHE_FILE), `${line}\n`, 'utf8');

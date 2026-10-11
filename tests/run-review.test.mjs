@@ -4,7 +4,7 @@ import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { runReview } from '../scripts/run-review.mjs';
+import { repoReportsDir, runReview } from '../scripts/run-review.mjs';
 
 
 async function makeRoot(prefix = 'omp-review-kit-') {
@@ -128,7 +128,7 @@ test('allows a staged change only after reviewer-kit PASS', async () => {
   const report = await readFile(result.reportPath, 'utf8');
   assert.match(report, /REVIEW_RESULT=PASS/);
   assert.match(report, /developer-architecture/);
-  assert.equal(result.reportPath.startsWith(path.join(root, 'audit-reports')), true);
+  assert.equal(path.dirname(result.reportPath), repoReportsDir(root));
 });
 
 test('blocks a staged change after reviewer-kit BLOCK', async () => {

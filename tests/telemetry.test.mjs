@@ -367,8 +367,10 @@ test('provider outage message is actionable and marker-free', () => {
   assert.doesNotMatch(message, /REVIEW_RESULT=/);
   assert.match(message, /infrastructure failure/);
   assert.match(message, /does not choose models/);
-  assert.match(message, /retry\.fallbackChains/);
   assert.doesNotMatch(message, /OMP_REVIEW_KIT_(MODEL|FALLBACK_MODELS)/);
+  assert.match(message, /REVIEW_REJECTION_REPORT/);
+  assert.match(message, /outside the repository/);
+  assert.doesNotMatch(message, /report and run telemetry are under audit-reports\/commit-reviews/);
   assert.match(message, /429 quota/);
 });
 

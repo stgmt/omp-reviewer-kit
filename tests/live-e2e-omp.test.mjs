@@ -24,6 +24,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const isDirectExecution = Boolean(process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url)));
 import test, { after, describe, it } from 'node:test';
 import { ReviewPrompt } from '../src/index.mjs';
+import { repoReportsDir } from '../src/infra/filesystem-report-store-adapter.mjs';
 
 const isLiveE2E = process.env.OMP_REVIEW_KIT_LIVE_E2E === '1';
 export const INFRA_RETRY_PATTERN = /RESOURCE_EXHAUSTED|429|socket connection was closed|timed out/i;
@@ -824,8 +825,8 @@ describe('Feature: Real Live OMP & Plugin Discovery E2E (No Mocks)', () => {
       );
       assert.match(commitRes2.stdout + commitRes2.stderr, /reviewer-kit BLOCK/);
 
-      // Verify commit reports were written to audit-reports/commit-reviews/
-      const reportsDir = path.join(repoDir, 'audit-reports', 'commit-reviews');
+      // Verify commit reports were written to the reports folder outside the repository
+      const reportsDir = repoReportsDir(repoDir);
       const reportFiles = await readdir(reportsDir);
       assert.ok(reportFiles.length >= 2, 'Audit reports must be created for both blocked commits');
     } finally {

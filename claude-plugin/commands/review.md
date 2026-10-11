@@ -11,4 +11,4 @@ A review takes up to about 10 minutes, longer than a default tool timeout. Start
 node "${CLAUDE_PLUGIN_ROOT}/scripts/bridge.mjs" review
 ```
 
-Exit code 0 means PASS; 1 means BLOCK or a review failure; 2 means OMP or the OMP plugin is missing or outdated (tell the user to run `/omp-reviewer-kit:install-omp`). Quote the verdict, findings, or the infrastructure message to the user verbatim. Do not retry with different models, do not set model environment variables, and do not bypass the gate. Reports are stored under `audit-reports/commit-reviews/`.
+Exit code 0 means PASS; 1 means BLOCK or a review failure; 2 means OMP or the OMP plugin is missing or outdated (tell the user to run `/omp-reviewer-kit:install-omp`). Quote the verdict, findings, or the infrastructure message to the user verbatim. Do not retry with different models, do not set model environment variables, and do not bypass the gate. Reports are stored in `~/Documents/omp-reviewer-kit/<repository>/`; the path is printed as `REVIEW_REJECTION_REPORT=` or `reviewer-kit PASS:`.

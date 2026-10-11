@@ -43,7 +43,6 @@ export class ReviewPrompt {
   #executionEvidenceText;
   #roundContextText;
   #scoutBaselineText;
-  #reportPath;
   #contextPackPath;
   #riskLanes;
   #hunterShardsText;
@@ -70,7 +69,6 @@ export class ReviewPrompt {
     this.#inlineDiff = typeof extras?.inlineDiff === 'string' && extras.inlineDiff.length > 0 ? extras.inlineDiff : null;
     this.#reviewProfile = typeof extras?.reviewProfile === 'string' ? extras.reviewProfile : null;
     this.#fileClasses = Array.isArray(extras?.fileClasses) ? extras.fileClasses : [];
-    this.#reportPath = typeof extras?.reportPath === 'string' && extras.reportPath.length > 0 ? extras.reportPath : null;
     this.#contextPackPath = typeof extras?.contextPackPath === 'string' && extras.contextPackPath.length > 0 ? extras.contextPackPath : null;
     this.#hunterShardsText = typeof extras?.hunterShardsText === 'string' ? extras.hunterShardsText : '';
     this.#riskLanes = Array.isArray(extras?.riskLanes) && extras.riskLanes.length > 0 ? extras.riskLanes.filter((l) => typeof l === 'string' && l.length > 0) : null;
@@ -108,7 +106,7 @@ export class ReviewPrompt {
       'The task must run exactly the risk lanes named below under "Risk lanes for this diff" (each lane = one blocking review-risk-hunter task in a single batch). A lane list of ["correctness","security"] restores both standard lanes; only the correctness lane inspects focused tests and YAGNI, and only when a concrete reachable P1/P2 impact is proven.',
       'The task must not edit, stage, reset, commit, or delete anything.',
       'Invoke the task with only the supported name, agent, and task fields; omit model, outputSchema, schemaMode, and isolated so the reviewer agent owns its declared schema and model roles.',
-      'After the task returns, reproduce its complete report verbatim; if the result says it was truncated or provides an agent URI, read that URI first, and never summarize or omit a rejection envelope. If the agent URI cannot be read, read the durable report copy at the per-run report path named in this prompt (the orchestrator writes it before yielding — pass that path to the reviewer-kit task in its task text) and reproduce that file verbatim instead.',
+      'After the task returns, reproduce its complete report verbatim; if the result says it was truncated or provides an agent URI, read that URI first, and never summarize or omit a rejection envelope. If the agent URI cannot be read, yield what you have verbatim; the runner recovers the complete report from the task session artifact.',
       'If the task fails, returns empty, or its result cannot be read, do not summarize: emit exactly one review_failure envelope — the line REVIEW_REJECTION_ENVELOPE_BEGIN, then one JSON object {"schema":"review-rejection-envelope@1","kind":"review_failure","diff_hash":"<the staged diff hash from this prompt>","findings":[],"non_coverable_items":[],"failure":{"code":"execution_failure","message":"<the observed task error>"}}, then REVIEW_REJECTION_ENVELOPE_END, then REVIEW_RESULT=BLOCK on its own line.',
       'Reproduce the task report as raw Markdown text exactly as returned; never JSON-encode, wrap, or reformat it.',
       'The verdict contract in this prompt overrides any other format: finish with exactly one standalone REVIEW_RESULT=PASS or REVIEW_RESULT=BLOCK line as the last non-empty line of the output — markers anywhere else are ignored — even if a skill describes a different verdict vocabulary.',
@@ -162,7 +160,6 @@ export class ReviewPrompt {
       lines.push('', 'Embed the SCOUT BASELINE block below verbatim in the context scout task text only (not in the hunter or verifier tasks):', this.#scoutBaselineText);
     }
     lines.push(`The staged diff hash for this hook invocation is ${this.#diffHash}.`);
-    if (this.#reportPath) lines.push(`The durable per-run report path for this review is \`${this.#reportPath}\`. Instruct the reviewer-kit task to write its complete final report verbatim to that path before yielding, as a best-effort durable copy: if a project policy guard denies the write, the task must not retry or work around it, because the runner recovers the report from the task session artifacts. It is the only path the task may write.`);
     if (this.#reviewProfile) lines.push(`Review profile for this diff: ${this.#reviewProfile}.`);
     if (Array.isArray(this.#riskLanes)) lines.push(`Risk lanes for this diff: ${JSON.stringify(this.#riskLanes)}.`);
     if (this.#hunterShardsText) lines.push(this.#hunterShardsText);
@@ -177,10 +174,6 @@ export class ReviewPrompt {
 
   get diffHash() {
     return this.#diffHash;
-  }
-
-  get reportPath() {
-    return this.#reportPath;
   }
 
   get snapshotDir() {

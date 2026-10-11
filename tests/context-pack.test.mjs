@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { access, mkdtemp, readFile } from 'node:fs/promises';
+import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -146,7 +146,7 @@ for (const [label, Prompt] of [['src module', ReviewPrompt], ['runner copy', run
   assert.equal(Prompt.forDiff('a'.repeat(64), '/snap', [], { contextPackPath: '/tmp/pack.md' }).contextPackPath, '/tmp/pack.md');
 });
 
-for (const [label, runReview] of [['modular', modularRunReview], ['bundled', runner.runReview]]) test(`(${label}) the workflow writes the pack for the review and removes it afterwards`, async () => {
+for (const [label, runReview] of [['modular', modularRunReview], ['bundled', runner.runReview]]) test(`(${label}) the workflow writes the pack for the review and removes it afterwards`, () => inIsolatedStores(async () => {
   const root = path.join(await mkdtemp(path.join(tmpdir(), 'omp-pack-')), 'project');
   const git = (args) => {
     if (args[0] === 'rev-parse') return Buffer.from(`${root}\n`);
@@ -179,4 +179,121 @@ for (const [label, runReview] of [['modular', modularRunReview], ['bundled', run
   assert.match(packDuringReview, /src\/total\.mjs/);
   await assert.rejects(access(packPath));
   assert.ok(events.some((event) => event.type === 'context_pack_built' && event.payload.symbols === 3));
-});
+}));
+
+const PACK_NAME = /^reviewer-kit-report-ctx-(?<runId>\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z-[0-9a-f]{12})-(?<seq>\d+)-(?<nonce>[0-9a-f]{16})-(?<pid>\d+)\.md$/;
+const SILENT = { log: () => {}, error: () => {} };
+const FROZEN_NOW = Date.UTC(2026, 9, 10, 20, 21, 51, 525);
+const PACK_STORE_KEYS = ['OMP_REVIEW_KIT_REPORTS_DIR', 'OMP_REVIEW_KIT_RUNS_DIR', 'OMP_REVIEW_KIT_CACHE'];
+
+const exists = (filePath) => access(filePath).then(() => true, () => false);
+
+// Points every review store at a throwaway folder and freezes Date.now, so reviews started together share a
+// run id and only the pack's sequence and nonce keep their names apart.
+async function inIsolatedStores(fn) {
+  const home = await mkdtemp(path.join(tmpdir(), 'omp-pack-home-'));
+  const saved = Object.fromEntries(PACK_STORE_KEYS.map((key) => [key, process.env[key]]));
+  Object.assign(process.env, {
+    OMP_REVIEW_KIT_REPORTS_DIR: path.join(home, 'reports'),
+    OMP_REVIEW_KIT_RUNS_DIR: path.join(home, 'runs'),
+    OMP_REVIEW_KIT_CACHE: '0',
+  });
+  const realNow = Date.now;
+  Date.now = () => FROZEN_NOW;
+  try {
+    return await fn();
+  } finally {
+    Date.now = realNow;
+    for (const key of PACK_STORE_KEYS) {
+      if (saved[key] === undefined) delete process.env[key];
+      else process.env[key] = saved[key];
+    }
+    await rm(home, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+async function freshRepo() {
+  return path.join(await mkdtemp(path.join(tmpdir(), 'omp-pack-repo-')), 'project');
+}
+
+function gitFor(root) {
+  return (args) => {
+    if (args[0] === 'rev-parse') return Buffer.from(`${root}\n`);
+    if (args[0] === 'diff') return Buffer.from(DIFF);
+    return Buffer.alloc(0);
+  };
+}
+
+// Reviewer double: records the pack named in its prompt, waits on `hold`, then reports whether that pack exists.
+function packProbe(hold = async () => {}) {
+  const probe = { packPath: null, existedInFlight: null };
+  probe.omp = async (prompt) => {
+    probe.packPath = /context pack for the scout is at `([^`]+)`/.exec(String(prompt))?.[1] ?? null;
+    await hold();
+    probe.existedInFlight = probe.packPath === null ? false : await exists(probe.packPath);
+    return { status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' };
+  };
+  return probe;
+}
+
+// Lets every caller through once `parties` have arrived, so the reviews overlap while in flight.
+function rendezvous(parties, timeoutMs = 15_000) {
+  let arrived = 0;
+  let open;
+  const everyone = new Promise((resolve) => { open = resolve; });
+  return async () => {
+    arrived += 1;
+    if (arrived === parties) open();
+    let timer;
+    const timedOut = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('rendezvous timed out')), timeoutMs);
+    });
+    try {
+      await Promise.race([everyone, timedOut]);
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+}
+
+for (const [label, runReview] of [['modular', modularRunReview], ['bundled', runner.runReview]]) {
+  test(`(${label}) sequential reviews name packs by the documented shape and never reuse one`, async () => {
+    await inIsolatedStores(async () => {
+      const root = await freshRepo();
+      const first = packProbe();
+      const second = packProbe();
+      await runReview({ cwd: root, git: gitFor(root), omp: first.omp, logger: SILENT });
+      await runReview({ cwd: root, git: gitFor(root), omp: second.omp, logger: SILENT });
+      const a = PACK_NAME.exec(path.basename(first.packPath));
+      const b = PACK_NAME.exec(path.basename(second.packPath));
+      assert.ok(a && b, `pack names must match the shape: ${first.packPath} / ${second.packPath}`);
+      assert.equal(a.groups.pid, String(process.pid));
+      assert.equal(b.groups.seq, String(Number(a.groups.seq) + 1));
+      assert.notEqual(a.groups.nonce, b.groups.nonce);
+      assert.equal(path.dirname(first.packPath), path.resolve(tmpdir()));
+    });
+  });
+
+  test(`(${label}) concurrent in-flight reviews get distinct packs that exist while running and are gone afterwards`, async () => {
+    await inIsolatedStores(async () => {
+      const root = await freshRepo();
+      const gate = rendezvous(2);
+      const probes = [packProbe(gate), packProbe(gate)];
+      const results = await Promise.all(probes.map((probe) => runReview({
+        cwd: root,
+        git: gitFor(root),
+        omp: probe.omp,
+        logger: SILENT,
+      })));
+      assert.deepEqual(results.map((result) => result.exitCode), [0, 0]);
+      const [firstPath, secondPath] = probes.map((probe) => probe.packPath);
+      assert.notEqual(firstPath, secondPath);
+      for (const probe of probes) {
+        assert.equal(probe.existedInFlight, true);
+        assert.match(path.basename(probe.packPath), PACK_NAME);
+      }
+      assert.equal(await exists(firstPath), false);
+      assert.equal(await exists(secondPath), false);
+    });
+  });
+}

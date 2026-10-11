@@ -345,9 +345,9 @@ export function isModelProviderFailure(result) {
 // OMP child with its own `--session-dir`, so the task tool persists every
 // task's complete result as `<session>/<artifacts>/<TaskId>.md`. The
 // dispatcher's stdout can still lose the report (truncated task preview,
-// unreadable `agent://` URI) and the durable per-run report file depends on
-// a bash heredoc that project policy guards may deny; this artifact needs
-// neither, so the runner reads it directly after the child exits.
+// unreadable `agent://` URI). The artifact needs no bash write, so project
+// policy guards that deny shell writes cannot lose the report, and the runner
+// reads it directly after the child exits.
 const TASK_ARTIFACT_MAX_BYTES = 8 * 1024 * 1024;
 const REPORT_MARKER_LINE_RE = /^REVIEW_RESULT=(PASS|BLOCK)\r?$/m;
 const EXECUTION_FAILURE_CODE_RE = /"code"\s*:\s*"execution_failure"/;
@@ -610,7 +610,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
     }
   }
 
-  async #runReviewAttempt(promptText, cwd, telemetry, attempts, attemptIndex, { reportPath = null } = {}) {
+  async #runReviewAttempt(promptText, cwd, telemetry, attempts, attemptIndex) {
     const startedAt = Date.now();
     const record = { attemptIndex, startedAt: new Date(startedAt).toISOString() };
     const stageHistory = [];
@@ -650,9 +650,6 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       const result = await this.#runner(promptText, cwd, undefined, {
         maxTime: this.#reviewMaxTime.arg,
         ...(sessionDir ? { sessionDir } : {}),
-        // Lets project policy guards recognize the one write the reviewer
-        // may perform (its durable report) without pattern-matching the command.
-        ...(reportPath ? { env: { OMP_REVIEW_KIT_REPORT_PATH: reportPath } } : {}),
         onSpawn: (pid) => {
           record.pid = pid;
           void telemetry.record('review_attempt_started', { ...record, pid });
@@ -966,7 +963,6 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       skills: reviewSkillsSelection().label,
     });
     const promptText = typeof prompt === 'string' ? prompt : prompt.toString();
-    const reportPath = typeof prompt === 'object' && typeof prompt?.reportPath === 'string' ? prompt.reportPath : null;
     const attempts = [];
     const probes = [];
 
@@ -980,11 +976,11 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
         stderr: formatProviderOutageError(preflightFailure.stderr || preflightFailure.stdout),
       };
     } else {
-      result = await this.#runReviewAttempt(promptText, cwd, telemetry, attempts, 0, { reportPath });
+      result = await this.#runReviewAttempt(promptText, cwd, telemetry, attempts, 0);
       // A hard child crash (Windows 0xC0000409 / -1) with no output is a
       // runtime fault, not a verdict: one more run with the same command.
       if (isChildCrash(result)) {
-        result = await this.#runReviewAttempt(promptText, cwd, telemetry, attempts, 1, { reportPath });
+        result = await this.#runReviewAttempt(promptText, cwd, telemetry, attempts, 1);
       }
       if (isModelProviderFailure(result)) {
         result = {

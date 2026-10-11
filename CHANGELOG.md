@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.20.2] - 2026-10-10
+
+Review reports leave the repository, and a guard that denies the reviewer's shell command no longer fails the review. Before this release, the reviewer wrote a durable copy of its report through a bash heredoc, and an omp-spec-kit guard denied that command whenever it named the spec folder; the reviewer then yielded the denial instead of the report and the commit was blocked as a review failure.
+
+### Changed
+- **Review reports live outside the repository.** Each report is saved to `~/Documents/omp-reviewer-kit/<repository folder name>/<timestamp>-<diff-hash>.md`; The repository folder name is the directory name plus a 12-character hash of the absolute path, so checkouts that share a directory name never share a folder. `OMP_REVIEW_KIT_REPORTS_DIR` moves the root. The verdict line, the verdict cache and `/reviewer-kit:status` carry the path. Repositories no longer get a report file per review; run telemetry and the verdict cache stay in `audit-reports/commit-reviews/`.
+
+### Fixed
+- **A review no longer fails when a guard denies its report write.** The reviewer's durable copy was a bash heredoc, and a spec-write guard in omp-spec-kit denied any shell command that names the spec folder. A report quoting spec paths was denied, the reviewer yielded the denial instead of the report, and the commit was blocked as a review failure.
+
+### Removed
+- **The reviewer no longer writes a durable report copy.** `OMP_REVIEW_KIT_REPORT_PATH`, its bash-heredoc exemption for project guards, and the `reviewer-kit-report-*.md` copy are gone. The orchestrator yields its report; the runner stores it and recovers the text from the task session artifact when the dispatcher output loses it.
+
 ## [0.20.1] - 2026-10-10
 
 The vendored runner stays the thin stub. Before this release, an installer from 0.19.x found the stub's first line without a version number and wrote the whole review algorithm over the stub, and the 0.20.0 installer wrote the stub back, so the file flipped between the two.

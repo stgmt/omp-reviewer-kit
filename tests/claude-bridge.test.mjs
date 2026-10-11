@@ -228,7 +228,7 @@ test('install-omp checks first: with OMP and a current plugin it installs nothin
 test('install-omp without --yes prints the plan for what is missing and changes nothing', async () => {
   const { home, cleanup } = await tempHome();
   try {
-    const exec = fakeExec({ 'bun --version': { stdout: '1.4.1' } });
+    const exec = fakeExec({ 'bun --version': { stdout: '1.4.1' }, 'bun install': { status: -1, stderr: 'install failed' } });
     const sink = collect();
     const code = installOmp({ argv: [], env: envFor(home), exec, platform: 'linux', out: sink.out, err: sink.err });
     assert.equal(code, EXIT.ok);
@@ -576,6 +576,7 @@ test('The bridge CLI prints the install plan for a bare machine without executin
   try {
     const result = spawnSync(process.execPath, ['claude-plugin/scripts/bridge.mjs', 'install-omp'], {
       encoding: 'utf8',
+      timeout: 30_000,
       env: envFor(home, { OMP_REVIEW_KIT_OMP: path.join(home, 'no-such-omp') }),
     });
     assert.equal(result.status, 0, result.stderr);
