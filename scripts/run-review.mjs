@@ -1,4 +1,4 @@
-// omp-reviewer-kit runner v0.20.2
+// omp-reviewer-kit runner v0.20.3
 import { createHash, randomBytes } from 'node:crypto';
 import { appendFile, chmod, lstat, mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
@@ -4781,6 +4781,7 @@ export class SubprocessExecutionAdapter extends ExecutionPort {
       try {
         child = spawn(command, {
           shell: true,
+          detached: process.platform !== 'win32',
           cwd,
           env: mergeRegistryProxyEnv(),
           windowsHide: true,

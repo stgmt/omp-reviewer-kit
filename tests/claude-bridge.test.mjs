@@ -685,6 +685,25 @@ test('review falls back to the OMP plugin runner when the repository has none, k
   }
 });
 
+test('Given the canonical thin stub, When doctor runs, Then it is active without a newer-runner warning', async () => {
+  const { home, cleanup } = await tempHome();
+  const repo = await tempRepo();
+  try {
+    await setup({ cwd: repo.dir, env: pluginEnv(home), exec: healthyExec(), out: () => {}, err: () => {} });
+    const { PluginInstallerService } = await import('../src/application/installer-service.mjs');
+    const state = await new PluginInstallerService().status(repo.dir);
+    assert.equal(state.state, 'active');
+    assert.equal(state.runnerCurrent, true);
+    assert.equal(state.runnerNewer, false);
+    const sink = collect();
+    assert.equal(await doctor({ cwd: repo.dir, env: pluginEnv(home), exec: healthyExec(), out: sink.out }), EXIT.ok);
+    assert.doesNotMatch(sink.lines.join('\n'), /The repository runner is newer/);
+  } finally {
+    await repo.cleanup();
+    await cleanup();
+  }
+});
+
 test('doctor warns when the repository runner is newer than the installed OMP plugin', async () => {
   const { home, cleanup } = await tempHome();
   const repo = await tempRepo();

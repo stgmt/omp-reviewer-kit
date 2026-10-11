@@ -694,7 +694,8 @@ export class PluginInstallerService {
           }
         } else {
           const runnerContent = await readFile(runnerPath, 'utf8');
-          runnerNewer = isRunnerNewer(runnerContent, pluginRunnerContent);
+          runnerNewer = runnerContent !== canonicalRunnerContent
+            && isRunnerNewer(runnerContent, pluginRunnerContent);
           runnerCurrent = runnerNewer || runnerContent === canonicalRunnerContent;
         }
       } catch (error) {

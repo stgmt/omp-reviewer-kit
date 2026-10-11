@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.20.3] - 2026-10-11
+
+### Fixed
+- **The canonical thin runner no longer produces a newer-runner warning.** Installer status recognises the exact canonical stub as current rather than comparing its deliberately high version with the algorithm release. A genuinely newer noncanonical runner remains protected from downgrades and still produces the warning.
+- **Timed-out execution commands terminate their child processes.** The modular execution adapter now uses the same process-tree termination as the review adapter instead of calling `require()` inside an ES module on Windows. Both modular and bundled execution commands start a separate process group on POSIX so descendants are terminated together. This only bounds opt-in execution commands, not full reviews.
+- **Modular execution reports its measured duration.** Its result now carries `durationMs`, matching the bundled runner and preserving execution evidence timing.
+
 ## [0.20.2] - 2026-10-10
 
 Review reports leave the repository, and a guard that denies the reviewer's shell command no longer fails the review. Before this release, the reviewer wrote a durable copy of its report through a bash heredoc, and an omp-spec-kit guard denied that command whenever it named the spec folder; the reviewer then yielded the denial instead of the report and the commit was blocked as a review failure.
