@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile, stat } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -129,53 +129,6 @@ test('lease heartbeat: clearLeaseTimer drains an in-flight tick before release()
     else process.env.OMP_REVIEW_KIT_RUNS_DIR = previousRunsDir;
     await rm(runsDir, { recursive: true, force: true });
   }
-});
-
-test('run report fallback file is unlinked on PASS and BLOCK paths; basenames stay distinct', async () => {
-  const reportPaths = [];
-  const reviewer = {
-    executeReview: async ({ prompt }) => {
-      const m = prompt.toString().match(/report path for this review is `(\S+)`\./);
-      assert.ok(m, 'prompt must carry the durable report path');
-      const reportPath = m[1];
-      reportPaths.push(reportPath);
-      // The dispatcher-orchestrator writes its durable copy before yielding;
-      // simulate that write so the finally's rm is exercised for real.
-      await writeFile(reportPath, '# report\n');
-      return { status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' };
-    },
-  };
-  const store = { create: async () => '/mock/snap', remove: async () => {} };
-  const service = makeService({ snapshotStore: store, reviewer });
-
-  await service.execute({ cwd: '/mock/root' });
-  await service.execute({ cwd: '/mock/root' });
-
-  assert.equal(reportPaths.length, 2);
-  assert.notEqual(reportPaths[0], reportPaths[1], 'sequential runs must produce distinct report basenames');
-  assert.match(reportPaths[0], /reviewer-kit-report-.*-\d+-[0-9a-f]{16}-\d+\.md$/, 'report name carries runId+seq+nonce+pid');
-  for (const p of reportPaths) {
-    await assert.rejects(stat(p), /ENOENT/, `${p} must be unlinked after the run`);
-  }
-
-  // Same for a BLOCK verdict path.
-  let blockReportPath;
-  const blockingReviewer = {
-    executeReview: async ({ prompt }) => {
-      const m = prompt.toString().match(/report path for this review is `(\S+)`\./);
-      const reportPath = m[1];
-      blockReportPath = reportPath;
-      await writeFile(reportPath, '# report\n');
-      return { status: 0, stdout: 'REVIEW_RESULT=BLOCK\n', stderr: '' };
-    },
-    // A bare BLOCK without envelope triggers the single envelope-repair re-emit.
-    reemitVerbatim: async () => ({ status: 1, stdout: '', stderr: 'no repair' }),
-  };
-  const service2 = makeService({ snapshotStore: store, reviewer: blockingReviewer });
-  const result = await service2.execute({ cwd: '/mock/root' });
-  assert.equal(result.exitCode, 1);
-  assert.ok(blockReportPath, 'BLOCK path must capture report path');
-  await assert.rejects(stat(blockReportPath), /ENOENT/, `${blockReportPath} must be unlinked after BLOCK run`);
 });
 
 test('badge-write failure never gates the verdict (audit-reports unwritable)', async () => {

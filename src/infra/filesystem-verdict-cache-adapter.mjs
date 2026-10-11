@@ -9,10 +9,10 @@ const OBJECT_ID = /^[0-9a-f]{40}$|^[0-9a-f]{64}$/;
 
 /**
  * Infrastructure adapter remembering PASS verdicts by (index tree, diff hash).
- * Only PASS is reusable: a BLOCK is always re-reviewed. A hit is honored only
- * when the referenced report still exists inside the repository and states the
- * same diff hash and `result: PASS`, so a stale or tampered index line fails closed
- * into a normal full review.
+ * Only PASS is reusable: a BLOCK is always re-reviewed. Reports live outside the
+ * repository, so an entry stores the report's absolute path. A hit is honored only
+ * when that report still exists and states the same diff hash and `result: PASS`;
+ * a repository-relative or stale entry fails closed into a normal full review.
  */
 export class FileSystemVerdictCacheAdapter extends VerdictCachePort {
   #relativeDir;
@@ -51,9 +51,8 @@ export class FileSystemVerdictCacheAdapter extends VerdictCachePort {
       if (entry.treeSha !== treeSha || entry.diffHash !== diffHash) continue;
       const age = now - Date.parse(entry.at);
       if (!Number.isFinite(age) || age < 0 || age > this.#ttlMs) continue;
-      const reportPath = path.resolve(repoRoot, String(entry.reportPath ?? ''));
-      const relative = path.relative(repoRoot, reportPath);
-      if (!entry.reportPath || relative.startsWith('..') || path.isAbsolute(relative)) continue;
+      const reportPath = typeof entry.reportPath === 'string' ? entry.reportPath : '';
+      if (!path.isAbsolute(reportPath)) continue;
       let report;
       try {
         report = await readFile(reportPath, 'utf8');
@@ -81,7 +80,7 @@ export class FileSystemVerdictCacheAdapter extends VerdictCachePort {
       treeSha,
       diffHash,
       verdict: 'PASS',
-      reportPath: path.relative(repoRoot, reportPath).split(path.sep).join('/'),
+      reportPath: path.resolve(reportPath),
       at: this.#clock().toISOString(),
     });
     await appendFile(path.join(dir, CACHE_FILE), `${line}\n`, 'utf8');

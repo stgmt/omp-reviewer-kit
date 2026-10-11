@@ -61,6 +61,34 @@ test('Given a test marker inherited from an outer test run, When the wrapper run
   }
 });
 
+test('Given an ambient reports dir, When the test wrapper runs a probe, Then the child sees a throwaway reports folder instead', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'omp-wrapper-reports-'));
+  try {
+    const probeOut = path.join(dir, 'probe.txt');
+    const probe = path.join(dir, 'probe.test.mjs');
+    await writeFile(probe, [
+      "import { writeFileSync } from 'node:fs';",
+      "import { test } from 'node:test';",
+      "test('probe', () => {",
+      '  writeFileSync(process.env.PROBE_OUT, process.env.OMP_REVIEW_KIT_REPORTS_DIR ?? \'\');',
+      '});',
+    ].join('\n'), 'utf8');
+    const env = { ...process.env, PROBE_OUT: probeOut, OMP_REVIEW_KIT_REPORTS_DIR: path.join(dir, 'sentinel-should-be-overridden') };
+
+    const result = spawnSync(process.execPath, [WRAPPER, probe], { encoding: 'utf8', env, windowsHide: true });
+
+    assert.equal(result.status, 0, result.stderr);
+    const reportsDir = readFileSync(probeOut, 'utf8');
+    assert.ok(path.isAbsolute(reportsDir), 'the reports dir is absolute');
+    assert.ok(reportsDir.endsWith(`${path.sep}reports`), 'the reports dir ends with the reports folder');
+    assert.ok(!reportsDir.includes('sentinel-should-be-overridden'), 'the wrapper overrides the ambient value');
+    assert.ok(!reportsDir.includes('Documents'), 'reports never target the user Documents folder');
+    assert.equal(existsSync(reportsDir), false, 'the throwaway directory is removed afterwards');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('Given a registry override in the outer environment, When the test wrapper runs a suite, Then the suite gets a throwaway target registry, never the user registry', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'omp-wrapper-registry-'));
   try {

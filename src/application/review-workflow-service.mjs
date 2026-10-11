@@ -26,9 +26,9 @@ const LEASE_REFRESH_MS = 15 * 60 * 1000;
 const ROUND_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 const ROUND_MAX_DIFF_CHARS = 2_000_000;
 
-// Per-process run sequence so two concurrent execute() calls on identical
-// staged content never share one runReportPath within a millisecond tick.
-let REPORT_SEQ = 0;
+// Per-process sequence so two concurrent execute() calls on identical
+// staged content never share one scratch path within a millisecond tick.
+let SCRATCH_SEQ = 0;
 
 /**
  * Renders a path for committed observability artifacts: repo-relative when
@@ -181,20 +181,11 @@ export class ReviewWorkflowService {
 
     const runStamp = ReviewReport.formatTimestamp(new Date(startedAt));
     const runId = diff.isEmpty() ? `${runStamp}-skipped` : `${runStamp}-${diff.hash.slice(0, 12)}`;
-    // Durable per-run report copy: the dispatcher falls back to it when the
-    // agent URI is unreadable. It lives OUTSIDE the shared content-addressed
-    // snapshot dir (run-unique, not diff-addressed) so concurrent reviews
-    // on identical staged content never share, delete, or overwrite each
-    // other's fallback — the cache dir stays read-only for the run lifetime.
-    // Name: runId(timestamp+hash) + per-process seq + random nonce + pid
-    // tail. The nonce makes the path unpredictable to same-user processes
-    // (a predictable name can be pre-created as a planted PASS report the
-    // dispatcher would reproduce verbatim); the pid tail feeds the
-    // orphan-sweep owner check (`-<pid>.md$`).
-    const runReportPath = path.join(tmpdir(), `reviewer-kit-report-${runId}-${REPORT_SEQ++}-${randomBytes(8).toString('hex')}-${process.pid}.md`);
-    // Deterministic scout context pack, written next to the report (same
-    // `reviewer-kit-report-` prefix and `-<pid>.md` tail, so the orphan sweep owns it).
-    const contextPackPath = path.join(tmpdir(), path.basename(runReportPath).replace('reviewer-kit-report-', 'reviewer-kit-report-ctx-'));
+    // Deterministic scout context pack, written to the OS temp dir. Name:
+    // runId + per-process seq + random nonce + pid tail, so concurrent reviews
+    // never share it. The `reviewer-kit-report-` prefix and `-<pid>.md` tail
+    // let the orphan sweep reclaim it after a crash.
+    const contextPackPath = path.join(tmpdir(), `reviewer-kit-report-ctx-${runId}-${SCRATCH_SEQ++}-${randomBytes(8).toString('hex')}-${process.pid}.md`);
     let contextPackWritten = false;
     let telemetry;
     try {
@@ -226,7 +217,6 @@ export class ReviewWorkflowService {
           }).catch(() => {});
         });
       }
-      await rm(runReportPath, { force: true }).catch(() => {});
       await rm(contextPackPath, { force: true }).catch(() => {});
     };
     const uninstall = installRunSignalGuard({ telemetry, runId, cleanup: cleanupSnapshots });
@@ -583,7 +573,6 @@ export class ReviewWorkflowService {
           riskLanes,
           hunterShardsText,
           fileClasses: fileClassRows,
-          reportPath: runReportPath,
           contextPackPath: contextPackWritten ? contextPackPath : '',
           // ~50KB ≈ 12K tokens — cheaper than four read round-trips per subagent.
           inlineDiff: diff.length <= 50_000 ? diff.bytes.toString('utf8') : '',
@@ -611,9 +600,7 @@ export class ReviewWorkflowService {
             }).catch(() => {});
           });
         }
-        // The dispatcher consumed the durable report (or never needed it);
-        // remove this run's copy so per-run fallbacks never accumulate.
-        await rm(runReportPath, { force: true }).catch(() => {});
+        // Per-run scratch: the scout context pack goes with the run.
         await rm(contextPackPath, { force: true }).catch(() => {});
       }
 

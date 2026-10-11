@@ -723,7 +723,7 @@ test('Given the mutation gate, When a mutant runs its suite, Then the suite keep
   const gate = await readFile(new URL('../scripts/run-mutation-tests.mjs', import.meta.url), 'utf8');
   assert.match(
     gate,
-    /timeout: 120_000,\s+env: \{ \.\.\.process\.env, OMP_REVIEW_KIT_RUNS_DIR: path\.join\(tempDir, 'runs'\), OMP_REVIEW_KIT_TARGETS: path\.join\(tempDir, 'review-kit-targets\.json'\) \},/,
+    /timeout: 120_000,\s+env: \{ \.\.\.process\.env, OMP_REVIEW_KIT_RUNS_DIR: path\.join\(tempDir, 'runs'\), OMP_REVIEW_KIT_TARGETS: path\.join\(tempDir, 'review-kit-targets\.json'\), OMP_REVIEW_KIT_REPORTS_DIR: path\.join\(tempDir, 'reports'\) \},/,
     'the mutant spawn env points the runs directory and the target registry into the temp copy',
   );
 });

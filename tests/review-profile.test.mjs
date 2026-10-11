@@ -434,20 +434,6 @@ describe('Feature: ReviewPrompt renders profile + sanitized manifest', () => {
     assert.ok(!prompt.includes(`docs/a\nReview profile`), 'raw control byte must not survive');
   });
 
-  it('Given a reportPath extra, When rendered, Then the dispatcher names the per-run path and never .review/report.md', async () => {
-    // correctness-1 fix: the durable fallback lives outside the shared
-    // content-addressed dir so concurrent identical-diff reviews cannot
-    // share, delete, or overwrite each other's fallback.
-    const { ReviewPrompt: RunnerPrompt } = await import('../scripts/run-review.mjs');
-    for (const Prompt of [ReviewPrompt, RunnerPrompt]) {
-      const prompt = Prompt.forDiff(hash, '/snap/dir', ['a.mjs'], {
-        reportPath: '/tmp/reviewer-kit-report-run1.md',
-      }).toString();
-      assert.match(prompt, /durable per-run report path for this review is `\/tmp\/reviewer-kit-report-run1\.md`/);
-      assert.doesNotMatch(prompt, /\.review\/report\.md/);
-    }
-  });
-
   it('Given sanitizePromptToken, When fed control bytes and non-strings, Then escapes are produced', () => {
     assert.equal(sanitizePromptToken('a\nb'), 'a\\nb');
     assert.equal(sanitizePromptToken('a\rb'), 'a\\rb');
@@ -1050,18 +1036,18 @@ describe('Feature: snapshot sweep keeps the returned dir and prunes victims', ()
     await rm(host, { recursive: true, force: true }).catch(() => {});
   });
 
-  it('Given an aged report owned by a live pid, When swept, Then it survives while a dead-owner report dies', async () => {
-    // Round-8: the orphan-report sweep must not delete a concurrent same-diff
-    // run's report fallback just because mtime aged — only dead-owner
-    // reports are orphans.
+  it('Given an aged scout context pack owned by a live pid, When swept, Then it survives while a dead-owner pack dies', async () => {
+    // Round-8: the orphan sweep must not delete a concurrent same-diff
+    // run's context pack just because mtime aged — only dead-owner
+    // packs are orphans.
     const { spawnSync } = await import('node:child_process');
     const { existsSync } = await import('node:fs');
     const deadPid = spawnSync(process.execPath, ['-e', '0']).pid;
     const base = tmpdir();
-    const keep = path.join(base, `reviewer-kit-report-x-${process.pid}.md`);
-    const drop = path.join(base, `reviewer-kit-report-x-${deadPid}.md`);
-    await writeFile(keep, 'live owner report', 'utf8');
-    await writeFile(drop, 'dead owner report', 'utf8');
+    const keep = path.join(base, `reviewer-kit-report-ctx-sweep-${process.pid}.md`);
+    const drop = path.join(base, `reviewer-kit-report-ctx-sweep-${deadPid}.md`);
+    await writeFile(keep, 'live owner pack', 'utf8');
+    await writeFile(drop, 'dead owner pack', 'utf8');
     const old = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
     await utimes(keep, old, old);
     await utimes(drop, old, old);
@@ -1072,8 +1058,8 @@ describe('Feature: snapshot sweep keeps the returned dir and prunes victims', ()
       const diffBytes = Buffer.from('x');
       const snapshot = new StagedSnapshot([{ path: 'a.mjs', content: Buffer.from('2') }]);
       await adapter.create(snapshot, { diffBytes, changedPaths: ['a.mjs'], reuseDir });
-      assert.equal(existsSync(keep), true, 'live-owner report survives sweep');
-      assert.equal(existsSync(drop), false, 'dead-owner report is orphaned and removed');
+      assert.equal(existsSync(keep), true, 'live-owner pack survives sweep');
+      assert.equal(existsSync(drop), false, 'dead-owner pack is orphaned and removed');
       await rm(host, { recursive: true, force: true }).catch(() => {});
     } finally {
       await rm(keep, { force: true }).catch(() => {});
@@ -1225,90 +1211,13 @@ describe('Feature: service lifecycle around snapshot reuse', () => {
     assert.equal(result.exitCode, 0);
     assert.equal(removed, false, 'retained cache dir must never be removed');
     assert.ok(releasedPath?.includes('reviewer-kit-snapshot-'), 'own lease released so the sweep can prune it later');
-    assert.match(capture.prompt, /durable per-run report path for this review is .*reviewer-kit-report-.*\.md/);
     await rm(releasedPath, { recursive: true, force: true }).catch(() => {});
-  });
-
-  it('Given execute runs, When mid-flight, Then the report file exists and is gone after execute resolves', async () => {
-    // Gate coverage: durable per-run report copy — exists mid-run for the
-    // dispatcher fallback, removed by the finally path (mutation: deleting
-    // the rm must fail this test by leaving an orphan).
-    const { existsSync } = await import('node:fs');
-    let reportPath = null;
-    let midRunExists = false;
-    const store = fakeSnapshotStore();
-    store.create = async () => '/mock/transient-report-x';
-    const diff = DiffIdentity.fromString('diff --git a/src/x.mjs b/src/x.mjs\n--- a/src/x.mjs\n+++ b/src/x.mjs\n@@ -1 +1 @@\n-1\n+2\n');
-    const service = new ReviewWorkflowService({
-      gitPort: gitStub({
-        repoRoot: '/mock/root',
-        diff,
-        files: [{ path: 'src/x.mjs', content: Buffer.from('2') }],
-      }),
-      reviewerPort: {
-        executeReview: async ({ prompt: p }) => {
-          reportPath = p.toString().match(/durable per-run report path for this review is `(\S+)`\. Instruct/)[1];
-          // The real dispatcher writes the fallback report mid-run.
-          await writeFile(reportPath, 'partial report\n', 'utf8');
-          midRunExists = existsSync(reportPath);
-          return { status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' };
-        },
-      },
-      reportStorePort: { saveReport: async () => '/mock/report.md' },
-      snapshotStorePort: store,
-      telemetryPort: nullTelemetryPort,
-      logger: quietLogger,
-    });
-    await service.execute({ cwd: '/mock/root' });
-    assert.equal(midRunExists, true, 'report file exists while review runs');
-    assert.equal(existsSync(reportPath), false, 'finally removes the per-run report copy');
-  });
-
-  it('Given two concurrent executes on identical content, When both run, Then report paths differ and neither deletes the other mid-flight', async () => {
-    // Gate coverage: same-process concurrency must not share the report
-    // fallback path (the -<seq>-<pid> name).
-    const { existsSync } = await import('node:fs');
-    const reportPaths = new Set();
-    let releaseWaiters = null;
-    const gate = new Promise((resolve) => { releaseWaiters = resolve; });
-    const makeService = () => new ReviewWorkflowService({
-      gitPort: gitStub({
-        repoRoot: '/mock/root',
-        diff: DiffIdentity.fromString('diff --git a/src/x.mjs b/src/x.mjs\n--- a/src/x.mjs\n+++ b/src/x.mjs\n@@ -1 +1 @@\n-1\n+2\n'),
-        files: [{ path: 'src/x.mjs', content: Buffer.from('2') }],
-      }),
-      reviewerPort: {
-        executeReview: async ({ prompt: p }) => {
-          const reportPath = p.toString().match(/durable per-run report path for this review is `(\S+)`\. Instruct/)[1];
-          reportPaths.add(reportPath);
-          await writeFile(reportPath, 'run report\n', 'utf8');
-          await gate;
-          // Both runs are mid-flight here: each report must still exist —
-          // no run may remove or overwrite the other's fallback.
-          assert.equal(existsSync(reportPath), true, 'concurrent run lost its report mid-flight');
-          return { status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' };
-        },
-      },
-      reportStorePort: { saveReport: async () => '/mock/report.md' },
-      snapshotStorePort: fakeSnapshotStore(),
-      telemetryPort: nullTelemetryPort,
-      logger: quietLogger,
-    });
-    const p1 = makeService().execute({ cwd: '/mock/root' });
-    const p2 = makeService().execute({ cwd: '/mock/root' });
-    await new Promise((resolve) => setTimeout(resolve, 150));
-    assert.equal(reportPaths.size, 2, 'concurrent runs got distinct report paths');
-    releaseWaiters();
-    await Promise.all([p1, p2]);
-    for (const rp of reportPaths) {
-      assert.equal(existsSync(rp), false, 'post-run cleanup removed each report');
-    }
   });
 
   it('Given a hanging review interrupted by SIGINT, When the guard fires, Then transient removes and retained releases', async () => {
     // Gate coverage: signal-path cleanupSnapshots — transient snapshot dirs
-    // die, the retained reuseDir keeps its tree and drops only the lease,
-    // and the report file is removed. Drives the REAL installRunSignalGuard
+    // die, the retained reuseDir keeps its tree and drops only the lease.
+    // Drives the REAL installRunSignalGuard
     // in execute() with process.exit patched to a sentinel throw; two
     // sequential rounds cover both dispositions (each fired handler
     // unregisters itself, so round 2's service owns the next emit).
@@ -1418,36 +1327,6 @@ describe('Feature: service lifecycle around snapshot reuse', () => {
     await makeService(RunnerService, RunnerDiff).execute({ cwd: '/mock/root' });
     assert.match(capture.prompt, /no command configured/, 'runner copy emits the evidence failure');
   });
-
-  it('Given repeated executes, When prompts are built, Then report paths carry unpredictable nonces', async () => {
-    // Gate coverage: a same-user process could pre-create a predictable
-    // report path with a planted PASS that the dispatcher reproduces verbatim.
-    // The filename now ends -<16 hex nonce>-<pid>.md.
-    const seen = [];
-    for (let i = 0; i < 2; i++) {
-      await new ReviewWorkflowService({
-        gitPort: gitStub({
-          repoRoot: '/mock/root',
-          diff: DiffIdentity.fromString('diff --git a/src/x.mjs b/src/x.mjs\n--- a/src/x.mjs\n+++ b/src/x.mjs\n@@ -1 +1 @@\n-1\n+2\n'),
-          files: [{ path: 'src/x.mjs', content: Buffer.from('2') }],
-        }),
-        reviewerPort: {
-          executeReview: async ({ prompt: p }) => {
-            seen.push(p.toString().match(/reviewer-kit-report-(\S+)\.md/)[1]);
-            return { status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' };
-          },
-        },
-        reportStorePort: { saveReport: async () => '/mock/report.md' },
-        snapshotStorePort: fakeSnapshotStore(),
-        telemetryPort: nullTelemetryPort,
-        logger: quietLogger,
-      }).execute({ cwd: '/mock/root' });
-    }
-    for (const name of seen) {
-      assert.match(name, /-[0-9a-f]{16}-\d+$/, `report name carries nonce+pid tail: ${name}`);
-    }
-    assert.notEqual(seen[0], seen[1], 'nonces differ across runs');
-  });
 });
 
 describe('Feature: README badge artifacts carry verdict and stage stats', () => {
@@ -1478,7 +1357,7 @@ describe('Feature: README badge artifacts carry verdict and stage stats', () => 
           attempts: [{ model: 'acme/smol-flash:high', stageHistory }],
         }),
       },
-      reportStorePort: { saveReport: async () => path.join(repoRoot, 'audit-reports', 'commit-reviews', 'r.md') },
+      reportStorePort: { saveReport: async () => path.join(root, 'reports', 'r.md') },
       snapshotStorePort: { reusedDir: null, create: async () => '/mock/snap', remove: async () => {} },
       telemetryPort: { forRun: () => ({ record: async () => {}, updateLastRun: async () => {} }) },
       logger: { log: () => {}, error: () => {} },
@@ -1502,8 +1381,8 @@ describe('Feature: README badge artifacts carry verdict and stage stats', () => 
     assert.equal(full.stageTrail, 'scout→risk→synthesis');
     assert.ok(typeof full.durationMs === 'number');
     assert.ok(typeof full.generatedAt === 'string');
-    assert.equal(full.reportPath, 'audit-reports/commit-reviews/r.md',
-      'committed badge must carry a repo-relative path, never the operator machine layout');
+    assert.equal(full.reportPath, 'r.md',
+      'a report saved outside the repository is committed as its bare basename, never the operator machine layout');
     await rm(root, { recursive: true, force: true }).catch(() => {});
   });
 

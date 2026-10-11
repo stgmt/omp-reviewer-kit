@@ -83,7 +83,7 @@ export function formatProviderOutageError(lastStderr) {
     'OMP could not get an answer from a model (this is an outage or a configuration problem, not a code verdict).',
     'Fix: reviewer-kit does not choose models. Check the login and the default model role in OMP itself,',
     '  and configure fallbacks there (modelRoles / retry.fallbackChains in ~/.omp/agent/config.yml).',
-    'The detailed report and run telemetry are under audit-reports/commit-reviews/.',
+    'The detailed report is the REVIEW_REJECTION_REPORT path above, outside the repository; run telemetry is under audit-reports/commit-reviews/.',
   ];
   const tail = typeof lastStderr === 'string'
     ? lastStderr.trim().split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(-3).join(' | ')

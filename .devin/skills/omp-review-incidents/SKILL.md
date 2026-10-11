@@ -15,7 +15,7 @@ not guess.
 |---|---|
 | Per-run event stream (one JSON object per line, `schema: review-run-event@1`) | `<repo>/audit-reports/commit-reviews/runs.jsonl` |
 | Live/last run state (`schema: review-last-run@1`) | `<repo>/audit-reports/commit-reviews/last-run.json` |
-| Verdict report per review | `<repo>/audit-reports/commit-reviews/<timestamp>-<hash>.md` |
+| Verdict report per review | `~/Documents/omp-reviewer-kit/<repo folder>/<timestamp>-<hash>.md` (`OMP_REVIEW_KIT_REPORTS_DIR` overrides the root) |
 | OMP process logs (JSONL; filename = `omp.<date>.<pid>.log`) | `~/.omp/logs/` (`C:\Users\<user>\.omp\logs\` on Windows) |
 | OMP agent sessions (subagent transcripts) | `~/.omp/agent/sessions/` and `%TEMP%/omp-task-*/` |
 | HTTP 4xx request dumps | `~/.omp/logs/http-400-requests/` |

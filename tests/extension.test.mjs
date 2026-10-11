@@ -8,6 +8,7 @@ import { spawn, spawnSync } from 'node:child_process';
 
 import { PluginInstallerService } from '../src/application/installer-service.mjs';
 import initExtension from '../src/extension.mjs';
+import { repoReportsFolderName } from '../src/infra/filesystem-report-store-adapter.mjs';
 
 async function createTempRepo() {
   const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-ext-test-'));
@@ -557,7 +558,6 @@ describe('Feature: Native OMP Extension & Installer Service', () => {
         await rm(dir, { recursive: true, force: true });
       }
     });
-
     it('Scenario 5: foreign core.hooksPath (.husky) and its files remain untouched and report conflict', async () => { const { baseDir, repoDir, git } = await createTempRepo();
     try {
       git(['config', 'core.hooksPath', '.husky']);
@@ -974,6 +974,64 @@ describe('Feature: Native OMP Extension & Installer Service', () => {
       assert.match(text, /models tried: @smol -> @task/);
       assert.match(text, /report: x\.md/);
     } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  it('/reviewer-kit:status prints the absolute path of the latest saved report right after its verdict', async () => {
+    const { baseDir, repoDir } = await createTempRepo();
+    const reportsRoot = path.join(baseDir, 'reports');
+    const savedReportsDir = process.env.OMP_REVIEW_KIT_REPORTS_DIR;
+    try {
+      const { repoRoot } = await new PluginInstallerService().status(repoDir);
+      const reportDir = path.join(reportsRoot, repoReportsFolderName(repoRoot));
+      await mkdir(reportDir, { recursive: true });
+      const reportPath = path.join(reportDir, `2026-10-10T20-21-51-525Z-${'c'.repeat(64)}.md`);
+      await writeFile(reportPath, '# OMP Review Kit commit review\n\n- result: BLOCK\n', 'utf8');
+      const runDir = path.join(repoDir, 'audit-reports', 'commit-reviews');
+      await mkdir(runDir, { recursive: true });
+      await writeFile(path.join(runDir, 'last-run.json'), JSON.stringify({
+        schema: 'review-last-run@1',
+        state: 'blocked',
+        verdict: 'BLOCK',
+        updatedAt: '2026-10-10T20:21:51.525Z',
+      }), 'utf8');
+      process.env.OMP_REVIEW_KIT_REPORTS_DIR = reportsRoot;
+
+      const harness = createExtensionHarness();
+      const ctx = harness.makeCtx(repoDir);
+      await harness.commands.get('reviewer-kit:status').handler('', ctx);
+      const lines = ctx.notifications.map((n) => n.msg).join('\n').split('\n');
+      const verdictAt = lines.indexOf('Latest Review: BLOCK (2026-10-10T20:21:51.525Z)');
+      assert.notEqual(verdictAt, -1, lines.join('\n'));
+      assert.equal(lines[verdictAt + 1], `Report: ${reportPath}`);
+      assert.ok(lines.some((line) => line.startsWith('Last Run: blocked')));
+    } finally {
+      if (savedReportsDir === undefined) delete process.env.OMP_REVIEW_KIT_REPORTS_DIR;
+      else process.env.OMP_REVIEW_KIT_REPORTS_DIR = savedReportsDir;
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  it('/reviewer-kit:status prints no Report line when the reports folder holds no report', async () => {
+    const { baseDir, repoDir } = await createTempRepo();
+    const reportsRoot = path.join(baseDir, 'reports');
+    const savedReportsDir = process.env.OMP_REVIEW_KIT_REPORTS_DIR;
+    try {
+      const { repoRoot } = await new PluginInstallerService().status(repoDir);
+      await mkdir(path.join(reportsRoot, repoReportsFolderName(repoRoot)), { recursive: true });
+      process.env.OMP_REVIEW_KIT_REPORTS_DIR = reportsRoot;
+
+      const harness = createExtensionHarness();
+      const ctx = harness.makeCtx(repoDir);
+      await harness.commands.get('reviewer-kit:status').handler('', ctx);
+      const text = ctx.notifications.map((n) => n.msg).join('\n');
+      assert.match(text, /^Status: /m);
+      assert.doesNotMatch(text, /Latest Review:/);
+      assert.doesNotMatch(text, /^Report: /m);
+    } finally {
+      if (savedReportsDir === undefined) delete process.env.OMP_REVIEW_KIT_REPORTS_DIR;
+      else process.env.OMP_REVIEW_KIT_REPORTS_DIR = savedReportsDir;
       await rm(baseDir, { recursive: true, force: true });
     }
   });

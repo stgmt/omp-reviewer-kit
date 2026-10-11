@@ -425,6 +425,7 @@ export default function initExtension(pi) {
 
         if (info.latestReview) {
           lines.push(`Latest Review: ${info.latestReview.verdict} (${info.latestReview.date})`);
+          lines.push(`Report: ${info.latestReview.path}`);
         }
 
         if (info.lastRun) {

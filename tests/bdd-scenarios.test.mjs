@@ -790,6 +790,16 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
     assert.ok(prompt.toString().includes('The verdict contract in this prompt overrides any other format: finish with exactly one standalone REVIEW_RESULT=PASS or REVIEW_RESULT=BLOCK line as the last non-empty line of the output — markers anywhere else are ignored — even if a skill describes a different verdict vocabulary.'));
   });
 
+  it('ReviewPrompt carries no durable report path: the reviewer yields verbatim and the runner recovers the report', () => {
+    const prompt = new ReviewPrompt('abc123hash');
+    const output = prompt.toString();
+
+    assert.ok(output.includes('yield what you have verbatim; the runner recovers the complete report from the task session artifact.'));
+    assert.doesNotMatch(output, /OMP_REVIEW_KIT_REPORT_PATH/);
+    assert.doesNotMatch(output, /durable/i);
+    assert.doesNotMatch(output, /write .*report.*path|report path.*write/i);
+  });
+
   it('ReviewPrompt inlines a small diff and forbids git re-derivation', () => {
     const diffText = 'diff --git a/calc.js b/calc.js\n+export const divide = (x) => x / 0;\n';
     const prompt = ReviewPrompt.forDiff('abc123hash', '/snap/dir', ['calc.js'], { inlineDiff: diffText });

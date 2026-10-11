@@ -117,11 +117,15 @@ Or on POSIX systems:
 
 ## Reports
 
-Every review generates an immutable audit record in the target repository at:
+Every review writes an immutable report outside the repository, in your Documents folder:
 
 ```text
-audit-reports/commit-reviews/<timestamp>-<diff-hash>.md
+~/Documents/omp-reviewer-kit/<repository folder name>/<timestamp>-<diff-hash>.md
 ```
+
+The repository folder name is the directory name plus a 12-character hash of the absolute path, so checkouts that share a directory name (every task worktree named `wt`, for example) never share a folder.
+
+`OMP_REVIEW_KIT_REPORTS_DIR` moves the root. The path is printed on the verdict line (`reviewer-kit PASS: <path>` or `REVIEW_REJECTION_REPORT=<path>`), stored with the verdict cache, and shown by `/reviewer-kit:status` as the latest report. The repository keeps only run telemetry and the verdict cache, under `audit-reports/commit-reviews/`.
 
 Reports record:
 - Staged diff hash and review timestamp
@@ -130,30 +134,11 @@ Reports record:
 - Unproven and rejected candidate summaries with defense justifications
 - Machine-readable verdict marker (`REVIEW_RESULT=PASS` or `REVIEW_RESULT=BLOCK`)
 
-### Report delivery and project policy guards
+### How the report reaches the runner
 
-The review child is a dispatcher plus a `reviewer-kit` task; the dispatcher's stdout is the only thing the runner parses, so the full report must survive the hop from the task. Two channels guarantee that, and neither depends on the dispatcher reading anything back:
+The review child is a dispatcher plus a `reviewer-kit` task. The runner evaluates the dispatcher's stdout, which carries the complete report the orchestrator yields. Each review attempt runs `omp` with its own `--session-dir` (removed after the attempt). When the dispatcher output has no standalone verdict marker, or carries an `execution_failure` envelope, the runner reads the task's complete result from `<session>/<artifacts>/<TaskId>.md` (telemetry `report_artifact_recovered`). The recovered text goes through the same fail-closed verdict and envelope validation as any other output.
 
-1. **Session artifacts (primary fallback, no write).** Every review attempt runs `omp` with its own `--session-dir` (a `reviewer-kit-session-<pid>-*` directory under the OS temp dir, removed after the attempt). When the dispatcher output has no standalone verdict marker, or carries an `execution_failure` envelope, the runner reads the task's complete result from `<session>/<artifacts>/<TaskId>.md` and evaluates that instead. Telemetry records `report_artifact_recovered`. A reviewer verdict is never invented: the recovered text goes through the same fail-closed `ReviewVerdict` / envelope validation as any other output.
-2. **Durable report file (best effort).** The prompt names a per-run path (`reviewer-kit-report-*.md` in the OS temp dir) and the same path is exported to the review child as `OMP_REVIEW_KIT_REPORT_PATH`. The orchestrator tries one bash heredoc write to it before yielding and does not retry if it is denied.
-
-**Projects that guard bash commands** (for example an extension that hard-denies commands containing `;`, `&`, `|`, a backtick or `$`) will deny that heredoc, because a Markdown report contains those characters. That no longer fails the review — channel 1 covers it — but you can keep channel 2 working by exempting exactly one write, keyed on the exported path rather than on a command pattern:
-
-```ts
-// In a deny-first tool_call guard, before the chained/substituted-command deny:
-const reportPath = process.env.OMP_REVIEW_KIT_REPORT_PATH?.replace(/\\/g, "/");
-function isReportWrite(command: string): boolean {
-  const lines = command.trim().split(/\r?\n/);
-  // cat > "<report path>" <<'DELIM' ... DELIM  — one heredoc, nothing else.
-  const heredoc = lines[0].match(/^cat\s*>\s*"?([^"\s]+)"?\s*<<\s*'(\w+)'$/);
-  return !!reportPath && !!heredoc
-    && heredoc[1].replace(/\\/g, "/") === reportPath
-    && lines.at(-1) === heredoc[2];
-}
-if (event.toolName === "bash" && isReportWrite(String(event.input.command ?? ""))) return;
-```
-
-Keep the exemption narrow (single heredoc, target equal to `OMP_REVIEW_KIT_REPORT_PATH`); the reviewer is otherwise read-only and must keep being blocked from other writes. If you skip the exemption entirely, only the secondary copy is lost.
+The reviewer writes no file, so no shell command is involved. A project guard that denies shell writes (for example a spec-write guard that rejects commands naming the spec folder) cannot fail a review.
 
 ## Claude Code Plugin and Target Sync
 
