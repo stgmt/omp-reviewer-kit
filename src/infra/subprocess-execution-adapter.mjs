@@ -2,30 +2,7 @@ import { spawn } from 'node:child_process';
 import { stat, symlink } from 'node:fs/promises';
 import path from 'node:path';
 import { ExecutionPort } from '../application/ports.mjs';
-import { mergeRegistryProxyEnv } from './omp-cli-reviewer-adapter.mjs';
-
-function terminateProcessTree(pid) {
-  if (!pid) return;
-  if (process.platform === 'win32') {
-    try {
-      const { spawnSync } = require('node:child_process');
-      spawnSync('taskkill', ['/T', '/F', '/PID', String(pid)], { stdio: 'ignore', windowsHide: true });
-    } catch {}
-    return;
-  }
-  try {
-    process.kill(-pid, 'SIGTERM');
-  } catch {
-    try { process.kill(pid, 'SIGTERM'); } catch {}
-  }
-  setTimeout(() => {
-    try {
-      process.kill(-pid, 'SIGKILL');
-    } catch {
-      try { process.kill(pid, 'SIGKILL'); } catch {}
-    }
-  }, 5000).unref();
-}
+import { mergeRegistryProxyEnv, terminateProcessTree } from './omp-cli-reviewer-adapter.mjs';
 
 /**
  * Creates symlinks for repository dependency directories into the snapshot directory.
@@ -74,6 +51,7 @@ export class SubprocessExecutionAdapter extends ExecutionPort {
       try {
         child = spawn(command, {
           shell: true,
+          detached: process.platform !== 'win32',
           cwd,
           // Same stale-parent guard as review spawns: execution children
           // inherit registry PI_PROXY_* when the parent env lacks them.
@@ -99,9 +77,9 @@ export class SubprocessExecutionAdapter extends ExecutionPort {
       });
 
       if (timeoutMs > 0) {
-        timer = setTimeout(() => {
+        timer = setTimeout(async () => {
           timedOut = true;
-          terminateProcessTree(child.pid);
+          await terminateProcessTree(child);
         }, timeoutMs);
         if (typeof timer?.unref === 'function') {
           timer.unref();
@@ -122,6 +100,7 @@ export class SubprocessExecutionAdapter extends ExecutionPort {
           // failure, never as exit 0.
           exitCode: exitCode ?? 1,
           timedOut,
+          durationMs,
           stdout: stdoutLines.join('\n'),
           stderr: stderrLines.join('\n'),
         });

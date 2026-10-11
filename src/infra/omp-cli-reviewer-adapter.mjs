@@ -502,7 +502,7 @@ function reviewSkillsSelection() {
 }
 
 
-async function terminateProcessTree(proc) {
+export async function terminateProcessTree(proc) {
   if (!proc.pid) return;
   if (process.platform === 'win32') {
     await new Promise((resolve) => {
