@@ -33,10 +33,14 @@ const FAILURE_STDOUT = [
 
 // The task tool stores a string yield payload JSON-encoded under
 // <session>/<artifacts>/<TaskId>.md; subagent results live one level deeper.
-async function writeTaskArtifact(sessionDir, text, { taskId = 'ReviewerKit', nested = false, encode = true } = {}) {
+async function writeTaskArtifact(sessionDir, text, { taskId = 'ReviewerKit', nested = false, encode = true, invocationToken = '', agent = 'reviewer-kit', status = 'success' } = {}) {
   const dir = path.join(sessionDir, '2026-10-03T00-00-00-000Z_session', ...(nested ? ['ReviewerKit'] : []));
   await mkdir(dir, { recursive: true });
   await writeFile(path.join(dir, `${taskId}.md`), encode ? JSON.stringify(text) : text);
+  await writeFile(path.join(dir, `${taskId}.jsonl`), [
+    { type: 'session_init', agent, task: invocationToken, id: taskId },
+    { type: 'message', message: { role: 'toolResult', toolName: 'yield', details: { status, data: text } } },
+  ].map((entry) => JSON.stringify(entry)).join('\n'));
 }
 
 const ADAPTERS = [
@@ -103,7 +107,7 @@ for (const [label, mod] of ADAPTERS) {
     const telemetry = { record: async (type, payload) => events.push({ type, payload }), updateLastRun: async () => {} };
     const adapter = new OmpCliReviewerAdapter({
       runner: async (text, root, timeoutMs, options) => {
-        await writeTaskArtifact(options.sessionDir, REPORT);
+        await writeTaskArtifact(options.sessionDir, REPORT, { invocationToken: options.invocationToken });
         return { status: 0, stdout: FAILURE_STDOUT, stderr: '' };
       },
     });
@@ -126,7 +130,7 @@ for (const [label, mod] of ADAPTERS) {
     const telemetry = { record: async (type, payload) => events.push({ type, payload }), updateLastRun: async () => {} };
     const adapter = new OmpCliReviewerAdapter({
       runner: async (text, root, timeoutMs, options) => {
-        await writeTaskArtifact(options.sessionDir, REPORT);
+        await writeTaskArtifact(options.sessionDir, REPORT, { invocationToken: options.invocationToken });
         return { status: 0, stdout: 'Review dispatched. Awaiting settled result.\n', stderr: '' };
       },
     });
@@ -141,7 +145,7 @@ for (const [label, mod] of ADAPTERS) {
     const dispatcherOutput = '### Review coverage\nREVIEW_RESULT=BLOCK\n';
     const adapter = new OmpCliReviewerAdapter({
       runner: async (text, root, timeoutMs, options) => {
-        await writeTaskArtifact(options.sessionDir, REPORT);
+        await writeTaskArtifact(options.sessionDir, REPORT, { invocationToken: options.invocationToken });
         return { status: 0, stdout: dispatcherOutput, stderr: '' };
       },
     });
@@ -176,7 +180,7 @@ for (const [label, mod] of ADAPTERS) {
     }
   });
 
-  test(`${label}: Given several task results, When recovering, Then the newest one with a marker wins`, async () => {
+  test(`${label}: Given several reviewer results, When recovering, Then ambiguity blocks recovery`, async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'rk-recover-'));
     try {
       await writeTaskArtifact(dir, 'old report\nREVIEW_RESULT=BLOCK', { taskId: 'First' });
@@ -185,8 +189,7 @@ for (const [label, mod] of ADAPTERS) {
 
       const recovered = await recoverTaskReport(dir);
 
-      assert.equal(recovered.text, REPORT);
-      assert.match(recovered.file, /Second\.md$/);
+      assert.equal(recovered, null);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -235,7 +238,7 @@ for (const [label, mod] of ADAPTERS) {
     assert.equal(decodeTaskArtifact(JSON.stringify({ verdict: 'PASS' })), JSON.stringify({ verdict: 'PASS' }));
     const adapter = new OmpCliReviewerAdapter({
       runner: async (text, root, timeoutMs, options) => {
-        await writeTaskArtifact(options.sessionDir, yielded);
+        await writeTaskArtifact(options.sessionDir, yielded, { invocationToken: options.invocationToken });
         return { status: 0, stdout: FAILURE_STDOUT, stderr: '' };
       },
     });
@@ -280,7 +283,8 @@ for (const [label, mod] of ADAPTERS) {
       },
     });
 
-    const review = await withEnv({ TEMP: missing, TMP: missing, TMPDIR: missing }, () => adapter.executeReview({ prompt: 'p', cwd, telemetry }));
+    let review;
+    await assert.doesNotReject(async () => { review = await withEnv({ TEMP: missing, TMP: missing, TMPDIR: missing }, () => adapter.executeReview({ prompt: 'p', cwd, telemetry })); }, 'unavailable session storage must degrade without aborting');
 
     assert.equal(seen[0].sessionDir, undefined);
     assert.equal(review.attempts[0].reportRecovered, undefined);
@@ -294,7 +298,7 @@ for (const [label, mod] of ADAPTERS) {
       runner: async (text, root, timeoutMs, options) => {
         calls.push({ sessionDir: options.sessionDir });
         if (calls.length === 1) return { status: -1, stdout: '', stderr: '' };
-        await writeTaskArtifact(options.sessionDir, REPORT);
+        await writeTaskArtifact(options.sessionDir, REPORT, { invocationToken: options.invocationToken });
         return { status: 0, stdout: 'Working...\n', stderr: '' };
       },
     });
@@ -330,6 +334,22 @@ for (const [label, mod] of ADAPTERS) {
     }
   });
 
+  test(`${label}: gated reviews load agents from the gate's own plugin root without model overrides`, async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'rk-plugin-root-'));
+    try {
+      const fake = await makeFakeOmp(root);
+      const gate = path.join(root, 'plugin', 'src', 'infra', 'review-gate-entry.mjs');
+      await withEnv({ OMP_REVIEW_KIT_OMP: fake.launcher }, () =>
+        OmpCliReviewerAdapter.defaultRunner('probe', cwd, 0, { reviewGateExtension: gate }));
+      const [call] = await fake.invocations();
+      assert.equal(call.args.includes('--no-extensions'), true, 'ambient installed agents must not shadow the gate contracts');
+      assert.equal(call.args[call.args.indexOf('--plugin-dir') + 1], path.join(root, 'plugin'));
+      assert.equal(call.args[call.args.indexOf('-e') + 1], gate);
+      assert.equal(call.args.includes('--model'), false);
+      assert.equal(call.args.includes('--smol'), false);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
   test(`${label}: defaultRunner exports only string env values to the child`, async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'rk-env-'));
     try {
@@ -353,6 +373,7 @@ for (const [label, mod] of ADAPTERS) {
     try {
       const file = path.join(root, 'not-a-dir.txt');
       await writeFile(file, 'x');
+      await assert.doesNotReject(() => recoverTaskReport(file), 'invalid session path must fail safely');
       assert.equal(await recoverTaskReport(file), null);
       assert.equal(await recoverTaskReport(path.join(root, 'deleted-before-the-call')), null);
       assert.equal(await recoverTaskReport(null), null);
@@ -362,7 +383,7 @@ for (const [label, mod] of ADAPTERS) {
     }
   });
 
-  test(`${label}: equal mtimes pick the greater path deterministically, and a newer mtime beats a greater path`, async () => {
+  test(`${label}: neither equal nor different mtimes resolve conflicting reviewer results`, async () => {
     const REPORT_BLOCK = 'first report\nREVIEW_RESULT=BLOCK';
     const dir = await mkdtemp(path.join(tmpdir(), 'rk-tie-'));
     try {
@@ -376,8 +397,7 @@ for (const [label, mod] of ADAPTERS) {
 
       const tied = await recoverTaskReport(dir);
 
-      assert.match(tied.file, /Second\.md$/);
-      assert.equal(tied.text, REPORT);
+      assert.equal(tied, null);
 
       const older = new Date(Date.now() - 60_000);
       const newer = new Date(Date.now() - 1000);
@@ -387,8 +407,7 @@ for (const [label, mod] of ADAPTERS) {
 
       const byTime = await recoverTaskReport(dir);
 
-      assert.match(byTime.file, /First\.md$/);
-      assert.equal(byTime.text, REPORT_BLOCK);
+      assert.equal(byTime, null);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -498,6 +517,7 @@ for (const [label, mod] of ADAPTERS) {
         "    const dir = path.join(args[at + 1], 'sess');",
         '    mkdirSync(dir, { recursive: true });',
         `    writeFileSync(path.join(dir, 'ReviewerKit.md'), JSON.stringify(${JSON.stringify(REPORT)}));`,
+        "    writeFileSync(path.join(dir, 'ReviewerKit.jsonl'), [JSON.stringify({type:'session_init',agent:'reviewer-kit',task:input}), JSON.stringify({type:'message',message:{role:'toolResult',toolName:'yield',details:{status:'success'}}})].join('\\n'));" ,
         '  }',
         `  process.stdout.write(${JSON.stringify(FAILURE_STDOUT)});`,
         '});',

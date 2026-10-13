@@ -1,9 +1,49 @@
-import { spawnSync } from 'node:child_process';
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { readFile, writeFile, appendFile } from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { runMutationGate } from './mutation-runner.mjs';
 
 const MUTANTS = [
+  {
+    id: 'mutation-pool-concurrency-disabled', file: 'scripts/mutation-runner.mjs', testFile: 'tests/mutation-runner.test.mjs',
+    original: 'Array.from({ length: count }, async (_, worker)', replacement: 'Array.from({ length: 1 }, async (_, worker)', description: 'Worker pool silently becomes sequential',
+  },
+  {
+    id: 'mutation-exclusive-lane-disabled', file: 'scripts/mutation-runner.mjs', testFile: 'tests/mutation-runner.test.mjs',
+    original: 'if (job.exclusive) {', replacement: 'if (false) {', description: 'Timing-sensitive jobs overlap parallel workers',
+  },
+  {
+    id: 'mutation-timeout-counted-as-kill', file: 'scripts/mutation-runner.mjs', testFile: 'tests/mutation-runner.test.mjs',
+    original: "if (run.timedOut) return 'timeout';", replacement: "if (run.timedOut) return 'killed';", description: 'A timed-out test is incorrectly counted as a mutation kill',
+  },
+  {
+    id: 'mutation-missing-summary-accepted', file: 'scripts/mutation-runner.mjs', testFile: 'tests/mutation-runner.test.mjs',
+    original: 'if (run.requireSummary) {', replacement: 'if (false) {', description: 'Partial test evidence can count as a mutation kill without native completion',
+  },
+  {
+    id: 'mutation-assertion-proof-omitted', file: 'scripts/mutation-runner.mjs', testFile: 'tests/mutation-runner.test.mjs',
+    original: "if (failures.some((event) => event.causeCode !== 'ERR_ASSERTION' && event.code !== 'ERR_ASSERTION')) return 'infrastructure_error';", replacement: "if (false) return 'infrastructure_error';", description: 'An infrastructure test failure is counted as a kill',
+  },
+  {
+    id: 'mutation-worker-file-not-restored', file: 'scripts/mutation-runner.mjs', testFile: 'tests/mutation-runner.test.mjs',
+    original: "await writeFile(absolute, Buffer.from(entry.bytes, 'base64'));", replacement: 'void absolute;', description: 'The next job receives dirty source bytes',
+  },
+  {
+    id: 'mutation-stale-selector-accepted', file: 'scripts/mutation-runner.mjs', testFile: 'tests/mutation-runner.test.mjs',
+    original: "if (!calibrate && (!selectors[mutant.id]?.tests?.length || selectors[mutant.id]?.mutantHash !== mutantIdentity(mutant)))", replacement: 'if (false)', description: 'Stale selector evidence is admitted before copying',
+  },
+  {
+    id: 'mutation-duplicate-catalog-accepted', file: 'scripts/mutation-runner.mjs', testFile: 'tests/mutation-runner.test.mjs',
+    original: "if (!mutants.length || new Set(mutants.map((mutant) => mutant.id)).size !== mutants.length)", replacement: 'if (!mutants.length)', description: 'Duplicate IDs satisfy catalog admission',
+  },
+  {
+    id: 'gate-native-diagnostic-lost', file: 'src/infra/review-batch-extension.mjs', testFile: 'tests/review-gate.test.mjs',
+    original: '...(error.diagnostic ? { diagnostic: error.diagnostic } : {})', replacement: '...{}', description: 'Native schema rejection loses its bounded diagnostic before cleanup',
+  },
+  ...['src/infra/omp-cli-reviewer-adapter.mjs', 'scripts/run-review.mjs'].map((file) => ({
+    id: `${file === 'scripts/run-review.mjs' ? 'runner' : 'modular'}-native-diagnostic-not-delivered`, file, testFile: 'tests/review-gate.test.mjs',
+    original: "const diagnostics = events.filter((event) => event.complete === false && event.diagnostic).slice(0, 16).map((event) => JSON.stringify(event.diagnostic)).join('\\n');", replacement: "const diagnostics = '';", description: 'Persisted native output diagnostics do not reach the review report',
+  })),
   {
     id: "runner-version-compare-inverted",
     file: "src/domain/runner-version.mjs",
@@ -709,7 +749,7 @@ const MUTANTS = [
     file: 'src/application/review-workflow-service.mjs',
     testFile: 'tests/reemit-verbatim.test.mjs',
     original: '          const reevaluated = ReviewRejectionEnvelope.evaluate({',
-    replacement: '          const reevaluated = { verdict: ReviewVerdict.fromOutput(reemittedOutput), envelope: null }; if (false) ReviewRejectionEnvelope.evaluate({',
+    replacement: '          const reevaluated = { verdict: (await import("../domain/review-verdict.mjs")).ReviewVerdict.fromOutput(reemittedOutput), envelope: null }; if (false) ReviewRejectionEnvelope.evaluate({',
     description: 'Re-evaluates re-emitted output for marker only without full rejection envelope',
   },
   {
@@ -1288,22 +1328,8 @@ const MUTANTS = [
     replacement: "false) return null;",
     description: "A scout report without coverage_map yields a broken baseline",
   },
-  {
-    id: "modular-scout-baseline-keep-rule-weakened",
-    file: "src/domain/scout-baseline.mjs",
-    testFile: "tests/scout-baseline.test.mjs",
-    original: "its covering_test is not null, and the file named in covering_test",
-    replacement: "and the file named in covering_test",
-    description: "Uncovered baseline entries are kept instead of re-derived",
-  },
-  {
-    id: "runner-scout-baseline-keep-rule-weakened",
-    file: "scripts/run-review.mjs",
-    testFile: "tests/scout-baseline.test.mjs",
-    original: "its covering_test is not null, and the file named in covering_test",
-    replacement: "and the file named in covering_test",
-    description: "Uncovered baseline entries are kept instead of re-derived",
-  },
+
+
   {
     id: "modular-round-scout-baseline-dropped",
     file: "src/domain/review-round.mjs",
@@ -1356,7 +1382,7 @@ const MUTANTS = [
     id: "modular-scout-baseline-not-read",
     file: "src/infra/omp-cli-reviewer-adapter.mjs",
     testFile: "tests/scout-baseline.test.mjs",
-    original: "if (scoutBaseline) outcome = { ...outcome, scoutBaseline };",
+    original: "if (scoutBaseline && !manifestPath) outcome = { ...outcome, scoutBaseline };",
     replacement: "if (false) outcome = { ...outcome, scoutBaseline };",
     description: "The scout report is never read from the session artifacts",
   },
@@ -1364,7 +1390,7 @@ const MUTANTS = [
     id: "runner-scout-baseline-not-read",
     file: "scripts/run-review.mjs",
     testFile: "tests/scout-baseline.test.mjs",
-    original: "if (scoutBaseline) outcome = { ...outcome, scoutBaseline };",
+    original: "if (scoutBaseline && !manifestPath) outcome = { ...outcome, scoutBaseline };",
     replacement: "if (false) outcome = { ...outcome, scoutBaseline };",
     description: "The scout report is never read from the session artifacts",
   },
@@ -1925,7 +1951,7 @@ const MUTANTS = [
     file: 'agents/review-risk-hunter.md',
     testFile: 'tests/plugin-layout.test.mjs',
     original: '"red_proof": "Concrete tree breakage that would make this check fail; empty string means the check cannot fail",',
-    replacement: '// red_proof field removed',
+    replacement: '',
     description: 'Removes red_proof field from risk hunter schema',
   },
   {
@@ -1933,7 +1959,7 @@ const MUTANTS = [
     file: 'agents/review-finding-verifier.md',
     testFile: 'tests/plugin-layout.test.mjs',
     original: '"triage": "lie | stale_record | disclosed_gap | not_applicable",',
-    replacement: '// triage field removed',
+    replacement: '',
     description: 'Removes triage field from verifier decisions schema',
   },
   {
@@ -2046,7 +2072,7 @@ const MUTANTS = [
     id: 'modular-report-artifact-recovery-skipped',
     file: 'src/infra/omp-cli-reviewer-adapter.mjs',
     testFile: 'tests/report-artifact-recovery.test.mjs',
-    original: "      if (sessionDir && reviewOutputNeedsRecovery(result?.stdout)) {",
+    original: "      if (sessionDir && reviewOutputNeedsRecovery(result?.stdout)\n        && !/\"kind\"\\s*:\\s*\"(?:confirmed_findings|coverage_required)\"/.test(String(result?.stdout ?? ''))) {",
     replacement: "      if (false) {",
     description: 'A truncated or unreadable dispatcher output is no longer recovered from the task session artifact',
   },
@@ -2054,7 +2080,7 @@ const MUTANTS = [
     id: 'modular-report-recovery-overrides-healthy-output',
     file: 'src/infra/omp-cli-reviewer-adapter.mjs',
     testFile: 'tests/report-artifact-recovery.test.mjs',
-    original: "  return !REPORT_MARKER_LINE_RE.test(text) || EXECUTION_FAILURE_CODE_RE.test(text);",
+    original: "  return text.split(/\\r?\\n/).filter((line) => /^REVIEW_RESULT=(PASS|BLOCK)$/.test(line)).length !== 1\n    || EXECUTION_FAILURE_CODE_RE.test(text);",
     replacement: "  return true;",
     description: 'A healthy dispatcher verdict is replaced by the task artifact',
   },
@@ -2070,7 +2096,7 @@ const MUTANTS = [
     id: 'runner-report-artifact-recovery-skipped',
     file: 'scripts/run-review.mjs',
     testFile: 'tests/report-artifact-recovery.test.mjs',
-    original: "      if (sessionDir && reviewOutputNeedsRecovery(result?.stdout)) {",
+    original: "      if (sessionDir && reviewOutputNeedsRecovery(result?.stdout)\n        && !/\"kind\"\\s*:\\s*\"(?:confirmed_findings|coverage_required)\"/.test(String(result?.stdout ?? ''))) {",
     replacement: "      if (false) {",
     description: 'A truncated or unreadable dispatcher output is no longer recovered from the task session artifact',
   },
@@ -2078,7 +2104,7 @@ const MUTANTS = [
     id: 'runner-report-recovery-overrides-healthy-output',
     file: 'scripts/run-review.mjs',
     testFile: 'tests/report-artifact-recovery.test.mjs',
-    original: "  return !REPORT_MARKER_LINE_RE.test(text) || EXECUTION_FAILURE_CODE_RE.test(text);",
+    original: "  return text.split(/\\r?\\n/).filter((line) => /^REVIEW_RESULT=(PASS|BLOCK)$/.test(line)).length !== 1\n    || EXECUTION_FAILURE_CODE_RE.test(text);",
     replacement: "  return true;",
     description: 'A healthy dispatcher verdict is replaced by the task artifact',
   },
@@ -2206,7 +2232,7 @@ const MUTANTS = [
     id: 'plugin-report-artifact-recovery-skipped',
     file: 'scripts/run-review.mjs',
     testFile: 'tests/report-artifact-recovery.test.mjs',
-    original: "      if (sessionDir && reviewOutputNeedsRecovery(result?.stdout)) {",
+    original: "      if (sessionDir && reviewOutputNeedsRecovery(result?.stdout)\n        && !/\"kind\"\\s*:\\s*\"(?:confirmed_findings|coverage_required)\"/.test(String(result?.stdout ?? ''))) {",
     replacement: "      if (false) {",
     description: "The review algorithm no longer recovers the report from the task session artifact",
   },
@@ -2222,8 +2248,8 @@ const MUTANTS = [
     id: 'modular-recover-outer-catch-rethrows',
     file: 'src/infra/omp-cli-reviewer-adapter.mjs',
     testFile: 'tests/report-artifact-recovery.test.mjs',
-    original: "  } catch {\n    return null;\n  }\n  return best ?",
-    replacement: "  } catch (error) {\n    throw error;\n  }\n  return best ?",
+    original: "  } catch {\n    return null;\n  }\n  if (candidates.length !== 1) return null;",
+    replacement: "  } catch (error) {\n    throw error;\n  }\n  if (candidates.length !== 1) return null;",
     description: "An unreadable session dir rejects the review instead of degrading to no recovery",
   },
   {
@@ -2246,8 +2272,8 @@ const MUTANTS = [
     id: 'runner-recover-outer-catch-rethrows',
     file: 'scripts/run-review.mjs',
     testFile: 'tests/report-artifact-recovery.test.mjs',
-    original: "  } catch {\n    return null;\n  }\n  return best ?",
-    replacement: "  } catch (error) {\n    throw error;\n  }\n  return best ?",
+    original: "  } catch {\n    return null;\n  }\n  if (candidates.length !== 1) return null;",
+    replacement: "  } catch (error) {\n    throw error;\n  }\n  if (candidates.length !== 1) return null;",
     description: "An unreadable session dir rejects the review instead of degrading to no recovery",
   },
   {
@@ -2298,54 +2324,12 @@ const MUTANTS = [
     replacement: "        if (!info) continue;\n        if (now - info.mtimeMs <= SNAPSHOT_TTL_MS) continue;\n        const owner = Number(name.match(/^reviewer-kit-session-",
     description: "The orphan session sweep also deletes plain files that merely share the prefix",
   },
-  {
-    id: 'modular-recover-oldest-wins',
-    file: 'src/infra/omp-cli-reviewer-adapter.mjs',
-    testFile: 'tests/report-artifact-recovery.test.mjs',
-    original: "info.mtimeMs > best.mtimeMs || (info.mtimeMs === best.mtimeMs && full > best.file)",
-    replacement: "info.mtimeMs < best.mtimeMs || (info.mtimeMs === best.mtimeMs && full > best.file)",
-    description: "Recovery adopts the oldest task artifact instead of the newest",
-  },
-  {
-    id: 'modular-recover-tie-takes-lesser-path',
-    file: 'src/infra/omp-cli-reviewer-adapter.mjs',
-    testFile: 'tests/report-artifact-recovery.test.mjs',
-    original: "info.mtimeMs === best.mtimeMs && full > best.file",
-    replacement: "info.mtimeMs === best.mtimeMs && full < best.file",
-    description: "Equal-mtime artifacts resolve to the lesser path instead of the greater one",
-  },
-  {
-    id: 'modular-recover-tie-ignores-mtime',
-    file: 'src/infra/omp-cli-reviewer-adapter.mjs',
-    testFile: 'tests/report-artifact-recovery.test.mjs',
-    original: "info.mtimeMs === best.mtimeMs && full > best.file",
-    replacement: "full > best.file",
-    description: "A greater path beats a newer artifact",
-  },
-  {
-    id: 'runner-recover-oldest-wins',
-    file: 'scripts/run-review.mjs',
-    testFile: 'tests/report-artifact-recovery.test.mjs',
-    original: "info.mtimeMs > best.mtimeMs || (info.mtimeMs === best.mtimeMs && full > best.file)",
-    replacement: "info.mtimeMs < best.mtimeMs || (info.mtimeMs === best.mtimeMs && full > best.file)",
-    description: "Recovery adopts the oldest task artifact instead of the newest",
-  },
-  {
-    id: 'runner-recover-tie-takes-lesser-path',
-    file: 'scripts/run-review.mjs',
-    testFile: 'tests/report-artifact-recovery.test.mjs',
-    original: "info.mtimeMs === best.mtimeMs && full > best.file",
-    replacement: "info.mtimeMs === best.mtimeMs && full < best.file",
-    description: "Equal-mtime artifacts resolve to the lesser path instead of the greater one",
-  },
-  {
-    id: 'runner-recover-tie-ignores-mtime',
-    file: 'scripts/run-review.mjs',
-    testFile: 'tests/report-artifact-recovery.test.mjs',
-    original: "info.mtimeMs === best.mtimeMs && full > best.file",
-    replacement: "full > best.file",
-    description: "A greater path beats a newer artifact",
-  },
+
+
+
+
+
+
   {
     id: "target-policy-tp-not-skipped",
     file: "src/domain/target-policy.mjs",
@@ -3068,10 +3052,10 @@ const MUTANTS = [
   },
   {
     id: 'run-mutation-gate-leaks-run-records',
-    file: 'scripts/run-mutation-tests.mjs',
-    testFile: 'tests/review-run-records.test.mjs',
-    original: "timeout: 120_000,\n        env: { ...process.env, OMP_REVIEW_KIT_RUNS_DIR: path.join(tempDir, 'runs'), OMP_REVIEW_KIT_TARGETS: path.join(tempDir, 'review-kit-targets.json'), OMP_REVIEW_KIT_REPORTS_DIR: path.join(tempDir, 'reports') },",
-    replacement: "timeout: 120_000,\n        env: { ...process.env },",
+    file: 'scripts/mutation-runner.mjs',
+    testFile: 'tests/mutation-runner.test.mjs',
+    original: "OMP_REVIEW_KIT_RUNS_DIR: path.join(scratch, 'runs')",
+    replacement: "OMP_REVIEW_KIT_RUNS_DIR: undefined",
     description: 'Mutant runs fall back to the per-user runs directory and leak records outside the temp copy',
   },
   {
@@ -4363,86 +4347,101 @@ const MUTANTS = [
     replacement: '          timedOut = false;\n          await terminateProcessTree(child);',
     description: 'The runner command fails to report its timeout',
   },
+  {"id":"modular-recovery-ambiguity","file":"src/infra/omp-cli-reviewer-adapter.mjs","testFile":"tests/recovery-provenance.test.mjs","original":"if (candidates.length !== 1) return null;","replacement":"if (candidates.length === 0) return null;","description":"Remove provenance or fail-closed guard"},
+  {"id":"modular-recovery-agent","file":"src/infra/omp-cli-reviewer-adapter.mjs","testFile":"tests/recovery-provenance.test.mjs","original":"identity.agent !== 'reviewer-kit'","replacement":"false","description":"Remove provenance or fail-closed guard"},
+  {"id":"modular-recovery-completion","file":"src/infra/omp-cli-reviewer-adapter.mjs","testFile":"tests/recovery-provenance.test.mjs","original":"!result.identity.complete","replacement":"false","description":"Remove provenance or fail-closed guard"},
+  {"id":"modular-recovery-attempt","file":"src/infra/omp-cli-reviewer-adapter.mjs","testFile":"tests/recovery-provenance.test.mjs","original":"invocationToken &&","replacement":"false &&","description":"Remove provenance or fail-closed guard"},
+  {"id":"modular-recovery-process","file":"src/infra/omp-cli-reviewer-adapter.mjs","testFile":"tests/recovery-provenance.test.mjs","original":"sessionDir.length === 0 || processStatus !== 0","replacement":"sessionDir.length === 0","description":"Remove provenance or fail-closed guard"},
+  {"id":"runner-recovery-ambiguity","file":"scripts/run-review.mjs","testFile":"tests/recovery-provenance.test.mjs","original":"if (candidates.length !== 1) return null;","replacement":"if (candidates.length === 0) return null;","description":"Remove provenance or fail-closed guard"},
+  {"id":"runner-recovery-agent","file":"scripts/run-review.mjs","testFile":"tests/recovery-provenance.test.mjs","original":"identity.agent !== 'reviewer-kit'","replacement":"false","description":"Remove provenance or fail-closed guard"},
+  {"id":"runner-recovery-completion","file":"scripts/run-review.mjs","testFile":"tests/recovery-provenance.test.mjs","original":"!result.identity.complete","replacement":"false","description":"Remove provenance or fail-closed guard"},
+  {"id":"runner-recovery-attempt","file":"scripts/run-review.mjs","testFile":"tests/recovery-provenance.test.mjs","original":"invocationToken &&","replacement":"false &&","description":"Remove provenance or fail-closed guard"},
+  {"id":"runner-recovery-process","file":"scripts/run-review.mjs","testFile":"tests/recovery-provenance.test.mjs","original":"sessionDir.length === 0 || processStatus !== 0","replacement":"sessionDir.length === 0","description":"Remove provenance or fail-closed guard"},
+  {"id":"batch-complete","file":"src/domain/review-batch.mjs","testFile":"tests/review-batch.test.mjs","original":"results.length !== expected.length","replacement":"false","description":"Accept incomplete native review stage"},
+  {"id":"batch-abort","file":"src/domain/review-batch.mjs","testFile":"tests/review-batch.test.mjs","original":"result.aborted","replacement":"false","description":"Accept incomplete native review stage"},
+  {"id":"scope-unresolved","file":"src/domain/review-batch.mjs","testFile":"tests/review-batch.test.mjs","original":"completion.unresolved.length","replacement":"false","description":"Accept incomplete native review stage"},
+  ...['src/domain/review-batch.mjs', 'scripts/run-review.mjs'].map((file) => ({
+    id: `${file === 'scripts/run-review.mjs' ? 'runner' : 'modular'}-scout-empty-discovery`, file, testFile: 'tests/review-batch.test.mjs',
+    original: "throw new Error('Incomplete scout discovery; completion paths alone do not prove scope coverage');",
+    replacement: 'void report;', description: 'Empty substantive scout output completes the stage',
+  })),
+  ...['src/infra/omp-cli-reviewer-adapter.mjs', 'scripts/run-review.mjs'].map((file) => ({
+    id: `${file === 'scripts/run-review.mjs' ? 'runner' : 'modular'}-verifier-block-ignored`, file, testFile: 'tests/review-gate.test.mjs',
+    original: 'events.some((event) => event.blocksApproval)', replacement: 'false', description: 'PASS contradicting confirmed verifier findings is accepted',
+  })),
+  ...['src/application/review-workflow-service.mjs', 'scripts/run-review.mjs'].map((file) => ({
+    id: `${file === 'scripts/run-review.mjs' ? 'runner' : 'modular'}-reverted-snapshot-deleted`, file, testFile: 'tests/execution-evidence.test.mjs',
+    original: '                const revertedSnapshot = new StagedSnapshot(revertedFiles);\n', replacement: '', description: 'Red proof loses its reverted snapshot and staged evidence',
+  })),
+  {
+    id: 'gate-verifier-block-evidence-lost', file: 'src/infra/review-batch-extension.mjs', testFile: 'tests/review-gate.test.mjs',
+    original: 'complete: true, blocksApproval,', replacement: 'complete: true, blocksApproval: false,', description: 'Verifier blocking conclusion is not carried to the runner',
+  },
+  {
+    id: 'gate-verifier-dispositions-ignored', file: 'src/infra/review-batch-extension.mjs', testFile: 'tests/review-gate.test.mjs',
+    original: "throw new Error('Verifier omitted or duplicated an authoritative candidate/coverage disposition');", replacement: 'void data;', description: 'Verifier silently drops a hunter candidate',
+  },
+  {
+    id: 'review-gate-plugin-root-omitted', file: 'src/infra/omp-cli-reviewer-adapter.mjs', testFile: 'tests/report-artifact-recovery.test.mjs',
+    original: "commandArgs.push('--no-extensions', '--plugin-dir', path.resolve(path.dirname(reviewGateExtension), '..', '..'), '-e', reviewGateExtension)", replacement: "commandArgs.push('--no-extensions', '-e', reviewGateExtension)", description: 'New gate loads stale agents from another installed plugin',
+  },
+  {
+    id: 'runner-gate-plugin-root-omitted', file: 'scripts/run-review.mjs', testFile: 'tests/report-artifact-recovery.test.mjs',
+    original: "commandArgs.push('--no-extensions', '--plugin-dir', path.resolve(path.dirname(reviewGateExtension), '..', '..'), '-e', reviewGateExtension)", replacement: "commandArgs.push('--no-extensions', '-e', reviewGateExtension)", description: 'Bundled gate loads stale agents from another installed plugin',
+  },
+  ...['src/infra/omp-cli-reviewer-adapter.mjs', 'scripts/run-review.mjs'].map((file) => ({
+    id: `${file === 'scripts/run-review.mjs' ? 'runner' : 'modular'}-review-ambient-agents-not-isolated`, file, testFile: 'tests/report-artifact-recovery.test.mjs',
+    original: "commandArgs.push('--no-extensions', '--plugin-dir',", replacement: "commandArgs.push('--plugin-dir',", description: 'Older installed agents shadow the current review schemas',
+  })),
+  ...['src/domain/review-batch.mjs', 'scripts/run-review.mjs'].map((file) => ({
+    id: `${file === 'scripts/run-review.mjs' ? 'runner' : 'modular'}-scout-field-ownership-instruction-omitted`, file, testFile: 'tests/review-batch.test.mjs',
+    original: 'changed_paths and completion.completed_paths must contain exactly the primary owned paths', replacement: 'Use every changed path in the full diff', description: 'Scoped scouts are not told which report fields are ownership-bound',
+  })),
+  {
+    id: 'superseded-excluded-workers-unprotected', file: 'src/application/superseded-run-stopper.mjs', testFile: 'tests/superseded-runs.test.mjs',
+    original: "    && !(typeof record.repoRoot === 'string' && isSkippedTarget(record.repoRoot))\n", replacement: '', description: 'Excluded worker reviews are stopped by plugin maintenance',
+  },
+  {
+    id: 'gate-flat-mode-rewritten-as-batch', file: 'src/infra/review-batch-extension.mjs', testFile: 'tests/review-gate.test.mjs',
+    original: 'if (!batchEnabled) {', replacement: 'if (false) {', description: 'Valid flat native calls are rewritten to unsupported batches',
+  },
 ];
 
-const DIRECTORIES_TO_COPY = ['src', 'scripts', 'agents', 'skills', 'tests', 'templates', '.omp-plugin', '.omp/review-kit', '.claude-plugin', 'claude-plugin', '.github'];
-const FILES_TO_COPY = ['package.json', 'README.md', 'AGENTS.md', 'ROADMAP.md', 'CHANGELOG.md'];
+export { MUTANTS };
 
-async function copyRepoTree(targetDir) {
-  for (const dir of DIRECTORIES_TO_COPY) {
-    await cp(dir, path.join(targetDir, dir), { recursive: true });
+async function main() {
+  if (Number(process.versions.node.split('.')[0]) < 22) throw new Error('Precise mutation gate requires Node 22 or newer; runtime plugin still supports Node 18');
+  const calibrate = process.argv.includes('--calibrate');
+  const workers = Number(process.env.OMP_MUTATION_WORKERS ?? 4);
+  const selectorPath = new URL('./mutation-selectors.json', import.meta.url);
+  let selectors = {};
+  if (!calibrate) {
+    const catalog = JSON.parse(await readFile(selectorPath, 'utf8'));
+    if (catalog.schema !== 'mutation-selectors@1' || !catalog.mappings || Object.keys(catalog.mappings).length !== MUTANTS.length) throw new Error('Incomplete selector catalog; run --calibrate');
+    selectors = catalog.mappings;
   }
-  for (const file of FILES_TO_COPY) {
-    await cp(file, path.join(targetDir, file));
+  const controller = new AbortController();
+  const interrupt = () => controller.abort();
+  process.once('SIGINT', interrupt);
+  process.once('SIGTERM', interrupt);
+  try {
+    console.log(`Starting safety mutation gate: ${MUTANTS.length} curated mutants, ${workers} workers, ${calibrate ? 'full/focused calibration' : 'verified focused selectors'}...`);
+    const resultPath = process.env.OMP_MUTATION_RESULT ?? path.join(process.cwd(), 'audit-reports', 'mutation-result.json');
+    await writeFile(`${resultPath}.jsonl`, '');
+    const result = await runMutationGate(MUTANTS, { workers, calibrate, selectors, signal: controller.signal,
+      onResult: (record, mapping, fingerprint) => appendFile(`${resultPath}.jsonl`, JSON.stringify({ ...record, mapping, fingerprint }) + '\n') });
+    await writeFile(process.env.OMP_MUTATION_RESULT ?? path.join(process.cwd(), 'audit-reports', 'mutation-result.json'), JSON.stringify(result, null, 2) + '\n');
+    if (calibrate && result.passed) await writeFile(selectorPath, JSON.stringify({ schema: 'mutation-selectors@1', mappings: result.mappings }, null, 2) + '\n');
+    const killed = result.results.filter((item) => item.outcome === 'killed').length;
+    console.log(`Mutation gate result: ${killed}/${MUTANTS.length} killed; ${result.durationMs}ms.`);
+    console.log(result.passed ? 'Mutation gate PASSED: 100% of curated safety mutants killed.' : 'Mutation gate FAILED: unresolved mutation evidence.');
+    if (!result.passed) process.exitCode = 1;
+  } finally {
+    process.off('SIGINT', interrupt);
+    process.off('SIGTERM', interrupt);
   }
 }
 
-async function runMutationGate() {
-  console.log(`Starting safety mutation gate: ${MUTANTS.length} curated mutants...`);
-  let killedCount = 0;
-  let survivedCount = 0;
-
-  for (const mutant of MUTANTS) {
-    const tempDir = await mkdtemp(path.join(tmpdir(), 'omp-mutant-'));
-    try {
-      await copyRepoTree(tempDir);
-
-      const targetPath = path.join(tempDir, mutant.file);
-      const originalContent = (await readFile(targetPath, 'utf8')).replace(/\r\n/g, '\n');
-      const normalizedOriginal = mutant.original.replace(/\r\n/g, '\n');
-      const normalizedReplacement = mutant.replacement.replace(/\r\n/g, '\n');
-
-      // Guarded single replacement
-      const occurrences = originalContent.split(normalizedOriginal).length - 1;
-      if (occurrences !== 1) {
-        throw new Error(
-          `Mutation target guard failed for [${mutant.id}]: expected 1 occurrence of original string in ${mutant.file}, found ${occurrences}`
-        );
-      }
-
-      const mutatedContent = originalContent.replace(normalizedOriginal, normalizedReplacement);
-      await writeFile(targetPath, mutatedContent, 'utf8');
-
-      // Run owning test suite in isolated directory
-      // Review run records of the mutant's tests stay inside the temp copy.
-      const testResult = spawnSync('node', ['--test', mutant.testFile], {
-        cwd: tempDir,
-        encoding: 'utf8',
-        windowsHide: true,
-        // Suites with real processes and PowerShell listings take 20 s or more on Windows.
-        timeout: 120_000,
-        env: { ...process.env, OMP_REVIEW_KIT_RUNS_DIR: path.join(tempDir, 'runs'), OMP_REVIEW_KIT_TARGETS: path.join(tempDir, 'review-kit-targets.json'), OMP_REVIEW_KIT_REPORTS_DIR: path.join(tempDir, 'reports') },
-      });
-
-      // A run that hits the time limit says nothing about the mutant, so it is not counted as killed.
-      const timedOut = testResult.error?.code === 'ETIMEDOUT';
-      if (testResult.status !== 0 && !timedOut) {
-        killedCount++;
-        console.log(`  ✔ [KILLED]   ${mutant.id} (${mutant.description})`);
-      } else {
-        survivedCount++;
-        const note = timedOut ? ' (time limit exceeded, so the mutant is not proven killed)' : '';
-        console.error(`  ✖ [SURVIVED] ${mutant.id} (${mutant.description})${note}`);
-        console.error(`    Test output:\n${testResult.stdout}\n${testResult.stderr}`);
-      }
-    } finally {
-      await rm(tempDir, { recursive: true, force: true }).catch(() => {});
-    }
-  }
-
-  const total = MUTANTS.length;
-  const killRate = ((killedCount / total) * 100).toFixed(1);
-  console.log(`\nMutation gate result: ${killedCount}/${total} killed (${killRate}%).`);
-
-  if (survivedCount > 0) {
-    console.error(`Mutation gate FAILED: ${survivedCount} mutants survived.`);
-    process.exit(1);
-  }
-
-  console.log('Mutation gate PASSED: 100% of curated safety mutants killed.');
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error) => { console.error('Fatal mutation gate error:', error.message); process.exitCode = 1; });
 }
-
-runMutationGate().catch((err) => {
-  console.error('Fatal mutation gate error:', err);
-  process.exit(1);
-});

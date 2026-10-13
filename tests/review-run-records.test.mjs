@@ -524,6 +524,7 @@ for (const { label, load } of MODULE_SETS) {
 
       await withEnv({ HOME: home, USERPROFILE: home, OMP_REVIEW_KIT_RUNS_DIR: 'relative-runs' }, () => passedReview(m, repo));
 
+      await assert.doesNotReject(() => onlyRecord(path.join(home, 'relative-runs')), 'relative override must create its home-scoped record');
       assert.equal((await onlyRecord(path.join(home, 'relative-runs'))).state, 'passed');
       assert.equal((await readdir(repo)).includes('relative-runs'), false, 'no run record is written inside the repository');
     }));
@@ -533,6 +534,7 @@ for (const { label, load } of MODULE_SETS) {
 
       await withEnv({ HOME: home, USERPROFILE: home, OMP_REVIEW_KIT_RUNS_DIR: '   ' }, () => passedReview(m, root));
 
+      await assert.doesNotReject(() => onlyRecord(path.join(home, '.omp', 'review-kit-runs')), 'invalid override must create its default home-scoped record');
       assert.equal((await onlyRecord(path.join(home, '.omp', 'review-kit-runs'))).state, 'passed');
     }));
 
@@ -541,6 +543,7 @@ for (const { label, load } of MODULE_SETS) {
 
       await withEnv({ HOME: home, USERPROFILE: home, OMP_REVIEW_KIT_RUNS_DIR: 'Q:runs' }, () => passedReview(m, root));
 
+      await assert.doesNotReject(() => onlyRecord(path.join(home, '.omp', 'review-kit-runs')), 'invalid override must create its default home-scoped record');
       assert.equal((await onlyRecord(path.join(home, '.omp', 'review-kit-runs'))).state, 'passed');
     }));
 
@@ -718,14 +721,11 @@ test('Given more finished records than one sweep examines, When a run starts, Th
 }));
 
 test('Given the mutation gate, When a mutant runs its suite, Then the suite keeps its run records and target registry inside the temp copy', async () => {
-  // Matched across a real line break: the gate's mutant table quotes this line with an
-  // escaped \n, so a plain substring match would pass on the table entry itself.
-  const gate = await readFile(new URL('../scripts/run-mutation-tests.mjs', import.meta.url), 'utf8');
-  assert.match(
-    gate,
-    /timeout: 120_000,\s+env: \{ \.\.\.process\.env, OMP_REVIEW_KIT_RUNS_DIR: path\.join\(tempDir, 'runs'\), OMP_REVIEW_KIT_TARGETS: path\.join\(tempDir, 'review-kit-targets\.json'\), OMP_REVIEW_KIT_REPORTS_DIR: path\.join\(tempDir, 'reports'\) \},/,
-    'the mutant spawn env points the runs directory and the target registry into the temp copy',
-  );
+  const gate = await readFile(new URL('../scripts/mutation-runner.mjs', import.meta.url), 'utf8');
+  for (const [key, relative] of [['OMP_REVIEW_KIT_RUNS_DIR', 'runs'], ['OMP_REVIEW_KIT_TARGETS', 'targets.json'], ['OMP_REVIEW_KIT_REPORTS_DIR', 'reports']]) {
+    assert.ok(gate.includes(`${key}: path.join(scratch, '${relative}')`), 'mutation jobs isolate persistent state');
+  }
+  // The native subprocess/environment contract is also exercised in mutation-runner.test.mjs.
 });
 
 test('Given an ambient git configuration that changes diff output, When a test repository is diffed, Then the ambient configuration is ignored', async () => {
@@ -800,7 +800,8 @@ test('Given a git port whose parent lookup throws, When a review runs, Then it p
     },
   });
 
-  const result = await service.execute({ cwd: '/mock/root' });
+  let result;
+  await assert.doesNotReject(async () => { result = await service.execute({ cwd: '/mock/root' }); }, 'parent lookup failure must not abort review');
 
   assert.equal(result.exitCode, 0);
   assert.equal(startedParent(updates), null);

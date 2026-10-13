@@ -56,6 +56,7 @@ for (const [label, api] of [
     assert.equal(api.parseScoutBaseline(''), null);
     assert.equal(api.parseScoutBaseline('not json'), null);
     assert.equal(api.parseScoutBaseline('[1,2]'), null);
+    assert.doesNotThrow(() => api.parseScoutBaseline(JSON.stringify({ change_goal: 'x' })), 'missing coverage_map must fail safely');
     assert.equal(api.parseScoutBaseline(JSON.stringify({ change_goal: 'x' })), null);
     const rows = api.parseScoutBaseline(JSON.stringify({ coverage_map: [null, 5, { behavior: 'b' }, { file_path: 'f' }, { behavior: 'ok', file_path: 'f.mjs', covering_test: '' }] }));
     assert.deepEqual(rows.coverageMap, [{ behavior: 'ok', file_path: 'f.mjs', line_start: null, line_end: null, covering_test: null }]);
@@ -86,8 +87,8 @@ for (const [label, api] of [
     assert.match(text, /- src\/b\.mjs:20 \| retries once on EPIPE \| covering_test: null/);
     assert.match(text, /non_coverable_items of the previous round:\n- docs\/x\.html:1-4 \| no harness for inline html/);
     assert.match(text, /\(the round delta\): src\/a\.mjs\./);
-    assert.match(text, /covering_test is not null/);
-    assert.match(text, /entries with covering_test null/);
+    assert.match(text, /Fingerprint status: revalidation required/);
+    assert.match(text, /including deletions and renames/);
     assert.equal(text.split('\n').filter((l) => l.startsWith('SCOUT BASELINE')).length, 1);
     assert.match(api.formatScoutBaseline({ baseline, deltaPaths: [], round: 3 }), /round delta\): none\./);
   });
@@ -112,6 +113,7 @@ for (const [label, api] of [
     assert.equal(round.toPromptText().includes('SCOUT BASELINE'), false);
     assert.equal(round.toPromptText().includes('retries once on EPIPE'), false);
 
+    assert.doesNotThrow(() => build(record({ diffText: undefined })).toScoutBaselineText(), 'unknown delta must suppress baseline safely');
     assert.equal(build(record({ diffText: undefined })).toScoutBaselineText(), '');
     assert.equal(build(record({ scout: undefined })).toScoutBaselineText(), '');
     assert.equal(build(record({ scout: { coverageMap: [] } })).scoutBaseline, null);
@@ -186,11 +188,12 @@ for (const [label, Adapter] of [['src adapter', SrcAdapter], ['runner copy', bun
         const nested = path.join(options.sessionDir, '2026-10-04T10-00-00-000Z_abc', 'ReviewerKit');
         await mkdir(nested, { recursive: true });
         await writeFile(path.join(nested, 'ReviewerKit.Scout.md'), JSON.stringify(SCOUT_REPORT));
+        await writeFile(path.join(nested, 'ReviewerKit.Scout.jsonl'), JSON.stringify({ type: 'session_init', agent: 'review-context-scout' }) + '\n' + JSON.stringify({ type: 'message', message: { role: 'toolResult', toolName: 'yield', details: { status: 'success' } } }));
         return { status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' };
       },
     });
     const review = await withScout.executeReview({ prompt: 'p', cwd: process.cwd() });
-    assert.equal(review.scoutBaseline.coverageMap.length, 2);
+    assert.equal(review.scoutBaseline?.coverageMap?.length, 2);
     assert.equal(review.scoutBaseline.testHarness, 'present');
 
     const without = new Adapter({ runner: async () => ({ status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' }) });
@@ -226,6 +229,7 @@ for (const [label, runReview] of [['modular', (await import('../src/index.mjs'))
             const nested = path.join(options.sessionDir, '2026-10-04T10-00-00-000Z_abc', 'ReviewerKit');
             await mkdir(nested, { recursive: true });
             await writeFile(path.join(nested, 'ReviewerKit.Scout.md'), scoutText);
+            await writeFile(path.join(nested, 'ReviewerKit.Scout.jsonl'), JSON.stringify({ type: 'session_init', agent: 'review-context-scout' }) + '\n' + JSON.stringify({ type: 'message', message: { role: 'toolResult', toolName: 'yield', details: { status: 'success' } } }));
           }
           return { status: 0, stdout: output, stderr: '' };
         },
@@ -239,13 +243,13 @@ for (const [label, runReview] of [['modular', (await import('../src/index.mjs'))
     const first = await review(d1, block(d1), JSON.stringify(SCOUT_REPORT));
     assert.equal(first.result.exitCode, 1);
     assert.equal(first.prompts[0].includes('SCOUT BASELINE'), false);
-    assert.equal(JSON.parse(await readFile(lastBlock, 'utf8')).scout.coverageMap.length, 2);
+    assert.equal(JSON.parse(await readFile(lastBlock, 'utf8')).scout?.coverageMap?.length, 2);
 
     const second = await review(d2, block(d2), '');
     assert.match(second.prompts[0], /SCOUT BASELINE \(review round 2\)/);
     assert.match(second.prompts[0], /retries once on EPIPE/);
     // this round's scout left no report: the earlier baseline stays on the chain
-    assert.equal(JSON.parse(await readFile(lastBlock, 'utf8')).scout.coverageMap.length, 2);
+    assert.equal(JSON.parse(await readFile(lastBlock, 'utf8')).scout?.coverageMap?.length, 2);
 
     const third = await review(d3, 'REVIEW_RESULT=PASS\n', '');
     assert.match(third.prompts[0], /SCOUT BASELINE \(review round 3\)/);

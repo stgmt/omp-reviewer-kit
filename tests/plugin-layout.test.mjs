@@ -49,7 +49,7 @@ const manifest = JSON.parse(await readFile('package.json', 'utf8'));
 describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
   it('manifest and skills declare fixed reviewer identities', () => {
     assert.equal(manifest.name, 'omp-reviewer-kit');
-    assert.equal(manifest.version, '0.20.3');
+    assert.equal(manifest.version, '0.21.0');
     assert.match(realitySkill, /name: reality-first-review/);
     assert.match(multiStageSkill, /name: multi-stage-review/);
     assert.match(rangeAuditSkill, /name: range-audit/);
@@ -148,7 +148,7 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.equal((reviewerKitAgent.match(/Stage [1-4]:/g) ?? []).length, 4);
     assert.equal((reviewerKitAgent.match(/agent `review-risk-hunter`/g) ?? []).length, 1);
     assert.match(reviewerKitAgent, /Risk lanes for this diff/);
-    assert.match(reviewerKitAgent, /CLI invocation pins the active and slow model roles/);
+    assert.match(reviewerKitAgent, /OMP owns the active model roles, agent overrides and fallback chains/);
     assert.match(reviewerKitAgent, /omit `model`, `outputSchema`, `schemaMode`, and `isolated`/);
     assert.match(reviewerKitAgent, /staged snapshot/i);
     assert.match(reviewerKitAgent, /test evidence/i);
@@ -283,7 +283,11 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(hunterAgent, /"trigger_scenario"/);
     assert.match(hunterAgent, /"impact"/);
     assert.match(hunterAgent, /"evidence"/);
-    assert.match(hunterAgent, /"red_proof"/);
+    const example = JSON.parse(hunterAgent.match(/```json\r?\n([\s\S]*?)\r?\n```/)[1]);
+    assert.equal(typeof example.candidates[0].red_proof, 'string');
+    const output = JSON.parse(fm.output);
+    assert.ok(output.properties.candidates.items.required.includes('red_proof'));
+    assert.equal(output.properties.candidates.items.properties.red_proof.type, 'string');
     assert.match(hunterAgent, /Neuroslop Pass/);
     assert.match(hunterAgent, /Anti-Noise Prohibitions/);
     assert.match(hunterAgent, /Do not emit verdict markers/i);
@@ -306,7 +310,11 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.equal(fm.model, undefined, 'agents inherit the OMP default model role');
     assert.match(verifierAgent, /"disposition": "confirmed \| rejected \| not_proven"/);
     assert.match(verifierAgent, /"confirmed_findings"/);
-    assert.match(verifierAgent, /"triage":/);
+    const example = JSON.parse(verifierAgent.match(/```json\r?\n([\s\S]*?)\r?\n```/)[1]);
+    assert.equal(example.decisions[0].triage, 'lie | stale_record | disclosed_gap | not_applicable');
+    const output = JSON.parse(fm.output);
+    assert.ok(output.properties.decisions.items.required.includes('triage'));
+    assert.deepEqual(output.properties.decisions.items.properties.triage.enum, ['lie', 'stale_record', 'disclosed_gap', 'not_applicable']);
     assert.match(verifierAgent, /Neuroslop confirmation/);
     assert.match(verifierAgent, /Self-tool audit/);
     assert.match(verifierAgent, /Adversarial Verification Checks/);

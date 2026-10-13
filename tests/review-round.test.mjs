@@ -218,6 +218,7 @@ for (const [label, runReview] of [['modular', modularRunReview], ['bundled', bun
       const first = await harness(repo, d1, blockOutput(sha(d1)));
       assert.equal(first.result.exitCode, 1);
       assert.doesNotMatch(first.prompts[0], /PREVIOUS ROUND/);
+      await assert.doesNotReject(readFile(path.join(repo, 'audit-reports', 'commit-reviews', 'last-block.json'), 'utf8'), 'confirmed BLOCK must persist the next-round evidence');
       const stored = JSON.parse(await readFile(path.join(repo, 'audit-reports', 'commit-reviews', 'last-block.json'), 'utf8'));
       assert.equal(stored.diffHash, sha(d1));
       assert.equal(stored.round, 1);

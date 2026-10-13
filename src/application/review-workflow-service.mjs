@@ -5,6 +5,8 @@ import path from 'node:path';
 import { ReviewRejectionEnvelope } from '../domain/review-rejection-envelope.mjs';
 import { ReviewPrompt } from '../domain/review-prompt.mjs';
 import { buildContextPack } from '../domain/context-pack.mjs';
+import { createReviewBatchManifest } from '../domain/review-batch.mjs';
+import { scoutSnapshotFingerprint } from '../domain/scout-baseline.mjs';
 import { formatHunterShards, planHunterShards } from '../domain/hunter-shards.mjs';
 import { ReviewReport } from '../domain/review-report.mjs';
 import { ReviewRound, roundFindingsFromEnvelope, roundFindingsTotal } from '../domain/review-round.mjs';
@@ -481,6 +483,7 @@ export class ReviewWorkflowService {
                   headFiles,
                 });
 
+                const revertedSnapshot = new StagedSnapshot(revertedFiles);
                 const revertedDir = await this.#snapshotStorePort.create(revertedSnapshot, {
                   artifacts: false,
                 });
@@ -564,24 +567,32 @@ export class ReviewWorkflowService {
 
       let execResult;
       try {
+        const batchPlan = createReviewBatchManifest({
+          diffText: diff.bytes.toString('utf8'), files: snapshot.files, riskLanes,
+          thresholdBytes: configuredInteger(process.env.OMP_REVIEW_KIT_SHARD_BYTES,
+            40_000, 0),
+          maxShards: configuredInteger(process.env.OMP_REVIEW_KIT_MAX_SHARDS, 3, 2),
+        });
         const prompt = ReviewPrompt.forDiff(diff, snapshotDir, diff.changedPaths, {
+          batchPlan: { scouts: batchPlan.scouts, hunters: batchPlan.hunters, previousFindings: reviewRound?.findings ?? [] },
           suspicionMapText: suspicionMap.toPromptText(),
           executionEvidenceText: executionEvidence ? executionEvidence.toPromptText() : '',
           roundContextText: reviewRound ? reviewRound.toPromptText() : '',
-          scoutBaselineText: reviewRound ? reviewRound.toScoutBaselineText() : '',
+          scoutBaselineText: reviewRound ? reviewRound.toScoutBaselineText(scoutSnapshotFingerprint(snapshot.files)) : '',
           reviewProfile,
           riskLanes,
           hunterShardsText,
           fileClasses: fileClassRows,
           contextPackPath: contextPackWritten ? contextPackPath : '',
-          // ~50KB ≈ 12K tokens — cheaper than four read round-trips per subagent.
-          inlineDiff: diff.length <= 50_000 ? diff.bytes.toString('utf8') : '',
+          // Scoped agents share authoritative snapshot paths, not duplicated diff bodies.
+          inlineDiff: '',
         });
         execResult = await this.#reviewerPort.executeReview({
           prompt,
           cwd: repoRoot,
           telemetry,
         });
+        if (execResult.scoutBaseline) execResult.scoutBaseline.snapshotFingerprint = scoutSnapshotFingerprint(snapshot.files);
       } finally {
         await clearLeaseTimer();
         if (snapshotDirDisposition(snapshotDir, reuseDir) === 'remove') {

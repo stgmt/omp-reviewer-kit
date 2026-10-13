@@ -62,11 +62,13 @@ The dispatcher materializes an absolute staged snapshot directory from the Git i
 
 The snapshot also carries the review inputs under `.review/`: `diff.patch` holds the complete staged diff and `changed-files.txt` lists every touched path. When the dispatch prompt carries an inline `---STAGED DIFF---` block, that block is authoritative: embed it verbatim into every subagent's task text (the context scout keeps file paths for repository context; both risk hunters and the verifier receive the diff inline instead of the `.review/diff.patch` path). Otherwise every stage reads the diff from `.review/diff.patch` as a file. In both cases agents must not re-derive the staged diff or staged file bytes with `git diff`, `git show`, or `git cat-file`.
 
+Respect the advertised native task schema: when `task.batch` is disabled, dispatch planned tasks once through flat calls and embed shared context in each assignment. The gate collects all planned results before completing the stage; never change user settings to obtain batching. A verifier must disposition every authoritative candidate, coverage gap and previous finding. Confirmed blocking findings/gaps cannot be overridden by final PASS synthesis.
+
 ## 2. Stage Contracts & Schemas
 
 ### Stage 1: Context Scout (`review-context-scout`)
 - **Role**: Read-only explorer. Discovers the purpose, blast radius, callers, and invariants of the staged change. Reads the diff from `<snapshot>/.review/diff.patch` and the file list from `<snapshot>/.review/changed-files.txt`.
-- **Tools**: `read`, `grep`, `glob`, `lsp`, `bash` (read-only git diff/log commands only). No `task`, no mutating tools. Budget: roughly 20 tool calls — stop scouting once callers and tests for changed behavior are mapped.
+- **Tools**: `read`, `grep`, `glob`, `lsp`, `bash` (read-only git diff/log commands only). No `task`, no mutating tools. No global 20–30-call hard cap: complete owned source/test/consumer obligations or report them unresolved. When NATIVE REVIEW BATCH PLAN is supplied, run every planned scout in one native task batch, using exact task names and ownership. Cross-scope reads resolve contracts without taking another scope's behavior ownership. Use the native merged report, not a second general scout.
 - **Output Contract**:
   - `change_goal`: Concise description of what the change attempts to achieve.
   - `changed_paths`: Array of files modified or added in the staged diff.
@@ -80,6 +82,9 @@ The snapshot also carries the review inputs under `.review/`: `diff.patch` holds
   - `declared_checks`: Array of `{selector, source_path, source_line}` — check commands or test selectors declared in staged content.
   - `unknowns`: Areas with insufficient visibility or ungrounded assumptions.
   - `reviewed_paths`: Complete list of repository files read during scouting.
+  - `completion`: `{scope_id, completed_paths, unresolved}`; every owned path must be completed, unresolved obligations must remain explicit. Empty or partial result never means no findings.
+
+Specialist frontmatter owns its native `output` schema. Submit one complete `yield` data payload, not incremental sections. Fix a rejected shape once; repeated identical invalid submissions stop with an error. Native exit 0 and schema-valid aborted payloads are failures. A previous scout baseline is historical context unless staged fingerprint validation explicitly permits reuse; added-line delta alone does not protect changed tests, callers, harness, deletions or renames.
 - **Constraint**: Must NOT generate defect findings or verdict markers (`REVIEW_RESULT=...`).
 
 ### Stage 2: Parallel Risk Hunters (`review-risk-hunter`)

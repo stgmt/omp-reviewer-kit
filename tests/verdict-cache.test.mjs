@@ -231,6 +231,7 @@ for (const [label, Cache, runReview] of [
       const cache = new Cache({ clock: () => NOW });
       const key = { repoRoot: repo, treeSha: TREE, diffHash: HASH };
       await writeCacheLines(repo, [cacheLine(42)]);
+      await assert.doesNotReject(() => cache.lookup(key), 'invalid path type must fail safely');
       assert.equal(await cache.lookup(key), null);
       await writeCacheLines(repo, [cacheLine(report), cacheLine(42)]);
       assert.equal((await cache.lookup(key)).reportPath, report);
@@ -245,7 +246,7 @@ for (const [label, Cache, runReview] of [
         const folder = process.cwd();
         await new Cache({ clock: () => NOW }).record({ repoRoot: repo, treeSha: TREE, diffHash: HASH, reportPath: 'r1.md' });
         const hit = await new Cache({ clock: () => NOW }).lookup({ repoRoot: repo, treeSha: TREE, diffHash: HASH });
-        assert.equal(hit.reportPath, path.join(folder, 'r1.md'));
+        assert.equal(hit?.reportPath, path.join(folder, 'r1.md'));
         assert.equal(path.isAbsolute(hit.reportPath), true);
       } finally {
         process.chdir(previous);

@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.21.0] - 2026-10-13
+
+### Added
+- **Native review stage gate.** The review child validates exact planned scout and hunter task identities before native OMP dispatch, collects every mandatory result, and rejects incomplete, aborted or invalid stages independently of the final model report. Native flat calls are supported when `task.batch` is disabled; user models, fallbacks and concurrency remain unchanged.
+- **Specialist-owned output contracts.** Scouts, hunters and the verifier declare native output schemas, yield one complete result and have bounded invalid-submission recovery. Stage diagnostics distinguish useful completion time from deferred cleanup and count repeated read ranges without logging raw file content.
+- **Scoped scouts for independent changes.** A deterministic path/import grouping seed keeps related source and tests together, without merging unrelated contracts solely through a common tests directory. Scoped reports merge only after every ownership obligation has completed with substantive discovery.
+
+### Changed
+- **Mutation checks use four asynchronous workers, pristine reusable copies and calibrated leaf-test selectors.** Process/timing-sensitive suites run exclusively. The development gate requires Node 22+ for precise nested selection; the plugin runtime remains Node 18+. Missing/stale selectors and infrastructure failures block, and only deciding assertions with a green baseline count as kills.
+- **Scout baselines are historical evidence unless the whole staged snapshot is unchanged.** Agent metadata, not task-name suffixes, identifies scout artifacts. Snapshot bytes, paths and modes bind reuse, and truncated baselines explicitly require revalidation. Per-scope dependency reuse is not claimed.
+- **Shared snapshot input replaces duplicated inline diff bodies in normal reviews.** Agents read the authoritative staged diff from snapshot files; the model orchestrator and semantic synthesis remain in place.
+
+### Fixed
+- **Review-child agent discovery cannot be shadowed by an older installed plugin.** Gated reviews disable ambient extension discovery only in the child, then load the explicit gate and its plugin catalog. User model roles, fallbacks and configuration remain unchanged.
+- **Damaged report delivery can recover without another model call.** Recovery requires one completed reviewer-kit artifact bound to the current invocation and matching its native yield payload. Ambiguous artifacts, nonzero exits and substantive BLOCK output cannot turn into approval.
+- **Verifier conclusions cannot disappear into PASS synthesis.** Authoritative hunter outputs and previous findings are passed to verification; omitted or duplicate dispositions block. Confirmed findings and harness-coverable coverage gaps reject contradictory PASS output.
+- **Copied completion paths do not make an empty scout successful.** Scope completion also requires discovery results, the owned changed-path manifest and inspected inputs; legitimately non-coverable scopes retain their deciding evidence.
+- **Excluded worker checkouts are left alone by superseded-review maintenance.** The stopper applies the existing target skip policy before process inspection or termination, matching setup and healing exclusions.
+- **Red-proof execution builds the reverted snapshot in both implementations.** The control run preserves staged test changes while reverting source, instead of losing execution evidence to an undefined snapshot variable.
+
+### Verification
+- Production contracts and nested native task hooks are exercised by a free offline OMP transport, including native concurrency, flat mode, confirmed findings, coverage gaps, omitted outputs and previous-round dispositions. This does not claim remote-provider, OAuth, LSP or live semantic performance validation.
+
 ## [0.20.3] - 2026-10-11
 
 ### Fixed

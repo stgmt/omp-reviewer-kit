@@ -21,9 +21,9 @@ for (const file of SUBAGENTS) {
 test('the scout starts from the context pack and the scout baseline when its task text carries them', async () => {
   const scout = await readFile('agents/review-context-scout.md', 'utf8');
   assert.match(scout, /names a context pack path, start from it/);
-  assert.match(scout, /ONE parallel batch/);
-  assert.match(scout, /`SCOUT BASELINE` block/);
-  assert.match(scout, /keep the unchanged entries verbatim/);
+  assert.match(scout, /primary owned paths\/hunks/);
+  assert.match(scout, /No global 20–30 tool-call cap applies/);
+  assert.match(scout, /fingerprint status explicitly says reusable/);
   const orchestrator = await readFile('agents/reviewer-kit.md', 'utf8');
   assert.match(orchestrator, /names a context pack path, pass that path to the scout in its task text too/);
 });

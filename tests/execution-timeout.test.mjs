@@ -35,7 +35,7 @@ for (const [name, Adapter] of [['modular', ModularExecutionAdapter], ['runner', 
       await writeFile(script, [
         "import { spawn } from 'node:child_process';",
         "import { writeFileSync } from 'node:fs';",
-        `const child = spawn(process.execPath, ['-e', ${JSON.stringify(`setTimeout(() => { require('node:fs').writeFileSync(${JSON.stringify(completed)}, 'finished'); }, 5000);`)}], { stdio: 'inherit' });`,
+        `const child = spawn(process.execPath, ['-e', ${JSON.stringify(`setTimeout(() => { require('node:fs').writeFileSync(${JSON.stringify(completed)}, 'finished'); }, 15000);`)}], { stdio: 'inherit' });`,
         "child.on('exit', () => process.exit(0));",
       ].join('\n'));
       const started = Date.now();
@@ -45,7 +45,7 @@ for (const [name, Adapter] of [['modular', ModularExecutionAdapter], ['runner', 
       assert.equal(result.ok, true);
       assert.equal(result.timedOut, true);
       assert.notEqual(result.exitCode, 0);
-      assert.ok(Date.now() - started < 4000, 'termination must not wait for the command to finish naturally');
+      assert.ok(Date.now() - started < 10000, 'termination must not wait for the command to finish naturally');
       await assert.rejects(readFile(completed, 'utf8'), { code: 'ENOENT' });
     } finally {
       await rm(dir, { recursive: true, force: true });

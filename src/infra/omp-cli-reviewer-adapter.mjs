@@ -1,12 +1,14 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtemp, open, readFile, readdir, rm, stat } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { mkdtemp, open, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { ReviewerPort } from '../application/ports.mjs';
 import { ReviewVerdict } from '../domain/review-verdict.mjs';
 import { NULL_RUN_TELEMETRY, formatProviderOutageError, safeRunTelemetry } from './filesystem-telemetry-adapter.mjs';
 import { parseScoutBaseline } from '../domain/scout-baseline.mjs';
-import { readStageResult, summarizeStageTranscripts } from './stage-transcript-stats.mjs';
+import { readArtifactIdentity, readStageResult, summarizeStageTranscripts } from './stage-transcript-stats.mjs';
 
 /**
  * Reads only the last `maxTailBytes` of a (possibly multi-MB) log file via a
@@ -386,20 +388,21 @@ export function decodeTaskArtifact(text) {
  */
 export function reviewOutputNeedsRecovery(stdout) {
   const text = String(stdout ?? '');
-  return !REPORT_MARKER_LINE_RE.test(text) || EXECUTION_FAILURE_CODE_RE.test(text);
+  return text.split(/\r?\n/).filter((line) => /^REVIEW_RESULT=(PASS|BLOCK)$/.test(line)).length !== 1
+    || EXECUTION_FAILURE_CODE_RE.test(text);
 }
 
 /**
- * Reads the newest top-level task result (one directory below the session
- * dir) that carries a standalone verdict marker. Subagent transcripts live a
- * level deeper and never qualify. Returns null when nothing usable exists.
+ * Recovers a solitary completed reviewer-kit artifact bound to this attempt.
+ * Neither mtime nor a specialist's marker can establish review provenance.
+ * Ambiguous, unfinished and legacy artifacts safely miss.
  *
  * @param {string|null|undefined} sessionDir
  * @returns {Promise<{ text: string, file: string, bytes: number }|null>}
  */
-export async function recoverTaskReport(sessionDir) {
-  if (typeof sessionDir !== 'string' || sessionDir.length === 0) return null;
-  let best = null;
+export async function recoverTaskReport(sessionDir, { invocationToken, processStatus = 0 } = {}) {
+  if (typeof sessionDir !== 'string' || sessionDir.length === 0 || processStatus !== 0) return null;
+  const candidates = [];
   try {
     for (const entry of await readdir(sessionDir, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
@@ -410,18 +413,23 @@ export async function recoverTaskReport(sessionDir) {
         const info = await stat(full).catch(() => null);
         if (!info || info.size === 0 || info.size > TASK_ARTIFACT_MAX_BYTES) continue;
         const text = decodeTaskArtifact(await readFile(full, 'utf8'));
-        if (!REPORT_MARKER_LINE_RE.test(text)) continue;
-        // Newest wins; equal mtimes (coarse-timestamp filesystems) fall back to the
-        // greater path so the choice never depends on readdir order.
-        if (!best || info.mtimeMs > best.mtimeMs || (info.mtimeMs === best.mtimeMs && full > best.file)) {
-          best = { text, file: full, mtimeMs: info.mtimeMs };
-        }
+        const identity = await readArtifactIdentity(full);
+        if (!identity || identity.agent !== 'reviewer-kit') continue;
+        // A second reviewer result is ambiguous even if one report is malformed.
+        candidates.push({ text, file: full, identity });
       }
     }
   } catch {
     return null;
   }
-  return best ? { text: best.text, file: best.file, bytes: Buffer.byteLength(best.text) } : null;
+  if (candidates.length !== 1) return null;
+  const result = candidates[0];
+  if (!result.identity.complete || (invocationToken && !result.identity.task.split(/\r?\n/).some((line) => line.trim() === invocationToken))) return null;
+  const yielded = result.identity.data;
+  if (yielded !== undefined && decodeTaskArtifact(typeof yielded === 'string' ? yielded : JSON.stringify(yielded)) !== result.text) return null;
+  if (reviewOutputNeedsRecovery(result.text)) return null;
+  if (!['verified', 'explicit_block'].includes(ReviewVerdict.fromOutput(result.text).reason)) return null;
+  return { text: result.text, file: result.file, bytes: Buffer.byteLength(result.text) };
 }
 
 const CHILD_CRASH_STATUSES = new Set([3221226505, -1073740791, 4294967295, -1]);
@@ -567,6 +575,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
   #preflightTimeoutMs;
   #reviewMaxTime;
   #progress;
+  #nativeBatch;
 
   /**
    * The adapter never selects, resolves, or falls back between models: OMP is
@@ -589,8 +598,10 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
     preflightTimeoutMs = configuredInteger(process.env.OMP_REVIEW_KIT_PREFLIGHT_TIMEOUT_MS, 90_000, 1),
     maxTime = process.env.OMP_REVIEW_KIT_MAX_TIME ?? null,
     progress,
+    nativeBatch,
   } = {}) {
     super();
+    this.#nativeBatch = nativeBatch ?? !runner;
     this.#runner = runner ?? OmpCliReviewerAdapter.defaultRunner;
     // An injected runner replaces the real OMP child, so the real health call
     // would be meaningless (and spawn a real process); it is opt-in then.
@@ -610,7 +621,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
     }
   }
 
-  async #runReviewAttempt(promptText, cwd, telemetry, attempts, attemptIndex) {
+  async #runReviewAttempt(promptText, cwd, telemetry, attempts, attemptIndex, batchPlan = null) {
     const startedAt = Date.now();
     const record = { attemptIndex, startedAt: new Date(startedAt).toISOString() };
     const stageHistory = [];
@@ -647,7 +658,19 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       sessionDir = null;
     }
     try {
-      const result = await this.#runner(promptText, cwd, undefined, {
+      const diffHash = promptText.match(/The staged diff hash for this hook invocation is ([a-f0-9]{64})\./)?.[1] ?? 'unknown';
+      const invocationToken = `REVIEW_INVOCATION=${randomUUID()}:${diffHash}`;
+      const attemptPrompt = `${promptText}\nForward the following exact invocation identity line in the reviewer-kit task assignment:\n${invocationToken}`;
+      let manifestPath = null;
+      if (batchPlan && this.#nativeBatch) {
+        if (!sessionDir) throw new Error('Review batch requires an attempt session directory');
+        manifestPath = path.join(sessionDir, 'review-batch.json');
+        await writeFile(manifestPath, JSON.stringify({ ...batchPlan, schema: 'review-batch@1', invocationToken, prompt: promptText }), { mode: 0o600 });
+      }
+      const result = await this.#runner(attemptPrompt, cwd, undefined, {
+        invocationToken,
+        ...(manifestPath ? { env: { OMP_REVIEW_KIT_BATCH_MANIFEST: manifestPath },
+          reviewGateExtension: fileURLToPath(new URL('./review-gate-entry.mjs', import.meta.url)) } : {}),
         maxTime: this.#reviewMaxTime.arg,
         ...(sessionDir ? { sessionDir } : {}),
         onSpawn: (pid) => {
@@ -714,22 +737,41 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       if (stageHistory.length > 0) record.stageHistory = stageHistory;
       record.stderrBytes = typeof result?.stderr === 'string' ? Buffer.byteLength(result.stderr) : 0;
       let outcome = result;
-      if (sessionDir && reviewOutputNeedsRecovery(result?.stdout)) {
-        const recovered = await recoverTaskReport(sessionDir);
+      if (sessionDir && reviewOutputNeedsRecovery(result?.stdout)
+        && !/"kind"\s*:\s*"(?:confirmed_findings|coverage_required)"/.test(String(result?.stdout ?? ''))) {
+        const recovered = await recoverTaskReport(sessionDir, { invocationToken, processStatus: result?.status });
         if (recovered) {
-          const reason = EXECUTION_FAILURE_CODE_RE.test(String(result?.stdout ?? '')) ? 'execution_failure' : 'missing_marker';
+          const reason = EXECUTION_FAILURE_CODE_RE.test(String(result?.stdout ?? '')) ? 'execution_failure'
+            : REPORT_MARKER_LINE_RE.test(String(result?.stdout ?? '')) ? 'multiple_verdict_markers' : 'missing_marker';
           record.reportRecovered = { reason, bytes: recovered.bytes };
           await telemetry.record('report_artifact_recovered', { attemptIndex, pid: record.pid, reason, bytes: recovered.bytes });
           outcome = { ...result, stdout: recovered.text };
         }
+      }
+      if (manifestPath) {
+        let events = [];
+        try { events = (await readFile(`${manifestPath}.events`, 'utf8')).split('\n').filter(Boolean).map((line) => JSON.parse(line)); } catch { /* missing completion fails below */ }
+        events = events.filter((event) => event.invocationToken === invocationToken);
+        const completed = (stage) => events.filter((e) => e.stage === stage && e.complete).length === 1;
+        const needsVerifier = events.some((e) => e.requiresVerifier) || promptText.includes('PREVIOUS ROUND');
+        if (!completed('review-context-scout') || !completed('review-risk-hunter') || !completed('reviewer-kit')
+          || (needsVerifier && !completed('review-finding-verifier')) || events.some((e) => e.complete === false)) {
+          const diagnostics = events.filter((event) => event.complete === false && event.diagnostic).slice(0, 16).map((event) => JSON.stringify(event.diagnostic)).join('\n');
+          outcome = { ...outcome, status: 1, stderr: `${outcome?.stderr ?? ''}\nNative review batch incomplete; commit blocked.${diagnostics ? `\nNative output diagnostics:\n${diagnostics}` : ''}` };
+        }
+        if (events.some((event) => event.blocksApproval) && ReviewVerdict.fromOutput(outcome?.stdout ?? '').isPass()) {
+          outcome = { ...outcome, status: 1, stderr: `${outcome?.stderr ?? ''}\nVerifier confirmed blocking findings or coverage; PASS synthesis rejected.` };
+        }
+        const merged = events.find((e) => e.stage === 'review-context-scout' && e.complete)?.mergedScout;
+        if (merged) outcome = { ...outcome, scoutBaseline: parseScoutBaseline(JSON.stringify(merged)) };
       }
       // Per-stage turn and tool-call counts: a stage lasts turns x turn latency,
       // so this is what explains a slow review. Read before the session dir goes.
       const stages = await summarizeStageTranscripts(sessionDir);
       if (stages.length > 0) await telemetry.record('stage_stats', { attemptIndex, pid: record.pid, stages });
       // The scout's map is carried to the next round so coverage does not drift.
-      const scoutBaseline = parseScoutBaseline(await readStageResult(sessionDir, /scout$/i));
-      if (scoutBaseline) outcome = { ...outcome, scoutBaseline };
+      const scoutBaseline = manifestPath ? null : parseScoutBaseline(await readStageResult(sessionDir, 'review-context-scout'));
+      if (scoutBaseline && !manifestPath) outcome = { ...outcome, scoutBaseline };
       await telemetry.record('review_attempt_finished', { ...record });
       return outcome;
     } finally {
@@ -786,7 +828,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
    * @param {{ noTools?: boolean, maxTime?: string|null, stagePollMs?: number, logDir?: string|null, onOutput?: (chunk: unknown, stream: 'stdout'|'stderr') => void, onSpawn?: (pid: number|undefined) => void, onStage?: (info: { stage: string, completed: number }) => void, onActivity?: (logAt: string) => void, registryEnv?: string|null, sessionDir?: string, env?: Record<string, string> }} [options]
    * @returns {Promise<{ status: number, stdout: string, stderr: string, pid?: number }>}
    */
-  static defaultRunner(prompt, cwd, timeout, { noTools = false, maxTime, stagePollMs = 10_000, logDir = null, onOutput, onSpawn, onStage, onActivity, registryEnv, sessionDir, env: extraEnv } = {}) {
+  static defaultRunner(prompt, cwd, timeout, { noTools = false, maxTime, stagePollMs = 10_000, logDir = null, onOutput, onSpawn, onStage, onActivity, registryEnv, sessionDir, reviewGateExtension, env: extraEnv } = {}) {
     return new Promise((resolve) => {
       const command = process.env.OMP_REVIEW_KIT_OMP ?? 'omp';
       const isWindowsWrapper = /\.(cmd|bat)$/i.test(command);
@@ -801,6 +843,7 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
       const sessionArgs = typeof sessionDir === 'string' && sessionDir.length > 0 ? ['--session-dir', sessionDir] : ['--no-session'];
       const commandArgs = ['-p', ...(noTools ? ['--no-tools'] : ['--tools', 'task,read']), ...sessionArgs, '--no-title', '--no-rules'];
       commandArgs.push(...reviewSkillsSelection().args);
+      if (reviewGateExtension && !noTools) commandArgs.push('--no-extensions', '--plugin-dir', path.resolve(path.dirname(reviewGateExtension), '..', '..'), '-e', reviewGateExtension);
       if (typeof maxTime === 'string' && REVIEW_MAX_TIME_RE.test(maxTime)) {
         commandArgs.push('--max-time', maxTime);
       }
@@ -976,11 +1019,11 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
         stderr: formatProviderOutageError(preflightFailure.stderr || preflightFailure.stdout),
       };
     } else {
-      result = await this.#runReviewAttempt(promptText, cwd, telemetry, attempts, 0);
+      result = await this.#runReviewAttempt(promptText, cwd, telemetry, attempts, 0, prompt?.batchPlan);
       // A hard child crash (Windows 0xC0000409 / -1) with no output is a
       // runtime fault, not a verdict: one more run with the same command.
       if (isChildCrash(result)) {
-        result = await this.#runReviewAttempt(promptText, cwd, telemetry, attempts, 1);
+        result = await this.#runReviewAttempt(promptText, cwd, telemetry, attempts, 1, prompt?.batchPlan);
       }
       if (isModelProviderFailure(result)) {
         result = {

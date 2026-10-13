@@ -279,12 +279,15 @@ for (const [label, runReview] of [['modular', modularRunReview], ['bundled', run
       const root = await freshRepo();
       const gate = rendezvous(2);
       const probes = [packProbe(gate), packProbe(gate)];
-      const results = await Promise.all(probes.map((probe) => runReview({
-        cwd: root,
-        git: gitFor(root),
-        omp: probe.omp,
-        logger: SILENT,
-      })));
+      let results;
+      await assert.doesNotReject(async () => {
+        results = await Promise.all(probes.map((probe) => runReview({
+          cwd: root,
+          git: gitFor(root),
+          omp: probe.omp,
+          logger: SILENT,
+        })));
+      }, 'concurrent reviews must keep their leased snapshots and packs usable');
       assert.deepEqual(results.map((result) => result.exitCode), [0, 0]);
       const [firstPath, secondPath] = probes.map((probe) => probe.packPath);
       assert.notEqual(firstPath, secondPath);

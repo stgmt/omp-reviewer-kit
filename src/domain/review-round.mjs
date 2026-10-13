@@ -174,12 +174,13 @@ export class ReviewRound {
    *
    * @returns {string}
    */
-  toScoutBaselineText() {
+  toScoutBaselineText(snapshotFingerprint = null) {
     if (!this.#scoutBaseline || this.#delta === null) return '';
     return formatScoutBaseline({
       baseline: this.#scoutBaseline,
       deltaPaths: this.#delta.map((d) => d.path),
       round: this.#number,
+      snapshotFingerprint,
     });
   }
 

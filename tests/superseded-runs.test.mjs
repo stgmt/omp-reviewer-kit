@@ -263,6 +263,19 @@ test('Given no superseded run, When the stopper runs, Then the process table is 
   assert.deepEqual(result, { currentVersion: '0.20.1', dryRun: false, stopped: [], unverified: [], kept: 2 });
 });
 
+test('Given superseded runs in excluded checkouts, When stopping old runners, Then no processes or records are touched', async () => {
+  const runsDir = freshDir('excluded');
+  const paths = ['/repos/tp-sandbox', '/repos/omp-reviewer-kit-release', '/tmp/omp-tasks/task-a/wt'];
+  for (const [index, repoRoot] of paths.entries()) writeRecord(runsDir, makeRecord({ runId: `excluded-${index}`, repoRoot, runnerVersion: '0.1.0' }));
+  const world = fakeWorld();
+  const result = await stopSupersededRuns({ runsDir, currentVersion: '0.21.0', now: NOW, ...world });
+  assert.equal(world.state.tableReads, 0);
+  assert.deepEqual(world.state.terminated, []);
+  assert.deepEqual(result.stopped, []);
+  assert.equal(result.kept, paths.length);
+  for (const [index] of paths.entries()) assert.equal(readRecord(runsDir, `excluded-${index}`).state, 'reviewing');
+});
+
 test('Given an invalid installed version, When the stopper runs, Then nothing is stopped and the table is not read', async () => {
   const runsDir = freshDir('badversion');
   writeRecord(runsDir, makeRecord());

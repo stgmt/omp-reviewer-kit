@@ -448,7 +448,7 @@ describe('Feature: OOP/DDD Domain Invariant Units', () => {
     for (const [expectedCode, output] of malformedCases) {
       const evaluated = ReviewRejectionEnvelope.evaluate({ output, diffIdentity: diff, processStatus: 0 });
       assert.equal(evaluated.verdict.value, 'BLOCK');
-      assert.equal(evaluated.envelope.failure.code, expectedCode);
+      assert.equal(evaluated.envelope.failure?.code, expectedCode);
     }
 
     const innerTaskResult = [
