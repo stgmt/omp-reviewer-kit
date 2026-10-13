@@ -209,6 +209,7 @@ describe('Feature: Verbatim Re-emit Recovery (missing verdict marker)', () => {
     assert.equal(result.exitCode, 1);
     assert.equal(result.verdict, 'BLOCK');
     assert.equal(calls.length, 2);
+    assert.ok(result.envelope, 're-emitted BLOCK must retain its validated rejection envelope');
     assert.equal(result.envelope.kind, 'confirmed_findings');
     assert.equal(result.envelope.findings.length, 1);
     assert.equal(result.envelope.findings[0].finding_id, 'correctness-1');
@@ -347,6 +348,7 @@ describe('Feature: Verbatim Re-emit Recovery (missing verdict marker)', () => {
     assert.equal(result.exitCode, 1);
     assert.equal(result.verdict, 'BLOCK');
     assert.equal(calls.length, 2);
+    assert.ok(result.envelope, 're-emitted BLOCK must retain its validated rejection envelope');
     assert.equal(result.envelope.kind, 'confirmed_findings');
     assert.equal(result.envelope.findings.length, 1);
   });

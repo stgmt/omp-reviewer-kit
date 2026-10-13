@@ -17,7 +17,7 @@ test('Given a session in a stale repository, When the session starts, Then it is
 
     const outcome = await ws.installer.refreshAtSessionStart(here);
 
-    assert.equal(outcome.current.success, true);
+    assert.equal(outcome.current?.success, true);
     assert.deepEqual(outcome.targets.healed, [path.resolve(other)]);
     assert.equal(await readFile(ws.runnerOf(here), 'utf8'), CANONICAL_RUNNER);
     assert.equal(await readFile(ws.runnerOf(other), 'utf8'), CANONICAL_RUNNER);

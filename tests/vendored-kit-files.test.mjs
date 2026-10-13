@@ -76,7 +76,8 @@ describe('Feature: the vendored kit files are not part of the reviewed diff', ()
           undefined,
         ];
         for (const vendoredFiles of loaders) {
-          const diff = await new Adapter(undefined, { vendoredFiles }).getStagedDiff(repo);
+          let diff;
+          await assert.doesNotReject(async () => { diff = await new Adapter(undefined, { vendoredFiles }).getStagedDiff(repo); }, 'canonical loader failure must retain the review diff safely');
           assert.deepEqual(pathsOf(diff).sort(), [HOOK, RUNNER].sort());
         }
       });

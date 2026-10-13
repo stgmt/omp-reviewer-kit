@@ -34,6 +34,11 @@ export function stageLabelFromTranscript(fileName) {
 export function summarizeTranscript(text, stage) {
   const tools = {};
   const turnTimes = [];
+  const reads = new Set();
+  let repeatedReads = 0;
+  let readResponseBytes = 0;
+  let invalidYields = 0;
+  const identity = transcriptIdentity(text);
   let firstAt = Infinity;
   let lastAt = -Infinity;
   let model = null;
@@ -57,6 +62,10 @@ export function summarizeTranscript(text, stage) {
       if (String(entry.role ?? '').startsWith('subagent:')) subagentModel ??= entry.model;
       else model ??= entry.model;
     }
+    if (entry.type === 'message' && entry.message?.role === 'toolResult') {
+      if (entry.message.toolName === 'yield' && (entry.message.isError || !['success', 'aborted'].includes(entry.message.details?.status))) invalidYields++;
+      if (entry.message.toolName === 'read') readResponseBytes += Buffer.byteLength(JSON.stringify(entry.message.content ?? []));
+    }
     if (entry.type !== 'message' || entry.message?.role !== 'assistant') continue;
     if (Number.isFinite(at)) turnTimes.push(at);
     for (const item of Array.isArray(entry.message.content) ? entry.message.content : []) {
@@ -64,6 +73,12 @@ export function summarizeTranscript(text, stage) {
       toolCalls += 1;
       const name = String(item.name ?? item.toolName ?? 'unknown');
       tools[name] = (tools[name] ?? 0) + 1;
+      if (name === 'read') {
+        const args = item.arguments ?? item.input ?? {};
+        const key = JSON.stringify([args.path, args.offset, args.limit]);
+        if (reads.has(key)) repeatedReads++;
+        reads.add(key);
+      }
     }
   }
   const gaps = [];
@@ -71,6 +86,12 @@ export function summarizeTranscript(text, stage) {
   gaps.sort((a, b) => a - b);
   return {
     stage,
+    agent: identity?.agent ?? null,
+    sessionId: identity?.sessionId ?? null,
+    taskId: identity?.taskId ?? null,
+    complete: identity?.complete ?? false,
+    workSpanMs: identity?.completedAtMs && Number.isFinite(firstAt) ? identity.completedAtMs - firstAt : null,
+    repeatedReads, readResponseBytes, invalidYields,
     turns: turnTimes.length,
     toolCalls,
     tools,
@@ -122,6 +143,41 @@ export async function summarizeStageTranscripts(sessionDir) {
 
 const STAGE_RESULT_MAX_BYTES = 2 * 1024 * 1024;
 
+export function transcriptIdentity(text) {
+  let init = null;
+  let completion = null;
+  let completedAtMs = null;
+  for (const line of String(text).split('\n')) {
+    let entry;
+    try { entry = JSON.parse(line); } catch { continue; }
+    if (entry?.type === 'session_init') {
+      if (init) return null;
+      init = entry;
+    }
+    if (entry?.type === 'message' && entry.message?.role === 'toolResult' && entry.message.toolName === 'yield') {
+      completion = entry.message.isError ? null : entry.message.details;
+      completedAtMs = Date.parse(entry.timestamp);
+    }
+  }
+  if (!init || typeof init.agent !== 'string') return null;
+  const data = completion?.data;
+  const complete = completion?.status === 'success' && !data?.aborted && !data?.error;
+  return { agent: init.agent, task: String(init.task ?? ''), sessionId: init.id,
+    taskId: String(init.task ?? '').match(/(?:^|\n)REVIEW_TASK_ID=([A-Za-z0-9-]+)(?:\n|$)/)?.[1] ?? null, complete,
+    completedAtMs: complete && Number.isFinite(completedAtMs) ? completedAtMs : null, data };
+}
+
+export async function readArtifactIdentity(file) {
+  try {
+    const transcript = file.replace(/\.md$/i, '.jsonl');
+    const info = await stat(transcript);
+    if (!info.isFile() || info.size > TRANSCRIPT_MAX_BYTES) return null;
+    return transcriptIdentity(await readFile(transcript, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Newest stage result artifact (`<artifacts>/<Parent>/<Parent>.<Stage>.md`)
  * whose stage label matches `labelPattern`, as text; empty when none exists.
@@ -134,6 +190,7 @@ const STAGE_RESULT_MAX_BYTES = 2 * 1024 * 1024;
 export async function readStageResult(sessionDir, labelPattern) {
   if (typeof sessionDir !== 'string' || sessionDir.length === 0) return '';
   let best = null;
+  let matches = 0;
   try {
     for (const artifacts of await readdir(sessionDir, { withFileTypes: true }).catch(() => [])) {
       if (!artifacts.isDirectory()) continue;
@@ -143,8 +200,12 @@ export async function readStageResult(sessionDir, labelPattern) {
         const nested = path.join(artifactsDir, entry.name);
         for (const inner of await readdir(nested, { withFileTypes: true }).catch(() => [])) {
           if (!inner.isFile() || !inner.name.endsWith('.md')) continue;
-          if (!labelPattern.test(stageLabelFromTranscript(inner.name.replace(/\.md$/i, '.jsonl')))) continue;
           const full = path.join(nested, inner.name);
+          if (typeof labelPattern === 'string') {
+            const identity = await readArtifactIdentity(full);
+            if (!identity?.complete || identity.agent !== labelPattern) continue;
+            matches++;
+          } else if (!labelPattern.test(stageLabelFromTranscript(inner.name.replace(/\.md$/i, '.jsonl')))) continue;
           const info = await stat(full).catch(() => null);
           if (!info || info.size === 0 || info.size > STAGE_RESULT_MAX_BYTES) continue;
           if (!best || info.mtimeMs > best.mtimeMs || (full > best.file && info.mtimeMs === best.mtimeMs)) {
@@ -153,6 +214,7 @@ export async function readStageResult(sessionDir, labelPattern) {
         }
       }
     }
+    if (typeof labelPattern === 'string' && matches !== 1) return '';
     return best ? await readFile(best.file, 'utf8') : '';
   } catch {
     return '';

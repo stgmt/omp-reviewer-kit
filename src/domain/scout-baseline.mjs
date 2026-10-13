@@ -1,4 +1,5 @@
 import { sanitizePromptToken } from './review-prompt.mjs';
+import { createHash } from 'node:crypto';
 
 const MAX_COVERAGE_ENTRIES = 60;
 const MAX_NON_COVERABLE_ENTRIES = 20;
@@ -60,6 +61,8 @@ export function parseScoutBaseline(text) {
   return {
     coverageMap,
     nonCoverable,
+    bounds: { coverageTotal: report.coverage_map.length, nonCoverableTotal: report.non_coverable_items?.length ?? 0,
+      truncated: report.coverage_map.length > MAX_COVERAGE_ENTRIES || (report.non_coverable_items?.length ?? 0) > MAX_NON_COVERABLE_ENTRIES },
     testHarness: harness.startsWith('present') ? 'present' : harness.startsWith('absent') ? 'absent' : 'unknown',
   };
 }
@@ -77,7 +80,20 @@ export function normalizeStoredBaseline(value) {
     non_coverable_items: value.nonCoverable,
     test_harness: value.testHarness,
   }));
-  return parsed && parsed.coverageMap.length > 0 ? parsed : null;
+  if (!parsed || parsed.coverageMap.length === 0) return null;
+  return { ...parsed, ...(value.bounds?.truncated ? { bounds: { ...parsed.bounds, truncated: true } } : {}),
+    ...(typeof value.snapshotFingerprint === 'string' && /^[a-f0-9]{64}$/.test(value.snapshotFingerprint)
+      ? { snapshotFingerprint: value.snapshotFingerprint } : {}) };
+}
+
+// Conservative dependency closure: all staged files. Unknown consumers/harness
+// changes cannot make an old coverage conclusion reusable. No filesystem reads.
+export function scoutSnapshotFingerprint(files) {
+  const hash = createHash('sha256');
+  for (const file of [...files].sort((a, b) => a.path.localeCompare(b.path))) {
+    hash.update(JSON.stringify([file.path, file.mode ?? '', createHash('sha256').update(file.content).digest('hex')]));
+  }
+  return hash.digest('hex');
 }
 
 const locationOf = (entry) => `${sanitizePromptToken(entry.file_path)}${entry.line_start ? `:${entry.line_start}${entry.line_end && entry.line_end !== entry.line_start ? `-${entry.line_end}` : ''}` : ''}`;
@@ -88,7 +104,7 @@ const locationOf = (entry) => `${sanitizePromptToken(entry.file_path)}${entry.li
  * @param {{ baseline: object, deltaPaths: string[], round: number }} input
  * @returns {string}
  */
-export function formatScoutBaseline({ baseline, deltaPaths, round }) {
+export function formatScoutBaseline({ baseline, deltaPaths, round, snapshotFingerprint = null }) {
   const lines = [
     `SCOUT BASELINE (review round ${round}): the previous round's scout map, carried so the coverage_map stays stable between rounds. Test harness then: ${baseline.testHarness}.`,
     'coverage_map entries of the previous round:',
@@ -102,7 +118,11 @@ export function formatScoutBaseline({ baseline, deltaPaths, round }) {
   }
   lines.push(
     `Files with lines added since then (the round delta): ${deltaPaths.length > 0 ? deltaPaths.map((p) => sanitizePromptToken(p)).join(', ') : 'none'}.`,
-    'Scout rules for this baseline: (1) keep an entry exactly as listed (same behavior and covering_test) when its file_path is outside the round delta, its covering_test is not null, and the file named in covering_test is outside the round delta; (2) re-derive every other entry from the staged snapshot, in particular entries with covering_test null and entries whose source or test file is in the delta, and say in `unknowns` when a baseline entry could not be re-verified; (3) add entries only for executable behaviors that are new in the delta, and drop entries whose behavior no longer exists; (4) do not re-scan unchanged files for new behaviors; (5) emit the full merged coverage_map.',
+    'Fingerprint status: revalidation required unless the runner explicitly confirms reusable. Paths outside an added-line delta do not prove unchanged dependencies. Re-derive source/test/consumer/harness conclusions from the current staged snapshot, including deletions and renames. Keep this historical map as context, not proof; emit the full current coverage_map.',
+    baseline.bounds?.truncated ? 'Baseline bounds: truncated; omitted entries must be re-derived, never treated as covered.' : 'Baseline bounds: retained entries only; do not infer complete scope from this map.',
   );
+  if (snapshotFingerprint && snapshotFingerprint === baseline.snapshotFingerprint && !baseline.bounds?.truncated) {
+    lines.push('Fingerprint status: reusable. Every staged file byte/mode/path is unchanged, including consumers, tests and harness. Preserve retained covered entries; uncovered entries still need investigation.');
+  }
   return lines.join('\n');
 }

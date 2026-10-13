@@ -2,6 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { runnerVersionString } from '../domain/runner-version.mjs';
 import { isSupersededRun } from '../domain/superseded-runs.mjs';
+import { isSkippedTarget } from '../domain/target-policy.mjs';
 import { TERMINAL_RUN_STATES, pidLiveness } from '../infra/filesystem-telemetry-adapter.mjs';
 import { listProcesses, terminateTree } from '../infra/process-table.mjs';
 import { classifyRun, readRunRecord, readRunRecords } from '../infra/review-run-records.mjs';
@@ -101,6 +102,7 @@ export async function stopSupersededRuns({
   const result = { currentVersion, dryRun, stopped: [], unverified: [], kept: 0 };
   const records = await readRecords(runsDir);
   const candidates = records.filter((record) => isSupersededRun(record, currentVersion)
+    && !(typeof record.repoRoot === 'string' && isSkippedTarget(record.repoRoot))
     && classifyRun(record, { now, liveness }) !== 'orphaned');
   result.kept = records.length - candidates.length;
   // Fast path of every session start: no candidate, no process table.

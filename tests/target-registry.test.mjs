@@ -92,6 +92,8 @@ test('Given a registry that cannot be read or written, Then registering and heal
     remove: async () => { throw new Error('read-only'); },
   };
   const installer = new PluginInstallerService({ targetRegistry: broken });
+  await assert.doesNotReject(() => installer.registerTarget('E:/anywhere'), 'registry write failure must be contained');
+  await assert.doesNotReject(() => installer.healTargets(), 'registry read failure must be contained');
   assert.equal(await installer.registerTarget('E:/anywhere'), false);
   assert.equal(await installer.registerTarget(''), false);
   assert.deepEqual(await installer.healTargets(), { checked: 0, healed: [], failed: [], pruned: [] });
@@ -170,6 +172,7 @@ test('Given repositories registered by sessions, Then sync-targets reads them wi
   const ws = await workspace();
   try {
     const repo = await ws.makeRepo('synced', { hook: false });
+    await assert.doesNotReject(() => loadTargets([], ws.registryFile), 'missing owner file must be supported');
     assert.deepEqual(await loadTargets([], ws.registryFile), [], 'nothing registered, no file');
     assert.equal(await ws.registry.add(repo), true);
     assert.deepEqual(await loadTargets([], ws.registryFile), [path.resolve(repo)]);

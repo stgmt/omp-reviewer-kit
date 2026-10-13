@@ -574,10 +574,17 @@ test('doctor fails with the infrastructure code and an actionable line when OMP 
 test('The bridge CLI prints the install plan for a bare machine without executing anything', async () => {
   const { home, cleanup } = await tempHome();
   try {
+    // A mutant can bypass consent; never let this CLI fixture reach real installers.
+    const bin = path.join(home, 'bin');
+    await mkdir(bin);
+    for (const command of ['bun', 'powershell', 'sh', 'curl', 'omp']) {
+      const file = path.join(bin, process.platform === 'win32' ? `${command}.cmd` : command);
+      await writeFile(file, process.platform === 'win32' ? '@exit /b 1\r\n' : '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+    }
     const result = spawnSync(process.execPath, ['claude-plugin/scripts/bridge.mjs', 'install-omp'], {
       encoding: 'utf8',
       timeout: 30_000,
-      env: envFor(home, { OMP_REVIEW_KIT_OMP: path.join(home, 'no-such-omp') }),
+      env: envFor(home, { PATH: bin, OMP_REVIEW_KIT_OMP: path.join(home, 'no-such-omp') }),
     });
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /Plan \(nothing was changed\)/);
@@ -651,6 +658,7 @@ test('SessionStart asks the plugin to refresh registered repositories within the
     const sink = collect();
     assert.equal(await session({ cwd: home, env: envFor(home, { OMP_REVIEW_KIT_PLUGIN_DIR: refreshing }), exec: healthyExec(), out: sink.out }), EXIT.ok);
     assert.deepEqual(globalThis.__refreshCalls, [{ cwd: home, options: { budgetMs: HEAL_BUDGET_MS } }]);
+    assert.equal(sink.lines.length, 1, 'failed refresh must still emit the repository diagnosis');
     assert.match(JSON.parse(sink.lines[0]).hookSpecificOutput.additionalContext, /stale/, 'the diagnosis still runs after a failed refresh');
 
     const old = path.join(home, 'old-plugin');

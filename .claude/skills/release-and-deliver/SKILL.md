@@ -23,7 +23,8 @@ Before a release, these show the same version X.Y.Z:
 Run them in a clean export of the index, not in the working tree (test runs write audit files there):
 
 - Export: `git -c core.autocrlf=false checkout-index -a --prefix=<empty-dir>/`, then `git -C <empty-dir> init`.
-- In the export: `npm test`, `npm run check`, and `npm run test:mutation` (about 30 minutes; it must report 100% killed).
+- In the export: `npm test`, `npm run check`, and `npm run test:mutation` (Node 22+ for the mutation gate; it must prove every curated mutant killed by a deciding assertion).
+- Follow `mutation-fast-default`: four asynchronous workers, pristine reusable worker copies and calibrated precise selectors. Do not rerun full-suite calibration for every release; maintain the selector catalog when mutants/deciding tests change. Missing or stale selectors, timeout, crash, zero selected tests and infrastructure errors block rather than count as kills. Record measured time, not a fixed duration estimate.
 
 ## 2. Commit through the review hook
 

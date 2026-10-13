@@ -163,10 +163,12 @@ After a BLOCK with confirmed findings, the next review of a changed diff (within
 A review stage lasts (model turns) x (the model's per-turn latency), so the runner removes turns instead of changing models:
 
 - **Context pack**: the runner writes a deterministic pack (changed files, changed symbols with their references, test-file mapping) and points the scout at it; the scout reads it with the diff and the changed files in one batch.
-- **Scout baseline**: after a BLOCK the next round reuses the scout's `coverage_map` and only re-derives what the delta touches, so coverage stops drifting between rounds. `OMP_REVIEW_KIT_ROUNDS=0` disables it together with delta rounds.
+- **Scout baseline**: after a BLOCK the next round receives the previous `coverage_map` as historical context. Reuse requires an unchanged fingerprint of staged bytes, modes and paths (including consumers, tests and harness); otherwise the scout revalidates it. Truncated baselines explicitly mark omitted coverage. `OMP_REVIEW_KIT_ROUNDS=0` disables it together with delta rounds.
+- **Native stage batches**: a review-only OMP extension validates planned scout scopes and hunter lanes/shards before native TaskTool dispatch. Large independent changes have scoped scouts; each owns source/test obligations, and results merge only when all scopes complete. Native concurrency and user model policies remain unchanged. With `task.batch: false`, planned tasks use native flat calls and the stage completes only after every planned result arrives; no config is rewritten. Empty discovery, missing/aborted/invalid results and omitted verifier dispositions block. Confirmed verifier findings or harness-coverable gaps cannot be overridden by PASS synthesis.
+- **Delivery recovery**: a solitary completed reviewer artifact bound to the current invocation can recover damaged stdout without another model request. Ambiguous results and nonzero child exits never become approval.
 - **Hunter shards**: a diff above `OMP_REVIEW_KIT_SHARD_BYTES` (default 40000; `0` disables) is split into at most `OMP_REVIEW_KIT_MAX_SHARDS` (default 3) file groups hunted in parallel.
 - **No suite runs by agents**: the dispatcher supplies the execution evidence; the agents only read.
-- **Telemetry**: `stage_stats` events in `runs.jsonl` (turns, tool calls, turn latency per stage), printed by `npm run analyze-review`.
+- **Telemetry**: `stage_stats` events in `runs.jsonl` record agent/task identity, turns, tool calls, repeated reads, response bytes and yield validation failures. `workSpanMs` ends at successful yield separately from delayed cleanup; `spanMs` remains the full transcript span. Printed by `npm run analyze-review`.
 
 ## Models
 
@@ -273,6 +275,12 @@ npm test                  # runs native node:test suites (unit, BDD, layout, mar
 npm run test:mutation     # runs dependency-free safety mutation test gate (100% killed required)
 npm run check             # asserts repository layout integrity and zero runner drift
 ```
+
+### Mutation gate execution
+
+The development mutation gate requires Node 22 or newer for precise native nested-test selection (the plugin runtime still supports Node 18). It uses four asynchronous workers by default (`OMP_MUTATION_WORKERS` overrides the count for diagnostics). Each worker owns one reusable project copy; the runner restores and verifies every file, mode and path before reuse. Timing-sensitive and process-tree suites run exclusively after the parallel jobs drain.
+
+`scripts/mutation-selectors.json` maps every curated mutant to a calibrated deciding test. An ordinary run verifies its green baseline and then requires an assertion failure from the selected test. Timeout, process/import/reporter failure, missing tests and incomplete catalogs block the gate rather than count as kills. `node scripts/run-mutation-tests.mjs --calibrate` compares full-suite reference results with focused selectors and generates the mapping; this is migration/maintenance work, not the default per-commit path. Calibration must be repeated for changed mutant definitions or deciding tests. Run records include worker concurrency and setup/test/reset timings; no fixed speedup is promised.
 
 ### Opt-in Live OMP End-to-End Verification
 

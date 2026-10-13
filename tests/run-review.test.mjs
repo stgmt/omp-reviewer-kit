@@ -485,7 +485,8 @@ test('runner fails open and includes unavailable in prompt when execution throws
   };
 
   let prompt = '';
-  const result = await runReview({
+  let result;
+  await assert.doesNotReject(async () => { result = await runReview({
     cwd: root,
     git: fakeGit(root, stagedDiff),
     executionPort: throwingPort,
@@ -497,8 +498,7 @@ test('runner fails open and includes unavailable in prompt when execution throws
       prompt = value;
       return { status: 0, stdout: 'REVIEW_RESULT=PASS\n', stderr: '' };
     },
-  });
-
+  }); }, 'execution evidence failure must not abort the runner');
   assert.equal(result.exitCode, 0);
   assert.equal(result.verdict, 'PASS');
   assert.match(prompt, /- Staged snapshot: unavailable \(runner execution crashed\)/);

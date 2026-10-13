@@ -108,6 +108,11 @@ if (args[0] === 'config') {
 ${captureExpr}
 const isReemit = args.includes('--no-tools');
 const out = isReemit ? ${JSON.stringify(reemitOutput)} : ${JSON.stringify(output)};
+if (!isReemit && process.env.OMP_REVIEW_KIT_BATCH_MANIFEST) {
+  const file = process.env.OMP_REVIEW_KIT_BATCH_MANIFEST;
+  const manifest = JSON.parse(readFileSync(file, 'utf8'));
+  writeFileSync(file + '.events', ['review-context-scout', 'review-risk-hunter', 'review-finding-verifier', 'reviewer-kit'].map(stage => JSON.stringify({ invocationToken: manifest.invocationToken, stage, complete: true })).join('\\n') + '\\n');
+}
 process.stdout.write(out.endsWith('\\n') ? out : out + '\\n');
 process.exit(0);
 `;

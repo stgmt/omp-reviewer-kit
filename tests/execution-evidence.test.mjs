@@ -114,6 +114,37 @@ describe('Feature: Execution Evidence Formatting and Interpretation', () => {
 
 import { ReviewWorkflowService } from '../src/application/review-workflow-service.mjs';
 import { DiffIdentity } from '../src/domain/diff-identity.mjs';
+import { ReviewWorkflowService as BundledWorkflow, DiffIdentity as BundledDiff } from '../scripts/run-review.mjs';
+
+for (const [label, Workflow, Diff] of [['source', ReviewWorkflowService, DiffIdentity], ['bundle', BundledWorkflow, BundledDiff]]) {
+  it(`${label}: Given source and test changes, When red proof is enabled, Then execute staged and reverted snapshots`, async () => {
+    const paths = ['src/a.mjs', 'tests/a.test.mjs'];
+    const diff = Diff.fromString(paths.map((p) => `diff --git a/${p} b/${p}\n--- a/${p}\n+++ b/${p}\n@@ -1 +1 @@\n-a\n+b\n`).join(''));
+    const snapshots = [];
+    const executions = [];
+    let evidence;
+    const service = new Workflow({
+      gitPort: {
+        getRepoRoot: async () => '/mock/root', getStagedDiff: async () => diff,
+        getSnapshot: async () => ({ files: paths.map((p) => ({ path: p, content: Buffer.from('b') })) }),
+        getHeadFile: async () => Buffer.from('a'),
+      },
+      snapshotStorePort: { create: async (snapshot) => { snapshots.push(snapshot); return '/mock/snapshot'; }, remove: async () => {} },
+      reportStorePort: { saveReport: async () => '/mock/report.md' },
+      reviewerPort: { executeReview: async ({ prompt }) => { evidence = prompt.toString(); return { status: 0, stdout: 'REVIEW_RESULT=PASS', stderr: '' }; } },
+      executionPort: { run: async (input) => { executions.push(input); return { ok: true, exitCode: executions.length === 1 ? 0 : 1, durationMs: 1, stdout: '', stderr: '' }; } },
+      execution: { enabled: true, command: 'fixture', redProof: true, linkDirs: [] },
+      logger: { log() {}, error() {} },
+    });
+    await service.execute({ cwd: '/mock/root' });
+    assert.equal(executions.length, 2);
+    assert.equal(snapshots[1].files.find((f) => f.path === 'src/a.mjs').content.toString(), 'a');
+    assert.equal(snapshots[1].files.find((f) => f.path === 'tests/a.test.mjs').content.toString(), 'b');
+    assert.match(evidence, /Staged snapshot: exit 0/);
+    assert.match(evidence, /Reverted snapshot .*exit 1/);
+    assert.doesNotMatch(evidence, /- (?:Staged|Reverted) snapshot: unavailable/);
+  });
+}
 
 describe('Feature: ReviewWorkflowService Execution Fail-Open and Ordering', () => {
   it('fails open when executionPort throws an unexpected error', async () => {
@@ -162,7 +193,8 @@ describe('Feature: ReviewWorkflowService Execution Fail-Open and Ordering', () =
       },
     });
 
-    const result = await service.execute({ cwd: '/mock/root' });
+    let result;
+    await assert.doesNotReject(async () => { result = await service.execute({ cwd: '/mock/root' }); }, 'execution evidence failure must not abort the review');
     assert.equal(result.exitCode, 0);
     assert.equal(result.verdict, 'PASS');
     assert.ok(capturedPrompt);

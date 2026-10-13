@@ -34,7 +34,7 @@ export function gateConfigProblems({ gateSource, layoutSource }) {
 }
 
 test('Every copy-list entry of the mutation gate exists, and every replayed path is inside it', async () => {
-  const gateSource = await readFile('scripts/run-mutation-tests.mjs', 'utf8');
+  const gateSource = (await readFile('scripts/run-mutation-tests.mjs', 'utf8')) + '\n' + (await readFile('scripts/mutation-runner.mjs', 'utf8'));
   const layoutSource = await readFile('scripts/check-layout.mjs', 'utf8');
   const { directories, files, problems } = gateConfigProblems({ gateSource, layoutSource });
   assert.ok(directories.includes('claude-plugin') && directories.includes('.github'));

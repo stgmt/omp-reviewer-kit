@@ -122,14 +122,16 @@ describe('Feature: review runs of one repository see each other', () => {
             countOtherLiveRuns: async () => 0,
           };
 
-          const { result, lines } = await reviewCommit({
+          let outcome;
+          await assert.doesNotReject(async () => { outcome = await reviewCommit({
             ...impl,
             home,
             repoRoot: path.join(home, 'repo'),
             diff: impl.Diff.fromString(DIFF_TEXT),
             telemetryPort,
             reviewerPort,
-          });
+          }); }, 'opening telemetry must not abort review');
+          const { result, lines } = outcome;
 
           assert.equal(result.exitCode, 0);
           assert.equal(reviews, 1);
@@ -228,6 +230,7 @@ describe('Feature: review runs of one repository see each other', () => {
       it('Given a runs folder that does not exist yet, When other live reviews are counted, Then none is counted and nothing is thrown', async () => {
         await withRunsDir(async ({ home }) => {
           process.env.OMP_REVIEW_KIT_RUNS_DIR = path.join(home, 'not-yet');
+          await assert.doesNotReject(() => new impl.Telemetry().countOtherLiveRuns({ repoRoot: path.join(home, 'repo'), runId: 'self' }), 'missing run records must not break announcement');
           assert.equal(await new impl.Telemetry().countOtherLiveRuns({ repoRoot: path.join(home, 'repo'), runId: 'self' }), 0);
         });
       });
@@ -262,7 +265,9 @@ describe('Feature: review runs of one repository see each other', () => {
               throw new Error('counter unavailable');
             },
           };
-          const { result, lines } = await reviewCommit({ ...impl, home, repoRoot: repo, diff: impl.Diff.fromString(DIFF_TEXT), telemetryPort });
+          let outcome;
+          await assert.doesNotReject(async () => { outcome = await reviewCommit({ ...impl, home, repoRoot: repo, diff: impl.Diff.fromString(DIFF_TEXT), telemetryPort }); }, 'announcement failure must not abort review');
+          const { result, lines } = outcome;
           assert.equal(result.exitCode, 0);
           assert.equal(lines.error.some((line) => line.includes('other review')), false);
         });

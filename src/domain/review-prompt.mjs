@@ -46,6 +46,7 @@ export class ReviewPrompt {
   #contextPackPath;
   #riskLanes;
   #hunterShardsText;
+  #batchPlan;
   #reemitOutput;
   #repairEnvelope = false;
 
@@ -59,6 +60,7 @@ export class ReviewPrompt {
     if (!Array.isArray(changedPaths)) {
       throw new TypeError('ReviewPrompt changedPaths must be an array');
     }
+    this.#batchPlan = extras.batchPlan ?? null;
     this.#diffHash = diffHash;
     this.#snapshotDir = snapshotDir;
     this.#changedPaths = changedPaths;
@@ -163,6 +165,7 @@ export class ReviewPrompt {
     if (this.#reviewProfile) lines.push(`Review profile for this diff: ${this.#reviewProfile}.`);
     if (Array.isArray(this.#riskLanes)) lines.push(`Risk lanes for this diff: ${JSON.stringify(this.#riskLanes)}.`);
     if (this.#hunterShardsText) lines.push(this.#hunterShardsText);
+    if (this.#batchPlan) lines.push(`NATIVE REVIEW BATCH PLAN (use these exact task names, one full batch per stage): ${JSON.stringify(this.#batchPlan)}`);
     return lines.join('\n');
   }
 
@@ -170,6 +173,10 @@ export class ReviewPrompt {
     const repair = this.#repairEnvelope
       ? 'The original verdict is BLOCK and must stay BLOCK: change no finding, priority, or verdict. Its rejection envelope is missing or malformed, so the output must contain exactly one valid envelope — the line REVIEW_REJECTION_ENVELOPE_BEGIN, one strict JSON object of schema review-rejection-envelope@1 describing exactly the findings already reported, the line REVIEW_REJECTION_ENVELOPE_END — immediately followed by the standalone REVIEW_RESULT=BLOCK line. ' : '';
     return repair + 'Reproduce the following review report verbatim as raw Markdown text exactly as returned; never JSON-encode, wrap, or reformat it. The verdict contract overrides any other format: finish with exactly one standalone REVIEW_RESULT=PASS or REVIEW_RESULT=BLOCK line as the last non-empty line of the output — markers anywhere else are ignored — even if the input describes a different verdict vocabulary.\n\n---ORIGINAL OUTPUT---\n' + this.#reemitOutput;
+  }
+
+  get batchPlan() {
+    return this.#batchPlan;
   }
 
   get diffHash() {

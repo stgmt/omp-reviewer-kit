@@ -533,7 +533,7 @@ test('Given a record that stays unreadable for a whole quiet period, When it is 
     cwd: await tempDir(), env: { OMP_REVIEW_KIT_QUIET_MS: '60000' }, runsDir, now: () => clock,
     sleep: async () => {
       polls += 1;
-      if (polls > 100) throw new Error('followed past the quiet period');
+      assert.ok(polls <= 100, 'followed past the quiet period');
       clock += 10_000;
     },
     out: (l) => sink.out.push(l), err: (l) => sink.err.push(l),
@@ -609,6 +609,7 @@ test('Given a commit that no run reviewed, When the reader is asked for it as JS
   const sink = sinks();
   const code = await main(['--commit', second, '--json'], { cwd: repo, env: {}, runsDir: await tempDir(), now: () => NOW, out: (l) => sink.out.push(l), err: (l) => sink.err.push(l) });
   assert.equal(code, 1);
+  assert.doesNotThrow(() => JSON.parse(sink.out.join('\n')), 'JSON mode must emit parseable output');
   assert.deepEqual(JSON.parse(sink.out.join('\n')), []);
 });
 
@@ -718,7 +719,7 @@ test('Given an installed reader, When the session starts, Then its summary is ad
 test('Given an installed plugin without the reader, When the session starts, Then the session stays silent about progress', async () => {
   const dir = await tempDir();
   // The OMP plugin matches this Claude plugin's release: an older one gets the "older than this Claude plugin" notice instead.
-  const pluginDir = await fakePlugin(dir, { version: '0.20.3', reader: null });
+  const pluginDir = await fakePlugin(dir, { version: '0.21.0', reader: null });
   const sink = sinks();
   assert.equal(await session({ cwd: dir, env: await sandbox({ OMP_REVIEW_KIT_PLUGIN_DIR: pluginDir }), exec: fakeOmp, out: (l) => sink.out.push(l), sessionId: 'sess-42' }), BRIDGE_EXIT.ok);
   assert.deepEqual(sink.out, []);
@@ -927,7 +928,8 @@ test('Given a SessionStart input with a session id, When the bridge session comm
 test('Given an environment file in a folder that does not exist, When the session starts, Then the session still answers the hook', async () => {
   const dir = await tempDir();
   const sink = sinks();
-  const code = await session({ cwd: dir, env: await sandbox(), exec: fakeOmp, out: (l) => sink.out.push(l), sessionId: 'sess-43', envFile: path.join(dir, 'missing', 'claude-env.sh') });
+  let code;
+  await assert.doesNotReject(async () => { code = await session({ cwd: dir, env: await sandbox(), exec: fakeOmp, out: (l) => sink.out.push(l), sessionId: 'sess-43', envFile: path.join(dir, 'missing', 'claude-env.sh') }); }, 'environment file failure must not abort SessionStart');
   assert.equal(code, BRIDGE_EXIT.ok);
   assert.equal(sink.out.length, 1);
   assert.match(sink.out[0], /hookSpecificOutput/);
