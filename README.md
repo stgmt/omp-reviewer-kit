@@ -172,15 +172,16 @@ A review stage lasts (model turns) x (the model's per-turn latency), so the runn
 
 ## Models
 
-reviewer-kit does not choose, pass, or fall back between models. OMP is your
-tool: you log in, assign the default model role, and configure fallbacks
-(`modelRoles`, `retry.fallbackChains`, `modelFallback` in
-`~/.omp/agent/config.yml`) yourself, and the review child and all four agents
-inherit exactly that. The hook only asks OMP for a verdict and gets `PASS`,
-`BLOCK`, or an error.
+reviewer-kit selects the native OMP `task` role, not a concrete model. The
+review child uses `--model @task`, and all four review agents declare
+`model: "@task"` so their fallback chains retain that role too. You own
+`modelRoles.task`, `retry.fallbackChains.task` and `modelFallback` in
+`~/.omp/agent/config.yml`; the plugin never writes those settings or changes
+OMP's global `default` role. User `task.agentModelOverrides` remain authoritative.
+The hook asks OMP for a verdict and gets `PASS`, `BLOCK`, or an error.
 
-Before the four stages start, the runner makes one short model-less health
-call. If OMP cannot reach a model (missing login, dead provider, exhausted
+Before the four stages start, the runner makes one short no-tools health
+call through the same `task` role. If OMP cannot reach a model (missing login, dead provider, exhausted
 quota with no configured fallback) the commit is blocked within seconds with a
 message telling you to fix the OMP configuration. This is an infrastructure
 failure, not a code verdict. A hard OMP child crash with no output is re-run

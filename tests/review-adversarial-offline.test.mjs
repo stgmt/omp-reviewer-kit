@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { OmpCliReviewerAdapter } from '../src/infra/omp-cli-reviewer-adapter.mjs';
 import { ReviewPrompt } from '../src/domain/review-prompt.mjs';
+import { ReviewRejectionEnvelope } from '../src/domain/review-rejection-envelope.mjs';
 import { OmpCliReviewerAdapter as BundledAdapter } from '../scripts/run-review.mjs';
 
 const repo = fileURLToPath(new URL('../', import.meta.url));
@@ -29,6 +30,7 @@ for (const [label, Adapter] of [['source', OmpCliReviewerAdapter], ['bundle', Bu
             OMP_REVIEW_KIT_AUTO_SYNC: '0', OMP_REVIEW_KIT_STOP_SUPERSEDED: '0' };
           for (const key of Object.keys(env)) if (/API_KEY|ACCESS_TOKEN|OAUTH/.test(key)) delete env[key];
           const result = spawnSync(process.env.OMP_REVIEW_KIT_OMP ?? 'omp', ['--cwd', work, '--no-extensions',
+            '--config', `${options.env.OMP_REVIEW_KIT_BATCH_MANIFEST}.config.yml`,
             '--plugin-dir', repo, '-e', options.reviewGateExtension, '-e', path.join(repo, 'tests', 'fixtures', 'review-sdk-probe.mjs'),
             '--no-title', '--no-rules', '--tools', 'task,read', '--session-dir', options.sessionDir,
             '--model', 'review-offline/fixture', '--smol', 'review-offline/fixture', '--thinking', 'off', '-p', prompt],
@@ -42,7 +44,11 @@ for (const [label, Adapter] of [['source', OmpCliReviewerAdapter], ['bundle', Bu
         const plan = { scouts: [{ id: 'Scout1', paths: ['src/a.mjs'] }, { id: 'Scout2', paths: ['src/b.mjs'] }],
           hunters: [{ id: 'Hunter-correctness', lane: 'correctness', paths: ['src/a.mjs'] }, { id: 'Hunter-security', lane: 'security', paths: ['src/b.mjs'] }] };
         const result = await adapter.executeReview({ prompt: ReviewPrompt.forDiff('a'.repeat(64), work, ['src/a.mjs', 'src/b.mjs'], { batchPlan: { ...plan, previousFindings: scenario.startsWith('previous-') ? [{ id: 'old1' }] : [] }, roundContextText: scenario.startsWith('previous-') ? 'PREVIOUS ROUND: old1 requires fixed/still_present disposition.' : '' }), cwd: work });
-        assert.equal(result.status, blocked ? 1 : 0, result.stderr);
+        const substantiveBlock = scenario === 'confirmed' || scenario === 'coverage';
+        assert.equal(result.status, blocked && !substantiveBlock ? 1 : 0, result.stderr);
+        const normalized = ReviewRejectionEnvelope.evaluate({ output: result.stdout, diffIdentity: 'a'.repeat(64), processStatus: result.status });
+        assert.equal(normalized.verdict.isPass(), !blocked);
+        if (substantiveBlock) assert.equal(normalized.envelope.kind, scenario === 'confirmed' ? 'confirmed_findings' : 'coverage_required');
         const state = JSON.parse(await readFile(resultFile, 'utf8'));
         assert.equal(state.externalRequests, 0);
         assert.equal(await readFile(path.join(agent, 'config.yml'), 'utf8'), config);

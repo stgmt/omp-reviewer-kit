@@ -129,14 +129,16 @@ test('the distributable runner mirrors the adapter skills selection verbatim', a
   assert.equal(runnerBlock, adapterBlock);
 });
 
-test('the review child never receives model flags, whatever the legacy model env says', async () => {
+test('the review child selects task and ignores legacy model and effort env', async () => {
   const saved = { model: process.env.OMP_REVIEW_KIT_MODEL, effort: process.env.OMP_REVIEW_KIT_EFFORT };
   process.env.OMP_REVIEW_KIT_MODEL = '@slow';
   process.env.OMP_REVIEW_KIT_EFFORT = 'max';
   try {
     const args = await captureSpawnArgs(undefined);
 
-    for (const flag of ['--model', '--smol', '--slow', '--thinking']) {
+    assert.equal(args[args.indexOf('--model') + 1], '@task');
+    assert.equal(args.filter((arg) => arg === '--model').length, 1);
+    for (const flag of ['--smol', '--slow', '--thinking']) {
       assert.ok(!args.includes(flag), `${flag} must not be passed: ${args.join(' ')}`);
     }
     assert.ok(!args.includes('@slow'));

@@ -78,27 +78,27 @@
       "tests": [
         "bundle: Given invalid native scout output, When the session is removed, Then bounded schema diagnostics survive in stderr"
       ],
+      "ancestors": [],
       "mutantHash": "e938500e4dbff7729ec17395f2907c827de86b773a1e38ffb1587777ddb9813b",
-      "testHash": "75061d6cdce9a3549247971080a033f50082396696c7bf83a276431b8ec48e9a",
-      "ancestors": []
+      "testHash": "770a3de9f2f387fb1b7cc55cf74b29301b26b53bd3af29a32c733774f708171c"
     },
     "modular-native-diagnostic-not-delivered": {
       "testFile": "tests/review-gate.test.mjs",
       "tests": [
         "source: Given invalid native scout output, When the session is removed, Then bounded schema diagnostics survive in stderr"
       ],
+      "ancestors": [],
       "mutantHash": "684f4a0709213cdc169ae5462ced6b8b9f6f854191cfc4fc32032f571bee0540",
-      "testHash": "75061d6cdce9a3549247971080a033f50082396696c7bf83a276431b8ec48e9a",
-      "ancestors": []
+      "testHash": "770a3de9f2f387fb1b7cc55cf74b29301b26b53bd3af29a32c733774f708171c"
     },
     "runner-native-diagnostic-not-delivered": {
       "testFile": "tests/review-gate.test.mjs",
       "tests": [
         "bundle: Given invalid native scout output, When the session is removed, Then bounded schema diagnostics survive in stderr"
       ],
+      "ancestors": [],
       "mutantHash": "f4cd64b1acb161bca50568e595c3137029d7fcee7852a0a228018e72e2e040dd",
-      "testHash": "75061d6cdce9a3549247971080a033f50082396696c7bf83a276431b8ec48e9a",
-      "ancestors": []
+      "testHash": "770a3de9f2f387fb1b7cc55cf74b29301b26b53bd3af29a32c733774f708171c"
     },
     "runner-version-compare-inverted": {
       "testFile": "tests/claude-bridge.test.mjs",
@@ -475,33 +475,33 @@
       "tests": [
         "review-risk-hunter uses one shared candidate schema for both correctness and security lanes"
       ],
-      "mutantHash": "3b8b9f13183f712947d9958a05016511c9185fc239e9f7c3af718470e0abef6b",
-      "testHash": "acc027a4a9e335dfa649302ee2acb97e263c7a60b2f07f551654745413d03c7a",
       "ancestors": [
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
-      ]
+      ],
+      "mutantHash": "3b8b9f13183f712947d9958a05016511c9185fc239e9f7c3af718470e0abef6b",
+      "testHash": "2510d6f2f3b3fb3ae07c5604e527f74ff7b65470fdf7c3bc4b3ccb754a23cb5b"
     },
     "anti-parasitic-both-to-either": {
       "testFile": "tests/plugin-layout.test.mjs",
       "tests": [
         "review-risk-hunter uses one shared candidate schema for both correctness and security lanes"
       ],
-      "mutantHash": "b8607c1dd6f7ba93c3e0b7431e95eb44980c25c7b9974dd0fc887acbf309bb74",
-      "testHash": "acc027a4a9e335dfa649302ee2acb97e263c7a60b2f07f551654745413d03c7a",
       "ancestors": [
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
-      ]
+      ],
+      "mutantHash": "b8607c1dd6f7ba93c3e0b7431e95eb44980c25c7b9974dd0fc887acbf309bb74",
+      "testHash": "2510d6f2f3b3fb3ae07c5604e527f74ff7b65470fdf7c3bc4b3ccb754a23cb5b"
     },
     "anti-parasitic-port-protection-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
       "tests": [
         "review-risk-hunter uses one shared candidate schema for both correctness and security lanes"
       ],
-      "mutantHash": "7cb2ae5cc876247bae2a345f17644a022a04d18c3ed82d839556f279b8e7e2e7",
-      "testHash": "acc027a4a9e335dfa649302ee2acb97e263c7a60b2f07f551654745413d03c7a",
       "ancestors": [
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
-      ]
+      ],
+      "mutantHash": "7cb2ae5cc876247bae2a345f17644a022a04d18c3ed82d839556f279b8e7e2e7",
+      "testHash": "2510d6f2f3b3fb3ae07c5604e527f74ff7b65470fdf7c3bc4b3ccb754a23cb5b"
     },
     "envelope-unsupported-class-modular": {
       "testFile": "tests/bdd-scenarios.test.mjs",
@@ -586,22 +586,22 @@
       "tests": [
         "multi-stage-review skill codifies the ordered protocol and schemas"
       ],
-      "mutantHash": "db7a8493b32121111624ef1add91a1b21b8c908d6e5da232df1a148e0af79373",
-      "testHash": "acc027a4a9e335dfa649302ee2acb97e263c7a60b2f07f551654745413d03c7a",
       "ancestors": [
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
-      ]
+      ],
+      "mutantHash": "db7a8493b32121111624ef1add91a1b21b8c908d6e5da232df1a148e0af79373",
+      "testHash": "2510d6f2f3b3fb3ae07c5604e527f74ff7b65470fdf7c3bc4b3ccb754a23cb5b"
     },
     "multi-stage-yagni-boundary-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
       "tests": [
         "multi-stage-review skill codifies the ordered protocol and schemas"
       ],
-      "mutantHash": "465a5de25c5a83dda3e244302a6b7eab09c0169bb39c82b5688b001fb8d5560c",
-      "testHash": "acc027a4a9e335dfa649302ee2acb97e263c7a60b2f07f551654745413d03c7a",
       "ancestors": [
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
-      ]
+      ],
+      "mutantHash": "465a5de25c5a83dda3e244302a6b7eab09c0169bb39c82b5688b001fb8d5560c",
+      "testHash": "2510d6f2f3b3fb3ae07c5604e527f74ff7b65470fdf7c3bc4b3ccb754a23cb5b"
     },
     "modular-provider-outage-ux-dropped": {
       "testFile": "tests/omp-cli-reviewer-adapter.test.mjs",
@@ -669,38 +669,38 @@
     "modular-default-preflight-uses-tools": {
       "testFile": "tests/preflight-coverage.test.mjs",
       "tests": [
-        "defaultPreflight spawns a no-tools model-less child fed the READY prompt"
+        "defaultPreflight spawns a no-tools task-role child fed the READY prompt"
       ],
+      "ancestors": [],
       "mutantHash": "2d2c422f2b152e9d3e231b3b568da0863bf2c9a8efff02bd9b4cf105a2330c3d",
-      "testHash": "e06aec8c6bce44b51c2dce3d49c83904fd326a5546ada4d53eb5462b19987b13",
-      "ancestors": []
+      "testHash": "e55f0dfae179c880ce68693d078c59e8205f2bb02e479b618348f769ddd562fd"
     },
     "modular-review-chain-timeout-dropped": {
       "testFile": "tests/preflight-coverage.test.mjs",
       "tests": [
         "review_chain telemetry records the health-call timeout, or null when no health call runs"
       ],
+      "ancestors": [],
       "mutantHash": "e77f4a90b9d0be118df4e702f0e8dd7dae4f24111f9651c971e75f3f482b7c00",
-      "testHash": "e06aec8c6bce44b51c2dce3d49c83904fd326a5546ada4d53eb5462b19987b13",
-      "ancestors": []
+      "testHash": "e55f0dfae179c880ce68693d078c59e8205f2bb02e479b618348f769ddd562fd"
     },
     "analyzer-model-segment-unconditional": {
       "testFile": "tests/preflight-coverage.test.mjs",
       "tests": [
         "analyze-review-run prints no model segment for attempts that carry no model"
       ],
+      "ancestors": [],
       "mutantHash": "219901050e376f292c4c9ca31df5f7c422fe8a29568dab60cd7bdcc4915bf5bb",
-      "testHash": "e06aec8c6bce44b51c2dce3d49c83904fd326a5546ada4d53eb5462b19987b13",
-      "ancestors": []
+      "testHash": "e55f0dfae179c880ce68693d078c59e8205f2bb02e479b618348f769ddd562fd"
     },
     "analyzer-preflight-events-ignored": {
       "testFile": "tests/preflight-coverage.test.mjs",
       "tests": [
         "analyze-review-run reports the preflight health call with its status and duration"
       ],
+      "ancestors": [],
       "mutantHash": "c1c464e0d34308d89ca7a8fa36e32ba5b011bc4aab89c5ea2d5a84b3d668e306",
-      "testHash": "e06aec8c6bce44b51c2dce3d49c83904fd326a5546ada4d53eb5462b19987b13",
-      "ancestors": []
+      "testHash": "e55f0dfae179c880ce68693d078c59e8205f2bb02e479b618348f769ddd562fd"
     },
     "runner-crash-rerun-dropped": {
       "testFile": "tests/telemetry.test.mjs",
@@ -1426,27 +1426,27 @@
       "tests": [
         "agents/review-risk-hunter.md: forbids running project test, build, lint or mutation suites"
       ],
+      "ancestors": [],
       "mutantHash": "3bfe16a06c4c08639a42ceb6fca0d42d95c6cc0fa8e50eb101aeb7f036b7e33f",
-      "testHash": "578ef36c694cf7984533582b7b29e5febdd84dd7fbefeaf029ea80699c1cbcb9",
-      "ancestors": []
+      "testHash": "257f3a6641660d1dbc1936f3908df1e592cc6b92b7d4ce1ce18ea4f2aab1eef4"
     },
     "agent-review-context-scout-test-suite-ban-removed": {
       "testFile": "tests/agent-contract.test.mjs",
       "tests": [
         "agents/review-context-scout.md: forbids running project test, build, lint or mutation suites"
       ],
+      "ancestors": [],
       "mutantHash": "1bc17bf2e5eb5d372e55ee8ef67cc10cafd324e3be896f7ddbfe00424e42bb1a",
-      "testHash": "578ef36c694cf7984533582b7b29e5febdd84dd7fbefeaf029ea80699c1cbcb9",
-      "ancestors": []
+      "testHash": "257f3a6641660d1dbc1936f3908df1e592cc6b92b7d4ce1ce18ea4f2aab1eef4"
     },
     "agent-review-finding-verifier-test-suite-ban-removed": {
       "testFile": "tests/agent-contract.test.mjs",
       "tests": [
         "agents/review-finding-verifier.md: forbids running project test, build, lint or mutation suites"
       ],
+      "ancestors": [],
       "mutantHash": "a0689cc78f413707158f08396d5fa51e6001fe8e4805f4697770eb7e0992454b",
-      "testHash": "578ef36c694cf7984533582b7b29e5febdd84dd7fbefeaf029ea80699c1cbcb9",
-      "ancestors": []
+      "testHash": "257f3a6641660d1dbc1936f3908df1e592cc6b92b7d4ce1ce18ea4f2aab1eef4"
     },
     "modular-context-pack-scans-planted-review-files": {
       "testFile": "tests/context-pack.test.mjs",
@@ -1921,18 +1921,18 @@
       "tests": [
         "the orchestrator, the hunter and the skill describe the hunter shards consistently"
       ],
+      "ancestors": [],
       "mutantHash": "fb3922eaf2ce06c80713129b74d628a0741e23b36a099bdef93d51d586d947a0",
-      "testHash": "578ef36c694cf7984533582b7b29e5febdd84dd7fbefeaf029ea80699c1cbcb9",
-      "ancestors": []
+      "testHash": "257f3a6641660d1dbc1936f3908df1e592cc6b92b7d4ce1ce18ea4f2aab1eef4"
     },
     "agent-orchestrator-shard-merge-dropped": {
       "testFile": "tests/agent-contract.test.mjs",
       "tests": [
         "the orchestrator, the hunter and the skill describe the hunter shards consistently"
       ],
+      "ancestors": [],
       "mutantHash": "407b0bed454fc815a9765c628823978b7c18920646da6503482f7c9ee3ebef47",
-      "testHash": "578ef36c694cf7984533582b7b29e5febdd84dd7fbefeaf029ea80699c1cbcb9",
-      "ancestors": []
+      "testHash": "257f3a6641660d1dbc1936f3908df1e592cc6b92b7d4ce1ce18ea4f2aab1eef4"
     },
     "modular-vendored-exempts-modified-files": {
       "testFile": "tests/vendored-kit-files.test.mjs",
@@ -2465,33 +2465,33 @@
       "tests": [
         "manifest and skills declare fixed reviewer identities"
       ],
-      "mutantHash": "ec31109e99d1fdb90e4b481cab9c38734f3857a530dd4a68f4327ef171a166d5",
-      "testHash": "acc027a4a9e335dfa649302ee2acb97e263c7a60b2f07f551654745413d03c7a",
       "ancestors": [
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
-      ]
+      ],
+      "mutantHash": "ec31109e99d1fdb90e4b481cab9c38734f3857a530dd4a68f4327ef171a166d5",
+      "testHash": "2510d6f2f3b3fb3ae07c5604e527f74ff7b65470fdf7c3bc4b3ccb754a23cb5b"
     },
     "hunter-red-proof-field-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
       "tests": [
         "review-risk-hunter uses one shared candidate schema for both correctness and security lanes"
       ],
-      "mutantHash": "61f3ac262a7e6643d183a03c1ffd0e7ebebf3d58d8cbaacaf70427b43ac14e8e",
-      "testHash": "acc027a4a9e335dfa649302ee2acb97e263c7a60b2f07f551654745413d03c7a",
       "ancestors": [
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
-      ]
+      ],
+      "mutantHash": "61f3ac262a7e6643d183a03c1ffd0e7ebebf3d58d8cbaacaf70427b43ac14e8e",
+      "testHash": "2510d6f2f3b3fb3ae07c5604e527f74ff7b65470fdf7c3bc4b3ccb754a23cb5b"
     },
     "verifier-triage-field-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
       "tests": [
         "review-finding-verifier enforces mandatory disposition values and forbids verdict markers"
       ],
-      "mutantHash": "e6356f58a6e2d47ec64b32c1f6f7664d120a06d1b1d697a3dac8517b2c7b5ea5",
-      "testHash": "acc027a4a9e335dfa649302ee2acb97e263c7a60b2f07f551654745413d03c7a",
       "ancestors": [
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
-      ]
+      ],
+      "mutantHash": "e6356f58a6e2d47ec64b32c1f6f7664d120a06d1b1d697a3dac8517b2c7b5ea5",
+      "testHash": "2510d6f2f3b3fb3ae07c5604e527f74ff7b65470fdf7c3bc4b3ccb754a23cb5b"
     },
     "modular-suspicion-assert-delta": {
       "testFile": "tests/suspicion-map.test.mjs",
@@ -2561,54 +2561,54 @@
       "tests": [
         "the distributable runner mirrors the adapter skills selection verbatim"
       ],
+      "ancestors": [],
       "mutantHash": "9bf61aeef2df0e1d3b66d92417bf49b50024df511267c2b9b1ee16d41fedba72",
-      "testHash": "6a743b5a76544365dca9d6ec737fc2b2d2e2ac9a04c1a9ee4e36109f03f138b9",
-      "ancestors": []
+      "testHash": "4af4fad3fdd4de09457f9e3aae536adde8e9bdc44e3cc0189b109730152182ed"
     },
     "modular-skills-plugin-skills-dropped": {
       "testFile": "tests/review-skills.test.mjs",
       "tests": [
         "the distributable runner mirrors the adapter skills selection verbatim"
       ],
+      "ancestors": [],
       "mutantHash": "30d97a1bce2cd5e28aa7b70bfde6a0d236c2e89488a22865001d1264c7eb497b",
-      "testHash": "6a743b5a76544365dca9d6ec737fc2b2d2e2ac9a04c1a9ee4e36109f03f138b9",
-      "ancestors": []
+      "testHash": "4af4fad3fdd4de09457f9e3aae536adde8e9bdc44e3cc0189b109730152182ed"
     },
     "modular-skills-all-case-sensitive": {
       "testFile": "tests/review-skills.test.mjs",
       "tests": [
         "the distributable runner mirrors the adapter skills selection verbatim"
       ],
+      "ancestors": [],
       "mutantHash": "2305d25ef3b44e0c1d36bfcded96e4e74b62b0118016055166552ad09f7b995b",
-      "testHash": "6a743b5a76544365dca9d6ec737fc2b2d2e2ac9a04c1a9ee4e36109f03f138b9",
-      "ancestors": []
+      "testHash": "4af4fad3fdd4de09457f9e3aae536adde8e9bdc44e3cc0189b109730152182ed"
     },
     "modular-skills-args-dropped": {
       "testFile": "tests/review-skills.test.mjs",
       "tests": [
-        "OMP_REVIEW_KIT_SKILLS adds custom patterns to the plugin skills without duplicates"
+        "review child lists the plugin skills and plugin-named skills by default"
       ],
+      "ancestors": [],
       "mutantHash": "8936b2df52231548cee9b115d2d6a6e20b0702216eaa0e39b32985b8c684461a",
-      "testHash": "6a743b5a76544365dca9d6ec737fc2b2d2e2ac9a04c1a9ee4e36109f03f138b9",
-      "ancestors": []
+      "testHash": "4af4fad3fdd4de09457f9e3aae536adde8e9bdc44e3cc0189b109730152182ed"
     },
     "runner-skills-default-drifted": {
       "testFile": "tests/review-skills.test.mjs",
       "tests": [
         "the distributable runner mirrors the adapter skills selection verbatim"
       ],
+      "ancestors": [],
       "mutantHash": "7db0cab2625a99cdbb8361449dd189f90ec1d5ffeee8edecf70f39bcbf5fe614",
-      "testHash": "6a743b5a76544365dca9d6ec737fc2b2d2e2ac9a04c1a9ee4e36109f03f138b9",
-      "ancestors": []
+      "testHash": "4af4fad3fdd4de09457f9e3aae536adde8e9bdc44e3cc0189b109730152182ed"
     },
     "modular-report-artifact-recovery-skipped": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
       "tests": [
-        "src adapter: the real reviewer-kit result shape (object with a report field) is recovered through the adapter"
+        "src adapter: Given dispatcher output without any verdict marker, When a task result exists, Then it is recovered as missing_marker"
       ],
       "ancestors": [],
       "mutantHash": "07beb1e8bef8ee5d85e028f05e109b6208a25a8581dc1bdb4332f306836199a1",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "modular-report-recovery-overrides-healthy-output": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
@@ -2617,7 +2617,7 @@
       ],
       "ancestors": [],
       "mutantHash": "bbb69768494b6e1b8eb76a6510cdf26a128eabac67e0a3b767cecb102f8b62c3",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "modular-session-dir-dropped": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
@@ -2626,16 +2626,16 @@
       ],
       "ancestors": [],
       "mutantHash": "5666fe1305ce27f05ba0032f84cc9648a50f2644e341713870b8b65694543850",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "runner-report-artifact-recovery-skipped": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
       "tests": [
-        "runner copy: Given dispatcher output without any verdict marker, When a task result exists, Then it is recovered as missing_marker"
+        "runner copy: the real reviewer-kit result shape (object with a report field) is recovered through the adapter"
       ],
       "ancestors": [],
       "mutantHash": "1d0ac1582ef721938b74e8765c0012c8dd4f718d8b633369248ed379085bd4c3",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "runner-report-recovery-overrides-healthy-output": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
@@ -2644,7 +2644,7 @@
       ],
       "ancestors": [],
       "mutantHash": "e25c7246803140f046b39ab31e88ea686272ab78fbc03178af7ab7bd0c49bed5",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "runner-session-dir-dropped": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
@@ -2653,7 +2653,7 @@
       ],
       "ancestors": [],
       "mutantHash": "36d603adbc466e67b83a584542eb906d5fa5d080550a2c48fbd4e16a89711384",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "modular-artifact-size-gate-dropped": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
@@ -2662,7 +2662,7 @@
       ],
       "ancestors": [],
       "mutantHash": "850432e3f5b37a0d591788b3366f232519b75b2ddcff95ef93f36f889bb64e39",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "modular-session-dir-failure-fatal": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
@@ -2671,16 +2671,16 @@
       ],
       "ancestors": [],
       "mutantHash": "ec3ad9adcb3a8196ed2a3eb532e3956bde6e635b084a54eb64abd4abf7979311",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "modular-ephemeral-probes-get-session-dir": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
       "tests": [
-        "src adapter: model-less probes and verbatim re-emit stay ephemeral (--no-session, never --session-dir)"
+        "src adapter: an empty sessionDir option keeps the child ephemeral"
       ],
       "ancestors": [],
       "mutantHash": "1dffd85d074bb42b92753520579487773c05ae37252bec38ab89cf038786e908",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "modular-extra-env-filter-dropped": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
@@ -2689,7 +2689,7 @@
       ],
       "ancestors": [],
       "mutantHash": "06edac1545c2c85567450a22d18ec133e34d1f873efc2d2c0be47d83d7d4515f",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "modular-task-artifact-report-field-ignored": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
@@ -2698,7 +2698,7 @@
       ],
       "ancestors": [],
       "mutantHash": "c4e14365df98a1b31646ccb38d83ca2b84c9e9c9e160946d8b4e8a0810f55109",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "runner-artifact-size-gate-dropped": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
@@ -2707,7 +2707,7 @@
       ],
       "ancestors": [],
       "mutantHash": "7b0432cf2016aaac87fad78cf823d79a7ab02c3612ff789dd937d1e358c1e1c3",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "runner-session-dir-failure-fatal": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
@@ -2716,7 +2716,7 @@
       ],
       "ancestors": [],
       "mutantHash": "f2091e7a8fc43019625dcd99a0d2da41aa445f7f3aa2e427b17cfe572d6477cd",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "runner-ephemeral-probes-get-session-dir": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
@@ -2725,7 +2725,7 @@
       ],
       "ancestors": [],
       "mutantHash": "d5cc6c895728d44943c037b4eef9f7f4f4eee2d201845bedfbc225c750201c47",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "runner-extra-env-filter-dropped": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
@@ -2734,7 +2734,7 @@
       ],
       "ancestors": [],
       "mutantHash": "d9bcf47f5e66c65a827b2e0fd34c860d76c1fb99360f77d137bedd565c2ebaa1",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "runner-task-artifact-report-field-ignored": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
@@ -2743,7 +2743,7 @@
       ],
       "ancestors": [],
       "mutantHash": "9617fa341394793e6bb3e74f361a05c0300d6bb6a565804b709287a15dce2ba8",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "modular-session-sweep-ignores-live-owner": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
@@ -2752,7 +2752,7 @@
       ],
       "ancestors": [],
       "mutantHash": "39f8adc1c3acaf0806108c235541c4bdc310fbbd0f2863e1973312dd429778c0",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "modular-session-sweep-ignores-ttl": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
@@ -2761,7 +2761,7 @@
       ],
       "ancestors": [],
       "mutantHash": "69abd1f346bfd6c63ec31853ee67db4d20c5734f851f2e544f9c7912e664ce50",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "runner-session-sweep-ignores-live-owner": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
@@ -2770,7 +2770,7 @@
       ],
       "ancestors": [],
       "mutantHash": "9ae6c150dafdfd3e7bd393fc7fe8b853be6db42581a5024bcc88190c01e03477",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "runner-session-sweep-ignores-ttl": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
@@ -2779,16 +2779,16 @@
       ],
       "ancestors": [],
       "mutantHash": "d25708e61be34d73d9ff64e8e394dfcda7b4053a2482f9ed393c869137126d89",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "plugin-report-artifact-recovery-skipped": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
       "tests": [
-        "runner copy: the real reviewer-kit result shape (object with a report field) is recovered through the adapter"
+        "runner copy: the crash retry gets its own session dir"
       ],
       "ancestors": [],
       "mutantHash": "0d96c7df0daecb41ebad29e6894438f78dcafc3907cdaf4fb30b1d4ee6c730bc",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "plugin-session-dir-dropped": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
@@ -2797,7 +2797,7 @@
       ],
       "ancestors": [],
       "mutantHash": "74b3f54ac9fa21a8faf1290bdccafa6a6ca888de172292d9dfa2db1e7437b4eb",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "modular-recover-outer-catch-rethrows": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
@@ -2806,16 +2806,16 @@
       ],
       "ancestors": [],
       "mutantHash": "6572d1c6eea9a3536e3c11827a50d9a1cf803bef6cd7288393e7c847a2b8ede1",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "modular-recover-accepts-any-extension": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
       "tests": [
-        "src adapter: the real reviewer-kit result shape (object with a report field) is recovered through the adapter"
+        "src adapter: Given dispatcher output without any verdict marker, When a task result exists, Then it is recovered as missing_marker"
       ],
       "ancestors": [],
       "mutantHash": "15bcb6cdec5a91c685a522d32238e084b79097b75d5312f93c7cd098ff2ef220",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "modular-empty-session-dir-persists": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
@@ -2824,7 +2824,7 @@
       ],
       "ancestors": [],
       "mutantHash": "837e39d455e5131e4b6c9640aedb5f03259761192ed31467a8f14399a275c281",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "runner-recover-outer-catch-rethrows": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
@@ -2833,16 +2833,16 @@
       ],
       "ancestors": [],
       "mutantHash": "4cabfb29d1df6b0ffbf987e328f7661d6646d2aa42ad39ab7f7805c84d928176",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "runner-recover-accepts-any-extension": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
       "tests": [
-        "runner copy: Given dispatcher output without any verdict marker, When a task result exists, Then it is recovered as missing_marker"
+        "runner copy: the real reviewer-kit result shape (object with a report field) is recovered through the adapter"
       ],
       "ancestors": [],
       "mutantHash": "472db06e95ef1429eb70a77de25def07d3b19ec23b71c3bd3d81c0220a1448cf",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "runner-empty-session-dir-persists": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
@@ -2851,7 +2851,7 @@
       ],
       "ancestors": [],
       "mutantHash": "95b637aae9cca066f201d926bf6f621ce4786bbd63c341ee0a144d7668990646",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "modular-session-sweep-prefix-filter-dropped": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
@@ -2860,7 +2860,7 @@
       ],
       "ancestors": [],
       "mutantHash": "62aec0d8f53e6adc8461300209b2075062e1f9cec1bd68d111b0161fa2bca596",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "modular-session-sweep-accepts-files": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
@@ -2869,7 +2869,7 @@
       ],
       "ancestors": [],
       "mutantHash": "875ea500921b9bce56ca9fe6b18bbab069f6c5a75d856df13d5083b76a66ad97",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "runner-session-sweep-prefix-filter-dropped": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
@@ -2878,7 +2878,7 @@
       ],
       "ancestors": [],
       "mutantHash": "6b2337dcde1e1bfe5c433531e563509fe9b23d776387896e8cb0e238727b2e5e",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "runner-session-sweep-accepts-files": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
@@ -2887,7 +2887,7 @@
       ],
       "ancestors": [],
       "mutantHash": "e217245411f0f157f513513f55b543948abbbb3e35564073055ec49f218ce740",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "target-policy-tp-not-skipped": {
       "testFile": "tests/target-registry.test.mjs",
@@ -3870,164 +3870,164 @@
     "review-progress-quiet-comparison-inverted": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
-        "Given an active run and a follow command, When its detail is printed, Then the follow command is shown"
+        "Given a live runner whose OMP child has logged nothing past the threshold, When classified, Then it is quiet even though the heartbeat keeps updating"
       ],
+      "ancestors": [],
       "mutantHash": "def9901c343a612f17fa538e4bd0367ed866d52544fa668fc4a1db47a6ae9a81",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "review-progress-orphan-check-removed": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given an orphaned run, When its detail is printed, Then it says no process is left and gives no kill command"
       ],
+      "ancestors": [],
       "mutantHash": "21361ee0a8366d7e272ecc092c2566fac8f2beb2192d4055f258c505cbd50343",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "review-progress-finished-check-removed": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given unfinished runs of this session in another repository and of this repository, When the session-start scope is read, Then old repository runs and finished runs are left out"
       ],
+      "ancestors": [],
       "mutantHash": "e13e88f8f3a06d1c77b85cd45d7a385e882a4064c319dd72a957e8799ad3d0d7",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "review-progress-heartbeat-counts-as-activity": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given a quiet run with a review pid, When its detail is printed, Then the kill hint names that pid and the kit says it stops nothing"
       ],
+      "ancestors": [],
       "mutantHash": "ba5f162b9875bfc033b6f9aa7d8ff98b60595efc46347e1de9c10243722026d0",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "review-progress-child-log-ignored": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given a stage change and a later OMP log line, When the last activity is read, Then the latest of the two is used"
       ],
+      "ancestors": [],
       "mutantHash": "60c96b71af9d5c9448b44f90273c7782459d471574293cc302a8cddc5fa24a5a",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "review-progress-attention-window-widened": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given unfinished runs of this session in another repository and of this repository, When the session-start scope is read, Then old repository runs and finished runs are left out"
       ],
+      "ancestors": [],
       "mutantHash": "a5956c6d308e40b80e76499bd2d5cc0e2bccbeeb66f2e8fe292df05d5cc0cd5f",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "review-progress-mine-ignores-session-tag": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given runs of two repositories and two sessions, When selected by run, tag, all or repository, Then exactly those runs are chosen"
       ],
+      "ancestors": [],
       "mutantHash": "da233b9d305a0da631b3b28c06a74b41089c9cc0e94e7bda61d9e85eff57a5c0",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "review-progress-commit-match-ignores-diff": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given a run of the same parent commit whose diff differs, When the reader is asked for a commit, Then that run is not matched"
       ],
+      "ancestors": [],
       "mutantHash": "d7bf92a8fa451c98165e68accecc872c43af930b31e6644a4f22e2db9e07ebf2",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "review-progress-quiet-kill-hint-dropped": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given a quiet run with a review pid, When its detail is printed, Then the kill hint names that pid and the kit says it stops nothing"
       ],
+      "ancestors": [],
       "mutantHash": "08888b53bb16f3cdef8db83724298e387213b0e1360764db12a257606e669415",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "review-progress-summary-line-not-empty": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given no unfinished runs, When the summary line is built, Then it is empty"
       ],
+      "ancestors": [],
       "mutantHash": "9e6b3593def1b4d21cd6fa1a736fc9dfd64560ff0887153b5c1cf8730800d867",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "review-progress-follow-exit-always-zero": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
-        "Given a run that blocked, When it is followed, Then the reader exits 1"
+        "Given a run whose runner is gone, When it is followed, Then the reader exits 3 and reports it as orphaned"
       ],
+      "ancestors": [],
       "mutantHash": "130e52068e99674102e849b1b213781e6bc3e2b3023de85ea21a5e8e7cbcccb3",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "review-progress-run-id-not-validated": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given the arguments, When they are parsed, Then unknown flags, malformed ids and a follow without a run are refused"
       ],
+      "ancestors": [],
       "mutantHash": "bed8636bc312df27921377d404b3ce43960004f280d484a0a36299ee30cd01fb",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "review-progress-session-tag-not-exported": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given the SessionStart input with a session id and an environment file, When the session starts, Then the id is exported as the run tag"
       ],
+      "ancestors": [],
       "mutantHash": "d741a94d5c80d58e227414d0768fbe4b1c73d6d41958e9a65d10e103ee09cb40",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "review-progress-session-id-unchecked": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given a session id that is not a plain token, When the session starts, Then nothing is written to the environment file"
       ],
+      "ancestors": [],
       "mutantHash": "df52b8296ceba9b8af2ba6618031d43ade9929348d220049d3a8ebb0c8a85da9",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "review-progress-summary-dropped": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given an installed reader, When the session starts, Then its summary is added to the context with the session tag in the environment"
       ],
+      "ancestors": [],
       "mutantHash": "c25a88d5ee54da3bf155197b02604bfd0d7f9326124c8075bef037693fe83225",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "review-progress-stdin-ignored": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given the SessionStart input on stdin, When it is read, Then the session id comes back"
       ],
+      "ancestors": [],
       "mutantHash": "0b2eb7af2db057196994ae721d65f2f813bee9bb8dbbc42b5f749ef414830c4f",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "review-progress-reader-exit-dropped": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given the reader in the installed plugin, When progress is asked, Then the bridge runs it with the same arguments and returns its exit code"
       ],
+      "ancestors": [],
       "mutantHash": "4788e60bfcc005e420f288517d621c594f05174393d6569bbe10fbbd5023b596",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "review-progress-old-plugin-not-refused": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given an OMP plugin that predates the reader, When progress is asked, Then the bridge exits 2 and asks for 0.20.0"
       ],
+      "ancestors": [],
       "mutantHash": "d742f8c4db53401649814ff6013e7d7e87b1e1590e064dc6b992898c4b90b54e",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "review-announce-line-dropped": {
       "testFile": "tests/review-announce.test.mjs",
@@ -4080,65 +4080,65 @@
     "review-progress-commit-colour-not-pinned": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
-        "Given a repository that drops diff prefixes by setting, When the reader is asked for a commit the kit reviewed, Then the run is found"
+        "Given a repository whose git colours diff output, When the reader is asked for a commit the kit reviewed, Then the run is found"
       ],
+      "ancestors": [],
       "mutantHash": "659c8befe3d4405084f72c772fb646253c5c7a1782c26e55c405e371f5b2297c",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "review-progress-run-json-branches-swapped": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given a quiet run, When its detail is requested by run id, Then the reader explains it and gives the review pid and exit 0"
       ],
+      "ancestors": [],
       "mutantHash": "53bd73ee9b9ca3cb66ae5c33e7dc2138a8ca0b4313ac6e7beb9b6f71124cfc03",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "review-progress-commit-outside-repo-exit-swapped": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given a folder outside any repository, When --commit is asked, Then the reader exits 2 and says a repository is needed"
       ],
+      "ancestors": [],
       "mutantHash": "58fce5537f2ae98c6e02526dc4f3e8b2d6bd17f4f0d69cc321b0deecb40838a5",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "review-progress-follow-repeats-unchanged-state": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given a run whose state does not change between polls, When it is followed, Then its active line is printed once"
       ],
+      "ancestors": [],
       "mutantHash": "f7b89a46c9e4ea25bcfd8e9e7e5f6c6c1c007c120d888deaa078b2a2e4a13d16",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "review-progress-commit-hash-prefixes-not-pinned": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given a repository that drops diff prefixes by setting, When the reader is asked for a commit the kit reviewed, Then the run is found"
       ],
+      "ancestors": [],
       "mutantHash": "f2226f9f6c318a10c82025c61dde7e2e69d704da4bdf11cd1332a113c98c4901",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "review-progress-commit-hash-binary-not-pinned": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given a commit that adds a binary file, When the reader is asked for it, Then the run is found with the binary bytes hashed"
       ],
+      "ancestors": [],
       "mutantHash": "5659b8d999be9caefa5535a34ad76069f094d6bb989112e0b2211f3909455662",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "review-progress-commit-hash-external-diff-not-pinned": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given a repository whose git runs an external diff tool, When the reader is asked for a commit the kit reviewed, Then the run is found"
       ],
+      "ancestors": [],
       "mutantHash": "2bae1df20f1aa544a08462b005b28077e30ce8a5f62dde24cfa2ff732d7f13a6",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "session-environment-file-failure-rethrown": {
       "testFile": "tests/review-progress.test.mjs",
@@ -4147,88 +4147,88 @@
       ],
       "ancestors": [],
       "mutantHash": "3a9d2c76f444dade09ccb6051abe9f00ad12bfd97dceeebb79685bd44bbe5758",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac"
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "session-failed-reader-output-kept": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given a reader that prints and then fails, When the session starts, Then its output is not added to the context"
       ],
+      "ancestors": [],
       "mutantHash": "99f7bd7f00e88af1cb50907077a424fa5222d475aa8501d76b12e307e906b9d0",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "session-terminal-input-read": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given a terminal instead of piped input, When the session input is read, Then nothing is read from it"
       ],
+      "ancestors": [],
       "mutantHash": "24ebcc8c3573b78c74f11985aebedc3faeaccb35275646b6196724ec84b02e88",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "session-input-null-returned": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given input that is not JSON or is JSON null, When it is read, Then the session input is empty"
       ],
+      "ancestors": [],
       "mutantHash": "93bd6262c454d4a60f94b7138981bd8f2c33509f8961dfaf1949e6d2ea02967d",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "progress-without-plugin-reports-success": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given no installed OMP plugin, When progress is asked, Then the bridge exits 2 with the setup hint and runs no reader"
       ],
+      "ancestors": [],
       "mutantHash": "00497d3ae73d00e3e9f399442ccafe37bae72892571740a05e76a0555294e5fb",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "dispatch-progress-drops-arguments": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given the installed reader, When the bridge runs progress with a flag it does not know, Then the reader receives exactly those arguments"
       ],
+      "ancestors": [],
       "mutantHash": "63cf6f16128ac7c0b950c8322f26eb04f16a2bf3f576a2d8b9d35071b56546f0",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "dispatch-session-drops-session-id": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given a SessionStart input with a session id, When the bridge session command runs as the hook, Then the id is exported as the run tag"
       ],
+      "ancestors": [],
       "mutantHash": "c9589a2d0375ac59db050b82c107d75e2b194e0cfa4d8590c51bcb091587e985",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "progress-command-empty-notice-dropped": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given a Git project without review runs, When /reviewer-kit:progress runs, Then one info notice says so"
       ],
+      "ancestors": [],
       "mutantHash": "cd04abd733fc5f4c70753d809989e24c94bf650537e17c0cb1f394aef7a28d06",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "progress-command-quiet-notice-not-warning": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given a Git project with a quiet run, When /reviewer-kit:progress runs, Then the notice is a warning"
       ],
+      "ancestors": [],
       "mutantHash": "0badde84fe77dc6a12e94bc6066d6b76bae93a03815ef97caaf59074180c16b3",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "progress-command-failure-not-error": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given an installer that fails, When /reviewer-kit:progress runs, Then the failure is an error notice"
       ],
+      "ancestors": [],
       "mutantHash": "d368713ddebf51114992ba2cd82a512ab8535991d1c0cd0d6e7289c5677907d7",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "layout-gate-drops-run-records-module": {
       "testFile": "tests/check-layout.test.mjs",
@@ -4311,11 +4311,11 @@
     "review-progress-torn-record-ends-follow": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
-        "Given a record that stays unreadable for a whole quiet period, When it is followed, Then the reader stops waiting and exits 3"
+        "Given a record that is half-written while it is followed, When the reader polls, Then it waits for the rewrite instead of exiting 1"
       ],
+      "ancestors": [],
       "mutantHash": "65df180267f515bd6ae57f55c1ec2248261a1afbe6673d7f1d1b543e263a0ce6",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "review-progress-unreadable-record-waits-forever": {
       "testFile": "tests/review-progress.test.mjs",
@@ -4324,25 +4324,25 @@
       ],
       "ancestors": [],
       "mutantHash": "95aaa65dd932f112c418504cadce08c55fc6ae97b1b4be25f0d8b267797ba27f",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac"
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "progress-command-not-git-notice-falls-through": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given a directory that is not a Git repository, When /reviewer-kit:progress runs, Then one warning says so and no run table follows"
       ],
+      "ancestors": [],
       "mutantHash": "169cd0649bf5557301c7e691a7671311e59afca5f709d74ff40a04c01e189f1f",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "progress-command-not-git-notice-not-warning": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given a directory that is not a Git repository, When /reviewer-kit:progress runs, Then one warning says so and no run table follows"
       ],
+      "ancestors": [],
       "mutantHash": "26da37f772f51e6bac3a075aa1a4d5064ad836a3576af95cc66f3c9d06837f64",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "announce-follow-printed-without-record": {
       "testFile": "tests/review-announce.test.mjs",
@@ -4471,34 +4471,34 @@
       ],
       "ancestors": [],
       "mutantHash": "c566c52dcb46ad6f74092ac23f585bb18fcc4fc2ae9991768a51334a4159284a",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac"
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "review-progress-unreadable-run-reported-absent": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given a run record that exists but cannot be read, When the reader is asked for that run, Then it exits 3 and does not report the run as absent"
       ],
+      "ancestors": [],
       "mutantHash": "7501b9ea73ba18ab5702948ef07aea306d7b1bcbf5a04d60525ffe0226c49f0f",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "review-progress-recent-unreadable-ignored": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given a record that cannot be read yet and was written just now, When the reader is asked for a commit no run matches, Then it exits 3 and asks for another try"
       ],
+      "ancestors": [],
       "mutantHash": "d14f9d954e8457b84caf8f563d6b2ba203aa63c5fc06678d9502f0a571a8feef",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "review-run-records-old-unreadable-waited-for": {
       "testFile": "tests/review-progress.test.mjs",
       "tests": [
         "Given a record that cannot be read and is older than the quiet period, When the reader is asked for a commit no run matches, Then it exits 1 as for an unreviewed commit"
       ],
+      "ancestors": [],
       "mutantHash": "70d24e2ae5e6919ee9bfbe984aa9098f45106f653eb63bf562bc102dc48e8589",
-      "testHash": "cfc82b3a3445b04bf6a99bb3fd4ce2dd5c427ce5838eb54e3b163e5950eb03ac",
-      "ancestors": []
+      "testHash": "599748865e39692b836906029bcd76362d310e6192c29dc6135b99a8f356966d"
     },
     "stub-missing-plugin-passes": {
       "testFile": "tests/runner-stub.test.mjs",
@@ -5425,7 +5425,7 @@
       ],
       "ancestors": [],
       "mutantHash": "a9805de182f6c6c5756aced482f4ee1d6466bb579b9bfa5b4dc4bc0a173ca497",
-      "testHash": "128f0517f5da4c19d6707ca8a4b3f5e5e2a2aa74abcb1691fd9179e7234ae17b"
+      "testHash": "dc10becb249aa09d3798b10fd70aaed2995098626f10eee30766d99b6c62de54"
     },
     "batch-abort": {
       "testFile": "tests/review-batch.test.mjs",
@@ -5434,7 +5434,7 @@
       ],
       "ancestors": [],
       "mutantHash": "6bbffeb98bb37eccb06cf383ab1e18a0d3859992442c1623c22550f2c3e00088",
-      "testHash": "128f0517f5da4c19d6707ca8a4b3f5e5e2a2aa74abcb1691fd9179e7234ae17b"
+      "testHash": "dc10becb249aa09d3798b10fd70aaed2995098626f10eee30766d99b6c62de54"
     },
     "scope-unresolved": {
       "testFile": "tests/review-batch.test.mjs",
@@ -5443,7 +5443,7 @@
       ],
       "ancestors": [],
       "mutantHash": "5d871b82103b8bc7781a1c126fe968a5063f5eed74ead3fcb5b57a5194689409",
-      "testHash": "128f0517f5da4c19d6707ca8a4b3f5e5e2a2aa74abcb1691fd9179e7234ae17b"
+      "testHash": "dc10becb249aa09d3798b10fd70aaed2995098626f10eee30766d99b6c62de54"
     },
     "modular-scout-empty-discovery": {
       "testFile": "tests/review-batch.test.mjs",
@@ -5452,7 +5452,7 @@
       ],
       "ancestors": [],
       "mutantHash": "1b97edb0338b59e118c5e979c0074a7d9c4b22013868edc2d4a4e1f75dcb7a3d",
-      "testHash": "128f0517f5da4c19d6707ca8a4b3f5e5e2a2aa74abcb1691fd9179e7234ae17b"
+      "testHash": "dc10becb249aa09d3798b10fd70aaed2995098626f10eee30766d99b6c62de54"
     },
     "runner-scout-empty-discovery": {
       "testFile": "tests/review-batch.test.mjs",
@@ -5461,25 +5461,25 @@
       ],
       "ancestors": [],
       "mutantHash": "039c2dbd169051eacee90add9596404b3e7e4b2d95fc73d7d707337faa2b681f",
-      "testHash": "128f0517f5da4c19d6707ca8a4b3f5e5e2a2aa74abcb1691fd9179e7234ae17b"
+      "testHash": "dc10becb249aa09d3798b10fd70aaed2995098626f10eee30766d99b6c62de54"
     },
     "modular-verifier-block-ignored": {
       "testFile": "tests/review-gate.test.mjs",
       "tests": [
         "source: Given verifier coverage, When synthesis incorrectly returns PASS, Then completion evidence blocks approval"
       ],
+      "ancestors": [],
       "mutantHash": "fa69643ec1bc613a0a5469e122eaac4a20693fdf1a8f47b146f854069f08d83b",
-      "testHash": "75061d6cdce9a3549247971080a033f50082396696c7bf83a276431b8ec48e9a",
-      "ancestors": []
+      "testHash": "770a3de9f2f387fb1b7cc55cf74b29301b26b53bd3af29a32c733774f708171c"
     },
     "runner-verifier-block-ignored": {
       "testFile": "tests/review-gate.test.mjs",
       "tests": [
-        "bundle: Given verifier coverage, When synthesis incorrectly returns PASS, Then completion evidence blocks approval"
+        "bundle: Given verifier findings, When synthesis incorrectly returns PASS, Then completion evidence blocks approval"
       ],
+      "ancestors": [],
       "mutantHash": "41171dd305eb9b8518e068f7d3e7d7396b28a211df5b38841aa6051b69e47176",
-      "testHash": "75061d6cdce9a3549247971080a033f50082396696c7bf83a276431b8ec48e9a",
-      "ancestors": []
+      "testHash": "770a3de9f2f387fb1b7cc55cf74b29301b26b53bd3af29a32c733774f708171c"
     },
     "modular-reverted-snapshot-deleted": {
       "testFile": "tests/execution-evidence.test.mjs",
@@ -5504,36 +5504,36 @@
       "tests": [
         "Given authoritative hunter outputs, When verifier confirms or omits them, Then gate records blocking evidence or failure"
       ],
+      "ancestors": [],
       "mutantHash": "0660bab1249b99f39154853d268113d58daf9d189f4cb2161fd7a9e30b4989de",
-      "testHash": "75061d6cdce9a3549247971080a033f50082396696c7bf83a276431b8ec48e9a",
-      "ancestors": []
+      "testHash": "770a3de9f2f387fb1b7cc55cf74b29301b26b53bd3af29a32c733774f708171c"
     },
     "gate-verifier-dispositions-ignored": {
       "testFile": "tests/review-gate.test.mjs",
       "tests": [
         "Given authoritative hunter outputs, When verifier confirms or omits them, Then gate records blocking evidence or failure"
       ],
+      "ancestors": [],
       "mutantHash": "272e73d7b45c4ba8340de3273129fef4c323ef7327946dbc3543bfb9efc129fd",
-      "testHash": "75061d6cdce9a3549247971080a033f50082396696c7bf83a276431b8ec48e9a",
-      "ancestors": []
+      "testHash": "770a3de9f2f387fb1b7cc55cf74b29301b26b53bd3af29a32c733774f708171c"
     },
     "review-gate-plugin-root-omitted": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
       "tests": [
-        "src adapter: gated reviews load agents from the gate's own plugin root without model overrides"
+        "src adapter: gated reviews load their own agents and select the native task role"
       ],
       "ancestors": [],
       "mutantHash": "cc9616ffc0c315985dde4e1a18e396711941d63abd9fdd2f707118275dd83072",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "runner-gate-plugin-root-omitted": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
       "tests": [
-        "runner copy: gated reviews load agents from the gate's own plugin root without model overrides"
+        "runner copy: gated reviews load their own agents and select the native task role"
       ],
       "ancestors": [],
       "mutantHash": "311450730d5764a17d5171048a7ae1e1500918a52b84a5691249f28410f392ab",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "superseded-excluded-workers-unprotected": {
       "testFile": "tests/superseded-runs.test.mjs",
@@ -5549,27 +5549,27 @@
       "tests": [
         "Given two planned flat scouts, When only one finishes, Then hunting stays blocked until the merged scope is complete"
       ],
+      "ancestors": [],
       "mutantHash": "0a63936dfadcea0b9a1a8dc6793fd9d92c84abfd46cfddc6a0fe56c9fe0113ff",
-      "testHash": "75061d6cdce9a3549247971080a033f50082396696c7bf83a276431b8ec48e9a",
-      "ancestors": []
+      "testHash": "770a3de9f2f387fb1b7cc55cf74b29301b26b53bd3af29a32c733774f708171c"
     },
     "modular-review-ambient-agents-not-isolated": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
       "tests": [
-        "src adapter: gated reviews load agents from the gate's own plugin root without model overrides"
+        "src adapter: gated reviews load their own agents and select the native task role"
       ],
       "ancestors": [],
       "mutantHash": "043433c652c07eec8590dd4be96299980c3a4c7b341a2880b68525cd47839556",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "runner-review-ambient-agents-not-isolated": {
       "testFile": "tests/report-artifact-recovery.test.mjs",
       "tests": [
-        "runner copy: gated reviews load agents from the gate's own plugin root without model overrides"
+        "runner copy: gated reviews load their own agents and select the native task role"
       ],
       "ancestors": [],
       "mutantHash": "c59175d0310addaf0a170044da52a0ae04564f7bf42d694292d89e39ba2c054b",
-      "testHash": "0c6bdfa4e8d772ff4df69a47c40a95b5febb8ee6d50c4367bc489c9bf70ac5a0"
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
     },
     "modular-scout-field-ownership-instruction-omitted": {
       "testFile": "tests/review-batch.test.mjs",
@@ -5578,7 +5578,7 @@
       ],
       "ancestors": [],
       "mutantHash": "25920885139e60f3f50795f68b7c43a484a211312ecfceae8e405a5018ddcac4",
-      "testHash": "128f0517f5da4c19d6707ca8a4b3f5e5e2a2aa74abcb1691fd9179e7234ae17b"
+      "testHash": "dc10becb249aa09d3798b10fd70aaed2995098626f10eee30766d99b6c62de54"
     },
     "runner-scout-field-ownership-instruction-omitted": {
       "testFile": "tests/review-batch.test.mjs",
@@ -5587,7 +5587,322 @@
       ],
       "ancestors": [],
       "mutantHash": "2f8942dedbab806d12a613a70cd898fb182ddccf794ac2ac96cbf05830e2143a",
-      "testHash": "128f0517f5da4c19d6707ca8a4b3f5e5e2a2aa74abcb1691fd9179e7234ae17b"
+      "testHash": "dc10becb249aa09d3798b10fd70aaed2995098626f10eee30766d99b6c62de54"
+    },
+    "reviewer-kit-task-role-identity-omitted": {
+      "testFile": "tests/agent-contract.test.mjs",
+      "tests": [
+        "all review agents select the native task role without pinning a concrete model"
+      ],
+      "ancestors": [],
+      "mutantHash": "4a7e2cc23d5469093b6e95e47e9f1b332e2512b9f36c1ad96af7ed6cf8261a7b",
+      "testHash": "257f3a6641660d1dbc1936f3908df1e592cc6b92b7d4ce1ce18ea4f2aab1eef4"
+    },
+    "review-context-scout-task-role-identity-omitted": {
+      "testFile": "tests/agent-contract.test.mjs",
+      "tests": [
+        "all review agents select the native task role without pinning a concrete model"
+      ],
+      "ancestors": [],
+      "mutantHash": "a6d8bf4cf7f1a486c609331be088bc71a081ddff38d7e39a84221c7d99abc3a0",
+      "testHash": "257f3a6641660d1dbc1936f3908df1e592cc6b92b7d4ce1ce18ea4f2aab1eef4"
+    },
+    "review-risk-hunter-task-role-identity-omitted": {
+      "testFile": "tests/agent-contract.test.mjs",
+      "tests": [
+        "all review agents select the native task role without pinning a concrete model"
+      ],
+      "ancestors": [],
+      "mutantHash": "a8a3a73e548e23238b99cf709dcc3004bb95c85bdb4204c1aeb06f657f1f495e",
+      "testHash": "257f3a6641660d1dbc1936f3908df1e592cc6b92b7d4ce1ce18ea4f2aab1eef4"
+    },
+    "review-finding-verifier-task-role-identity-omitted": {
+      "testFile": "tests/agent-contract.test.mjs",
+      "tests": [
+        "all review agents select the native task role without pinning a concrete model"
+      ],
+      "ancestors": [],
+      "mutantHash": "d80f0995452fdea2f2c8453db7e85f82695d31baaae2ee88d783a622cd6db0ed",
+      "testHash": "257f3a6641660d1dbc1936f3908df1e592cc6b92b7d4ce1ce18ea4f2aab1eef4"
+    },
+    "modular-task-role-selection-omitted": {
+      "testFile": "tests/report-artifact-recovery.test.mjs",
+      "tests": [
+        "src adapter: gated reviews load their own agents and select the native task role"
+      ],
+      "ancestors": [],
+      "mutantHash": "e26d49da183e6d91a0f2cc7d1493012e91aa73dc797dc29d7fb57d719cb1499e",
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
+    },
+    "runner-task-role-selection-omitted": {
+      "testFile": "tests/report-artifact-recovery.test.mjs",
+      "tests": [
+        "runner copy: gated reviews load their own agents and select the native task role"
+      ],
+      "ancestors": [],
+      "mutantHash": "809215a876ce3ebb08da2968fe0a7c3aa70865ccbaa50fe91f2630fc9c779f43",
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
+    },
+    "modular-verified-block-payload-lost": {
+      "testFile": "tests/review-gate.test.mjs",
+      "tests": [
+        "source: Given native verified findings valid, Then preserve a substantive BLOCK only with complete successful provenance"
+      ],
+      "ancestors": [],
+      "mutantHash": "ff1036be8df4fac15f2aa4ff6a1f5ba062489966dd29ebd1d40e69e45607e9a2",
+      "testHash": "770a3de9f2f387fb1b7cc55cf74b29301b26b53bd3af29a32c733774f708171c"
+    },
+    "modular-nonzero-verifier-rescued": {
+      "testFile": "tests/review-gate.test.mjs",
+      "tests": [
+        "source: Given native verified findings timeout, Then preserve a substantive BLOCK only with complete successful provenance"
+      ],
+      "ancestors": [],
+      "mutantHash": "91eb6ce7dbafdf1e9649f323b1a154ec56e2c2f3dfff6d258362d9077ab9f943",
+      "testHash": "770a3de9f2f387fb1b7cc55cf74b29301b26b53bd3af29a32c733774f708171c"
+    },
+    "modular-structured-overlay-omitted": {
+      "testFile": "tests/report-artifact-recovery.test.mjs",
+      "tests": [
+        "src adapter: gated reviews load their own agents and select the native task role"
+      ],
+      "ancestors": [],
+      "mutantHash": "aa9e581c343cb52a9214f988f3492c286b58f8b711bc8cca0cc4205eff4005c4",
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
+    },
+    "runner-verified-block-payload-lost": {
+      "testFile": "tests/review-gate.test.mjs",
+      "tests": [
+        "bundle: Given native verified findings valid, Then preserve a substantive BLOCK only with complete successful provenance"
+      ],
+      "ancestors": [],
+      "mutantHash": "f6ad51f1b7b7b214cb593198eb96089d763dbc86fe4930190ca6045e40e378ee",
+      "testHash": "770a3de9f2f387fb1b7cc55cf74b29301b26b53bd3af29a32c733774f708171c"
+    },
+    "runner-nonzero-verifier-rescued": {
+      "testFile": "tests/review-gate.test.mjs",
+      "tests": [
+        "bundle: Given native verified findings timeout, Then preserve a substantive BLOCK only with complete successful provenance"
+      ],
+      "ancestors": [],
+      "mutantHash": "9f47d809f24e9f498616dff5899728df22916f3af4c0a0fd1810d1d8b8a42249",
+      "testHash": "770a3de9f2f387fb1b7cc55cf74b29301b26b53bd3af29a32c733774f708171c"
+    },
+    "verifier-behavior-validation-omitted": {
+      "testFile": "tests/review-gate.test.mjs",
+      "tests": [
+        "source: Given native verified findings malformed, Then preserve a substantive BLOCK only with complete successful provenance"
+      ],
+      "ancestors": [],
+      "mutantHash": "4392dfcb1af53372891a3027fa077dc5b45955cfaca9d775eb4d3526702bc0c7",
+      "testHash": "770a3de9f2f387fb1b7cc55cf74b29301b26b53bd3af29a32c733774f708171c"
+    },
+    "runner-structured-overlay-omitted": {
+      "testFile": "tests/report-artifact-recovery.test.mjs",
+      "tests": [
+        "runner copy: gated reviews load their own agents and select the native task role"
+      ],
+      "ancestors": [],
+      "mutantHash": "0797ab6a062a5458d888dfd6e4f0573b7847a2acf7306b9ee8c99665cc3dd1e2",
+      "testHash": "06886e3a4d38a35579fb50e0723754750133fbe87b93dd27416475c461488387"
+    },
+    "modular-orchestrator-solution-space-lost": {
+      "testFile": "tests/review-batch.test.mjs",
+      "tests": [
+        "source: Given native solution-space metadata, When dispatching every review stage, Then preserve the field without changing model policy"
+      ],
+      "ancestors": [],
+      "mutantHash": "b22a71eed8b43c885e0e7c96f5d90d501c7126f294134ceedc58ad310245d507",
+      "testHash": "dc10becb249aa09d3798b10fd70aaed2995098626f10eee30766d99b6c62de54"
+    },
+    "modular-specialist-solution-space-lost": {
+      "testFile": "tests/review-batch.test.mjs",
+      "tests": [
+        "source: Given native solution-space metadata, When dispatching every review stage, Then preserve the field without changing model policy"
+      ],
+      "ancestors": [],
+      "mutantHash": "eb0a466921172af0167f46e685a4fe89ac6f59128fde8c3532050346f3406bbb",
+      "testHash": "dc10becb249aa09d3798b10fd70aaed2995098626f10eee30766d99b6c62de54"
+    },
+    "runner-orchestrator-solution-space-lost": {
+      "testFile": "tests/review-batch.test.mjs",
+      "tests": [
+        "bundle: Given native solution-space metadata, When dispatching every review stage, Then preserve the field without changing model policy"
+      ],
+      "ancestors": [],
+      "mutantHash": "e0a3a6da8f5a872d2f6044b037f7adb47b260878465e4357fa48cdbac5902caf",
+      "testHash": "dc10becb249aa09d3798b10fd70aaed2995098626f10eee30766d99b6c62de54"
+    },
+    "runner-specialist-solution-space-lost": {
+      "testFile": "tests/review-batch.test.mjs",
+      "tests": [
+        "bundle: Given native solution-space metadata, When dispatching every review stage, Then preserve the field without changing model policy"
+      ],
+      "ancestors": [],
+      "mutantHash": "e38dc562d178c691e11586f5ac5bfee30d90c2d7eb8c8d921755b0c60af55ad4",
+      "testHash": "dc10becb249aa09d3798b10fd70aaed2995098626f10eee30766d99b6c62de54"
+    },
+    "modular-outage-task-role-reverted": {
+      "testFile": "tests/native-task-release-coverage.test.mjs",
+      "tests": [
+        "Given a provider-outage diagnostic, When formatted directly, Then task-role guidance is actionable and marker-free"
+      ],
+      "ancestors": [],
+      "mutantHash": "9749d57164d657aeca835188758f8bfb8db01c5a9709ef5b36abfdd6babe80cc",
+      "testHash": "f79ce107f2034f8f973105985a7df0dbf6b73bb674bca67ad33f7c3c4cac0d4b"
+    },
+    "runner-outage-task-role-reverted": {
+      "testFile": "tests/native-task-release-coverage.test.mjs",
+      "tests": [
+        "bundle: Given HTTP 429 during preflight, When review is blocked, Then remediation names the task role rather than the default role"
+      ],
+      "ancestors": [],
+      "mutantHash": "1817d88b1233f8d53c7ad02b7d4d891ac3e266f1e865f6a07244a3093efaf94c",
+      "testHash": "f79ce107f2034f8f973105985a7df0dbf6b73bb674bca67ad33f7c3c4cac0d4b"
+    },
+    "modular-native-dispatch-shape-omitted": {
+      "testFile": "tests/native-task-release-coverage.test.mjs",
+      "tests": [
+        "source: Given a native task dispatch, When the child reads stdin, Then receive task shape and conditional solutionSpace without policy overrides"
+      ],
+      "ancestors": [],
+      "mutantHash": "083ad8c666214f690f4cf63746c186456ea372877b92d5ceb8713801bc43a4fc",
+      "testHash": "f79ce107f2034f8f973105985a7df0dbf6b73bb674bca67ad33f7c3c4cac0d4b"
+    },
+    "runner-native-dispatch-shape-omitted": {
+      "testFile": "tests/native-task-release-coverage.test.mjs",
+      "tests": [
+        "bundle: Given a native task dispatch, When the child reads stdin, Then receive task shape and conditional solutionSpace without policy overrides"
+      ],
+      "ancestors": [],
+      "mutantHash": "150669700333d96e731269e61b4b1d3982ac93836b001e5566b67dd57dd0af4b",
+      "testHash": "f79ce107f2034f8f973105985a7df0dbf6b73bb674bca67ad33f7c3c4cac0d4b"
+    },
+    "native-task-catalog-contract-removed": {
+      "testFile": "tests/native-task-release-coverage.test.mjs",
+      "tests": [
+        "Given the native-task release catalog, When loading mutants and selectors, Then every new contract has unique presence and its intended deciding test"
+      ],
+      "ancestors": [],
+      "mutantHash": "5da997d3c2a041ea2caeddc61d02aacb90dd5104c723d7213a7a282d593aa72a",
+      "testHash": "f79ce107f2034f8f973105985a7df0dbf6b73bb674bca67ad33f7c3c4cac0d4b"
+    },
+    "runner-verified-block-stderr-unquoted": {
+      "testFile": "tests/verifier-block-production.test.mjs",
+      "tests": [
+        "bundle: Given confirmed P2 and marker-bearing stderr, When synthesis says PASS, Then the full workflow blocks without a permissive reemit"
+      ],
+      "ancestors": [],
+      "mutantHash": "395a840e97c54183a410ac171b5ea1919620b978769126f51fba9193a519ce6c",
+      "testHash": "90d5edd464e06e82ab0b4b9e19b56273d9be53d1a37f739bba4601bf6b8ca27d"
+    },
+    "modular-verified-block-terminal-repair-omitted": {
+      "testFile": "tests/verifier-block-production.test.mjs",
+      "tests": [
+        "source: Given confirmed P2 and marker-bearing stderr, When synthesis says PASS, Then the full workflow blocks without a permissive reemit"
+      ],
+      "ancestors": [],
+      "mutantHash": "24a05f796827344ebbfa69cfbf3f854fa6d83b8929cef8df825f3b68d167c56e",
+      "testHash": "90d5edd464e06e82ab0b4b9e19b56273d9be53d1a37f739bba4601bf6b8ca27d"
+    },
+    "modular-verified-block-stderr-unquoted": {
+      "testFile": "tests/verifier-block-production.test.mjs",
+      "tests": [
+        "source: Given confirmed P2 and marker-bearing stderr, When synthesis says PASS, Then the full workflow blocks without a permissive reemit"
+      ],
+      "ancestors": [],
+      "mutantHash": "f7c93bd0b47029aa51d8cc554412bb6bf9ac7907247b33399afa4b8519f61576",
+      "testHash": "90d5edd464e06e82ab0b4b9e19b56273d9be53d1a37f739bba4601bf6b8ca27d"
+    },
+    "runner-verified-block-terminal-repair-omitted": {
+      "testFile": "tests/verifier-block-production.test.mjs",
+      "tests": [
+        "bundle: Given confirmed P2 and marker-bearing stderr, When synthesis says PASS, Then the full workflow blocks without a permissive reemit"
+      ],
+      "ancestors": [],
+      "mutantHash": "c5532190920cea0cd687c593ca788ef4e3eba9e4195b0abc68083ac71eaa005d",
+      "testHash": "90d5edd464e06e82ab0b4b9e19b56273d9be53d1a37f739bba4601bf6b8ca27d"
+    },
+    "runner-verified-block-untrusted-flag": {
+      "testFile": "tests/verifier-block-production.test.mjs",
+      "tests": [
+        "bundle: Given an unverified runner repair flag, When ordinary output has conflicting stderr, Then do not quote away the conflict"
+      ],
+      "ancestors": [],
+      "mutantHash": "36ecc9c8b1fd4be7236521ab8a86e7718be30b3f80afc23aee9689838d951f5c",
+      "testHash": "90d5edd464e06e82ab0b4b9e19b56273d9be53d1a37f739bba4601bf6b8ca27d"
+    },
+    "modular-verified-block-untrusted-flag": {
+      "testFile": "tests/verifier-block-production.test.mjs",
+      "tests": [
+        "source: Given an unverified runner repair flag, When ordinary output has conflicting stderr, Then do not quote away the conflict"
+      ],
+      "ancestors": [],
+      "mutantHash": "e3d0e3d1c5d37810752f0ee30aa95f40cd381cbda7473497e10f965f161ecc5b",
+      "testHash": "90d5edd464e06e82ab0b4b9e19b56273d9be53d1a37f739bba4601bf6b8ca27d"
+    },
+    "modular-verifier-absent-harness-blocks": {
+      "testFile": "tests/release-final-coverage.test.mjs",
+      "tests": [
+        "source: Given coverage-only verifier data, When the harness is absent, Then fromVerifier returns no coverage BLOCK"
+      ],
+      "ancestors": [],
+      "mutantHash": "8cbea1148877a5905b3ada9f88a7f7e9f951333f06344ed257555f21bb16bd22",
+      "testHash": "ea5f260a326418268c2973ae408b2ea83efcb5883413640eae1b92df196eef41"
+    },
+    "gate-verifier-data-not-persisted": {
+      "testFile": "tests/release-final-coverage.test.mjs",
+      "tests": [
+        "bundle: Given absent-coverage, When real native tool handlers complete the stages, Then persisted verifierData drives the verdict"
+      ],
+      "ancestors": [],
+      "mutantHash": "26531ceddbcbce36d5b0af5fb5ba34a4583c78262f78f71920cf869d38bfb4d6",
+      "testHash": "ea5f260a326418268c2973ae408b2ea83efcb5883413640eae1b92df196eef41"
+    },
+    "runner-verifier-absent-harness-blocks": {
+      "testFile": "tests/release-final-coverage.test.mjs",
+      "tests": [
+        "bundle: Given coverage-only verifier data, When the harness is absent, Then fromVerifier returns no coverage BLOCK"
+      ],
+      "ancestors": [],
+      "mutantHash": "b473ef51269de97e3c5bc8ef8d8d871b020e489b8ab2fe959bbae0f411b087d5",
+      "testHash": "ea5f260a326418268c2973ae408b2ea83efcb5883413640eae1b92df196eef41"
+    },
+    "scout-bounded-unresolved-contract-removed": {
+      "testFile": "tests/release-final-coverage.test.mjs",
+      "tests": [
+        "Given bounded scout discovery, When reading the prompt contract, Then completion distinguishes unfinished inspection from epistemic unknowns"
+      ],
+      "ancestors": [],
+      "mutantHash": "bffbddf52cdb8241630865f592341ee7ccecc3fad6e5c17123bf2bc9a6f95722",
+      "testHash": "ea5f260a326418268c2973ae408b2ea83efcb5883413640eae1b92df196eef41"
+    },
+    "orchestrator-native-required-shape-removed": {
+      "testFile": "tests/release-final-coverage.test.mjs",
+      "tests": [
+        "Given the native task schema, When reading the orchestrator prompt contract, Then required assignment shape is explicit without model or schema overrides"
+      ],
+      "ancestors": [],
+      "mutantHash": "d3cf2f697506bb2f1fef8ff2660b6183821fcc2d428579d42bd784ed56bd930b",
+      "testHash": "ea5f260a326418268c2973ae408b2ea83efcb5883413640eae1b92df196eef41"
+    },
+    "runner-verifier-inferred-timeout-ignored": {
+      "testFile": "tests/verifier-timeout-recovery.test.mjs",
+      "tests": [
+        "bundle: Given inferred max-time expiry, When a PASS artifact is recovered with complete blocking verifier evidence, Then fail without substantive repair"
+      ],
+      "ancestors": [],
+      "mutantHash": "b0b03eb71066892c1da71b0d01cfe23676cd1983adc7837117a761274bdea332",
+      "testHash": "5672e7c330ebb7006000c3ba9ba60b2d946a6309245c8668c38ae9188d4701d2"
+    },
+    "modular-verifier-inferred-timeout-ignored": {
+      "testFile": "tests/verifier-timeout-recovery.test.mjs",
+      "tests": [
+        "source: Given inferred max-time expiry, When a PASS artifact is recovered with complete blocking verifier evidence, Then fail without substantive repair"
+      ],
+      "ancestors": [],
+      "mutantHash": "2a3871ff0a0f7173e62181410d0d6eb4ff5d34fc3b30b32a981b66f3423a0cba",
+      "testHash": "5672e7c330ebb7006000c3ba9ba60b2d946a6309245c8668c38ae9188d4701d2"
     }
   }
 }

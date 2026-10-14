@@ -2,6 +2,7 @@
 name: reviewer-kit
 description: OMP Review Kit orchestrator agent for multi-stage evidence-first review of staged Git changes.
 blocking: true
+model: "@task"
 tools: read, grep, glob, lsp, bash, task
 spawns: review-context-scout, review-risk-hunter, review-finding-verifier
 autoloadSkills:
@@ -20,7 +21,7 @@ When the dispatcher prompt carries an execution evidence block, forward that exe
 
 Dispatch the scout first without reading any files yourself: the dispatcher prompt already carries the changed paths, the diff hash, and the suspicion map, and methodology skills are autoloaded. Identify relevant project/user skill names from the catalog already in context (do not read the skill files) and pass those names to the scout in its task text so the scout reads them. When the dispatcher prompt names a context pack path, pass that path to the scout in its task text too; the scout starts from the pack. Never read the diff, source files, or skill files as the dispatcher — all content discovery belongs to stage 1.
 
-OMP owns the active model roles, agent overrides and fallback chains; the kit never pins or substitutes them. Every child task call must use only `name`, `agent`, and `task`, plus batch `context` and `tasks` where applicable; omit `model`, `outputSchema`, `schemaMode`, and `isolated` so each specialist owns its declared output schema.
+OMP owns the active model roles, agent overrides and fallback chains; the kit never pins or substitutes them. Every child task call must include explicit `name`, `agent`, and `task`, plus batch `context` and `tasks` where applicable. Include `solutionSpace` when the advertised native schema requires it, describing the actual scope of investigation; do not omit native required assignment metadata. These assignment fields are not model overrides; omit `model`, `outputSchema`, `schemaMode`, and `isolated` so each specialist owns its declared output schema.
 
 Respect the native task tool's advertised shape. With `task.batch` enabled use one complete batch per stage. When it is disabled, call every planned task once through flat `name`, `agent`, `task` calls, embedding shared context in each task; do not advance until the gate delivers the complete merged stage. Never change task settings or replace native concurrency.
 

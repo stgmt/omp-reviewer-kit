@@ -4393,6 +4393,32 @@ const MUTANTS = [
     id: `${file === 'scripts/run-review.mjs' ? 'runner' : 'modular'}-review-ambient-agents-not-isolated`, file, testFile: 'tests/report-artifact-recovery.test.mjs',
     original: "commandArgs.push('--no-extensions', '--plugin-dir',", replacement: "commandArgs.push('--plugin-dir',", description: 'Older installed agents shadow the current review schemas',
   })),
+  ...['src/infra/omp-cli-reviewer-adapter.mjs', 'scripts/run-review.mjs'].map((file) => ({
+    id: `${file === 'scripts/run-review.mjs' ? 'runner' : 'modular'}-task-role-selection-omitted`, file, testFile: 'tests/report-artifact-recovery.test.mjs',
+    original: "['-p', '--model', '@task',", replacement: "['-p',", description: 'Review child and probes fall back to the unrelated global default role',
+  })),
+  ...['src/infra/omp-cli-reviewer-adapter.mjs', 'scripts/run-review.mjs'].flatMap((file) => [
+    {
+      id: `${file === 'scripts/run-review.mjs' ? 'runner' : 'modular'}-structured-overlay-omitted`, file, testFile: 'tests/report-artifact-recovery.test.mjs',
+      original: "commandArgs.push('--config', `${extraEnv.OMP_REVIEW_KIT_BATCH_MANIFEST}.config.yml`);", replacement: 'void extraEnv;', description: 'Native tasks lose agent schemas when OMP defaults to plain text',
+    },
+    {
+      id: `${file === 'scripts/run-review.mjs' ? 'runner' : 'modular'}-verified-block-payload-lost`, file, testFile: 'tests/review-gate.test.mjs',
+      original: 'ReviewRejectionEnvelope.fromVerifier(verifier?.verifierData, diffHash,', replacement: 'ReviewRejectionEnvelope.fromVerifier(undefined, diffHash,', description: 'Confirmed findings disappear into infrastructure failure',
+    },
+    {
+      id: `${file === 'scripts/run-review.mjs' ? 'runner' : 'modular'}-nonzero-verifier-rescued`, file, testFile: 'tests/review-gate.test.mjs',
+      original: 'result?.status === 0 && outcome?.status === 0 && !result?.timedOut', replacement: 'true', description: 'Verifier report masks a failed process or incomplete stage',
+    },
+  ]),
+  {
+    id: 'verifier-behavior-validation-omitted', file: 'src/domain/review-rejection-envelope.mjs', testFile: 'tests/review-gate.test.mjs',
+    original: "['candidate_id', 'title', 'observed_behavior', 'expected_behavior', 'trigger_scenario', 'impact']", replacement: "['candidate_id', 'title', 'expected_behavior', 'trigger_scenario', 'impact']", description: 'Malformed verifier data is admitted without observed behavior',
+  },
+  ...['reviewer-kit', 'review-context-scout', 'review-risk-hunter', 'review-finding-verifier'].map((agent) => ({
+    id: `${agent}-task-role-identity-omitted`, file: `agents/${agent}.md`, testFile: 'tests/agent-contract.test.mjs',
+    original: 'model: "@task"\n', replacement: '', description: 'Review agent loses task-role fallback identity and inherits default fallbacks',
+  })),
   ...['src/domain/review-batch.mjs', 'scripts/run-review.mjs'].map((file) => ({
     id: `${file === 'scripts/run-review.mjs' ? 'runner' : 'modular'}-scout-field-ownership-instruction-omitted`, file, testFile: 'tests/review-batch.test.mjs',
     original: 'changed_paths and completion.completed_paths must contain exactly the primary owned paths', replacement: 'Use every changed path in the full diff', description: 'Scoped scouts are not told which report fields are ownership-bound',
@@ -4401,6 +4427,56 @@ const MUTANTS = [
     id: 'superseded-excluded-workers-unprotected', file: 'src/application/superseded-run-stopper.mjs', testFile: 'tests/superseded-runs.test.mjs',
     original: "    && !(typeof record.repoRoot === 'string' && isSkippedTarget(record.repoRoot))\n", replacement: '', description: 'Excluded worker reviews are stopped by plugin maintenance',
   },
+  ...['src/domain/review-batch.mjs', 'scripts/run-review.mjs'].flatMap((file) => ['tasks[0]', 'task'].map((item) => ({
+    id: `${file === 'scripts/run-review.mjs' ? 'runner' : 'modular'}-${item === 'task' ? 'specialist' : 'orchestrator'}-solution-space-lost`, file, testFile: 'tests/review-batch.test.mjs',
+    original: `...(typeof ${item}.solutionSpace === 'string' ? { solutionSpace: ${item}.solutionSpace } : {}),`, replacement: '', description: 'Gate drops native required assignment metadata',
+  }))),
+  ...['src/infra/omp-cli-reviewer-adapter.mjs', 'scripts/run-review.mjs'].map((file) => ({
+    id: `${file === 'scripts/run-review.mjs' ? 'runner' : 'modular'}-native-dispatch-shape-omitted`, file, testFile: 'tests/native-task-release-coverage.test.mjs',
+    original: 'Use the advertised native task shape with explicit name, agent and task, plus shared context/tasks for batch mode. Include solutionSpace when required by that schema. ', replacement: '', description: 'Dispatch loses native task shape and required solutionSpace guidance',
+  })),
+  ...['src/infra/filesystem-telemetry-adapter.mjs', 'scripts/run-review.mjs'].map((file) => ({
+    id: `${file === 'scripts/run-review.mjs' ? 'runner' : 'modular'}-outage-task-role-reverted`, file, testFile: 'tests/native-task-release-coverage.test.mjs',
+    original: 'task model role', replacement: 'default model role', description: 'Outage remediation points to the wrong model role',
+  })),
+  {
+    id: 'native-task-catalog-contract-removed', file: 'scripts/run-mutation-tests.mjs', testFile: 'tests/native-task-release-coverage.test.mjs',
+    original: ['-task-role-selection-', 'omitted'].join(''), replacement: '-retired-task-role-selection', description: 'A mandatory native task-role mutation disappears from the catalog',
+  },
+  ...['src/infra/omp-cli-reviewer-adapter.mjs', 'scripts/run-review.mjs'].flatMap((file) => [
+    {
+      id: `${file === 'scripts/run-review.mjs' ? 'runner' : 'modular'}-verified-block-untrusted-flag`, file, testFile: 'tests/verifier-block-production.test.mjs',
+      original: 'let outcome = { ...result, verifiedBlockRepair: false };', replacement: 'let outcome = { ...result };', description: 'Unverified runner metadata can hide conflicting stderr verdicts',
+    },
+    {
+      id: `${file === 'scripts/run-review.mjs' ? 'runner' : 'modular'}-verified-block-terminal-repair-omitted`, file, testFile: 'tests/verifier-block-production.test.mjs',
+      original: 'verifiedBlockRepair: true,', replacement: 'verifiedBlockRepair: false,', description: 'Verified BLOCK loses terminal-marker serialization in combined output',
+    },
+    {
+      id: `${file === 'scripts/run-review.mjs' ? 'runner' : 'modular'}-verified-block-stderr-unquoted`, file, testFile: 'tests/verifier-block-production.test.mjs',
+      original: "sanitizedStderr.split(/\\r?\\n/).map((line) => `> ${line}`).join('\\n')", replacement: 'sanitizedStderr', description: 'Child stderr markers corrupt the authoritative verifier BLOCK',
+    },
+  ]),
+  ...['src/domain/review-rejection-envelope.mjs', 'scripts/run-review.mjs'].map((file) => ({
+    id: `${file === 'scripts/run-review.mjs' ? 'runner' : 'modular'}-verifier-absent-harness-blocks`, file, testFile: 'tests/release-final-coverage.test.mjs',
+    original: 'return harnessPresent ? coverage : null;', replacement: 'return coverage;', description: 'Coverage-only verifier evidence blocks without a runnable harness',
+  })),
+  {
+    id: 'gate-verifier-data-not-persisted', file: 'src/infra/review-batch-extension.mjs', testFile: 'tests/release-final-coverage.test.mjs',
+    original: "...(stage === 'review-finding-verifier' ? { verifierData: ordered[0].structuredOutput.data } : {}),", replacement: '...{},', description: 'Actual native completion producer drops authoritative verifier evidence',
+  },
+  {
+    id: 'scout-bounded-unresolved-contract-removed', file: 'agents/review-context-scout.md', testFile: 'tests/release-final-coverage.test.mjs',
+    original: '`completion.unresolved` is for unfinished required inspection of the supplied snapshot (an unread owned path, a failed necessary query, or unexamined deciding evidence), not every epistemic unknown.', replacement: '', description: 'Scout loses the boundary between unfinished inspection and unknown external consumers',
+  },
+  {
+    id: 'orchestrator-native-required-shape-removed', file: 'agents/reviewer-kit.md', testFile: 'tests/release-final-coverage.test.mjs',
+    original: 'Include `solutionSpace` when the advertised native schema requires it, describing the actual scope of investigation; do not omit native required assignment metadata.', replacement: '', description: 'Orchestrator no longer requires native assignment metadata',
+  },
+  ...['src/infra/omp-cli-reviewer-adapter.mjs', 'scripts/run-review.mjs'].map((file) => ({
+    id: `${file === 'scripts/run-review.mjs' ? 'runner' : 'modular'}-verifier-inferred-timeout-ignored`, file, testFile: 'tests/verifier-timeout-recovery.test.mjs',
+    original: ' && !record.timedOut', replacement: '', description: 'Artifact recovery permits substantive BLOCK repair after inferred max-time expiry',
+  })),
   {
     id: 'gate-flat-mode-rewritten-as-batch', file: 'src/infra/review-batch-extension.mjs', testFile: 'tests/review-gate.test.mjs',
     original: 'if (!batchEnabled) {', replacement: 'if (false) {', description: 'Valid flat native calls are rewritten to unsupported batches',

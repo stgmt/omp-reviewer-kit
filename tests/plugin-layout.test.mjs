@@ -49,7 +49,7 @@ const manifest = JSON.parse(await readFile('package.json', 'utf8'));
 describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
   it('manifest and skills declare fixed reviewer identities', () => {
     assert.equal(manifest.name, 'omp-reviewer-kit');
-    assert.equal(manifest.version, '0.21.0');
+    assert.equal(manifest.version, '0.21.1');
     assert.match(realitySkill, /name: reality-first-review/);
     assert.match(multiStageSkill, /name: multi-stage-review/);
     assert.match(rangeAuditSkill, /name: range-audit/);
@@ -78,7 +78,7 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
   it('reviewer-kit is configured as a blocking orchestrator with exact specialist spawns', () => {
     const fm = parseFrontmatter(reviewerKitAgent);
     assert.equal(fm.name, 'reviewer-kit');
-    assert.equal(fm.model, undefined, 'agents inherit the OMP default model role');
+    assert.equal(fm.model, '@task', 'review agents use the OMP task model role');
     assert.equal(fm.blocking, 'true');
 
     // Tool list contains task for orchestration, but no mutation tools
@@ -248,7 +248,7 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
 
   it('review-context-scout specifies read-only context output schema and forbids verdict markers', () => {
     const fm = parseFrontmatter(scoutAgent);
-    assert.equal(fm.model, undefined, 'agents inherit the OMP default model role');
+    assert.equal(fm.model, '@task', 'review agents use the OMP task model role');
     assert.match(scoutAgent, /"change_goal"/);
     assert.match(scoutAgent, /"changed_paths"/);
     assert.match(scoutAgent, /"relevant_consumers"/);
@@ -271,7 +271,7 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
 
   it('review-risk-hunter uses one shared candidate schema for both correctness and security lanes', () => {
     const fm = parseFrontmatter(hunterAgent);
-    assert.equal(fm.model, undefined, 'agents inherit the OMP default model role');
+    assert.equal(fm.model, '@task', 'review agents use the OMP task model role');
     assert.match(hunterAgent, /lane: "correctness"/);
     assert.match(hunterAgent, /lane: "security"/);
     assert.match(hunterAgent, /"candidate_id"/);
@@ -307,7 +307,7 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
 
   it('review-finding-verifier enforces mandatory disposition values and forbids verdict markers', () => {
     const fm = parseFrontmatter(verifierAgent);
-    assert.equal(fm.model, undefined, 'agents inherit the OMP default model role');
+    assert.equal(fm.model, '@task', 'review agents use the OMP task model role');
     assert.match(verifierAgent, /"disposition": "confirmed \| rejected \| not_proven"/);
     assert.match(verifierAgent, /"confirmed_findings"/);
     const example = JSON.parse(verifierAgent.match(/```json\r?\n([\s\S]*?)\r?\n```/)[1]);
