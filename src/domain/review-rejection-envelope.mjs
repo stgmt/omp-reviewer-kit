@@ -456,6 +456,38 @@ export class ReviewRejectionEnvelope {
     });
   }
 
+  static fromVerifier(data, diffIdentity, { harnessPresent = true } = {}) {
+    if (!hasExactKeys(data, ['confirmed_coverage_gaps', 'confirmed_findings', 'coverage_summary', 'decisions', 'rejected_coverage_gaps'])
+      || !isNonEmptyString(data.coverage_summary)
+      || ['decisions', 'confirmed_findings', 'confirmed_coverage_gaps', 'rejected_coverage_gaps'].some((key) => !Array.isArray(data[key]))) return null;
+    const findingKeys = ['candidate_id', 'evidence', 'expected_behavior', 'file_path', 'impact', 'lane', 'line_end', 'line_start', 'observed_behavior', 'priority', 'title', 'trigger_scenario'];
+    const decisionKeys = ['candidate_id', 'disposition', 'evidence', 'reason', 'triage'];
+    if (data.decisions.some((decision) => !hasExactKeys(decision, decisionKeys)
+      || !['confirmed', 'rejected', 'not_proven', 'fixed', 'still_present'].includes(decision.disposition)
+      || !['lie', 'stale_record', 'disclosed_gap', 'not_applicable'].includes(decision.triage)
+      || ['candidate_id', 'reason', 'evidence'].some((key) => !isNonEmptyString(decision[key])))) return null;
+    if (data.confirmed_findings.some((finding) => !hasExactKeys(finding, findingKeys)
+      || ['candidate_id', 'title', 'observed_behavior', 'expected_behavior', 'trigger_scenario', 'impact'].some((key) => !isNonEmptyString(finding[key]))
+      || !Array.isArray(finding.evidence) || finding.evidence.length === 0 || !finding.evidence.every(isNonEmptyString)
+      || data.decisions.filter((decision) => decision.candidate_id === finding.candidate_id
+        && ['confirmed', 'still_present'].includes(decision.disposition)).length !== 1)) return null;
+    if (data.decisions.some((decision) => ['confirmed', 'still_present'].includes(decision.disposition)
+      && data.confirmed_findings.filter((finding) => finding.candidate_id === decision.candidate_id).length !== 1)) return null;
+    const findings = data.confirmed_findings.map((finding) => ({ ...finding,
+      verifier_argument: `${finding.title}: ${finding.observed_behavior}; expected: ${finding.expected_behavior}. Impact: ${finding.impact}. Evidence: ${finding.evidence.join('; ')}`,
+      counterexample: finding.trigger_scenario,
+    }));
+    const base = { schema: ENVELOPE_SCHEMA, diff_hash: diffHashOf(diffIdentity), findings, non_coverable_items: [] };
+    try {
+      // Validate every gap even when the finding envelope takes precedence.
+      const coverage = data.confirmed_coverage_gaps.length ? new ReviewRejectionEnvelope({ ...base, findings: [], kind: 'coverage_required', coverage_items: data.confirmed_coverage_gaps }) : null;
+      if (findings.length) return new ReviewRejectionEnvelope({ ...base, kind: 'confirmed_findings' });
+      return harnessPresent ? coverage : null;
+    } catch {
+      return null;
+    }
+  }
+
   static evaluate({ output, diffIdentity, processStatus, processError }) {
     const rawOutput = typeof output === 'string' ? output : String(output ?? '');
     const diffHash = diffHashOf(diffIdentity);

@@ -50,7 +50,7 @@ for (const copy of ['../scripts/run-review.mjs']) {
   });
 }
 
-test('defaultPreflight spawns a no-tools model-less child fed the READY prompt', async () => {
+test('defaultPreflight spawns a no-tools task-role child fed the READY prompt', async () => {
   const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-preflight-'));
   const commandPath = path.join(baseDir, isWindows ? 'fake-omp.cmd' : 'fake-omp.sh');
   const argsPath = path.join(baseDir, 'args.txt');
@@ -76,7 +76,9 @@ test('defaultPreflight spawns a no-tools model-less child fed the READY prompt',
     const args = (await readFile(argsPath, 'utf8')).split(/\s+/).filter(Boolean);
     assert.ok(args.includes('--no-tools'), args.join(' '));
     assert.ok(!args.includes('--tools'));
-    for (const flag of ['--model', '--smol', '--slow', '--thinking']) assert.ok(!args.includes(flag), flag);
+    assert.equal(args[args.indexOf('--model') + 1], '@task');
+    assert.equal(args.filter((arg) => arg === '--model').length, 1);
+    for (const flag of ['--smol', '--slow', '--thinking']) assert.ok(!args.includes(flag), flag);
     assert.match(await readFile(stdinPath, 'utf8'), /Respond with exactly READY/);
   } finally {
     for (const [key, name] of [['command', 'OMP_REVIEW_KIT_OMP'], ['args', 'OMP_REVIEW_TEST_ARGS'], ['stdin', 'OMP_REVIEW_TEST_STDIN']]) {

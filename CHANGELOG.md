@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.21.1] - 2026-10-14
+
+### Fixed
+- **Native task-role identity.** The dispatcher, health probe, verbatim re-emission and all four review agents select OMP's existing `@task` role, preserving its configured models, effort, overrides and fallback chain without changing user settings.
+- **OMP 18.10.4 structured completion.** A temporary per-attempt config overlay enables native `task.structured` for gated review children. Agent-owned schemas and `yield` remain authoritative; plain-text or fenced JSON is not accepted as stage completion. Native `solutionSpace` assignment metadata is preserved when the gate rebuilds tasks.
+- **Blocking verifier evidence survives contradictory synthesis.** A complete, successful, invocation-bound verifier result can be serialized into a strict BLOCK envelope when synthesis incorrectly emits PASS. Actual nonzero exits, timeouts, missing stages and invalid evidence still fail closed.
+- **Verifier BLOCK remains terminal in production output.** A provenance-validated repair quotes diagnostics before its envelope and final BLOCK marker, preserving the original child stderr separately. Combined-output parsing cannot turn confirmed findings into a permissive marker re-emission; the full workflow is regression-tested for empty and marker-bearing stderr in source and bundle.
+- **Inferred max-time expiry forbids substantive repair.** Verifier BLOCK reconstruction checks the adapter's inferred timeout as well as explicit child timeout flags. Source and bundled regressions combine empty-output expiry, invocation-bound artifact recovery and completed verifier evidence, while retaining the ordinary non-timeout recovery control.
+- **Bounded scout completion.** Hypothetical external consumers remain disclosed unknowns after completed snapshot inspection; only concrete unfinished mandatory inspection belongs in `completion.unresolved`.
+
+### Verification
+- Current OMP 18.10.4 native matrix: 23/23. The release gate additionally requires captured native dispatch guidance, task-role outage remediation and catalog-presence regressions; every curated mutant remains mandatory, with assertion-only kill accounting.
+- Live controls through the user's unchanged `@task`: a vacuous test yields a substantive P2 BLOCK and a clean public CLI yields PASS. Review acceleration is not claimed: the completed comparisons did not establish a quality-preserving speedup.
+
 ## [0.21.0] - 2026-10-13
 
 ### Added

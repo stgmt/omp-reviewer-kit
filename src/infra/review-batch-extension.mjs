@@ -106,6 +106,7 @@ export function registerReviewBatchGate(pi, manifestPath = process.env.OMP_REVIE
           || (data.confirmed_coverage_gaps.length > 0 && !String(mergedScout?.test_harness).startsWith('absent'));
       }
       await record({ stage, tasks: planned.map((task) => task.id), complete: true, blocksApproval,
+        ...(stage === 'review-finding-verifier' ? { verifierData: ordered[0].structuredOutput.data } : {}),
         requiresVerifier: ordered.some((result) => (result.structuredOutput?.data?.candidates?.length ?? 0) > 0 || (result.structuredOutput?.data?.coverage_gaps?.length ?? 0) > 0) });
       completed.add(stage);
     } catch (error) {

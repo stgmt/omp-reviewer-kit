@@ -2,6 +2,14 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
+test('all review agents select the native task role without pinning a concrete model', async () => {
+  for (const file of ['agents/reviewer-kit.md', ...SUBAGENTS]) {
+    const text = await readFile(file, 'utf8');
+    const frontmatter = text.split('---')[1];
+    assert.match(frontmatter, /^model: "@task"$/m, file);
+  }
+});
+
 const SUBAGENTS = [
   'agents/review-context-scout.md',
   'agents/review-risk-hunter.md',

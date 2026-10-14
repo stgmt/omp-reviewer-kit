@@ -21,11 +21,12 @@ test(`Given standalone OMP concurrency ${concurrency} and missing hunter ${omitH
     const invocationToken = 'REVIEW_INVOCATION=offline';
     await writeFile(manifest, JSON.stringify({ schema: 'review-batch@1', invocationToken, prompt: 'Offline staged review fixture; no previous findings.',
       scouts: [{ id: 'Scout1', paths: ['src/a.mjs'] }, { id: 'Scout2', paths: ['src/b.mjs'] }], hunters: [{ id: 'Hunter-correctness', lane: 'correctness', paths: [] }, { id: 'Hunter-security', lane: 'security', paths: [] }] }));
+    await writeFile(`${manifest}.config.yml`, 'task:\n  structured: true\n');
     const resultPath = path.join(root, 'result.json');
     const env = { ...process.env, PI_CODING_AGENT_DIR: agent, OMP_REVIEW_KIT_BATCH_MANIFEST: manifest, REVIEW_SDK_RESULT: resultPath,
       OMP_REVIEW_KIT_AUTO_SYNC: '0', OMP_REVIEW_KIT_STOP_SUPERSEDED: '0', REVIEW_SDK_OMIT_HUNTER: omitHunter ? '1' : '0' };
     for (const key of Object.keys(env)) if (/API_KEY|ACCESS_TOKEN|OAUTH/.test(key)) delete env[key];
-    const result = spawnSync(process.env.OMP_REVIEW_KIT_OMP ?? 'omp', ['--cwd', work, '--no-extensions',
+    const result = spawnSync(process.env.OMP_REVIEW_KIT_OMP ?? 'omp', ['--cwd', work, '--no-extensions', '--config', `${manifest}.config.yml`,
       '-e', path.join(repo, 'src', 'infra', 'review-gate-entry.mjs'), '-e', path.join(repo, 'tests', 'fixtures', 'review-sdk-probe.mjs'),
       '--no-title', '--no-rules', '--tools', 'task,read', '--session-dir', path.join(root, 'sessions'),
       '--model', 'review-offline/fixture', '--smol', 'review-offline/fixture', '--thinking', 'off', '-p', 'Run reviewer-kit'],

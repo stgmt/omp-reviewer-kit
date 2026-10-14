@@ -314,7 +314,7 @@ for (const [label, mod] of ADAPTERS) {
     assert.equal(review.stdout, REPORT);
   });
 
-  test(`${label}: model-less probes and verbatim re-emit stay ephemeral (--no-session, never --session-dir)`, async () => {
+  test(`${label}: task-role probes and verbatim re-emit stay ephemeral (--no-session, never --session-dir)`, async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'rk-argv-'));
     try {
       const fake = await makeFakeOmp(root);
@@ -328,25 +328,29 @@ for (const [label, mod] of ADAPTERS) {
       for (const call of calls) {
         assert.ok(call.args.includes('--no-session'), call.args.join(' '));
         assert.equal(call.args.includes('--session-dir'), false, call.args.join(' '));
+        assert.equal(call.args[call.args.indexOf('--model') + 1], '@task');
+        assert.equal(call.args.filter((arg) => arg === '--model').length, 1);
       }
     } finally {
       await rm(root, { recursive: true, force: true });
     }
   });
 
-  test(`${label}: gated reviews load agents from the gate's own plugin root without model overrides`, async () => {
+  test(`${label}: gated reviews load their own agents and select the native task role`, async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'rk-plugin-root-'));
     try {
       const fake = await makeFakeOmp(root);
       const gate = path.join(root, 'plugin', 'src', 'infra', 'review-gate-entry.mjs');
       await withEnv({ OMP_REVIEW_KIT_OMP: fake.launcher }, () =>
-        OmpCliReviewerAdapter.defaultRunner('probe', cwd, 0, { reviewGateExtension: gate }));
+        OmpCliReviewerAdapter.defaultRunner('probe', cwd, 0, { reviewGateExtension: gate, env: { OMP_REVIEW_KIT_BATCH_MANIFEST: path.join(root, 'manifest.json') } }));
       const [call] = await fake.invocations();
       assert.equal(call.args.includes('--no-extensions'), true, 'ambient installed agents must not shadow the gate contracts');
       assert.equal(call.args[call.args.indexOf('--plugin-dir') + 1], path.join(root, 'plugin'));
       assert.equal(call.args[call.args.indexOf('-e') + 1], gate);
-      assert.equal(call.args.includes('--model'), false);
+      assert.equal(call.args[call.args.indexOf('--model') + 1], '@task');
+      assert.equal(call.args.filter((arg) => arg === '--model').length, 1);
       assert.equal(call.args.includes('--smol'), false);
+      assert.equal(call.args[call.args.indexOf('--config') + 1], path.join(root, 'manifest.json.config.yml'));
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 

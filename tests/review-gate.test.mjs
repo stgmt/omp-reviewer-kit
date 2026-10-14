@@ -6,7 +6,44 @@ import path from 'node:path';
 import { registerReviewBatchGate } from '../src/infra/review-batch-extension.mjs';
 import { OmpCliReviewerAdapter } from '../src/infra/omp-cli-reviewer-adapter.mjs';
 import { ReviewPrompt } from '../src/domain/review-prompt.mjs';
+import { ReviewRejectionEnvelope } from '../src/domain/review-rejection-envelope.mjs';
 import { OmpCliReviewerAdapter as BundledAdapter } from '../scripts/run-review.mjs';
+
+const verifiedFinding = { candidate_id: 'c1', lane: 'correctness', priority: 'P2', title: 'Wrong calculation', file_path: 'src/a.mjs', line_start: 1, line_end: 2, observed_behavior: 'Returns zero', expected_behavior: 'Returns the sum', trigger_scenario: 'add(1, 2) returns 0 instead of 3', impact: 'Caller receives a wrong total', evidence: ['src/a.mjs:1-2'] };
+const verifiedData = { coverage_summary: 'Inspected changed calculation and caller', decisions: [{ candidate_id: 'c1', disposition: 'confirmed', triage: 'not_applicable', reason: 'Reachable wrong total', evidence: 'src/a.mjs:1-2' }], confirmed_findings: [verifiedFinding], confirmed_coverage_gaps: [], rejected_coverage_gaps: [] };
+
+for (const [label, Adapter] of [['source', OmpCliReviewerAdapter], ['bundle', BundledAdapter]]) {
+  for (const scenario of ['valid', 'nonzero', 'timeout', 'incomplete', 'foreign', 'duplicate', 'malformed', 'still-present-missing']) {
+    test(`${label}: Given native verified findings ${scenario}, Then preserve a substantive BLOCK only with complete successful provenance`, async () => {
+      const adapter = new Adapter({ nativeBatch: true, runner: async (_prompt, _cwd, _timeout, options) => {
+        const file = options.env.OMP_REVIEW_KIT_BATCH_MANIFEST;
+        const manifest = JSON.parse(await readFile(file, 'utf8'));
+        assert.equal(await readFile(`${file}.config.yml`, 'utf8'), 'task:\n  structured: true\n');
+        const data = structuredClone(verifiedData);
+        if (scenario === 'malformed') data.confirmed_findings[0].observed_behavior = '';
+        if (scenario === 'still-present-missing') { data.decisions[0].disposition = 'still_present'; data.confirmed_findings = []; }
+        const events = [
+          { stage: 'review-context-scout', complete: true, mergedScout: { test_harness: 'present' } },
+          { stage: 'review-risk-hunter', complete: true, requiresVerifier: true },
+          { stage: 'review-finding-verifier', complete: true, blocksApproval: true, verifierData: data },
+          { stage: 'reviewer-kit', complete: scenario !== 'incomplete' },
+        ];
+        if (scenario === 'duplicate') events.push(events[2]);
+        await writeFile(`${file}.events`, events.map((event) => JSON.stringify({ invocationToken: scenario === 'foreign' ? 'foreign' : manifest.invocationToken, ...event })).join('\n'));
+        return { status: scenario === 'nonzero' ? 7 : 0, timedOut: scenario === 'timeout', stdout: 'Original synthesis\nREVIEW_RESULT=PASS', stderr: '' };
+      } });
+      const result = await adapter.executeReview({ prompt: ReviewPrompt.forDiff('a'.repeat(64), '', [], { batchPlan: plan }), cwd: process.cwd() });
+      const normalized = ReviewRejectionEnvelope.evaluate({ output: result.stdout, diffIdentity: 'a'.repeat(64), processStatus: result.status });
+      assert.equal(normalized.verdict.isPass(), false);
+      assert.equal(normalized.envelope.kind, scenario === 'valid' ? 'confirmed_findings' : 'review_failure');
+      if (scenario === 'valid') {
+        assert.equal(result.status, 0, 'a completed child emits a substantive BLOCK, not an infrastructure failure');
+        assert.equal(normalized.envelope.findings[0].counterexample, verifiedFinding.trigger_scenario);
+        assert.match(normalized.envelope.findings[0].verifier_argument, /Returns zero.*Returns the sum/);
+      }
+    });
+  }
+}
 
 for (const [label, Adapter] of [['source', OmpCliReviewerAdapter], ['bundle', BundledAdapter]]) {
   for (const blocked of ['findings', 'coverage', 'missing-disposition']) {

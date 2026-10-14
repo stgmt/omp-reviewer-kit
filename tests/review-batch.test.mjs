@@ -20,6 +20,29 @@ test('Given a claimed completion, When substantive discovery or owned paths are 
   }
 });
 
+test('Given native solution-space metadata, When dispatching every review stage, Then preserve the field without changing model policy', () => {
+  for (const agent of ['reviewer-kit', 'review-context-scout', 'review-risk-hunter', 'review-finding-verifier']) {
+    const planned = agent === 'review-context-scout' ? manifest.scouts : agent === 'review-risk-hunter' ? manifest.hunters : [{ id: agent === 'reviewer-kit' ? 'ReviewerKit' : 'Verifier' }];
+    for (const batchEnabled of [true, false]) {
+      const tasks = planned.map((p) => ({ name: p.id, agent, task: 'inspect', solutionSpace: 'Trace deciding evidence before judging' }));
+      const inputs = batchEnabled ? [{ tasks }] : tasks;
+      for (const input of inputs) {
+        const gated = gateReviewBatch(input, manifest, { batchEnabled });
+        assert.ok(gated.tasks.every((task) => task.solutionSpace === 'Trace deciding evidence before judging'));
+        assert.ok(gated.tasks.every((task) => !Object.hasOwn(task, 'model')));
+      }
+    }
+  }
+});
+
+test('Given bounded consumer uncertainty after completed inspection, Then unknowns survive without accepting unfinished obligations', () => {
+  const scopes = [{ id: 'Scout1', paths: ['src/a.mjs'] }];
+  const report = { ...scout(scopes[0]), unknowns: ['Hypothetical external consumers are outside the supplied snapshot'] };
+  assert.deepEqual(mergeScoutReports([report], scopes).unknowns, report.unknowns);
+  report.completion.unresolved = ['Identified deciding caller src/caller.mjs could not be read'];
+  assert.throws(() => mergeScoutReports([report], scopes), /Unresolved/);
+});
+
 test('Given scoped scouts, When dispatching, Then output ownership excludes cross-scope evidence paths', () => {
   const tasks = manifest.scouts.map((scope) => ({ name: scope.id, agent: 'review-context-scout', task: 'Map the full staged change' }));
   const gated = gateReviewBatch({ tasks }, manifest);

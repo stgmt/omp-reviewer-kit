@@ -81,7 +81,7 @@ export function formatProviderOutageError(lastStderr) {
   const lines = [
     'reviewer-kit infrastructure failure: no review verdict was produced.',
     'OMP could not get an answer from a model (this is an outage or a configuration problem, not a code verdict).',
-    'Fix: reviewer-kit does not choose models. Check the login and the default model role in OMP itself,',
+    'Fix: reviewer-kit does not choose models. Check the login and the task model role in OMP itself,',
     '  and configure fallbacks there (modelRoles / retry.fallbackChains in ~/.omp/agent/config.yml).',
     'The detailed report is the REVIEW_REJECTION_REPORT path above, outside the repository; run telemetry is under audit-reports/commit-reviews/.',
   ];
