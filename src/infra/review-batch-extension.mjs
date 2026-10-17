@@ -1,6 +1,11 @@
 import { appendFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { gateReviewBatch, validateBatchResults, mergeScoutReports } from '../domain/review-batch.mjs';
+import { gateReviewBatch, validateBatchTasks, mergeScoutReports } from '../domain/review-batch.mjs';
+
+// A native task may fail once and be dispatched again; the second failure ends the review.
+const MAX_TASK_DISPATCHES = 2;
+const MAX_RECORDED_FAILURES = 32;
+const MAX_RECORDED_REJECTIONS = 50;
 
 export function registerReviewBatchGate(pi, manifestPath = process.env.OMP_REVIEW_KIT_BATCH_MANIFEST) {
   if (!manifestPath || pi.__reviewKitBatchGate) return;
@@ -19,11 +24,18 @@ export function registerReviewBatchGate(pi, manifestPath = process.env.OMP_REVIE
   const completed = new Set();
   let mergedScout;
   let hunterData = [];
+  const dispatchCount = new Map();
   let failed = false;
+  let failureReason = '';
   let rejectedYields = 0;
+  let rejections = 0;
   const record = async (event) => {
     const manifest = await manifestPromise;
     await appendFile(`${manifestPath}.events`, JSON.stringify({ invocationToken: manifest.invocationToken, ...event }) + '\n', { mode: 0o600 });
+  };
+  const rejected = async (reason) => {
+    if (rejections++ >= MAX_RECORDED_REJECTIONS) return;
+    await record({ event: 'dispatch_rejected', reason: String(reason).slice(0, 240) }).catch(() => {});
   };
   pi.on('tool_call', async (event, ctx) => {
     if (event.toolName === 'yield' && rejectedYields >= 2) {
@@ -35,10 +47,13 @@ export function registerReviewBatchGate(pi, manifestPath = process.env.OMP_REVIE
     if (event.toolName !== 'task') return;
     try {
       const manifest = await manifestPromise;
+      // The first failure explains everything after it: say so before any other rejection can mask it.
+      if (failed) throw new Error(`Review already failed (${failureReason}); do not rerun any stage and do not approve this review`);
       const taskSchema = pi.getAllTools?.().find((tool) => tool.name === 'task')?.parameters;
       const schema = typeof taskSchema?.toJsonSchema === 'function' ? taskSchema.toJsonSchema() : taskSchema;
       const batchEnabled = schema ? Object.hasOwn(schema.properties ?? {}, 'tasks') : true;
-      const input = gateReviewBatch(event.input, manifest, { batchEnabled });
+      const requestedAgent = Array.isArray(event.input?.tasks) ? event.input.tasks[0]?.agent : event.input?.agent;
+      const input = gateReviewBatch(event.input, manifest, { batchEnabled, completed: new Set(stageResults.get(requestedAgent)?.keys() ?? []) });
       const stage = input.tasks[0].agent;
       if (stage === 'review-finding-verifier') {
         input.context += `\nAuthoritative completed hunter outputs (verify every candidate and coverage gap):\n${JSON.stringify(hunterData)}\nAuthoritative previous findings (decide fixed/still_present for each id):\n${JSON.stringify(manifest.previousFindings ?? [])}`;
@@ -47,10 +62,13 @@ export function registerReviewBatchGate(pi, manifestPath = process.env.OMP_REVIE
       if ((parentAgent === 'reviewer-kit' && stage === 'reviewer-kit') || (parentAgent && parentAgent !== 'reviewer-kit')) throw new Error('Review spawn hierarchy violated');
       if (ctx?.sessionManager && !parentAgent && stage !== 'reviewer-kit') throw new Error('Dispatcher must spawn reviewer-kit, not a specialist');
       const dispatched = started.get(stage) ?? new Set();
-      if (failed || input.tasks.some((task) => dispatched.has(task.name))) throw new Error('Review stage already dispatched or failed; do not rerun the whole stage');
+      if (input.tasks.some((task) => dispatched.has(task.name))) throw new Error('Review stage already dispatched or failed; do not rerun the whole stage');
       if (stage === 'review-risk-hunter' && !completed.has('review-context-scout')) throw new Error('Scout must complete before hunting');
       if (stage === 'review-finding-verifier' && !completed.has('review-risk-hunter')) throw new Error('Hunters must complete before verification');
-      for (const task of input.tasks) dispatched.add(task.name);
+      for (const task of input.tasks) {
+        dispatched.add(task.name);
+        dispatchCount.set(`${stage}:${task.name}`, (dispatchCount.get(`${stage}:${task.name}`) ?? 0) + 1);
+      }
       started.set(stage, dispatched);
       calls.set(event.toolCallId, input);
       if (!batchEnabled) {
@@ -59,6 +77,7 @@ export function registerReviewBatchGate(pi, manifestPath = process.env.OMP_REVIE
       }
       return { input };
     } catch (error) {
+      await rejected(error.message);
       return { block: true, reason: error.message };
     }
   });
@@ -71,14 +90,30 @@ export function registerReviewBatchGate(pi, manifestPath = process.env.OMP_REVIE
     try {
       const parentId = ctx?.sessionManager?.getEntries?.().find((e) => e.type === 'session_init')?.agent === 'reviewer-kit'
         ? path.basename(ctx.sessionManager.getSessionFile(), '.jsonl') : null;
-      if (event.isError) throw new Error('Native task failed');
-      const results = validateBatchResults(input, event.details, parentId);
       const manifest = await manifestPromise;
       const stage = input.tasks[0].agent;
-      const planned = stage === 'review-context-scout' ? manifest.scouts : stage === 'review-risk-hunter' ? manifest.hunters : input.tasks.map((task) => ({ id: task.name }));
+      const { valid, failures } = validateBatchTasks(input, event.details, parentId, stage === 'review-context-scout' ? manifest.scouts : null);
+      // An error flag with every task intact is not a stage we can account for.
+      if (event.isError && failures.length === 0) throw new Error('Native task failed');
       const collected = stageResults.get(stage) ?? new Map();
-      for (let i = 0; i < results.length; i++) collected.set(input.tasks[i].name, results[i]);
+      for (const [name, result] of valid) collected.set(name, result);
       stageResults.set(stage, collected);
+      if (failures.length > 0) {
+        const recorded = { failures: failures.slice(0, MAX_RECORDED_FAILURES), failureCount: failures.length };
+        // Only specialists are retried; the orchestrator's own failure is the review's failure.
+        const retryable = stage !== 'reviewer-kit';
+        if (!retryable || failures.some((item) => (dispatchCount.get(`${stage}:${item.task}`) ?? 0) >= MAX_TASK_DISPATCHES)) {
+          const error = new Error(`Native task failed${retryable ? ' again after its retry' : ''}: ${failures.slice(0, 8).map((item) => item.task).join(', ')}`);
+          error.recorded = recorded;
+          error.diagnostic = failures.find((item) => item.diagnostic)?.diagnostic;
+          throw error;
+        }
+        for (const item of failures) started.get(stage)?.delete(item.task);
+        await record({ event: 'task_retry', stage, ...recorded });
+        const names = failures.map((item) => item.task).join(', ');
+        return { additionalContext: `Review stage incomplete: ${failures.length} native task(s) failed (${names}). Completed tasks are kept. Dispatch exactly these tasks once more, unchanged, and nothing else; a second failure ends the review. Do not begin the next stage and do not approve this review.` };
+      }
+      const planned = stage === 'review-context-scout' ? manifest.scouts : stage === 'review-risk-hunter' ? manifest.hunters : input.tasks.map((task) => ({ id: task.name }));
       if (planned.some((task) => !collected.has(task.id))) {
         return { additionalContext: `Stage incomplete. Dispatch remaining planned tasks: ${planned.filter((task) => !collected.has(task.id)).map((task) => task.id).join(', ')}. Do not begin the next stage.` };
       }
@@ -111,7 +146,8 @@ export function registerReviewBatchGate(pi, manifestPath = process.env.OMP_REVIE
       completed.add(stage);
     } catch (error) {
       failed = true;
-      await record({ stage: input.tasks[0].agent, complete: false, ...(error.diagnostic ? { diagnostic: error.diagnostic } : {}) }).catch(() => {});
+      failureReason = String(error.message).slice(0, 200);
+      await record({ stage: input.tasks[0].agent, complete: false, reason: failureReason, ...(error.recorded ?? {}), ...(error.diagnostic ? { diagnostic: error.diagnostic } : {}) }).catch(() => {});
       return { isError: true, content: [{ type: 'text', text: `Review stage incomplete: ${error.message}. Do not approve this review.` }, ...event.content] };
     }
   });

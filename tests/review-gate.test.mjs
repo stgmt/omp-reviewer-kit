@@ -73,19 +73,30 @@ for (const [label, Adapter] of [['source', OmpCliReviewerAdapter], ['bundle', Bu
       const manifest = JSON.parse(await readFile(file, 'utf8'));
       const handlers = {};
       registerReviewBatchGate({ on: (event, handler) => { handlers[event] = handler; } }, file);
-      await handlers.tool_call({ toolName: 'task', toolCallId: 'scout', input: { tasks: [{ name: 'Scout1', agent: 'review-context-scout', task: 'inspect' }] } });
-      const output = await handlers.tool_result({ toolName: 'task', toolCallId: 'scout', content: [], details: { results: [{ id: 'Scout1', agent: 'review-context-scout', exitCode: 0, structuredOutput: { status: 'invalid', source: 'agent', mode: 'permissive', data: { private_payload: 'DO_NOT_LOG' }, error: 'coverage_map.0.line_start: expected integer; secret=DO_NOT_LOG https://private.invalid/account' } }] } });
+      const invalid = { id: 'Scout1', agent: 'review-context-scout', exitCode: 0, structuredOutput: { status: 'invalid', source: 'agent', mode: 'permissive', data: { private_payload: 'DO_NOT_LOG' }, error: 'coverage_map.0.line_start: expected integer; secret=DO_NOT_LOG https://private.invalid/account' } };
+      const dispatch = (toolCallId) => handlers.tool_call({ toolName: 'task', toolCallId, input: { tasks: [{ name: 'Scout1', agent: 'review-context-scout', task: 'inspect' }] } });
+      await dispatch('scout');
+      const first = await handlers.tool_result({ toolName: 'task', toolCallId: 'scout', content: [], details: { results: [invalid] } });
+      assert.equal(first.isError, undefined, 'the first failure of a task is retried, not final');
+      assert.equal((await dispatch('scout-retry')).block, undefined);
+      const output = await handlers.tool_result({ toolName: 'task', toolCallId: 'scout-retry', content: [], details: { results: [invalid] } });
       assert.equal(output.isError, true);
-      const event = JSON.parse((await readFile(`${file}.events`, 'utf8')).trim());
+      const raw = await readFile(`${file}.events`, 'utf8');
+      const events = raw.trim().split('\n').map((line) => JSON.parse(line));
+      const event = events.at(-1);
       assert.equal(event.complete, false);
       assert.deepEqual(event.diagnostic, { task: 'Scout1', status: 'invalid', source: 'agent', mode: 'permissive', reason: 'schema_validation', field: 'coverage_map.0.line_start' });
-      assert.doesNotMatch(JSON.stringify(event), /DO_NOT_LOG|private_payload|private\.invalid/);
+      assert.equal(events.at(-2).event, 'task_retry');
+      assert.deepEqual(events.at(-2).failures[0].diagnostic, event.diagnostic);
+      assert.doesNotMatch(raw, /DO_NOT_LOG|private_payload|private\.invalid/);
       assert.equal(event.invocationToken, manifest.invocationToken);
       return { status: 0, stdout: 'REVIEW_RESULT=PASS', stderr: '' };
     } });
     const result = await adapter.executeReview({ prompt: ReviewPrompt.forDiff('a'.repeat(64), '', [], { batchPlan: plan }), cwd: process.cwd() });
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /Scout1.*invalid.*coverage_map\.0\.line_start/);
+    assert.match(result.stderr, /Native output diagnostics:\n\{"task":"Scout1","status":"invalid".*"field":"coverage_map\.0\.line_start"\}/);
+    assert.match(result.stderr, /Native task failures:\n.*"task":"Scout1".*"reason":"Invalid specialist output/);
+    assert.match(result.stderr, /Native task retries:\n.*"task":"Scout1"/);
     assert.doesNotMatch(result.stderr, /DO_NOT_LOG|private_payload|private\.invalid/);
   });
 }
@@ -110,11 +121,22 @@ test('Given a review invocation, When checking tasks and outputs, Then gates pre
     const input = { tasks: [{ name: 'Scout1', agent: 'review-context-scout', task: 'scout' }] };
     const revised = await handlers.tool_call({ toolName: 'task', toolCallId: 'x', input });
     assert.match(revised.input.context, /source/);
-    const output = await handlers.tool_result({ toolName: 'task', toolCallId: 'x', details: { results: [] }, content: [{ type: 'text', text: 'native preflight explanation' }] });
+    const first = await handlers.tool_result({ toolName: 'task', toolCallId: 'x', details: { results: [] }, content: [{ type: 'text', text: 'native preflight explanation' }] });
+    assert.equal(first.isError, undefined);
+    assert.match(first.additionalContext, /Scout1.*once more/);
+    assert.equal((await handlers.tool_call({ toolName: 'task', toolCallId: 'y', input })).block, undefined);
+    const output = await handlers.tool_result({ toolName: 'task', toolCallId: 'y', details: { results: [] }, content: [{ type: 'text', text: 'native preflight explanation' }] });
     assert.equal(output.isError, true);
     assert.equal(output.content[1].text, 'native preflight explanation');
-    const event = JSON.parse((await readFile(`${file}.events`, 'utf8')).trim());
+    const events = (await readFile(`${file}.events`, 'utf8')).trim().split('\n').map((line) => JSON.parse(line));
+    const event = events.at(-1);
     assert.equal(event.complete, false);
+    assert.match(event.reason, /Native task failed again after its retry: Scout1/);
+    assert.match(events.find((e) => e.event === 'dispatch_rejected')?.reason ?? '', /complete native batch/);
+    const masked = await handlers.tool_call({ toolName: 'task', toolCallId: 'z', input: { tasks: [{ name: 'Hunter-correctness', agent: 'review-risk-hunter', model: 'forbidden' }] } });
+    assert.equal(masked.block, true);
+    assert.match(masked.reason, /Review already failed \(Native task failed again after its retry: Scout1\)/);
+    assert.doesNotMatch(masked.reason, /inherit/);
     for (let i = 0; i < 2; i++) await handlers.tool_result({ toolName: 'yield', isError: true });
     assert.match((await handlers.tool_call({ toolName: 'yield', input: { data: {} } })).input.error, /Repeated invalid/);
   } finally { await rm(root, { recursive: true, force: true }); }
@@ -176,7 +198,7 @@ test('Given two planned flat scouts, When only one finishes, Then hunting stays 
         assert.equal(blocked.block, true);
       }
     }
-    const events = (await readFile(`${file}.events`, 'utf8')).trim().split('\n').map((line) => JSON.parse(line));
+    const events = (await readFile(`${file}.events`, 'utf8')).trim().split('\n').map((line) => JSON.parse(line)).filter((e) => e.stage);
     assert.equal(events.length, 1);
     assert.deepEqual(events[0].mergedScout.completion.scopes, ['Scout1', 'Scout2']);
   } finally { await rm(root, { recursive: true, force: true }); }

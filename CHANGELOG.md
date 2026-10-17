@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.21.2] - 2026-10-17
+
+### Fixed
+- **One failed task no longer ends the whole review.** OMP flags a whole native `task` call as an error when any child fails, and the gate used to treat that as final: a single failed scout among 212 discarded about 80 minutes of completed work and every later dispatch was rejected. Results are now matched to tasks by identity and judged one by one. Completed tasks are kept, and only the failed ones are dispatched again, once. A second failure of the same task ends the review exactly as before. The orchestrator's own failure, an error flag with every task result intact, and a verifier that omits an authoritative disposition remain final. A scout whose report leaves obligations unresolved or claims foreign paths is judged per scout and retried alone instead of failing the final merge. OMP returns a task dispatched again under the next free id (`Scout3-2`, per `OutputManager.allocate`); the gate recognizes that id for its own task only, never for another planned task of the same call.
+- **The first failure is the one reported.** The gate checked a dispatch's fields before checking whether the review had already failed, so a model's malformed follow-up dispatch ("Review tasks must inherit native model and agent output policy") masked the real cause. A failed review now answers every later dispatch with `Review already failed (<cause>)`, and a completed stage answers `already complete`.
+- **The report says why a native batch ended.** Before, the cleanup of the session directory removed the only record, and the report ended with a bare "Native review batch incomplete". Gate events now carry the failing stage and reason, a bounded list of failed tasks (exit code, aborted, truncated, errored; never provider or model text), the retried tasks, and the dispatch rejections, and the adapter appends them to the review output as `Review stage failures`, `Native task failures`, `Native task retries` and `Gate rejections`.
+
+### Verification
+- `npm test` in a clean export of the index: 1185 pass, 0 fail, 44 skipped live checks; `npm run check` passes.
+- Mutation gate: 641/641 curated mutants killed by a deciding assertion (32 new, 4 workers).
+- The release's own pre-commit review exposed the re-issued id and a scout ownership violation (3 of 12 scouts reported claims outside their paths) in the first draft; both are covered by regression tests, and the failed review's report now names the stage, tasks and reasons.
+
+### Notes
+- Scout count and scope planning are unchanged. A measurement of the 212-scout diff showed that 90% of import edges between changed files cross scout boundaries and that capping the count alone does not change that, so no cap was introduced. 5.5 MB of the 8.4 MB diff was binary fixtures, which is what inflated the byte-based count.
+
 ## [0.21.1] - 2026-10-14
 
 ### Fixed

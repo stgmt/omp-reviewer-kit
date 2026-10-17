@@ -761,7 +761,15 @@ export class OmpCliReviewerAdapter extends ReviewerPort {
         if (!completed('review-context-scout') || !completed('review-risk-hunter') || !completed('reviewer-kit')
           || (needsVerifier && !completed('review-finding-verifier')) || events.some((e) => e.complete === false)) {
           const diagnostics = events.filter((event) => event.complete === false && event.diagnostic).slice(0, 16).map((event) => JSON.stringify(event.diagnostic)).join('\n');
-          outcome = { ...outcome, status: 1, stderr: `${outcome?.stderr ?? ''}\nNative review batch incomplete; commit blocked.${diagnostics ? `\nNative output diagnostics:\n${diagnostics}` : ''}` };
+          // Why the batch ended is the first thing an operator needs; the session directory is gone by then.
+          const gateNotes = [
+            ['Review stage failures', events.filter((event) => event.complete === false && event.reason).map((event) => `${event.stage}: ${event.reason}`)],
+            ['Native task failures', events.filter((event) => event.complete === false).flatMap((event) => event.failures ?? [])],
+            ['Native task retries', events.filter((event) => event.event === 'task_retry').flatMap((event) => event.failures ?? [])],
+            ['Gate rejections', [...new Set(events.filter((event) => event.event === 'dispatch_rejected').map((event) => event.reason))]],
+          ].filter(([, items]) => items.length > 0)
+            .map(([label, items]) => `\n${label}:\n${items.slice(0, 16).map((item) => typeof item === 'string' ? item : JSON.stringify(item)).join('\n')}`).join('');
+          outcome = { ...outcome, status: 1, stderr: `${outcome?.stderr ?? ''}\nNative review batch incomplete; commit blocked.${diagnostics ? `\nNative output diagnostics:\n${diagnostics}` : ''}${gateNotes}` };
         }
         if (events.some((event) => event.blocksApproval) && ReviewVerdict.fromOutput(outcome?.stdout ?? '').isPass()) {
           const verifier = completed('review-finding-verifier')
