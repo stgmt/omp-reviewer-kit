@@ -719,7 +719,7 @@ test('Given an installed reader, When the session starts, Then its summary is ad
 test('Given an installed plugin without the reader, When the session starts, Then the session stays silent about progress', async () => {
   const dir = await tempDir();
   // The OMP plugin matches this Claude plugin's release: an older one gets the "older than this Claude plugin" notice instead.
-  const pluginDir = await fakePlugin(dir, { version: '0.21.1', reader: null });
+  const pluginDir = await fakePlugin(dir, { version: '0.21.2', reader: null });
   const sink = sinks();
   assert.equal(await session({ cwd: dir, env: await sandbox({ OMP_REVIEW_KIT_PLUGIN_DIR: pluginDir }), exec: fakeOmp, out: (l) => sink.out.push(l), sessionId: 'sess-42' }), BRIDGE_EXIT.ok);
   assert.deepEqual(sink.out, []);

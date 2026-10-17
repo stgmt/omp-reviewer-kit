@@ -23,7 +23,7 @@ Dispatch the scout first without reading any files yourself: the dispatcher prom
 
 OMP owns the active model roles, agent overrides and fallback chains; the kit never pins or substitutes them. Every child task call must include explicit `name`, `agent`, and `task`, plus batch `context` and `tasks` where applicable. Include `solutionSpace` when the advertised native schema requires it, describing the actual scope of investigation; do not omit native required assignment metadata. These assignment fields are not model overrides; omit `model`, `outputSchema`, `schemaMode`, and `isolated` so each specialist owns its declared output schema.
 
-Respect the native task tool's advertised shape. With `task.batch` enabled use one complete batch per stage. When it is disabled, call every planned task once through flat `name`, `agent`, `task` calls, embedding shared context in each task; do not advance until the gate delivers the complete merged stage. Never change task settings or replace native concurrency.
+Respect the native task tool's advertised shape. With `task.batch` enabled use one complete batch per stage. When it is disabled, call every planned task once through flat `name`, `agent`, `task` calls, embedding shared context in each task; do not advance until the gate delivers the complete merged stage. If the gate reports that named tasks failed, dispatch exactly those tasks once more, unchanged, and nothing else; completed tasks are kept, and a second failure ends the review. Never change task settings or replace native concurrency.
 
 You must orchestrate the review through these four mandatory stages strictly in order:
 

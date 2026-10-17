@@ -54,7 +54,7 @@ export function createReviewBatchManifest({ invocationToken, prompt, diffText, f
   return { schema: 'review-batch@1', invocationToken, prompt, scouts: scoutScopes, hunters };
 }
 
-export function gateReviewBatch(input, manifest, { batchEnabled = true } = {}) {
+export function gateReviewBatch(input, manifest, { batchEnabled = true, completed = new Set() } = {}) {
   const tasks = Array.isArray(input?.tasks) ? input.tasks : input?.agent ? [input] : [];
   if (tasks.length === 0) throw new Error('Review batch has no tasks');
   if (tasks.some((t) => ['model', 'outputSchema', 'schemaMode', 'isolated'].some((key) => Object.hasOwn(t, key)))) {
@@ -70,8 +70,10 @@ export function gateReviewBatch(input, manifest, { batchEnabled = true } = {}) {
     return { context: 'Execute the supplied staged review protocol; preserve all mandatory stages and inputs.', tasks: [{ name: tasks[0].name || 'ReviewerKit', agent, ...(typeof tasks[0].solutionSpace === 'string' ? { solutionSpace: tasks[0].solutionSpace } : {}), task: `Execute your four-stage review protocol with the following authoritative staged inputs. Do not spawn another reviewer-kit.\n${authoritative}\n${manifest.invocationToken}` }] };
   }
   if (!SPECIALISTS.has(agent)) throw new Error('Unplanned review agent');
-  const planned = agent === 'review-context-scout' ? manifest.scouts
-    : agent === 'review-risk-hunter' ? manifest.hunters : [{ id: 'Verifier' }];
+  // Tasks that already completed stay completed: a retry carries only the rest.
+  const planned = (agent === 'review-context-scout' ? manifest.scouts
+    : agent === 'review-risk-hunter' ? manifest.hunters : [{ id: 'Verifier' }]).filter((p) => !completed.has(p.id));
+  if (planned.length === 0) throw new Error('Review stage already complete; do not dispatch it again');
   if (!batchEnabled && (tasks.length !== 1 || !planned.some((p) => p.id === tasks[0].name))) {
     throw new Error('One planned flat task required');
   }
@@ -85,6 +87,46 @@ export function gateReviewBatch(input, manifest, { batchEnabled = true } = {}) {
       const task = tasks.find((t) => t.name === p.id);
       return { name: p.id, agent, ...(typeof task.solutionSpace === 'string' ? { solutionSpace: task.solutionSpace } : {}), task: `${task.task ?? ''}\n${manifest.invocationToken}\nREVIEW_TASK_ID=${p.id}\n${p.lane ? `lane: "${p.lane}"\n` : ''}${p.paths ? `Primary owned paths (JSON): ${JSON.stringify(p.paths)}\n${p.paths.length ? 'Investigate and report only owned behaviors/suspicion entries; inspect cross-scope consumers when they decide your contract.\n' : ''}` : ''}${agent === 'review-context-scout' ? 'Return completion: {scope_id, completed_paths, unresolved}; completed_paths must list every primary owned path, unresolved lists unfulfilled obligations. changed_paths and completion.completed_paths must contain exactly the primary owned paths, not the full changed-file manifest. coverage_map and non_coverable_items file_path, and claims and declared_checks source_path must belong to primary owned paths. Cross-scope evidence belongs in relevant_consumers, invariants, test_evidence and reviewed_paths; do not emit ownership-bound entries for those files. These scoped field rules override any generic request to map the full diff.\n' : ''}` };
     }) };
+}
+
+// One failed native task must not discard its completed siblings: results are
+// matched by task identity and every task is judged on its own.
+export function validateBatchTasks(input, details, parentId = null, scopes = null) {
+  const results = Array.isArray(details?.results) ? details.results : [];
+  const qualify = (name) => (parentId ? `${parentId}.${name}` : name);
+  const requested = new Set(input.tasks.map((task) => qualify(task.name)));
+  const valid = new Map();
+  const failures = [];
+  for (const task of input.tasks) {
+    const id = qualify(task.name);
+    // OMP gives a name that is dispatched again the next free id (`Scout3-2`);
+    // an id that belongs to another task of the same call never qualifies.
+    const reissued = new RegExp(`^${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-\\d+$`);
+    const own = results.filter((result) => result?.id === id || (reissued.test(String(result?.id)) && !requested.has(result.id)));
+    try {
+      if (own.length !== 1) throw new Error(own.length === 0 ? 'No native result for task' : 'Duplicate native result for task');
+      const [result] = validateBatchResults({ tasks: [task] }, { results: [{ ...own[0], id }] }, parentId);
+      const scope = scopes?.find((item) => item.id === task.name);
+      if (scope) mergeScoutReports([result.structuredOutput.data], [scope]);
+      valid.set(task.name, result);
+    } catch (error) {
+      failures.push(describeTaskFailure(task.name, own[0], error));
+    }
+  }
+  return { valid, failures };
+}
+
+// Bounded and free of model output: it is persisted for the review report.
+export function describeTaskFailure(task, result, error) {
+  return {
+    task,
+    reason: String(error?.message ?? error).slice(0, 200),
+    ...(result && Number.isInteger(result.exitCode) ? { exitCode: result.exitCode } : {}),
+    ...(result?.aborted ? { aborted: true } : {}),
+    ...(result?.truncated ? { truncated: true } : {}),
+    ...(result?.error ? { errored: true } : {}),
+    ...(error?.diagnostic ? { diagnostic: error.diagnostic } : {}),
+  };
 }
 
 export function validateBatchResults(input, details, parentId = null) {

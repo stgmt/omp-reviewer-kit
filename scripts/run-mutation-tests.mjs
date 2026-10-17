@@ -4481,6 +4481,33 @@ const MUTANTS = [
     id: 'gate-flat-mode-rewritten-as-batch', file: 'src/infra/review-batch-extension.mjs', testFile: 'tests/review-gate.test.mjs',
     original: 'if (!batchEnabled) {', replacement: 'if (false) {', description: 'Valid flat native calls are rewritten to unsupported batches',
   },
+  ...[
+    ['gate-retry-budget-unbounded', 'failures.some((item) => (dispatchCount.get(`${stage}:${item.task}`) ?? 0) >= MAX_TASK_DISPATCHES)', 'false', 'A task that fails again after its retry is retried forever instead of ending the review'],
+    ['gate-orchestrator-retried', '!retryable || ', '', 'The orchestrator task is retried like a specialist'],
+    ['gate-failure-cause-masked', "      if (failed) throw new Error(`Review already failed (${failureReason}); do not rerun any stage and do not approve this review`);\n", '', 'Later dispatch rejections hide the failure that ended the review'],
+    ['gate-completed-tasks-redispatched', 'completed: new Set(stageResults.get(requestedAgent)?.keys() ?? [])', 'completed: new Set()', 'A retry must repeat the whole stage instead of only the failed tasks'],
+    ['gate-sibling-results-discarded', 'for (const [name, result] of valid) collected.set(name, result);', '', 'Completed tasks are lost when a sibling fails'],
+    ['gate-error-flag-ignored', "if (event.isError && failures.length === 0) throw new Error('Native task failed');", '', 'An error-flagged native call with unexplained results completes the stage'],
+    ['gate-failed-task-not-redispatchable', 'for (const item of failures) started.get(stage)?.delete(item.task);', '', 'A failed task can never be dispatched again'],
+    ['gate-failure-record-unbounded', 'failures: failures.slice(0, MAX_RECORDED_FAILURES)', 'failures: failures', 'A mass failure writes an unbounded event record'],
+    ['gate-rejection-not-recorded', '    if (rejections++ >= MAX_RECORDED_REJECTIONS) return;\n', '    return;\n', 'Gate rejections never reach the review report'],
+    ['gate-retry-event-not-recorded', "await record({ event: 'task_retry', stage, ...recorded });", '', 'Retried tasks leave no trace in the review report'],
+  ].map(([id, original, replacement, description]) => ({ id, file: 'src/infra/review-batch-extension.mjs', testFile: 'tests/review-gate-retry.test.mjs', original, replacement, description })),
+  ...['src/domain/review-batch.mjs', 'scripts/run-review.mjs'].flatMap((file) => [
+    ['scout-scope-not-checked-per-task', 'if (scope) mergeScoutReports([result.structuredOutput.data], [scope]);', '', 'A scout with unfinished obligations only fails the final merge instead of being retried alone'],
+    ['stage-complete-guard-removed', "if (planned.length === 0) throw new Error('Review stage already complete; do not dispatch it again');\n", '', 'A completed stage is accepted for dispatch again'],
+    ['completed-tasks-not-filtered', '.filter((p) => !completed.has(p.id));', ';', 'A retry batch must include tasks that already completed'],
+    ['duplicate-task-result-accepted', "if (own.length !== 1) throw new Error(own.length === 0 ? 'No native result for task' : 'Duplicate native result for task');", "if (own.length === 0) throw new Error('No native result for task');", 'Two native results for one task are accepted'],
+    ['task-failure-reason-unbounded', 'reason: String(error?.message ?? error).slice(0, 200),', 'reason: String(error?.message ?? error),', 'A persisted failure reason has no length bound'],
+    ['reissued-task-id-rejected', ' || (reissued.test(String(result?.id)) && !requested.has(result.id))', '', 'The result of a task dispatched again is never recognized, so a retry always fails'],
+    ['reissued-id-claims-planned-task', ' && !requested.has(result.id)', '', 'A suffixed result id is credited to a task it does not belong to'],
+  ].map(([id, original, replacement, description]) => ({ id: `${file === 'scripts/run-review.mjs' ? 'runner' : 'modular'}-${id}`, file, testFile: 'tests/review-gate-retry.test.mjs', original, replacement, description }))),
+  ...['src/infra/omp-cli-reviewer-adapter.mjs', 'scripts/run-review.mjs'].flatMap((file) => [
+    ['review-stage-failures', "['Review stage failures', events.filter((event) => event.complete === false && event.reason).map((event) => `${event.stage}: ${event.reason}`)],", "['Review stage failures', []],"],
+    ['task-failures', "['Native task failures', events.filter((event) => event.complete === false).flatMap((event) => event.failures ?? [])],", "['Native task failures', []],"],
+    ['task-retries', "['Native task retries', events.filter((event) => event.event === 'task_retry').flatMap((event) => event.failures ?? [])],", "['Native task retries', []],"],
+    ['gate-rejections', "['Gate rejections', [...new Set(events.filter((event) => event.event === 'dispatch_rejected').map((event) => event.reason))]],", "['Gate rejections', []],"],
+  ].map(([id, original, replacement]) => ({ id: `${file === 'scripts/run-review.mjs' ? 'runner' : 'modular'}-${id}-not-delivered`, file, testFile: 'tests/review-gate-retry.test.mjs', original, replacement, description: 'The reason a native batch ended does not reach the review report' }))),
 ];
 
 export { MUTANTS };
