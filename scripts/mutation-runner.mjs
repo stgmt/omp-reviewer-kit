@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { cp, mkdir, mkdtemp, readdir, lstat, readFile, writeFile, readlink, symlink, chmod, rm } from 'node:fs/promises';
+import { appendFile, cp, mkdir, mkdtemp, readdir, lstat, readFile, writeFile, readlink, symlink, chmod, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -291,5 +291,123 @@ export async function runMutationGate(mutants, { root = process.cwd(), workers =
   } finally {
     parentSignal?.removeEventListener('abort', forwardAbort);
     if (!unsafeWorker) await rm(base, { recursive: true, force: true });
+  }
+}
+
+export const testFileHash = (text) => createHash('sha256').update(text.replace(/\r\n/g, '\n')).digest('hex');
+
+/**
+ * Mutants whose recorded selector no longer fits: no mapping, another test file, a changed mutant, or a test file whose bytes changed.
+ * Only these need `--calibrate-stale`; every other selector is proven again by each ordinary gate run.
+ */
+export async function findStaleMutants(mutants, mappings, root = process.cwd()) {
+  const hashes = new Map();
+  const hashOf = async (testFile) => {
+    if (!hashes.has(testFile)) hashes.set(testFile, testFileHash(await readFile(path.join(root, testFile), 'utf8')));
+    return hashes.get(testFile);
+  };
+  const stale = [];
+  for (const mutant of mutants) {
+    const mapping = mappings[mutant.id];
+    if (!mapping?.tests?.length || mapping.testFile !== mutant.testFile || mapping.mutantHash !== mutantIdentity(mutant) || mapping.testHash !== await hashOf(mutant.testFile)) stale.push(mutant);
+  }
+  return stale;
+}
+
+/**
+ * Fresh calibration wins and existing entries keep their order; new mutants follow in catalog order; selectors of mutants
+ * that left the catalog are dropped. A mutant without any selector is an error,
+ * unless the calibration is partial: then the proven selectors are kept so that the next run only repeats the failed mutants.
+ */
+export function mergeCalibration(mutants, previous, fresh, { complete = true } = {}) {
+  const known = new Set(mutants.map((mutant) => mutant.id));
+  const merged = {};
+  // Entries keep their place, so recalibrating a few mutants rewrites a few lines of the catalog, not all of it.
+  for (const id of Object.keys(previous)) if (known.has(id)) merged[id] = fresh[id] ?? previous[id];
+  for (const mutant of mutants) {
+    if (mutant.id in merged) continue;
+    if (!fresh[mutant.id]) {
+      if (complete) throw new Error(`No selector for ${mutant.id} after calibration`);
+      continue;
+    }
+    merged[mutant.id] = fresh[mutant.id];
+  }
+  return merged;
+}
+
+// Command line of the mutation gate. The exit code is always a verdict about the whole catalog: 0 only when every curated mutant is
+// killed by a deciding assertion, 1 otherwise. `--calibrate-stale` first recalibrates the stale selectors (a survivor there ends the run
+// with 1 and keeps the selectors it proved) and then runs the ordinary gate over every mutant, so no invocation exits 0 on a subset or on nothing.
+export async function runCli({ mutants, argv = process.argv.slice(2), env = process.env, cwd = process.cwd(),
+  selectorPath = new URL('./mutation-selectors.json', import.meta.url), gate = runMutationGate, log = console.log } = {}) {
+  const staleOnly = argv.includes('--calibrate-stale');
+  const calibrate = argv.includes('--calibrate');
+  const workers = Number(env.OMP_MUTATION_WORKERS ?? 4);
+  const resultPath = env.OMP_MUTATION_RESULT ?? path.join(cwd, 'audit-reports', 'mutation-result.json');
+  const writeCatalog = (mappings) => writeFile(selectorPath, JSON.stringify({ schema: 'mutation-selectors@1', mappings }, null, 2) + '\n');
+  let selectors = {};
+  let stale = [];
+  let previous = {};
+  if (staleOnly) {
+    // Maintenance after a catalog or test edit: calibrate only the mutants whose selector no longer fits, keep the rest.
+    const catalog = JSON.parse(await readFile(selectorPath, 'utf8'));
+    if (catalog.schema !== 'mutation-selectors@1' || !catalog.mappings) throw new Error('Unreadable selector catalog; run --calibrate');
+    previous = catalog.mappings;
+    stale = await findStaleMutants(mutants, previous, cwd);
+    log(`Selector catalog: ${stale.length} of ${mutants.length} mutants need calibration.`);
+  } else if (!calibrate) {
+    const catalog = JSON.parse(await readFile(selectorPath, 'utf8'));
+    if (catalog.schema !== 'mutation-selectors@1' || !catalog.mappings || Object.keys(catalog.mappings).length !== mutants.length) throw new Error('Incomplete selector catalog; run --calibrate');
+    selectors = catalog.mappings;
+  }
+  const controller = new AbortController();
+  const interrupt = () => controller.abort();
+  process.once('SIGINT', interrupt);
+  process.once('SIGTERM', interrupt);
+  try {
+    const prove = async (targets, options, mode, subset) => {
+      log(`Starting safety mutation gate: ${targets.length} curated mutants, ${workers} workers, ${mode}...`);
+      await writeFile(`${resultPath}.jsonl`, '');
+      const result = await gate(targets, { workers, signal: controller.signal, ...options,
+        onResult: (record, mapping, fingerprint) => appendFile(`${resultPath}.jsonl`, JSON.stringify({ ...record, mapping, fingerprint }) + '\n') });
+      await writeFile(resultPath, JSON.stringify(subset ? { ...result, subset: { mutants: targets.length, catalog: mutants.length } } : result, null, 2) + '\n');
+      return result;
+    };
+    if (staleOnly) {
+      if (stale.length) {
+        const calibrated = await prove(stale, { calibrate: true, selectors: {} }, 'stale-selector calibration', true);
+        selectors = mergeCalibration(mutants, previous, calibrated.mappings, { complete: calibrated.passed });
+        await writeCatalog(selectors);
+        const proven = calibrated.results.filter((item) => item.outcome === 'killed').length;
+        log(`Stale-selector calibration ${calibrated.passed ? 'finished' : 'FAILED'}: ${proven}/${stale.length} stale mutants killed; ${calibrated.durationMs}ms.`);
+        if (!calibrated.passed) return 1;
+      } else {
+        selectors = mergeCalibration(mutants, previous, {});
+        await writeCatalog(selectors);
+        log('Selector catalog is current: no selector needed calibration.');
+      }
+      log('Proving every selector now: the exit code of --calibrate-stale is the verdict of the full gate.');
+    }
+    const result = await prove(mutants, { calibrate, selectors }, calibrate ? 'full/focused calibration' : 'verified focused selectors', false);
+    if (calibrate && result.passed) await writeCatalog(result.mappings);
+    const killed = result.results.filter((item) => item.outcome === 'killed').length;
+    log(`Mutation gate result: ${killed}/${mutants.length} killed; ${result.durationMs}ms.`);
+    log(result.passed ? 'Mutation gate PASSED: 100% of curated safety mutants killed.' : 'Mutation gate FAILED: unresolved mutation evidence.');
+    return result.passed ? 0 : 1;
+  } finally {
+    process.off('SIGINT', interrupt);
+    process.off('SIGTERM', interrupt);
+  }
+}
+
+
+// What the script entry does with the command line: a Node too old for precise selectors or any failure exits non-zero.
+export async function runAsScript({ mutants, nodeVersion = process.versions.node, run = runCli, setExitCode = (code) => { process.exitCode = code; }, report = console.error }) {
+  try {
+    if (Number(nodeVersion.split('.')[0]) < 22) throw new Error('Precise mutation gate requires Node 22 or newer; runtime plugin still supports Node 18');
+    setExitCode(await run({ mutants }));
+  } catch (error) {
+    report('Fatal mutation gate error:', error.message);
+    setExitCode(1);
   }
 }

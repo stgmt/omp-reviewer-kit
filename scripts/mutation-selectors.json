@@ -4095,7 +4095,7 @@
         "source: Given results of a partly failed batch, When validating per task, Then successes stay usable and failures carry no model text"
       ],
       "ancestors": [],
-      "mutantHash": "17eb98b20b1ef0ddaf95530f270307a4b6fe79d9cc24794e7945a5c624fc8325",
+      "mutantHash": "6c89e519d4a63968f19aba8b96cf85e792a35b6d41d53d739e174aa7e3eb864e",
       "testHash": "95244e37b109ea937a59ce94217ea2e696b5f9c5fa19fb67265ada5d3e948021"
     },
     "modular-stage-complete-guard-removed": {
@@ -4140,7 +4140,7 @@
         "bundle: Given results of a partly failed batch, When validating per task, Then successes stay usable and failures carry no model text"
       ],
       "ancestors": [],
-      "mutantHash": "325a9f9ba5ebeb2d82beceba7a01444b6e3c13f070e5320cfe84655fe618e67e",
+      "mutantHash": "55794ec03b29fe167233599e94a3571cdd06bbaf004957cceec6bef39a949d81",
       "testHash": "95244e37b109ea937a59ce94217ea2e696b5f9c5fa19fb67265ada5d3e948021"
     },
     "runner-stage-complete-guard-removed": {
@@ -4258,7 +4258,7 @@
       ],
       "ancestors": [],
       "mutantHash": "430e165a43355f97673826a582745330ac75a7b53c4b9c0bb92d24e4ee5f0d62",
-      "testHash": "c108661bbbcfe1e53c2fa7266decc4005ee1edbeeb94c5679afafb23b8ca8ab8"
+      "testHash": "8b18556f837e6a22da49a3f9a7fe4dd9aa4dfbddbc023fe73133104b7864d85d"
     },
     "mutation-exclusive-lane-disabled": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -4267,7 +4267,7 @@
       ],
       "ancestors": [],
       "mutantHash": "b242bfd0e13e8a9e7842ddb380b2ea0eb0df8d339612fd03c7bb2c313917ac95",
-      "testHash": "c108661bbbcfe1e53c2fa7266decc4005ee1edbeeb94c5679afafb23b8ca8ab8"
+      "testHash": "8b18556f837e6a22da49a3f9a7fe4dd9aa4dfbddbc023fe73133104b7864d85d"
     },
     "mutation-timeout-counted-as-kill": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -4276,7 +4276,7 @@
       ],
       "ancestors": [],
       "mutantHash": "8e5a1c5148d62c2c1e37373d73a0bc43d26606efa53af684611a83184db4d362",
-      "testHash": "c108661bbbcfe1e53c2fa7266decc4005ee1edbeeb94c5679afafb23b8ca8ab8"
+      "testHash": "8b18556f837e6a22da49a3f9a7fe4dd9aa4dfbddbc023fe73133104b7864d85d"
     },
     "mutation-missing-summary-accepted": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -4285,7 +4285,7 @@
       ],
       "ancestors": [],
       "mutantHash": "39f020855996175c63d8274b295fccb78c8e0ae7fe7fe00f9f052dc5e87c4c6d",
-      "testHash": "c108661bbbcfe1e53c2fa7266decc4005ee1edbeeb94c5679afafb23b8ca8ab8"
+      "testHash": "8b18556f837e6a22da49a3f9a7fe4dd9aa4dfbddbc023fe73133104b7864d85d"
     },
     "mutation-assertion-proof-omitted": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -4294,7 +4294,7 @@
       ],
       "ancestors": [],
       "mutantHash": "9461f424804a5718dfb0f3fef66b6e2f2de70ff431449396a29898459905d796",
-      "testHash": "c108661bbbcfe1e53c2fa7266decc4005ee1edbeeb94c5679afafb23b8ca8ab8"
+      "testHash": "8b18556f837e6a22da49a3f9a7fe4dd9aa4dfbddbc023fe73133104b7864d85d"
     },
     "mutation-worker-file-not-restored": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -4303,7 +4303,7 @@
       ],
       "ancestors": [],
       "mutantHash": "e5b5fcdfe45bcfff98928e441617dd63872e7bc0f93e29183658af3cd6f816a9",
-      "testHash": "c108661bbbcfe1e53c2fa7266decc4005ee1edbeeb94c5679afafb23b8ca8ab8"
+      "testHash": "8b18556f837e6a22da49a3f9a7fe4dd9aa4dfbddbc023fe73133104b7864d85d"
     },
     "mutation-stale-selector-accepted": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -4312,7 +4312,7 @@
       ],
       "ancestors": [],
       "mutantHash": "bacdb060d41cbc04378f7646db230200fbda69126d6bc00e0bc3d34162c8e6d6",
-      "testHash": "c108661bbbcfe1e53c2fa7266decc4005ee1edbeeb94c5679afafb23b8ca8ab8"
+      "testHash": "8b18556f837e6a22da49a3f9a7fe4dd9aa4dfbddbc023fe73133104b7864d85d"
     },
     "mutation-duplicate-catalog-accepted": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -4321,7 +4321,7 @@
       ],
       "ancestors": [],
       "mutantHash": "2d8e45133b5b12aa77ab2fb64d7073a4b7f2d962ea547d3f803c73e58a26842b",
-      "testHash": "c108661bbbcfe1e53c2fa7266decc4005ee1edbeeb94c5679afafb23b8ca8ab8"
+      "testHash": "8b18556f837e6a22da49a3f9a7fe4dd9aa4dfbddbc023fe73133104b7864d85d"
     },
     "runner-version-compare-inverted": {
       "testFile": "tests/claude-bridge.test.mjs",
@@ -5260,7 +5260,7 @@
       ],
       "ancestors": [],
       "mutantHash": "ebc112b31a50f0f358ee62462adeb2063c6d458cd3657b5f637f1767449c81d7",
-      "testHash": "c108661bbbcfe1e53c2fa7266decc4005ee1edbeeb94c5679afafb23b8ca8ab8"
+      "testHash": "8b18556f837e6a22da49a3f9a7fe4dd9aa4dfbddbc023fe73133104b7864d85d"
     },
     "run-record-drive-relative-override-accepted": {
       "testFile": "tests/review-run-records.test.mjs",
@@ -6191,6 +6191,618 @@
       "ancestors": [],
       "mutantHash": "87203961a7fcb3939754b72f46e8855d5e81c0cbe9059a0bf472c6f22fbc7f92",
       "testHash": "95244e37b109ea937a59ce94217ea2e696b5f9c5fa19fb67265ada5d3e948021"
+    },
+    "modular-scout-foreign-entries-never-dropped": {
+      "testFile": "tests/scout-foreign-entries.test.mjs",
+      "tests": [
+        "source: Given a scout whose only discovery was outside the batch, When it merges, Then it still has not discovered anything"
+      ],
+      "ancestors": [],
+      "mutantHash": "8adcaecbd62bc175f271eeac530f4cb6738f9f6e5f442f3c5256a705c6aa0b9b",
+      "testHash": "0e7690e8d9371f8636fa6e325d8a832762d5f1c26abecc053f92e79671a1a61a"
+    },
+    "runner-scout-foreign-entries-never-dropped": {
+      "testFile": "tests/scout-foreign-entries.test.mjs",
+      "tests": [
+        "bundle: Given a scout whose only discovery was outside the batch, When it merges, Then it still has not discovered anything"
+      ],
+      "ancestors": [],
+      "mutantHash": "0f3a689f76676a24e42f3d23dc97886f66c69726a0ac236f2920ab1cbebbe9fd",
+      "testHash": "0e7690e8d9371f8636fa6e325d8a832762d5f1c26abecc053f92e79671a1a61a"
+    },
+    "modular-scout-foreign-entries-owner-only": {
+      "testFile": "tests/scout-foreign-entries.test.mjs",
+      "tests": [
+        "source: Given per-task validation of a scout that cites another scout's file, Then the task is not failed, and an unowned path is dropped silently"
+      ],
+      "ancestors": [],
+      "mutantHash": "35c50e6cdc0bece6efd901b5b753cc4b7eeb264fdedee2dbe032d68cea36eb06",
+      "testHash": "0e7690e8d9371f8636fa6e325d8a832762d5f1c26abecc053f92e79671a1a61a"
+    },
+    "runner-scout-foreign-entries-owner-only": {
+      "testFile": "tests/scout-foreign-entries.test.mjs",
+      "tests": [
+        "bundle: Given per-task validation of a scout that cites another scout's file, Then the task is not failed, and an unowned path is dropped silently"
+      ],
+      "ancestors": [],
+      "mutantHash": "c82f82992a4dcbf4e31d0e7c99507383cb33a9c8ab7768996eb4e50f983cd650",
+      "testHash": "0e7690e8d9371f8636fa6e325d8a832762d5f1c26abecc053f92e79671a1a61a"
+    },
+    "modular-scout-foreign-entries-drop-unreported": {
+      "testFile": "tests/scout-foreign-entries.test.mjs",
+      "tests": [
+        "source: Given a scout cites a path no scout owns, When the batch merges, Then the entry is dropped and counted, never failed"
+      ],
+      "ancestors": [],
+      "mutantHash": "0c7f5b0f6b4b9cd8bdfa9a5fbf66e76ccee868fa31c8203b9a04c188b26aa194",
+      "testHash": "0e7690e8d9371f8636fa6e325d8a832762d5f1c26abecc053f92e79671a1a61a"
+    },
+    "runner-scout-foreign-entries-drop-unreported": {
+      "testFile": "tests/scout-foreign-entries.test.mjs",
+      "tests": [
+        "bundle: Given a scout cites a path no scout owns, When the batch merges, Then the entry is dropped and counted, never failed"
+      ],
+      "ancestors": [],
+      "mutantHash": "d1bccb5e91f51df010b96ebe2a0e202a34d6b58de063a38c4ed39b20e404d5e2",
+      "testHash": "0e7690e8d9371f8636fa6e325d8a832762d5f1c26abecc053f92e79671a1a61a"
+    },
+    "modular-scout-foreign-entries-discovery-counts-dropped": {
+      "testFile": "tests/scout-foreign-entries.test.mjs",
+      "tests": [
+        "source: Given a scout whose only discovery was outside the batch, When it merges, Then it still has not discovered anything"
+      ],
+      "ancestors": [],
+      "mutantHash": "e3890a796fd3c4e43f0a0c52ad4e92c0053e218d5a81d26a32373cc2f9d9184c",
+      "testHash": "0e7690e8d9371f8636fa6e325d8a832762d5f1c26abecc053f92e79671a1a61a"
+    },
+    "runner-scout-foreign-entries-discovery-counts-dropped": {
+      "testFile": "tests/scout-foreign-entries.test.mjs",
+      "tests": [
+        "bundle: Given a scout whose only discovery was outside the batch, When it merges, Then it still has not discovered anything"
+      ],
+      "ancestors": [],
+      "mutantHash": "9287a2736e8e7670467686bbf4fe0d925f4b7b4465da1ea5116ffacf0c134736",
+      "testHash": "0e7690e8d9371f8636fa6e325d8a832762d5f1c26abecc053f92e79671a1a61a"
+    },
+    "modular-scout-foreign-entries-batch-paths-ignored": {
+      "testFile": "tests/scout-foreign-entries.test.mjs",
+      "tests": [
+        "source: Given per-task validation of a scout that cites another scout's file, Then the task is not failed, and an unowned path is dropped silently"
+      ],
+      "ancestors": [],
+      "mutantHash": "54eb1ecfe385a53713d04444a207ca24b52cf043588323d5b32bf69a49626b98",
+      "testHash": "0e7690e8d9371f8636fa6e325d8a832762d5f1c26abecc053f92e79671a1a61a"
+    },
+    "runner-scout-foreign-entries-batch-paths-ignored": {
+      "testFile": "tests/scout-foreign-entries.test.mjs",
+      "tests": [
+        "bundle: Given per-task validation of a scout that cites another scout's file, Then the task is not failed, and an unowned path is dropped silently"
+      ],
+      "ancestors": [],
+      "mutantHash": "dbfdcf4f25cbf1e0fc447c74c2f6782a9c21ca54071c26e593426c33cfd58024",
+      "testHash": "0e7690e8d9371f8636fa6e325d8a832762d5f1c26abecc053f92e79671a1a61a"
+    },
+    "modular-scout-foreign-entries-validation-batch-unaware": {
+      "testFile": "tests/scout-foreign-entries.test.mjs",
+      "tests": [
+        "source: Given per-task validation of a scout that cites another scout's file, Then the task is not failed, and an unowned path is dropped silently"
+      ],
+      "ancestors": [],
+      "mutantHash": "adb1f7f34eaea829fb176a89484ce35e51672fb2c8388f45fc1b9348724b5190",
+      "testHash": "0e7690e8d9371f8636fa6e325d8a832762d5f1c26abecc053f92e79671a1a61a"
+    },
+    "runner-scout-foreign-entries-validation-batch-unaware": {
+      "testFile": "tests/scout-foreign-entries.test.mjs",
+      "tests": [
+        "bundle: Given per-task validation of a scout that cites another scout's file, Then the task is not failed, and an unowned path is dropped silently"
+      ],
+      "ancestors": [],
+      "mutantHash": "3bc9bad1b22e91855e35c9034a0f8988e53415e2f2460351904f984913d0c30c",
+      "testHash": "0e7690e8d9371f8636fa6e325d8a832762d5f1c26abecc053f92e79671a1a61a"
+    },
+    "cli-stale-flag-ignored": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given stale mutants survive, When --calibrate-stale runs, Then it fails, keeps the proven selectors and leaves the survivors stale"
+      ],
+      "ancestors": [],
+      "mutantHash": "0237c4307b1f6eb71fca086c5867412242adceeef928f8949e876e17509d8c95",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-stale-empty-set-runs-gate": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given selectors of mutants that left the catalog, When nothing is stale, Then the rewrite drops them and keeps the rest unchanged"
+      ],
+      "ancestors": [],
+      "mutantHash": "ee93c6568187cea9b04276a5a9d802f32baed0a32d33fd84febe7a97a0cb4b92",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-stale-ratio-counts-catalog": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given stale mutants survive, When --calibrate-stale runs, Then it fails, keeps the proven selectors and leaves the survivors stale"
+      ],
+      "ancestors": [],
+      "mutantHash": "33b0f419ca4d51861a1f2780e38287f7df8ae4ebf2c149074df9a2ddda89e0f5",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-stale-subset-claims-gate-pass": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given the stale subset is proven, When another selector fails in the full gate, Then --calibrate-stale exits 1, says so and keeps what it calibrated"
+      ],
+      "ancestors": [],
+      "mutantHash": "ddb377c7e6295eea545a4f1f6adc384886f4e7731445acffc0b3c35138a04408",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-stale-current-claims-gate-pass": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given selectors of mutants that left the catalog, When nothing is stale, Then the rewrite drops them and keeps the rest unchanged"
+      ],
+      "ancestors": [],
+      "mutantHash": "adfb183ffcec416dcec74c23fce575db49854028376d48f060df7a8c94382546",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-stale-merge-drops-untouched": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given stale mutants survive, When --calibrate-stale runs, Then it fails, keeps the proven selectors and leaves the survivors stale"
+      ],
+      "ancestors": [],
+      "mutantHash": "8ea5b1b03c84ed9043d24fafef8092137ad98dbac42b3d504097d70562da6ac6",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-stale-result-unmarked": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given stale mutants survive, When --calibrate-stale runs, Then it fails, keeps the proven selectors and leaves the survivors stale"
+      ],
+      "ancestors": [],
+      "mutantHash": "58fb6521fd972e6ca42162f0239fcc17b9526b7ae21c6347db85fba8af2c4a86",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-gate-failure-exits-zero": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given an interrupt during the gate, When it arrives, Then the gate is aborted and the signal handlers are removed afterwards"
+      ],
+      "ancestors": [],
+      "mutantHash": "dfff4a6272b52599e912f19e405613d27ccf3d97316cbc9db99db1591f8477f4",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-gate-failure-claims-pass": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given a survivor, When the ordinary gate runs, Then it fails with a non-zero exit and says so"
+      ],
+      "ancestors": [],
+      "mutantHash": "514bd0f305c78ed40bdd3d679598f548584d0bc26f7f7f42c828b476212bdb16",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-ordinary-run-rewrites-selectors": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given a complete catalog, When the ordinary gate passes, Then it reports a full pass and leaves the selectors untouched"
+      ],
+      "ancestors": [],
+      "mutantHash": "e962201c746337dbfc7cee684e02b2aaeef809694295e37b7d2e68627ce5b363",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-failed-calibration-writes-selectors": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given a full --calibrate, When it passes it writes the fresh selectors and when a mutant survives it leaves the catalog alone"
+      ],
+      "ancestors": [],
+      "mutantHash": "fc694db847bcff4a720eb20a945f3e0e845739d25af81f2ba1085d6d7f812c05",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-incomplete-catalog-accepted": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given a catalog that misses a mutant, When the ordinary gate starts, Then it is refused before any mutant runs"
+      ],
+      "ancestors": [],
+      "mutantHash": "a7b57332a0cd06757da480e97dbd65ebf4806e2a458b527c2ad5cb6fb3582d14",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-stale-partial-write-requires-complete": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given stale mutants survive, When --calibrate-stale runs, Then it fails, keeps the proven selectors and leaves the survivors stale"
+      ],
+      "ancestors": [],
+      "mutantHash": "8a8c2b20d7fa305d434f2edb66886c5b8d7e5321457ae85c439066004f5d9d74",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "modular-verifier-judged-by-hunter-lane": {
+      "testFile": "tests/verifier-task-lane.test.mjs",
+      "tests": [
+        "source: Given a verifier task that quotes a lane, When its result is validated, Then the lane belongs to the hunters and the verifier passes"
+      ],
+      "ancestors": [],
+      "mutantHash": "9e7070b1c5a6b0f16c7f84b3d9dd4edeb677aaa2d323e8a1cdb81e1278b540db",
+      "testHash": "d25efebc1847da1e91e34609b3a71fe75e9fd59d5e19ba59b1bef4b8a29a46c4"
+    },
+    "runner-verifier-judged-by-hunter-lane": {
+      "testFile": "tests/verifier-task-lane.test.mjs",
+      "tests": [
+        "bundle: Given a verifier task that quotes a lane, When its result is validated, Then the lane belongs to the hunters and the verifier passes"
+      ],
+      "ancestors": [],
+      "mutantHash": "bc0dd81f59c82c526c4dd47833c59a42284adece151b9d83feed049787562971",
+      "testHash": "d25efebc1847da1e91e34609b3a71fe75e9fd59d5e19ba59b1bef4b8a29a46c4"
+    },
+    "modular-hunter-lane-check-removed": {
+      "testFile": "tests/verifier-task-lane.test.mjs",
+      "tests": [
+        "source: Given a hunter task for one lane, When a candidate names another lane, Then the result is refused as belonging to another lane"
+      ],
+      "ancestors": [],
+      "mutantHash": "2caa9cdd6736cc88d3c7e72f2cfe9df6c9e7ef2fd7d178eeeb980ef6d867f93c",
+      "testHash": "d25efebc1847da1e91e34609b3a71fe75e9fd59d5e19ba59b1bef4b8a29a46c4"
+    },
+    "runner-hunter-lane-check-removed": {
+      "testFile": "tests/verifier-task-lane.test.mjs",
+      "tests": [
+        "bundle: Given a hunter task for one lane, When a candidate names another lane, Then the result is refused as belonging to another lane"
+      ],
+      "ancestors": [],
+      "mutantHash": "0e9aa229d831bc2576505f3c3b35e89e6375368b82dbf59efbf4e84d148aead8",
+      "testHash": "d25efebc1847da1e91e34609b3a71fe75e9fd59d5e19ba59b1bef4b8a29a46c4"
+    },
+    "cli-unreadable-catalog-accepted": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given an unreadable selector catalog, When --calibrate-stale runs, Then it is refused before any mutant runs"
+      ],
+      "ancestors": [],
+      "mutantHash": "9bcc7daa04a1a6dbf93fc9dd91a9dabbbf487fca2215d33cf5bd81aaf0bedc41",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-stale-rewrite-keeps-removed": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given selectors of mutants that left the catalog, When nothing is stale, Then the rewrite drops them and keeps the rest unchanged"
+      ],
+      "ancestors": [],
+      "mutantHash": "2e9dad991e279016b35054546e7ffbc87ee745b87875591d1adbcc5afa2c2be2",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-workers-env-ignored": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given OMP_MUTATION_WORKERS, When the gate starts, Then the worker count reaches the gate and the banner, and defaults to four"
+      ],
+      "ancestors": [],
+      "mutantHash": "beacfcefbf6949f23281da44c717265db5fdf6df6b790a5cc8e99626564c4fd7",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-workers-default-changed": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given OMP_MUTATION_WORKERS, When the gate starts, Then the worker count reaches the gate and the banner, and defaults to four"
+      ],
+      "ancestors": [],
+      "mutantHash": "46b8cd815a916f427f6ccfb900612f087b71cbfad30d704de53bbf51e78e9867",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-interrupt-not-forwarded": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given an interrupt during the gate, When it arrives, Then the gate is aborted and the signal handlers are removed afterwards"
+      ],
+      "ancestors": [],
+      "mutantHash": "2db978cc019c72d30d37d89f0bded732c878e8b36ab1b076f9878c627b3dfdfa",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-sigterm-not-handled": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given an interrupt during the gate, When it arrives, Then the gate is aborted and the signal handlers are removed afterwards"
+      ],
+      "ancestors": [],
+      "mutantHash": "f6bb93f1ae29b429555a1c1762c5c4d85655181735e93a285e48c90b89487b8e",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-default-catalog-elsewhere": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given no selector path, When the ordinary gate starts, Then it reads the catalog next to the script"
+      ],
+      "ancestors": [],
+      "mutantHash": "455211f9977a989f9df535d0f7221b0c53ff31fd11fff97e2e38851f601b06e7",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-entry-old-node-accepted": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given the script entry, When the Node version, the run or the exit code say so, Then the exit code and the report follow"
+      ],
+      "ancestors": [],
+      "mutantHash": "f1d1a7a856b40578b9be6d1e896ad98ea047eb762f6b565ddb647ebf2485ae28",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-entry-ignores-exit-code": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given the script entry, When the Node version, the run or the exit code say so, Then the exit code and the report follow"
+      ],
+      "ancestors": [],
+      "mutantHash": "2a2d315afebdab4a78613b44d54541dd232c6c315fd9627ca1e07bd9285c5f42",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-entry-failure-exits-zero": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given the script entry, When the Node version, the run or the exit code say so, Then the exit code and the report follow"
+      ],
+      "ancestors": [],
+      "mutantHash": "69e37a758f81eced2f9250d73dfc68c58bc3edcc0d402d642647180cbc8eaa37",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-entry-failure-unreported": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given the script entry, When the Node version, the run or the exit code say so, Then the exit code and the report follow"
+      ],
+      "ancestors": [],
+      "mutantHash": "d0e302d32a6f969a73941d11d21f807bd002db03b0e19cab98674e76d95e7400",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-entry-catalog-dropped": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given the script entry, When the Node version, the run or the exit code say so, Then the exit code and the report follow"
+      ],
+      "ancestors": [],
+      "mutantHash": "fd61979a7150314bc43c35864a53a7c0be12a873694586d0cfeaad244e85172f",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-sigint-handler-leaks": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given an interrupt during the gate, When it arrives, Then the gate is aborted and the signal handlers are removed afterwards"
+      ],
+      "ancestors": [],
+      "mutantHash": "b82a6ef2dc51f8ea9af7118f621b8061c38e02ef631ff117e9a9b78ca17d9fcd",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-sigterm-handler-leaks": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given an interrupt during the gate, When it arrives, Then the gate is aborted and the signal handlers are removed afterwards"
+      ],
+      "ancestors": [],
+      "mutantHash": "266f36260489ce6d69fec1e3001d4e47f35833e6e188837051eb73aede665949",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-stale-empty-selector-current": {
+      "testFile": "tests/mutation-runner.test.mjs",
+      "tests": [
+        "Given a selector catalog after an edit, When stale entries are looked up, Then only mutants with a missing, moved or outdated selector need calibration"
+      ],
+      "ancestors": [],
+      "mutantHash": "5eba7ce6c41e8e962ac784083d5ca6e8372b66cca931e3f12f38d4cbc9efbea0",
+      "testHash": "8b18556f837e6a22da49a3f9a7fe4dd9aa4dfbddbc023fe73133104b7864d85d"
+    },
+    "cli-stale-moved-test-current": {
+      "testFile": "tests/mutation-runner.test.mjs",
+      "tests": [
+        "Given a selector catalog after an edit, When stale entries are looked up, Then only mutants with a missing, moved or outdated selector need calibration"
+      ],
+      "ancestors": [],
+      "mutantHash": "7da508a3adc08f2e154dce203d2fb9eeb2036ce54497f53253c4cf56d6f7fea4",
+      "testHash": "8b18556f837e6a22da49a3f9a7fe4dd9aa4dfbddbc023fe73133104b7864d85d"
+    },
+    "cli-stale-edited-mutant-current": {
+      "testFile": "tests/mutation-runner.test.mjs",
+      "tests": [
+        "Given a selector catalog after an edit, When stale entries are looked up, Then only mutants with a missing, moved or outdated selector need calibration"
+      ],
+      "ancestors": [],
+      "mutantHash": "847805ebde874edf56c51a57973d2a663216e21018efec7477ebc3c45cfffc48",
+      "testHash": "8b18556f837e6a22da49a3f9a7fe4dd9aa4dfbddbc023fe73133104b7864d85d"
+    },
+    "cli-stale-edited-test-current": {
+      "testFile": "tests/mutation-runner.test.mjs",
+      "tests": [
+        "Given a selector catalog after an edit, When stale entries are looked up, Then only mutants with a missing, moved or outdated selector need calibration"
+      ],
+      "ancestors": [],
+      "mutantHash": "0bc66ae7bcc20e6468dbb028c5379cc16b087d6752943c86dbfeedb309548aaa",
+      "testHash": "8b18556f837e6a22da49a3f9a7fe4dd9aa4dfbddbc023fe73133104b7864d85d"
+    },
+    "cli-stale-hash-keeps-crlf": {
+      "testFile": "tests/mutation-runner.test.mjs",
+      "tests": [
+        "Given a selector catalog after an edit, When stale entries are looked up, Then only mutants with a missing, moved or outdated selector need calibration"
+      ],
+      "ancestors": [],
+      "mutantHash": "a01fd5aadcddf4e4547b23f3d9f449a0235413762631dec5824d68fbc3f2ac64",
+      "testHash": "8b18556f837e6a22da49a3f9a7fe4dd9aa4dfbddbc023fe73133104b7864d85d"
+    },
+    "cli-merge-keeps-removed": {
+      "testFile": "tests/mutation-runner.test.mjs",
+      "tests": [
+        "Given a partial calibration, When merged, Then fresh selectors win, removed mutants are dropped and a mutant left without any selector is an error"
+      ],
+      "ancestors": [],
+      "mutantHash": "e0fa5248e67c4ec4e6fbf74d311b4fe78156a6006168c5f36f1b57c9f97b045c",
+      "testHash": "8b18556f837e6a22da49a3f9a7fe4dd9aa4dfbddbc023fe73133104b7864d85d"
+    },
+    "cli-merge-ignores-fresh": {
+      "testFile": "tests/mutation-runner.test.mjs",
+      "tests": [
+        "Given a partial calibration, When merged, Then fresh selectors win, removed mutants are dropped and a mutant left without any selector is an error"
+      ],
+      "ancestors": [],
+      "mutantHash": "7bfdc771cac2b23d7c791b1399c51da1b74403e94131d2325dbe46dfc9efcdbc",
+      "testHash": "8b18556f837e6a22da49a3f9a7fe4dd9aa4dfbddbc023fe73133104b7864d85d"
+    },
+    "cli-merge-drops-unfreshened": {
+      "testFile": "tests/mutation-runner.test.mjs",
+      "tests": [
+        "Given a partial calibration, When merged, Then fresh selectors win, removed mutants are dropped and a mutant left without any selector is an error"
+      ],
+      "ancestors": [],
+      "mutantHash": "3b60675eaefe39028e741d2829dd41f9e91612ab06b26053876cebad4b5bdf03",
+      "testHash": "8b18556f837e6a22da49a3f9a7fe4dd9aa4dfbddbc023fe73133104b7864d85d"
+    },
+    "cli-merge-incomplete-not-error": {
+      "testFile": "tests/mutation-runner.test.mjs",
+      "tests": [
+        "Given a partial calibration, When merged, Then fresh selectors win, removed mutants are dropped and a mutant left without any selector is an error"
+      ],
+      "ancestors": [],
+      "mutantHash": "76b4dad86fa0ba0bc60b2517aceb16650fd191f3636fce3794e9a0d3b958d691",
+      "testHash": "8b18556f837e6a22da49a3f9a7fe4dd9aa4dfbddbc023fe73133104b7864d85d"
+    },
+    "cli-merge-default-incomplete": {
+      "testFile": "tests/mutation-runner.test.mjs",
+      "tests": [
+        "Given a partial calibration, When merged, Then fresh selectors win, removed mutants are dropped and a mutant left without any selector is an error"
+      ],
+      "ancestors": [],
+      "mutantHash": "ebcddaa71822dec4cb9ad90695a27d1a92bef1a64058a659d52a3caef9a5dbf7",
+      "testHash": "8b18556f837e6a22da49a3f9a7fe4dd9aa4dfbddbc023fe73133104b7864d85d"
+    },
+    "cli-merge-missing-selector-written": {
+      "testFile": "tests/mutation-runner.test.mjs",
+      "tests": [
+        "Given a partial calibration, When merged, Then fresh selectors win, removed mutants are dropped and a mutant left without any selector is an error"
+      ],
+      "ancestors": [],
+      "mutantHash": "c7063bab53651cc9772049f41b6ab3e8caa63b762ff120fe2ce2cb66b4662a0b",
+      "testHash": "8b18556f837e6a22da49a3f9a7fe4dd9aa4dfbddbc023fe73133104b7864d85d"
+    },
+    "cli-result-lines-dropped": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given one outdated selector, When --calibrate-stale runs, Then that mutant is calibrated first, then every selector is proven, and the exit code is the full gate verdict"
+      ],
+      "ancestors": [],
+      "mutantHash": "784dced6c0040ed03ac5488e9d2e4eb9d2518395e33fc787f4633ef59dd47b00",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-result-lines-lose-fingerprint": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given one outdated selector, When --calibrate-stale runs, Then that mutant is calibrated first, then every selector is proven, and the exit code is the full gate verdict"
+      ],
+      "ancestors": [],
+      "mutantHash": "d445757a885a242e1ae65c198fcfd52729d5db4080aeba4c359effc57fed0c0e",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-entry-guard-inverted": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given the script is run directly, When it cannot read a test file, Then it reports a fatal error, exits non-zero and leaves the catalog alone"
+      ],
+      "ancestors": [],
+      "mutantHash": "eccb34ff4284e02f35f652113cfb73901cce9dcfae3db4e00d4dbccf9819e440",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-entry-guard-removed": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given the script module is imported without an entry file, When nothing runs it, Then it only exports the catalog"
+      ],
+      "ancestors": [],
+      "mutantHash": "70e6b650b7d832276d93de11bba51611f11744c75487fb397141112f6feba88a",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-entry-guard-needs-no-argv": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given the script module is imported without an entry file, When nothing runs it, Then it only exports the catalog"
+      ],
+      "ancestors": [],
+      "mutantHash": "5ab4691ccb20d90c184d1501c20172a70b908b9df0f910128eb83efb2d13c8c0",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-entry-script-catalog-empty": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given the script is run directly, When it cannot read a test file, Then it reports a fatal error, exits non-zero and leaves the catalog alone"
+      ],
+      "ancestors": [],
+      "mutantHash": "c15aef928fc393159a5399af91f721f050403c81b7b156bcd6e25a050665a8ad",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-merge-existing-recomputed": {
+      "testFile": "tests/mutation-runner.test.mjs",
+      "tests": [
+        "Given a partial calibration, When merged, Then fresh selectors win, removed mutants are dropped and a mutant left without any selector is an error"
+      ],
+      "ancestors": [],
+      "mutantHash": "266704804c25aff8d784e9b68874defbe92028a3d23005fc1dd3b9855bac2230",
+      "testHash": "8b18556f837e6a22da49a3f9a7fe4dd9aa4dfbddbc023fe73133104b7864d85d"
+    },
+    "cli-result-lines-not-truncated": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given one outdated selector, When --calibrate-stale runs, Then that mutant is calibrated first, then every selector is proven, and the exit code is the full gate verdict"
+      ],
+      "ancestors": [],
+      "mutantHash": "7e65b7ffeec71505289051eb5d48c9aa9456396cbe64c1ec02a5dae8603ab930",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-result-lines-lose-mapping": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given one outdated selector, When --calibrate-stale runs, Then that mutant is calibrated first, then every selector is proven, and the exit code is the full gate verdict"
+      ],
+      "ancestors": [],
+      "mutantHash": "baa90dc9b0b67df691f773c3ba53e1a0ed18711d7b954cdfdb89022c0698c287",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-stale-banner-counts-catalog-twice": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given stale mutants survive, When --calibrate-stale runs, Then it fails, keeps the proven selectors and leaves the survivors stale"
+      ],
+      "ancestors": [],
+      "mutantHash": "c920bf818e50a0d0e5fdbf079915b883af65a20b0925d21e47f670e0da24f755",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-stale-failed-calibration-runs-full-gate": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given stale mutants survive, When --calibrate-stale runs, Then it fails, keeps the proven selectors and leaves the survivors stale"
+      ],
+      "ancestors": [],
+      "mutantHash": "4cb8114f9b7d2bce1f1309d9fd4f9ac166627293a7bfd6397bec1b99f7b94c84",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-stale-full-gate-ignores-calibration": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given selectors of mutants that left the catalog, When nothing is stale, Then the rewrite drops them and keeps the rest unchanged"
+      ],
+      "ancestors": [],
+      "mutantHash": "90b6d9fcf0a1b7a272f72b2b5a5d4538f0c96563b79d2d1f7c297e01f2486537",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-full-gate-marked-subset": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given a complete catalog, When the ordinary gate passes, Then it reports a full pass and leaves the selectors untouched"
+      ],
+      "ancestors": [],
+      "mutantHash": "4a36174967d6a944a45c2efffc95709c4e547de269cfee960ee3d7f4c302e2e1",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
+    },
+    "cli-stale-calibration-result-claims-whole-catalog": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given stale mutants survive, When --calibrate-stale runs, Then it fails, keeps the proven selectors and leaves the survivors stale"
+      ],
+      "ancestors": [],
+      "mutantHash": "ad341f3cf5ae6306a9d43758c9596cbefc0d51280f467e7e349689c69f7641b4",
+      "testHash": "3e7d4d62f1e0d1f055f8be4d2b1f53266defba96079009a531a84b05d21ea1cd"
     }
   }
 }

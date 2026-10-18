@@ -107,7 +107,7 @@ export function validateBatchTasks(input, details, parentId = null, scopes = nul
       if (own.length !== 1) throw new Error(own.length === 0 ? 'No native result for task' : 'Duplicate native result for task');
       const [result] = validateBatchResults({ tasks: [task] }, { results: [{ ...own[0], id }] }, parentId);
       const scope = scopes?.find((item) => item.id === task.name);
-      if (scope) mergeScoutReports([result.structuredOutput.data], [scope]);
+      if (scope) mergeScoutReports([result.structuredOutput.data], [scope], { owned: scopes.flatMap((item) => item.paths) });
       valid.set(task.name, result);
     } catch (error) {
       failures.push(describeTaskFailure(task.name, own[0], error));
@@ -163,14 +163,22 @@ export function validateBatchResults(input, details, parentId = null) {
         : ['decisions', 'confirmed_findings', 'confirmed_coverage_gaps', 'rejected_coverage_gaps'];
       if (typeof data.coverage_summary !== 'string' || fields.some((field) => !Array.isArray(data[field]))) throw new Error('Incomplete specialist domain payload');
       const expectedLane = expected[i].task.match(/lane: "(correctness|security|content-risk)"/)?.[1];
-      if (expectedLane && data.candidates.some((candidate) => candidate.lane !== expectedLane)) throw new Error('Hunter result belongs to another lane');
+      // Only a hunter has candidates; a verifier task may quote a lane in its text without owning one.
+      if (result.agent === 'review-risk-hunter' && expectedLane && data.candidates.some((candidate) => candidate.lane !== expectedLane)) throw new Error('Hunter result belongs to another lane');
     }
   }
   return results;
 }
 
-export function mergeScoutReports(reports, scopes) {
+// A scout reads the whole staged diff, so it routinely cites evidence from a file another scout owns. Such an entry is not
+// wrong, only attributed to the wrong scout: it is kept when some scout of the batch owns the path (the merge deduplicates it
+// against the owner's own entry) and dropped, with a count, when no scout owns it. It never fails the review.
+const OWNED_ENTRY_PATH = { claims: 'source_path', declared_checks: 'source_path', non_coverable_items: 'file_path' };
+
+export function mergeScoutReports(reports, scopes, { owned = null } = {}) {
   if (reports.length !== scopes.length) throw new Error('Missing scout scope');
+  const batchPaths = new Set(owned ?? scopes.flatMap((s) => s.paths));
+  const dropped = [];
   const fields = ['changed_paths', 'relevant_consumers', 'invariants', 'test_evidence', 'coverage_map', 'non_coverable_items', 'claims', 'declared_checks', 'unknowns', 'reviewed_paths'];
   const merged = Object.fromEntries(fields.map((field) => [field, []]));
   const coverage = new Map();
@@ -181,18 +189,20 @@ export function mergeScoutReports(reports, scopes) {
     if (!completion || completion.scope_id !== scope.id || !Array.isArray(completion.completed_paths)
       || !Array.isArray(completion.unresolved) || completion.unresolved.length
       || scope.paths.some((p) => !completion.completed_paths.includes(p)) || new Set(completion.completed_paths).size !== completion.completed_paths.length) throw new Error('Unresolved scout obligations');
+    const kept = {};
     for (const field of fields) {
       if (!Array.isArray(report[field])) throw new Error(`Missing scout field: ${field}`);
-      merged[field].push(...report[field]);
+      const pathKey = OWNED_ENTRY_PATH[field];
+      kept[field] = pathKey ? report[field].filter((entry) => batchPaths.has(entry?.[pathKey])) : report[field];
+      if (kept[field].length !== report[field].length) dropped.push({ scope: scope.id, field, count: report[field].length - kept[field].length });
+      merged[field].push(...kept[field]);
     }
     if (completion.completed_paths.some((p) => !scope.paths.includes(p)) || report.changed_paths.some((p) => !scope.paths.includes(p))) throw new Error('Scout claims foreign ownership');
     if (typeof report.change_goal !== 'string' || !report.change_goal.trim()
       || scope.paths.some((p) => !report.changed_paths.includes(p)) || report.reviewed_paths.length === 0
-      || !['invariants', 'test_evidence', 'coverage_map', 'non_coverable_items', 'claims', 'declared_checks'].some((field) => report[field].length > 0)) {
+      || !['invariants', 'test_evidence', 'coverage_map', 'non_coverable_items', 'claims', 'declared_checks'].some((field) => kept[field].length > 0)) {
       throw new Error('Incomplete scout discovery; completion paths alone do not prove scope coverage');
     }
-    for (const entry of report.non_coverable_items) if (!scope.paths.includes(entry.file_path)) throw new Error('Non-coverable item outside ownership');
-    for (const entry of [...report.claims, ...report.declared_checks]) if (!scope.paths.includes(entry.source_path)) throw new Error('Claim outside ownership');
     for (const entry of report.coverage_map) {
       if (!scope.paths.includes(entry.file_path)) throw new Error('Scout coverage outside ownership');
       const key = JSON.stringify([entry.file_path, entry.line_start, entry.line_end, entry.behavior]);
@@ -206,5 +216,6 @@ export function mergeScoutReports(reports, scopes) {
   if (harnessClasses.size !== 1 || !['present', 'absent'].includes([...harnessClasses][0])) throw new Error('Runtime-specific harness conflict requires resolution');
   merged.test_harness = reports.map((r) => r.test_harness).join('; ');
   merged.completion = { scopes: scopes.map((s) => s.id), unresolved: [] };
+  if (dropped.length) merged.dropped_entries = dropped;
   return merged;
 }

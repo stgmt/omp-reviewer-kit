@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { runPool, classifyTestRun, captureTree, restoreTree, runTest, runMutationGate } from '../scripts/mutation-runner.mjs';
+import { runPool, classifyTestRun, captureTree, restoreTree, runTest, runMutationGate, findStaleMutants, mergeCalibration, mutantIdentity, testFileHash } from '../scripts/mutation-runner.mjs';
 
 test('Given two mutants of one behavior, When calibrated with reusable workers, Then all IDs have reference and focused assertion proof', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'rk-gate-test-'));
@@ -151,4 +151,48 @@ test('Given a native nested test, When selected precisely, Then reporter proves 
     assert.ok(result.events.some((event) => event.name === 'contract' && event.causeCode === 'ERR_ASSERTION'));
     assert.ok(!result.events.some((event) => event.name === 'unrelated' && !event.skipped));
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('Given a selector catalog after an edit, When stale entries are looked up, Then only mutants with a missing, moved or outdated selector need calibration', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'rk-stale-test-'));
+  try {
+    await mkdir(path.join(root, 'tests'), { recursive: true });
+    await writeFile(path.join(root, 'tests', 'a.test.mjs'), 'a\r\ntest\r\n');
+    await writeFile(path.join(root, 'tests', 'b.test.mjs'), 'b test\n');
+    const mutant = (id, testFile, replacement = 'x') => ({ id, file: 'src/a.mjs', testFile, original: 'o', replacement });
+    const fresh = mutant('fresh', 'tests/a.test.mjs');
+    const moved = mutant('moved', 'tests/a.test.mjs');
+    const edited = mutant('edited', 'tests/a.test.mjs');
+    const changedTest = mutant('changed-test', 'tests/b.test.mjs');
+    const missing = mutant('missing', 'tests/b.test.mjs');
+    const aHash = testFileHash('a\ntest\n');
+    const mapping = (m, over = {}) => ({ testFile: m.testFile, tests: ['t'], ancestors: [], mutantHash: mutantIdentity(m), testHash: m.testFile === 'tests/a.test.mjs' ? aHash : testFileHash('b test\n'), ...over });
+    const mappings = {
+      fresh: mapping(fresh),
+      moved: mapping(moved, { testFile: 'tests/b.test.mjs' }),
+      edited: mapping(edited, { mutantHash: mutantIdentity(mutant('edited', 'tests/a.test.mjs', 'y')) }),
+      'changed-test': mapping(changedTest, { testHash: 'outdated' }),
+      emptied: mapping(mutant('emptied', 'tests/a.test.mjs'), { tests: [] }),
+    };
+    const stale = await findStaleMutants([fresh, moved, edited, changedTest, missing], mappings, root);
+    assert.deepEqual(stale.map((m) => m.id), ['moved', 'edited', 'changed-test', 'missing']);
+    assert.deepEqual((await findStaleMutants([mutant('emptied', 'tests/a.test.mjs')], mappings, root)).map((m) => m.id), ['emptied']);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('Given a partial calibration, When merged, Then fresh selectors win, removed mutants are dropped and a mutant left without any selector is an error', () => {
+  const mutants = [{ id: 'kept' }, { id: 'recalibrated' }];
+  const previous = { kept: { tests: ['old-kept'] }, recalibrated: { tests: ['old'] }, removed: { tests: ['gone'] } };
+  // A merge that throws must fail on an assertion (a thrown error would be an infrastructure error of the mutation gate).
+  const attempt = (...args) => { try { return mergeCalibration(...args); } catch (error) { return { threw: error.message }; } };
+  const merged = attempt(mutants, previous, { recalibrated: { tests: ['new'] } });
+  assert.deepEqual(merged, { kept: { tests: ['old-kept'] }, recalibrated: { tests: ['new'] } });
+  assert.deepEqual(Object.keys(merged), ['kept', 'recalibrated']);
+  // Existing entries keep the catalog's order, whatever the order of the mutants; new ones follow.
+  const reordered = attempt([{ id: 'new-mutant' }, ...mutants.slice().reverse()], previous, { 'new-mutant': { tests: ['n'] } });
+  assert.deepEqual(Object.keys(reordered), ['kept', 'recalibrated', 'new-mutant']);
+  assert.throws(() => mergeCalibration([...mutants, { id: 'new-mutant' }], previous, {}), /No selector for new-mutant/);
+  // A partial calibration keeps what was proven and leaves the rest without a selector, so the gate still refuses the incomplete catalog.
+  const partial = attempt([...mutants, { id: 'new-mutant' }], previous, { recalibrated: { tests: ['new'] } }, { complete: false });
+  assert.deepEqual(partial, { kept: { tests: ['old-kept'] }, recalibrated: { tests: ['new'] } });
 });
