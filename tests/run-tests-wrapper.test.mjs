@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -109,6 +109,26 @@ test('Given a registry override in the outer environment, When the test wrapper 
     assert.notEqual(registry, '', 'the suite runs with a target registry set');
     assert.notEqual(path.resolve(registry), path.resolve(userRegistry), 'the outer override never reaches the suite');
     assert.equal(existsSync(path.dirname(registry)), false, 'the throwaway registry folder is removed afterwards');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('Given an ignored upstream checkout, When no suites are specified, Then only flat kit test suites run', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'omp-wrapper-discovery-'));
+  try {
+    await mkdir(path.join(dir, 'tests', 'nested'), { recursive: true });
+    await mkdir(path.join(dir, 'Temp', 'upstream'), { recursive: true });
+    const marker = path.join(dir, 'executed');
+    await writeFile(path.join(dir, 'tests', 'kit.test.mjs'), `import {writeFileSync} from 'node:fs'; import test from 'node:test'; test('flat kit suite',()=>writeFileSync(${JSON.stringify(marker)},'yes'));`);
+    await writeFile(path.join(dir, 'tests', 'nested', 'foreign.test.mjs'), "throw Error('Nested helper suite was executed');");
+    await writeFile(path.join(dir, 'Temp', 'upstream', 'foreign.test.mjs'), "throw Error('Ignored upstream tests were executed');");
+    const env = { ...process.env };
+    delete env.NODE_TEST_CONTEXT;
+    const result = spawnSync(process.execPath, [WRAPPER], { cwd: dir, env, encoding: 'utf8', windowsHide: true });
+    assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
+    assert.equal(readFileSync(marker, 'utf8'), 'yes');
+    assert.doesNotMatch(`${result.stdout}${result.stderr}`, /Nested helper suite was executed|Ignored upstream tests were executed/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

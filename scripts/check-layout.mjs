@@ -14,7 +14,6 @@ const CLAUDE_PLUGIN_FILES = [
   'commands/setup.md',
   'hooks/hooks.json',
   'scripts/bridge.mjs',
-  'skills/review-progress/SKILL.md',
 ];
 const CLAUDE_PLUGIN_MAX_BYTES = 100 * 1024;
 
@@ -23,23 +22,30 @@ const required = [
   '.omp-plugin/marketplace.json',
   '.claude-plugin/marketplace.json',
   ...CLAUDE_PLUGIN_FILES.map((file) => `claude-plugin/${file}`),
+  // The native review: one staged snapshot, one native task, a verdict over its evidence.
+  'src/native/native-host.mjs',
+  'src/native/native-review.mjs',
+  'src/native/snapshot.mjs',
+  'src/native/assignment.mjs',
+  'src/native/verdict.mjs',
+  'src/native/task-engine.mjs',
+  'src/domain/file-class.mjs',
+  'src/domain/diff-identity.mjs',
+  'src/domain/prompt-token.mjs',
+  'src/domain/suspicion-map.mjs',
+  'src/infra/filesystem-report-store-adapter.mjs',
+  // The hook: installer, guard, shim and target registry.
   'src/domain/runner-version.mjs',
   'src/infra/vendored-kit-files.mjs',
   'src/domain/target-policy.mjs',
   'src/domain/hook-template.mjs',
+  'src/domain/hook-shim.mjs',
+  'src/domain/git-commit-command.mjs',
   'scripts/stamp-hook.mjs',
   'src/infra/target-registry.mjs',
-  'src/infra/stage-transcript-stats.mjs',
-  'src/domain/context-pack.mjs',
-  'src/domain/scout-baseline.mjs',
-  'src/domain/hunter-shards.mjs',
   'scripts/sync-targets.mjs',
-  'src/infra/filesystem-verdict-cache-adapter.mjs',
-  'src/infra/filesystem-round-store-adapter.mjs',
-  'src/domain/review-round.mjs',
-  'src/domain/review-batch.mjs',
-  'src/infra/review-batch-extension.mjs',
-  'src/infra/review-gate-entry.mjs',
+  '.specs/native-task-review/REQUIREMENTS.md',
+  '.specs/native-task-review/ACCEPTANCE_CRITERIA.md',
   'skills/reality-first-review/SKILL.md',
   'skills/multi-stage-review/SKILL.md',
   'agents/reviewer-kit.md',
@@ -57,7 +63,6 @@ const required = [
   'scripts/install-hook.ps1',
   'scripts/install-hook.sh',
   'src/index.mjs',
-  'src/domain/review-rejection-envelope.mjs',
   'src/extension.mjs',
   'src/application/installer-service.mjs',
   'AGENTS.md',
@@ -65,16 +70,6 @@ const required = [
   'CHANGELOG.md',
   '.github/workflows/ci.yml',
   '.github/workflows/release.yml',
-  'src/domain/suspicion-map.mjs',
-  'src/domain/execution-evidence.mjs',
-  'src/domain/reverted-snapshot.mjs',
-  'src/infra/subprocess-execution-adapter.mjs',
-  'src/infra/review-run-records.mjs',
-  'scripts/review-progress.mjs',
-  'src/domain/superseded-runs.mjs',
-  'src/infra/process-table.mjs',
-  'src/application/superseded-run-stopper.mjs',
-  'scripts/stop-superseded-runs.mjs',
   'scripts/audit-range.mjs',
   'skills/range-audit/SKILL.md',
   'agents/review-range-auditor.md',
@@ -106,6 +101,11 @@ const algorithm = await readFile('scripts/run-review.mjs', 'utf8');
 const runnerMarker = /^\/\/ omp-reviewer-kit runner v(\d+\.\d+\.\d+)\r?\n/.exec(algorithm);
 if (!runnerMarker || runnerMarker[1] !== pkg.version) {
   throw new Error(`scripts/run-review.mjs must start with "// omp-reviewer-kit runner v${pkg.version}".`);
+}
+
+// The native review imports OMP's library: it is pinned to one exact version, never a range, so doctor can compare it.
+if (!/^\d+\.\d+\.\d+$/.test(pkg.dependencies?.['@oh-my-pi/pi-coding-agent'] ?? '')) {
+  throw new Error('package.json must pin @oh-my-pi/pi-coding-agent to one exact version (no range).');
 }
 
 // The stub's marker must outrank the algorithm's: an installer that predates the stub then keeps the stub instead of writing the algorithm over it.

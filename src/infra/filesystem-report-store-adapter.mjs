@@ -1,8 +1,6 @@
 import { createHash } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
-import { ReportStorePort } from '../application/ports.mjs';
 
 /**
  * Root folder for saved review reports. It lies outside every repository: the
@@ -41,34 +39,4 @@ export function repoReportsFolderName(repoRoot) {
  */
 export function repoReportsDir(repoRoot, options = {}) {
   return path.join(reportsRootDir(options), repoReportsFolderName(repoRoot));
-}
-
-/**
- * Infrastructure adapter persisting audit reports to a folder outside the repository.
- */
-export class FileSystemReportStoreAdapter extends ReportStorePort {
-  #rootDir;
-
-  /**
-   * @param {{ rootDir?: string }} [options]
-   */
-  constructor({ rootDir = reportsRootDir() } = {}) {
-    super();
-    this.#rootDir = rootDir;
-  }
-
-  /**
-   * @param {string} repoRoot
-   * @param {import('../domain/review-report.mjs').ReviewReport} report
-   * @returns {Promise<string>} absolute path of the written report
-   */
-  async saveReport(repoRoot, report) {
-    const reportDir = path.join(this.#rootDir, repoReportsFolderName(repoRoot));
-    await mkdir(reportDir, { recursive: true });
-
-    const reportPath = path.join(reportDir, report.filename);
-    await writeFile(reportPath, report.toMarkdown(), 'utf8');
-
-    return reportPath;
-  }
 }

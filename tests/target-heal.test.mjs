@@ -16,7 +16,7 @@ test('Given a registered repository with a stale runner, When targets are healed
     for (const repo of [stale, fresh]) await ws.installer.registerTarget(repo);
     await ws.makeStale(stale);
 
-    const summary = await ws.installer.healTargets();
+    const summary = await ws.installer.healTargets({ budgetMs: Infinity });
 
     assert.deepEqual(summary, { checked: 2, healed: [path.resolve(stale)], failed: [], pruned: [] });
     assert.equal(await readFile(ws.runnerOf(stale), 'utf8'), CANONICAL_RUNNER);
@@ -52,7 +52,7 @@ test('Given registered repositories that never installed the hook, lost their gi
     await ws.makeStale(current);
     await rm(gone, { recursive: true, force: true });
 
-    const summary = await ws.installer.healTargets({ exceptRoot: current });
+    const summary = await ws.installer.healTargets({ exceptRoot: current, budgetMs: Infinity });
 
     assert.deepEqual(summary.healed, []);
     assert.deepEqual(summary.pruned, [path.resolve(gone)]);

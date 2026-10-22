@@ -49,7 +49,7 @@ const manifest = JSON.parse(await readFile('package.json', 'utf8'));
 describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
   it('manifest and skills declare fixed reviewer identities', () => {
     assert.equal(manifest.name, 'omp-reviewer-kit');
-    assert.equal(manifest.version, '0.21.2');
+    assert.equal(manifest.version, '0.22.0');
     assert.match(realitySkill, /name: reality-first-review/);
     assert.match(multiStageSkill, /name: multi-stage-review/);
     assert.match(rangeAuditSkill, /name: range-audit/);
@@ -108,8 +108,8 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(reviewerKitAgent, /### Unproven\/rejected summary/);
     assert.match(reviewerKitAgent, /### Verified-OK/);
     assert.match(reviewerKitAgent, /### Required test coverage/);
-    assert.match(reviewerKitAgent, /coverage_required/);
-    assert.match(reviewerKitAgent, /coverage_items/);
+    // The native host reads the verdict marker and the report only: no rejection envelope exists any more.
+    assert.doesNotMatch(reviewerKitAgent, /\bcoverage_required\b|\bcoverage_items\b|REVIEW_REJECTION_ENVELOPE|review-rejection-envelope@1/);
     assert.match(reviewerKitAgent, /### Notes/);
     // Suppressed coverage items must leave a durable record in ### Notes —
     // sourced from the three producer records on every surface.
@@ -139,12 +139,11 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(hunterAgent, /equally non-coverable/i);
     assert.match(verifierAgent, /equally non-coverable/i);
     assert.match(multiStageSkill, /equally non-coverable/i);
-    assert.match(reviewerKitAgent, /suspicion map/i);
-    assert.match(reviewerKitAgent, /execution evidence/i);
+    // The prompt-side inputs of the removed pipeline are gone from the orchestrator.
+    assert.doesNotMatch(reviewerKitAgent, /suspicion map|execution evidence|PREVIOUS ROUND|HUNTER SHARDS|NATIVE REVIEW BATCH PLAN/);
 
     assert.match(reviewerKitAgent, /REVIEW_RESULT=PASS/);
     assert.match(reviewerKitAgent, /REVIEW_RESULT=BLOCK/);
-    assert.match(reviewerKitAgent, /review-rejection-envelope@1/);
     assert.equal((reviewerKitAgent.match(/Stage [1-4]:/g) ?? []).length, 4);
     assert.equal((reviewerKitAgent.match(/agent `review-risk-hunter`/g) ?? []).length, 1);
     assert.match(reviewerKitAgent, /Risk lanes for this diff/);
@@ -169,7 +168,7 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(reviewerKitAgent, /spec-docs/);
     assert.match(reviewerKitAgent, /content-risk/);
     assert.match(reviewerKitAgent, /file-classes\.json/);
-    assert.match(reviewerKitAgent, /never emit a `coverage_required` envelope/);
+    assert.match(reviewerKitAgent, /never enumerate or verify coverage gaps/);
     // Hunter accepts the third lane; schema enum must cover all three.
     assert.match(hunterAgent, /lane: "content-risk"/);
     assert.match(hunterAgent, /"correctness \| security \| content-risk"/);
@@ -181,44 +180,22 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(scoutAgent, /file-classes\.json/);
   });
 
-  it('review-profile contract: dispatcher prompt and runner emit profile + manifest', async () => {
-    const promptSrc = await readFile('src/domain/review-prompt.mjs', 'utf8');
-    assert.match(promptSrc, /Review profile for this diff:/);
-    assert.match(promptSrc, /File-class manifest/);
-    assert.match(promptSrc, /Risk lanes for this diff:/);
-    const fileClassSrc = await readFile('src/domain/file-class.mjs', 'utf8');
-    assert.match(fileClassSrc, /spec-docs.*content-risk|content-risk.*spec-docs/);
-    assert.match(fileClassSrc, /OMP_REVIEW_KIT_LANES/);
-    const adapterSrc = await readFile('src/infra/filesystem-snapshot-adapter.mjs', 'utf8');
-    assert.match(adapterSrc, /file-classes\.json/);
-    assert.match(adapterSrc, /file-classes@1/);
-    assert.match(adapterSrc, /reuseDir/);
-    const serviceSrc = await readFile('src/application/review-workflow-service.mjs', 'utf8');
-    assert.match(serviceSrc, /reviewProfileFor/);
-    assert.match(serviceSrc, /fileClassRows/);
-    assert.match(serviceSrc, /snapshotDirDisposition/);
-    assert.match(serviceSrc, /#writeBadge/);
-    const runnerSrc = await readFile('scripts/run-review.mjs', 'utf8');
-    assert.match(runnerSrc, /Review profile for this diff:/);
-    assert.match(runnerSrc, /file-classes\.json/);
-    assert.match(runnerSrc, /childLogReadStage/);
-    assert.match(runnerSrc, /SNAPSHOT_RETENTION/);
-    assert.match(runnerSrc, /review-badge\.json/);
-    const agentAdapter = await readFile('src/infra/omp-cli-reviewer-adapter.mjs', 'utf8');
-    assert.match(agentAdapter, /childLogReadStage/);
-    assert.match(agentAdapter, /onStage/);
-    assert.match(agentAdapter, /stageHistory/);
-  });
-  it('env parity: every spawn site in src and runner merges registry PI_PROXY_* (r30)', async () => {
-    // The bundled runners were already flipped; the modular src adapter
-    // must carry the same merge or execution children lose PI_PROXY_* on
-    // stale parents — the parity drift r30 caught.
-    const execSrc = await readFile('src/infra/subprocess-execution-adapter.mjs', 'utf8');
-    assert.match(execSrc, /mergeRegistryProxyEnv\(\)/);
-    assert.doesNotMatch(execSrc, /env: process\.env/);
-    const runnerSrc = await readFile('scripts/run-review.mjs', 'utf8');
-    assert.equal(runnerSrc.includes('env: process.env,'), false,
-      'no spawn site in the runner may pass raw process.env');
+  it('review-profile contract: the native assignment names the profile and the staged snapshot manifest', async () => {
+    const { buildAssignment } = await import('../src/native/assignment.mjs');
+    const assignment = buildAssignment({
+      snapshotDir: '/tmp/snap',
+      repoRoot: '/repo',
+      diffHash: 'a'.repeat(64),
+      profile: 'spec-docs',
+      lanes: ['content-risk'],
+      changedPaths: ['docs/SPEC.md'],
+    });
+    assert.match(assignment, /^Review profile for this diff: spec-docs$/m);
+    assert.match(assignment, /^Risk lanes for this diff: \["content-risk"\]$/m);
+    assert.match(assignment, /^File-class manifest .*: \/tmp\/snap\/\.review\/file-classes\.json$/m);
+    const snapshotSrc = await readFile('src/native/snapshot.mjs', 'utf8');
+    assert.match(snapshotSrc, /file-classes\.json/);
+    assert.match(snapshotSrc, /'--binary', '--no-ext-diff'/);
   });
   it('dispatcher dispatches without reading files and passes skill names downstream', () => {
     assert.match(reviewerKitAgent, /without reading any files yourself/);
@@ -340,7 +317,7 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(multiStageSkill, /REVIEW_RESULT=BLOCK/);
     assert.match(multiStageSkill, /Anti-Parasitic Correctness Gate/);
     assert.match(multiStageSkill, /both repository or declared-framework evidence/);
-    assert.match(multiStageSkill, /review-rejection-envelope@1/);
+    assert.doesNotMatch(multiStageSkill, /review-rejection-envelope@1|coverage_required/);
     assert.match(multiStageSkill, /staged snapshot.*working tree/i);
     assert.match(multiStageSkill, /test evidence.*YAGNI|YAGNI.*test evidence/i);
     assert.match(multiStageSkill, /Verified-OK/);
@@ -348,7 +325,6 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(multiStageSkill, /declared_checks/);
     assert.match(multiStageSkill, /### Notes/);
     assert.match(multiStageSkill, /### Required test coverage/);
-    assert.match(multiStageSkill, /coverage_required/);
     assert.match(multiStageSkill, /coverage_map/);
     assert.match(multiStageSkill, /confirmed_coverage_gaps/);
     assert.match(multiStageSkill, /triage/);

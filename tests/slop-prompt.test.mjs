@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test, { describe, it } from 'node:test';
-import { SlopPrompt, SlopReport } from '../src/index.mjs';
+import { SlopPrompt } from '../src/domain/slop-prompt.mjs';
+import { SlopReport } from '../src/domain/slop-report.mjs';
 
 describe('Feature: SlopPrompt dispatcher contract', () => {
   it('renders the /slop dispatcher prompt naming the slop agent, target, focus, and VERDICT contract', () => {

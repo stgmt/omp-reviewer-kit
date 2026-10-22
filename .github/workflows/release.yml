@@ -33,6 +33,14 @@ jobs:
         with:
           node-version: 22.x
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.1
+
+      - name: Install the pinned OMP library
+        run: bun install --frozen-lockfile
+
       - name: Verify tag and synchronized versions
         shell: bash
         run: |

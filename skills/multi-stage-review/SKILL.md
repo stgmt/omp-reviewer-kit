@@ -20,7 +20,7 @@ Staged Diff (git diff --cached --binary --no-ext-diff --)
   - Produces structured context report.
                     │
                     ▼
-[Stage 2: Parallel Risk Hunting] (review-risk-hunter — one task per lane named in the dispatcher's `Risk lanes for this diff:` list)
+[Stage 2: Parallel Risk Hunting] (review-risk-hunter — one task per lane named in the assignment's `Risk lanes for this diff:` list)
   - Lane "correctness" (boundary conditions, null/default states, resource leaks, anti-parasitic correctness defects).
   - Lane "security" (attacker input source, dangerous sink, missing controls) — opt-in via `OMP_REVIEW_KIT_LANES`.
   - Lane "content-risk" — spec-docs profile only.
@@ -34,13 +34,13 @@ Staged Diff (git diff --cached --binary --no-ext-diff --)
                     ▼
 [Stage 4: Orchestrator Synthesis] (reviewer-kit)
   - Synthesizes coverage, validated findings, and unproven summaries.
-  - Emits a strict `review-rejection-envelope@1` before BLOCK and a solitary machine-readable verdict marker; PASS has no envelope.
+  - Ends with exactly one solitary machine-readable verdict marker; PASS and BLOCK both end with one.
 ```
 
 
 ## Review profiles
 
-The dispatcher classifies every changed path deterministically into file classes (`executable`, `test`, `prompt`, `spec`, `docs`, `config`, `data`), materializes the manifest at `<snapshot>/.review/file-classes.json` (`file-classes@1`, one row per path with the staged-content SHA-256), and states the review profile on the `Review profile for this diff:` prompt line.
+The runner classifies every changed path deterministically into file classes (`executable`, `test`, `prompt`, `spec`, `docs`, `config`, `data`), materializes the manifest at `<snapshot>/.review/file-classes.json` (`file-classes@1`, one row per path with the staged-content SHA-256), and states the review profile on the `Review profile for this diff:` prompt line.
 
 - `full` — at least one `executable` or `test` file changed. Run the four stages exactly as specified below, spawning one hunter task per lane named in `Risk lanes for this diff:` (correctness only by default; the security lane is opt-in via `OMP_REVIEW_KIT_LANES`).
 - `spec-docs` — zero `executable`/`test` files changed (prompt/spec/docs/config/data only). Run a reduced review:
@@ -55,18 +55,19 @@ The dispatcher classifies every changed path deterministically into file classes
 [Stage 4: Orchestrator Synthesis] — same report shape; `### Required test coverage` reads "None required" (no executable change exists to cover).
 ```
 
-Under `spec-docs` the orchestrator MUST NOT run the correctness lane, the separate security lane, coverage-gap enumeration, or coverage-gap verification, and MUST NOT emit a `coverage_required` envelope. Confirmed content findings block normally with the `confirmed_findings` envelope (`defect_class` = the lane value `content-risk`). The file-class manifest is a deterministic input; agents must not re-classify paths. When the manifest contradicts what an agent observes (e.g. an `executable` row that is actually prose), it flags the row in `unknowns`/`### Notes` — it does not silently widen the profile.
+Under `spec-docs` the orchestrator MUST NOT run the correctness lane, the separate security lane, coverage-gap enumeration, or coverage-gap verification, and MUST NOT write coverage directives. Confirmed content findings block normally (lane `content-risk`). The file-class manifest is a deterministic input; agents must not re-classify paths. When the manifest contradicts what an agent observes (e.g. an `executable` row that is actually prose), it flags the row in `unknowns`/`### Notes` — it does not silently widen the profile.
 ## Snapshot and evidence boundary
 
-The dispatcher materializes an absolute staged snapshot directory from the Git index before invoking the reviewer. All source-file contents, tests, and fixtures must be read from that snapshot; use the repository working tree only for read-only Git metadata, caller discovery, and project-skill discovery. The snapshot is the authoritative review input and prevents unstaged worktree content from entering the decision.
+The runner materializes an absolute staged snapshot directory from the Git index before invoking the reviewer. All source-file contents, tests, and fixtures must be read from that snapshot; use the repository working tree only for read-only Git metadata, caller discovery, and project-skill discovery. The snapshot is the authoritative review input and prevents unstaged worktree content from entering the decision.
 
 The snapshot also carries the review inputs under `.review/`: `diff.patch` holds the complete staged diff and `changed-files.txt` lists every touched path. When the dispatch prompt carries an inline `---STAGED DIFF---` block, that block is authoritative: embed it verbatim into every subagent's task text (the context scout keeps file paths for repository context; both risk hunters and the verifier receive the diff inline instead of the `.review/diff.patch` path). Otherwise every stage reads the diff from `.review/diff.patch` as a file. In both cases agents must not re-derive the staged diff or staged file bytes with `git diff`, `git show`, or `git cat-file`.
 
-Respect the advertised native task schema: when `task.batch` is disabled, dispatch planned tasks once through flat calls and embed shared context in each assignment. The gate collects all planned results before completing the stage; when it names tasks that failed natively, dispatch exactly those tasks once more (completed tasks are kept, a second failure ends the review); never change user settings to obtain batching. A verifier must disposition every authoritative candidate, coverage gap and previous finding. Confirmed blocking findings/gaps cannot be overridden by final PASS synthesis.
+Dispatch every planned task of a stage as a native task call, with the shared context embedded in each assignment, and do not advance until the whole stage has completed; never change user settings to obtain batching. A verifier must disposition every authoritative candidate, coverage gap and previous finding. Confirmed blocking findings/gaps cannot be overridden by final PASS synthesis.
 
 ## 2. Stage Contracts & Schemas
 
 ### Stage 1: Context Scout (`review-context-scout`)
+- **Verdict Rule**: A BLOCK ends the Markdown report with exactly one `REVIEW_RESULT=BLOCK` line; a PASS ends it with `REVIEW_RESULT=PASS`. Waived coverage records MUST be mirrored into `### Notes`.
 - **Role**: Read-only explorer. Discovers the purpose, blast radius, callers, and invariants of the staged change. Reads the diff from `<snapshot>/.review/diff.patch` and the file list from `<snapshot>/.review/changed-files.txt`.
 - **Tools**: `read`, `grep`, `glob`, `lsp`, `bash` (read-only git diff/log commands only). No `task`, no mutating tools. No global 20–30-call hard cap: complete owned source/test/consumer obligations or report them unresolved. When NATIVE REVIEW BATCH PLAN is supplied, run every planned scout in one native task batch, using exact task names and ownership. Cross-scope reads resolve contracts without taking another scope's behavior ownership. Use the native merged report, not a second general scout.
 - **Output Contract**:
@@ -88,8 +89,7 @@ Specialist frontmatter owns its native `output` schema. Submit one complete `yie
 - **Constraint**: Must NOT generate defect findings or verdict markers (`REVIEW_RESULT=...`).
 
 ### Stage 2: Parallel Risk Hunters (`review-risk-hunter`)
-- **Sharding**: when the dispatcher prompt carries a `HUNTER SHARDS` block (large diffs), the correctness lane is split into one blocking task per shard, in the same batch; candidate ids become `correctness-s<shard>-<ordinal>`, each hunter covers the `coverage_map` entries and assertions of its shard files, and the orchestrator merges all shards' candidates and `coverage_gaps` before stage 3.
-- **Role**: Generates focused defect candidates — ONE blocking task per lane named in the dispatcher's `Risk lanes for this diff:` list (default: `correctness` only; the `security` lane is opt-in via `OMP_REVIEW_KIT_LANES`; `spec-docs` profile names `content-risk` and nothing else). Lane semantics:
+- **Role**: Generates focused defect candidates — ONE blocking task per lane named in the assignment's `Risk lanes for this diff:` list (default: `correctness` only; the `security` lane is opt-in via `OMP_REVIEW_KIT_LANES`; `spec-docs` profile names `content-risk` and nothing else). Lane semantics:
   - `lane: "correctness"`: Boundary conditions, absence/default/failure values, side effects, determinism, resource/handle leaks, behavior-test gaps, and control infrastructure that duplicates an existing mechanism without adding product capability.
   - `lane: "security"`: Attacker-controlled input source, dangerous sink, missing/bypassed controls, credential leakage, permission bypass.
   - `lane: "content-risk"` (spec-docs only): spec/prose claims that contradict repository facts, anchors, or stated contracts — not executable defects.
@@ -172,12 +172,6 @@ Specialist frontmatter owns its native `output` schema. Submit one complete `yie
   - `### Unproven/rejected summary`: Terse summary of rejected or unproven candidates with rationale.
   - `### Notes`: Non-blocking observations (stale records with intact code, check commands suppressing output, showcase stub tests, disclosed gaps with named owners); never blocks PASS. Coverage items suppressed on the new grounds MUST be mirrored here with `file_path`, line range, and the ground applied — sourced from the three producer records: scout `non_coverable_items`, hunter `suppressed_coverage_items`, verifier `rejected_coverage_gaps` — and when the verdict is BLOCK they additionally ride the envelope's `non_coverable_items` array (`category_kind:"non_coverable"`, `severity:"none"`, `blocking:false`, `source` = producer stage) so waived directives leave a durable machine-readable record of what was evaluated and why; a suppression whose producer record is absent is not grounded and must be noted.
   - `### Verified-OK`: Explicit paths, tests, caller checks, and invariants actually verified, each carrying a concrete measure (unit count, path, positive control). Bare "looks correct" is prohibited; never use this section to hide unresolved candidates.
-- **Rejection Envelope Rule**:
-  - A confirmed-finding BLOCK emits one strict `review-rejection-envelope@1` with the current diff hash and findings normalized to `correctness`, `security`, or (content lane) `content-risk` — each carrying `category_kind:"finding"`, `severity` mirroring `priority`, `blocking:true`, and `source` = the producing lane.
-  - A coverage-only BLOCK (zero confirmed findings, at least one confirmed coverage gap, `test_harness: present`) emits one `coverage_required` envelope: `findings: []` plus `coverage_items` mirroring `confirmed_coverage_gaps` one-to-one (`coverage_id`, `file_path`, `line_start`, `line_end`, `behavior`, `required_tests`) each normalized with `category_kind:"coverage"`, `severity` (`P1`|`P2`), `blocking:true`, `source` = producing stage. Confirmed findings take precedence: when both exist, emit the `confirmed_findings` envelope and keep the coverage directive in the report section only.
-  - Every BLOCK envelope carries `non_coverable_items` (`[]` when none): normalized producer records for waived coverage (`category_kind:"non_coverable"`, `severity:"none"`, `blocking:false`, `source` = `scout`|`hunter`|`verifier`).
-  - A mandatory-stage failure emits a `review_failure` envelope with `execution_failure`, a non-empty diagnostic message, `findings: []`, `non_coverable_items: []`.
-  - The envelope occurs between standalone begin/end lines before the solitary BLOCK marker. PASS emits no envelope.
 - **Verdict Rule**:
   - Exactly zero confirmed findings and zero blocking coverage gaps -> emit `REVIEW_RESULT=PASS`.
   - At least one confirmed `P1` or `P2` finding -> emit `REVIEW_RESULT=BLOCK`.

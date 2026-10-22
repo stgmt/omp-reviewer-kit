@@ -4,6 +4,8 @@
 
 Native Oh My Pi plugin for multi-stage, evidence-first code review of staged Git changes.
 
+**Requirements (0.22.0):** Git; Bun 1.4.1 (the review runs on Bun); Node.js 22 or 24 (CI tests both); and the OMP library `@oh-my-pi/pi-coding-agent` 18.12.5, which the plugin pins and installs with `bun install` (see [Installation](#standard-installation-recommended)). The review uses your own OMP configuration. The kit does not choose models.
+
 ## Names
 
 - GitHub and plugin: `omp-reviewer-kit`
@@ -14,7 +16,7 @@ Native Oh My Pi plugin for multi-stage, evidence-first code review of staged Git
 
 ## What It Does
 
-`omp-reviewer-kit` provides a fail-closed Git pre-commit hook powered by a 4-stage hierarchy of specialized OMP agents running on your local machine:
+`omp-reviewer-kit` provides a fail-closed Git pre-commit hook. The review is a 4-stage hierarchy of specialized OMP agents, run through OMP's native task system:
 
 ```
 Staged Diff (git diff --cached --binary --no-ext-diff --)
@@ -22,38 +24,32 @@ Staged Diff (git diff --cached --binary --no-ext-diff --)
                     ▼
 [Stage 1: Context Scout] (review-context-scout)
   - Maps blast radius, touched files, callers/consumers via LSP/grep, invariants, and tests.
-  - Generates structured context without judging code or emitting findings.
+  - Produces structured context and a coverage map. It does not emit findings.
                     │
                     ▼
-[Stage 2: Parallel Risk Hunting] (review-risk-hunter batch per lane)
-  - Profile `full`: Correctness lane by default; Security lane via `OMP_REVIEW_KIT_LANES=correctness,security`.
-  - Profile `spec-docs`: Content-risk lane only (secrets in text, doc-vs-code contradictions, dead links/steps).
-  - Anti-Noise Prohibitions: Strictly rejects comments, formatting, naming, and ungrounded advice.
+[Stage 2: Risk Hunting] (review-risk-hunter, one per lane)
+  - Profile `full`: correctness lane by default; add the security lane with OMP_REVIEW_KIT_LANES=correctness,security.
+  - Profile `spec-docs`: content-risk lane only (secrets in text, doc-vs-code contradictions, dead links/steps).
+  - Strict anti-noise rules: no comments, formatting, naming, or ungrounded advice.
                     │
                     ▼
 [Stage 3: Adversarial Verification] (review-finding-verifier)
-  - Defense Attorney: Assumes the author is correct until disproven by repository evidence.
-  - Challenges each candidate against upstream protections, caller constraints, and reachability.
-  - Categorizes candidates into confirmed, rejected, or not_proven.
+  - Defense attorney: assumes the author is correct until repository evidence disproves it.
+  - Checks upstream protections, caller constraints and reachability; confirms or rejects each candidate.
                     │
                     ▼
 [Stage 4: Orchestrator Synthesis] (reviewer-kit)
-  - Synthesizes coverage, validated findings, and rejected summaries.
-  - Emits the final machine-readable verdict marker:
+  - Synthesizes coverage, confirmed findings and rejected summaries, then writes the report.
+  - Ends the report with the verdict marker.
 ```
 
-The commit proceeds only when the orchestrator emits exactly one solitary line:
-
-```text
-REVIEW_RESULT=PASS
-```
-
-Any confirmed `P1` or `P2` finding, missing/failed stage, malformed marker, or process timeout strictly blocks the commit (fail-closed). Default execution timeout is 10 minutes (`600_000ms`), overridable via `timeoutMs`.
+The hook lets the commit proceed only when the native host exits 0 and prints `review: PASS`. The reviewer's report must also end with exactly one solitary `REVIEW_RESULT=PASS` line. Any confirmed finding, a confirmed coverage gap when the scout reports a runnable test harness, a missing or failed stage, an aborted task, a malformed marker, or an infrastructure error blocks the commit (exit 1). The review has no wall-clock cap.
 
 ### Review Profiles & Risk Lanes
 
-- **`full` profile** (diff contains executable code or tests): Runs the complete 4-stage pipeline with test coverage mapping. Stage 2 runs the `correctness` lane by default; set `OMP_REVIEW_KIT_LANES=correctness,security` to run both correctness and security lanes concurrently.
-- **`spec-docs` profile** (diff contains only documentation, specifications, agent/skill prompts, or configuration): Automatically selects a reduced review without the coverage requirement, focusing on `content-risk` findings.
+- **`full` profile** (the diff contains executable code or tests): the complete 4-stage pipeline with test coverage mapping. Stage 2 runs the `correctness` lane by default; `OMP_REVIEW_KIT_LANES=correctness,security` adds the security lane.
+- **`spec-docs` profile** (only documentation, specifications, agent or skill prompts, or configuration): a reduced review focused on the `content-risk` lane.
+- `OMP_REVIEW_KIT_LANES` is a comma-separated allowlist over `correctness`, `security` and `content-risk`. An unknown token fails the review closed.
 
 ## Standard Installation (Recommended)
 
@@ -78,16 +74,26 @@ omp plugin install omp-reviewer-kit@omp-reviewer-kit --scope project
 omp plugin install omp-reviewer-kit@omp-reviewer-kit --scope user
 ```
 
+### Install the pinned OMP library (required)
+
+The review imports the OMP library that the plugin pins. Installing the plugin does not run Bun install scripts, so run this once in the plugin directory (the launcher prints the exact command when the library is missing):
+
+```bash
+bun install --cwd ~/.omp/plugins/node_modules/omp-reviewer-kit
+```
+
+Check the result with `/omp-reviewer-kit:doctor` in Claude Code, which reports Bun and the OMP library version. The plugin-directory install path has not been verified end to end; see `.specs/native-task-review/STATUS.md`.
+
 ## Configuring the Hook via OMP Slash Commands
 
-Once installed, manage the review hook directly inside your OMP session without leaving the terminal:
+Once installed, manage the review hook inside your OMP session:
 
-- `/reviewer-kit:setup` — Automatically configures the pre-commit review hook in the active Git repository (`core.hooksPath .githooks`).
-- `/reviewer-kit:status` — Displays current hook configuration, runner integrity, and the latest review verdict.
-- `/reviewer-kit:progress` — Lists the review runs of the active repository with their state, stage, time since the last activity, and verdict. Read-only.
-- `/reviewer-kit:doctor` — Runs environment and toolchain health checks (Node.js, Git, OMP CLI, hook permissions).
+- `/reviewer-kit:setup`: configures the pre-commit review hook in the active Git repository (`core.hooksPath .githooks`).
+- `/reviewer-kit:status`: shows the hook configuration, the effective hook that git runs, and runner integrity.
+- `/reviewer-kit:doctor`: checks Node.js, Git, Bun, the OMP CLI and library versions, and hook integrity. It also lists registered repositories whose commits would go unreviewed.
+- `/slop`: runs the standalone slop audit. It is not part of the commit gate.
 
-The plugin also observes `session_start`: opening any Git repository in OMP auto-installs the review hook in the background (manual `/reviewer-kit:setup` remains as fallback), and updates the OMP status bar indicator (`reviewer-kit: active` or `reviewer-kit: unconfigured`).
+The plugin also observes `session_start`: opening any Git repository in OMP installs the review hook in the background (manual `/reviewer-kit:setup` remains as fallback) and updates the OMP status bar (`reviewer-kit: active` or `reviewer-kit: unconfigured`).
 
 ### Coexisting with an existing `.githooks/pre-commit`
 
@@ -97,13 +103,13 @@ The installer never overwrites a foreign hook. If your repository already ships 
 "$hook_dir/pre-commit.d/00-omp-reviewer-kit.chain"
 ```
 
-The line must invoke exactly that entry name — no arguments, no `&&`/`;` chaining, no other `*.chain` basename. A hook that enumerates the directory (`for h in "$hook_dir/pre-commit.d"/*.chain; do "$h"; done`) is also adopted, since it picks up the entry once deployed.
+The line must invoke exactly that entry name, with no arguments, no `&&`/`;` chaining, and no other `*.chain` basename. A hook that enumerates the directory (`for h in "$hook_dir/pre-commit.d"/*.chain; do "$h"; done`) is also adopted, since it picks up the entry once deployed.
 
-When `session_start` or `/reviewer-kit:setup` sees either shape, it deploys the owned chain entry `.githooks/pre-commit.d/00-omp-reviewer-kit.chain` (which execs the review runner) and repairs it on drift — the foreign hook file stays byte-identical. A foreign hook that calls a different entry name, or has no chain marker at all, still reports `conflict` and is left untouched.
+When `session_start` or `/reviewer-kit:setup` sees either shape, it deploys the owned chain entry `.githooks/pre-commit.d/00-omp-reviewer-kit.chain` (which runs the review runner) and repairs it on drift. The foreign hook file stays byte-identical. A foreign hook that calls a different entry name, or has no chain marker at all, still reports `conflict` and is left untouched.
 
 ## Standalone / CI Installation (Fallback)
 
-For CI environments or machines without an interactive OMP shell, standalone scripts remain available as secondary fallbacks:
+For CI environments or machines without an interactive OMP shell, standalone scripts remain available:
 
 ```powershell
 pwsh ./scripts/install-hook.ps1 -Repository E:/repos/your-project
@@ -123,92 +129,77 @@ Every review writes an immutable report outside the repository, in your Document
 ~/Documents/omp-reviewer-kit/<repository folder name>/<timestamp>-<diff-hash>.md
 ```
 
-The repository folder name is the directory name plus a 12-character hash of the absolute path, so checkouts that share a directory name (every task worktree named `wt`, for example) never share a folder.
+The repository folder name is the directory name plus a 12-character hash of the absolute path, so checkouts that share a directory name never share a folder. `OMP_REVIEW_KIT_REPORTS_DIR` moves the root. The host prints the path on its own line as `review: report <path>`.
 
-`OMP_REVIEW_KIT_REPORTS_DIR` moves the root. The path is printed on the verdict line (`reviewer-kit PASS: <path>` or `REVIEW_REJECTION_REPORT=<path>`), stored with the verdict cache, and shown by `/reviewer-kit:status` as the latest report. The repository keeps only run telemetry and the verdict cache, under `audit-reports/commit-reviews/`.
+The report starts with `# reviewer-kit review: PASS` or `# reviewer-kit review: BLOCK` and records:
 
-Reports record:
-- Staged diff hash and review timestamp
-- Review coverage (inspected paths, loaded project skills, executed stages)
-- Confirmed findings (priority, line ranges, observed vs. expected, trigger, impact, evidence)
-- Unproven and rejected candidate summaries with defense justifications
-- Machine-readable verdict marker (`REVIEW_RESULT=PASS` or `REVIEW_RESULT=BLOCK`)
+- The staged diff hash and the review timestamp
+- Review coverage, the confirmed findings, the required test coverage, and the unproven or rejected candidates with their defense
+- Notes and the verified-OK items
+- The machine-readable verdict marker (`REVIEW_RESULT=PASS` or `REVIEW_RESULT=BLOCK`)
 
-### How the report reaches the runner
+## How the Review Runs
 
-The review child is a dispatcher plus a `reviewer-kit` task. The runner evaluates the dispatcher's stdout, which carries the complete report the orchestrator yields. Each review attempt runs `omp` with its own `--session-dir` (removed after the attempt). When the dispatcher output has no standalone verdict marker, or carries an `execution_failure` envelope, the runner reads the task's complete result from `<session>/<artifacts>/<TaskId>.md` (telemetry `report_artifact_recovered`). The recovered text goes through the same fail-closed verdict and envelope validation as any other output.
+The Node launcher (`scripts/run-review.mjs`) checks that Bun and the pinned library are present, then starts the Bun host (`src/native/native-host.mjs`) on the staged repository. The host:
 
-The reviewer writes no file, so no shell command is involved. A project guard that denies shell writes (for example a spec-write guard that rejects commands naming the spec folder) cannot fail a review.
+1. Exports the staged index into a temporary snapshot and writes the review inputs (`.review/diff.patch`, `.review/changed-files.txt`, `.review/file-classes.json`). Agents read the diff from there, never through `git diff`.
+2. Calls OMP's native `TaskTool` once with `agent: reviewer-kit` and the assignment (profile, lanes, changed paths, snapshot directory). OMP resolves the agent, its `task` model role, the owner's overrides, credentials, effort, eligibility and fallback.
+3. Accepts the review only when the reviewer task completed successfully, yielded one Markdown report, and every mandatory stage completed. The mandatory stages are the scout, a hunter per lane, and the verifier for the `full` profile.
+4. Writes the report and exits 0 for PASS or 1 for BLOCK. A missing or ambiguous native result is BLOCK.
+
+The kit adds no model call of its own: no preflight, no dispatcher, no re-emit, no whole-review retry. The reviewer's `yield` is the only way the report leaves the agent.
 
 ## Claude Code Plugin and Target Sync
 
-The Claude Code plugin is a thin shell over the OMP plugin (the review always runs on OMP): `/plugin marketplace add stgmt/omp-reviewer-kit`, `/plugin install omp-reviewer-kit`, then `/omp-reviewer-kit:install-omp` (checks what is already installed, shows the plan, and installs OMP and the OMP plugin only after your confirmation), `/omp-reviewer-kit:setup` for the current repository, and `/omp-reviewer-kit:review` before committing. `/omp-reviewer-kit:doctor` diagnoses the setup. The plugin also ships the read-only `review-progress` skill, which lets an agent check the runs of its own commit reviews. Installing the OMP plugin does not install the Claude plugin; removing the Claude plugin does not remove a repository's hook.
+The Claude Code plugin is a thin shell over the OMP plugin (the review always runs on OMP): `/plugin marketplace add stgmt/omp-reviewer-kit`, `/plugin install omp-reviewer-kit`, then `/omp-reviewer-kit:install-omp` (checks what is installed, shows the plan, and installs OMP and the OMP plugin only after your confirmation), `/omp-reviewer-kit:setup` for the current repository, and `/omp-reviewer-kit:review` before committing. `/omp-reviewer-kit:doctor` diagnoses the setup. Exit codes of `/review`: 0 PASS, 1 BLOCK or review failure, 2 when OMP or the OMP plugin is missing. Installing the OMP plugin does not install the Claude plugin; removing the Claude plugin does not remove a repository's hook.
 
-A repository has exactly one git hook and one vendored runner (`.omp/review-kit/run-review.mjs`). The vendored runner is a thin stub: the same few lines in every repository, never edited. It finds the installed OMP plugin (`OMP_REVIEW_KIT_PLUGIN_DIR`, else `~/.omp/plugins/node_modules/omp-reviewer-kit`), runs that plugin's `scripts/run-review.mjs` with the same arguments, and forwards the exit code; without a plugin it fails closed with `reviewer-kit INFRA_ERROR`. The review algorithm therefore lives only in the installed plugin, so a plugin update changes every repository's review without touching a repository file, and no repository can hold an older copy of the algorithm. The hook and the stub are written only by the OMP plugin's installer, whichever channel invoked it, and an installed runner whose version marker is newer than the installer's own algorithm is never replaced. `/omp-reviewer-kit:review` runs that same runner file, so it agrees with the hook. To roll a new runner out to several repositories run `node scripts/sync-targets.mjs` (dry run) or `--apply`, then commit each repository through its own hook. The vendored runner and hook are the review plugin, not the committer's work: when the staged `.omp/review-kit/run-review.mjs` is byte-identical (line endings aside) to the stub `templates/review-kit/run-review.mjs` of the installed OMP plugin, or the staged `.githooks/pre-commit` to that plugin's `templates/githooks/pre-commit`, the hook leaves it out of the reviewed diff, and a commit made only of such files is skipped (`reviewer-kit SKIPPED: no reviewable staged changes`). A hand-edited copy, a runner from an earlier release that still holds the algorithm, or any doubt (no installed plugin, unreadable blob), keeps the file in review.
+A repository has exactly one git hook and one vendored runner (`.omp/review-kit/run-review.mjs`). The vendored runner is a thin stub: the same few lines in every repository, never edited. It finds the installed OMP plugin (`OMP_REVIEW_KIT_PLUGIN_DIR`, else `~/.omp/plugins/node_modules/omp-reviewer-kit`), runs that plugin's `scripts/run-review.mjs` with the same arguments, and forwards the exit code. Without a plugin it fails closed with `reviewer-kit INFRA_ERROR`. The review algorithm therefore lives only in the installed plugin, so a plugin update changes every repository's review without touching a repository file. The hook and the stub are written only by the OMP plugin's installer, and an installed runner whose version marker is newer than the installer's is never replaced. To roll a new runner out to several repositories, run `node scripts/sync-targets.mjs` (dry run) or with `--apply`, then commit each repository through its own hook.
 
-**Hook ownership.** The hook template's second line carries a marker, `# omp-reviewer-kit hook v<version> body-sha256:<digest>`, whose digest covers every other line. A hook whose body still matches its marker is the kit's own, whatever release wrote it, so a plugin update replaces an older kit hook without anyone listing past versions. A hook whose body was edited under an unchanged marker is a conflict and is left alone; a hook from a newer release is never downgraded. Maintainers run `node scripts/stamp-hook.mjs` after every edit of `templates/githooks/pre-commit`; `npm run check` fails until the marker matches the body and the package version. In the kit repository itself the hook runs `scripts/run-review.mjs` directly.
+When the staged `.omp/review-kit/run-review.mjs` is byte-identical (line endings aside) to the plugin's `templates/review-kit/run-review.mjs`, or the staged `.githooks/pre-commit` to the plugin's `templates/githooks/pre-commit`, the review leaves that file out of the reviewed diff. A commit whose only staged changes are such files is skipped (`review: SKIPPED (no staged changes)`). A hand-edited copy, a runner that still holds an older algorithm, or any doubt (no installed plugin, unreadable blob) keeps the file in review.
 
-**Automatic propagation.** Setting up the hook remembers the repository as a small file in `~/.omp/review-kit-targets.json.d/` next to the owner-edited `~/.omp/review-kit-targets.json` (`OMP_REVIEW_KIT_TARGETS` overrides the path; both are read, so a hand-written list of repositories works too). Whenever a session starts, in OMP or in Claude Code, every registered repository whose hook or runner is stale is repaired within a few seconds, so a plugin update reaches all of them without running `sync-targets` by hand; the Claude Code SessionStart hook also repairs the current repository. Repositories without the hook, with a foreign hook, or with a newer runner are left alone, `tp-*` and the release checkout are never registered, and `OMP_REVIEW_KIT_AUTO_SYNC=0` switches it off. Repairing only rewrites the two vendored files; a repository that tracks them commits the change through its own hook, which skips a commit made only of unchanged vendored files. `/reviewer-kit:doctor` shows how many registered repositories are stale.
+**Hook ownership.** The hook template's second line carries a marker, `# omp-reviewer-kit hook v<version> body-sha256:<digest>`, whose digest covers every other line. A hook whose body still matches its marker is the kit's own, whatever release wrote it, so a plugin update replaces an older kit hook without anyone listing past versions. A hook whose body was edited under an unchanged marker is a conflict and is left alone. A hook from a newer release is never downgraded. Maintainers run `node scripts/stamp-hook.mjs` after every edit of `templates/githooks/pre-commit`; `npm run check` fails until the marker matches the body and the package version. In the kit repository itself the hook runs `scripts/run-review.mjs` directly.
 
-## Verdict Reuse
+**Automatic propagation.** Setting up the hook remembers the repository as a small file in `~/.omp/review-kit-targets.json.d/`, next to the owner-edited `~/.omp/review-kit-targets.json` (`OMP_REVIEW_KIT_TARGETS` overrides the path; both are read, so a hand-written list of repositories works too). Whenever a session starts, in OMP or in Claude Code, every registered repository whose hook or runner is stale is repaired, so a plugin update reaches all of them. Repositories without the hook, with a foreign hook, or with a newer runner are left alone. `tp-*` and the release checkout are never registered. `OMP_REVIEW_KIT_AUTO_SYNC=0` switches the automatic repair off. Repairing rewrites only the two vendored files; a repository that tracks them commits the change through its own hook.
 
-A PASS is reused when the staged tree and diff hash are identical to an earlier PASS whose report is still present (14 days). BLOCK is never reused. Set `OMP_REVIEW_KIT_CACHE=0` to force a fresh review.
+**Commits that skip the review.** `.githooks` protects a checkout only while git runs it, and another tool can silently point `core.hooksPath` somewhere else. Claude Code Agent Teams writes `<repo>/.git/hooks` into the shared config when it creates a worktree, after which `git commit` runs no review at all. The kit defends against that in four ways:
 
-## Delta Rounds
-
-After a BLOCK with confirmed findings, the next review of a changed diff (within 12 hours) is told which findings were raised and which lines changed since, must verify each previous finding, and only raises new P2 findings inside that delta (new P1 anywhere). A PASS resets the chain. Set `OMP_REVIEW_KIT_ROUNDS=0` to review every diff from scratch.
-
-## Review Speed
-
-A review stage lasts (model turns) x (the model's per-turn latency), so the runner removes turns instead of changing models:
-
-- **Context pack**: the runner writes a deterministic pack (changed files, changed symbols with their references, test-file mapping) and points the scout at it; the scout reads it with the diff and the changed files in one batch.
-- **Scout baseline**: after a BLOCK the next round receives the previous `coverage_map` as historical context. Reuse requires an unchanged fingerprint of staged bytes, modes and paths (including consumers, tests and harness); otherwise the scout revalidates it. Truncated baselines explicitly mark omitted coverage. `OMP_REVIEW_KIT_ROUNDS=0` disables it together with delta rounds.
-- **Native stage batches**: a review-only OMP extension validates planned scout scopes and hunter lanes/shards before native TaskTool dispatch. Large independent changes have scoped scouts; each owns source/test obligations, and results merge only when all scopes complete. Native concurrency and user model policies remain unchanged. With `task.batch: false`, planned tasks use native flat calls and the stage completes only after every planned result arrives; no config is rewritten. Empty discovery, missing/aborted/invalid results and omitted verifier dispositions block. Confirmed verifier findings or harness-coverable gaps cannot be overridden by PASS synthesis.
-- **Delivery recovery**: a solitary completed reviewer artifact bound to the current invocation can recover damaged stdout without another model request. Ambiguous results and nonzero child exits never become approval.
-- **Hunter shards**: a diff above `OMP_REVIEW_KIT_SHARD_BYTES` (default 40000; `0` disables) is split into at most `OMP_REVIEW_KIT_MAX_SHARDS` (default 3) file groups hunted in parallel.
-- **No suite runs by agents**: the dispatcher supplies the execution evidence; the agents only read.
-- **Telemetry**: `stage_stats` events in `runs.jsonl` record agent/task identity, turns, tool calls, repeated reads, response bytes and yield validation failures. `workSpanMs` ends at successful yield separately from delayed cleanup; `spanMs` remains the full transcript span. Printed by `npm run analyze-review`.
+- A `core.hooksPath` that names git's own default hooks directory, while that directory holds no real hook, is treated as a stray value rather than another tool's choice. Setup, the session start and `sync-targets --apply` put `.githooks` back (in `config.worktree` when the value lives there). Real hooks in that directory, or another hook system such as `.husky`, stay a conflict and are never rewritten.
+- Setup stores a small shim in `<git common dir>/hooks/pre-commit` that runs the checkout's own `.githooks/pre-commit`, so even a stray value still reaches the review. The shim never replaces another tool's hook, is not written through a symlinked hooks directory, and its marker versions the shim format, not the release.
+- Before an agent runs `git commit` (OMP extension `tool_call`, Claude Code PreToolUse hook on Bash), the guard checks which hook git would run. If it is the kit's, nothing happens. If not, it repairs the checkout and says so, or refuses the commit with the reason and the one-line fix. `OMP_REVIEW_KIT_AUTO_SYNC=0` turns the repair off (the guard then only refuses); `OMP_REVIEW_KIT_GUARD=0` turns the guard off. Only repositories that carry the kit's own `.githooks/pre-commit` are guarded.
+- `/reviewer-kit:status` prints the effective hook, `/reviewer-kit:doctor` fails when commits here are not reviewed and lists registered repositories that would commit unreviewed, `sync-targets` marks them `NOT-REVIEWED`, and a Claude Code session start warns.
 
 ## Models
 
-reviewer-kit selects the native OMP `task` role, not a concrete model. The
-review child uses `--model @task`, and all four review agents declare
-`model: "@task"` so their fallback chains retain that role too. You own
-`modelRoles.task`, `retry.fallbackChains.task` and `modelFallback` in
-`~/.omp/agent/config.yml`; the plugin never writes those settings or changes
-OMP's global `default` role. User `task.agentModelOverrides` remain authoritative.
-The hook asks OMP for a verdict and gets `PASS`, `BLOCK`, or an error.
+OMP owns model choice. Configure the `task` role, its fallbacks, and any `task.agentModelOverrides` in `~/.omp/agent/config.yml`. The kit does not read those settings to plan a route, does not pin a model, and does not copy `task` into another role. Its own review agents declare `model: "@task"`, so they use whatever the `task` role resolves to. Note that `agentModelOverrides` silently override an agent's `model:` frontmatter. Provider retry, cooldown and fallback are OMP's; the kit does not add a retry layer.
 
-Before the four stages start, the runner makes one short no-tools health
-call through the same `task` role. If OMP cannot reach a model (missing login, dead provider, exhausted
-quota with no configured fallback) the commit is blocked within seconds with a
-message telling you to fix the OMP configuration. This is an infrastructure
-failure, not a code verdict. A hard OMP child crash with no output is re-run
-once.
+## Removed in 0.22.0
 
-```text
-OMP_REVIEW_KIT_PREFLIGHT_TIMEOUT_MS # health-call timeout (default: 90000)
-OMP_REVIEW_KIT_MAX_TIME         # opt-in child-side bound via omp --max-time (default: off; 600|10m|1h shapes)
-OMP_REVIEW_KIT_SKILLS           # extra skill globs the review child lists via omp --skills, added to the always-included plugin skills (default extras: *reviewer-kit*,*review-kit*; all = full catalog)
-OMP_REVIEW_KIT_OMP              # path/name of the omp executable
-OMP_REVIEW_KIT_TELEMETRY=0      # disable run telemetry (runs.jsonl, last-run.json, run records)
-OMP_REVIEW_KIT_RUNS_DIR         # directory for per-run records (default: ~/.omp/review-kit-runs)
-OMP_REVIEW_KIT_RUN_TAG          # session tag recorded with a run (set by the Claude Code SessionStart hook)
-OMP_REVIEW_KIT_QUIET_MS         # silence before a running review is shown as quiet (default: 600000; a quiet review is never stopped by a timer)
-OMP_REVIEW_KIT_STOP_SUPERSEDED=0 # disable the automatic stop of superseded reviews at session start (the explicit command still works)
-OMP_REVIEW_KIT_ASSERT_PATTERNS    # comma-separated regexes identifying assert statements (suspicion map)
-OMP_REVIEW_KIT_TEST_PATH_PATTERNS # comma-separated regexes identifying test file paths (suspicion map)
-OMP_REVIEW_KIT_EXECUTE=1          # enable opt-in pre-review check execution (default: 0)
-OMP_REVIEW_KIT_EXECUTE_COMMAND    # shell command to run in staged/reverted snapshots (e.g. npm test)
-OMP_REVIEW_KIT_EXECUTE_TIMEOUT_MS # timeout for check execution (default: 600000)
-OMP_REVIEW_KIT_EXECUTE_LINK_DIRS  # comma-separated dir names to link from repoRoot (default: node_modules,.venv,venv)
-OMP_REVIEW_KIT_RED_PROOF=1        # enable reverted snapshot run for red proof (default: 0)
-```
+The native rewrite removed the earlier pipeline and its settings. Do not expect these:
+
+- The model dispatcher, the model preflight, the `task`-to-`default` chain overlay and its reader, the model re-emit, and provider-driven whole-review reruns.
+- `OMP_REVIEW_KIT_MODEL`, `OMP_REVIEW_KIT_FALLBACK_MODELS`, `OMP_REVIEW_KIT_MAX_FALLBACKS`, `OMP_REVIEW_KIT_TASK_CHAIN`, `OMP_REVIEW_KIT_PREFLIGHT_TIMEOUT_MS`, `OMP_REVIEW_KIT_REEMIT`, `OMP_REVIEW_KIT_EFFORT`, `OMP_REVIEW_KIT_MAX_TIME` and the other model and chain settings (`audit-range --llm` is the one exception; see below).
+- The verdict cache, delta rounds, the context pack, hunter shards, scout baseline and the scout scope planner, the batch gate and its retries, the rejection envelope, the run telemetry and per-run records, the progress commands and the superseded-run stop, and pre-review check execution (`OMP_REVIEW_KIT_EXECUTE`, `OMP_REVIEW_KIT_RED_PROOF`).
+- `OMP_REVIEW_KIT_CACHE`, `OMP_REVIEW_KIT_ROUNDS`, `OMP_REVIEW_KIT_SHARD_BYTES`, `OMP_REVIEW_KIT_SCOUT_MAX_FILES`, `OMP_REVIEW_KIT_SCOUT_MAX_BYTES`, `OMP_REVIEW_KIT_TELEMETRY`, `OMP_REVIEW_KIT_SKILLS` and the others that configured them.
+
+Node 18 and 20 are no longer in CI, because the suite now loads the Bun library.
+
+## Environment
+
+| Variable | Effect |
+|---|---|
+| `OMP_REVIEW_KIT_BUN` | The Bun executable used by the launcher (default `bun`). |
+| `OMP_REVIEW_KIT_OMP` | The OMP executable used by the installer and the Claude shell (default `omp`). |
+| `OMP_REVIEW_KIT_PLUGIN_DIR` | The installed plugin directory the vendored stub runs. |
+| `OMP_REVIEW_KIT_PLUGIN_SPEC` | The plugin specifier the Claude shell installs (default `github:stgmt/omp-reviewer-kit#v<version>`). |
+| `OMP_REVIEW_KIT_REPORTS_DIR` | The report root (default `~/Documents/omp-reviewer-kit`). |
+| `OMP_REVIEW_KIT_LANES` | The risk-lane allowlist for stage 2 (see Review Profiles). |
+| `OMP_REVIEW_KIT_TARGETS` | The owner-edited target registry file. |
+| `OMP_REVIEW_KIT_AUTO_SYNC=0` | Turns off the automatic repair of registered repositories. |
+| `OMP_REVIEW_KIT_GUARD=0` | Turns off the commit-time hook guard. |
 
 ## Commit-Range Audit CLI
 
-Audit an entire commit range for stealth test weakening, deleted assertions, vacuum checks, and neuroslop:
+Audit an entire commit range for stealth test weakening, deleted assertions, vacuous checks and neuroslop:
 
 ```sh
 node scripts/audit-range.mjs <base>..<head>
@@ -219,74 +210,25 @@ node scripts/audit-range.mjs <base>..<head> --llm
 
 The CLI runs a deterministic pass across each commit using `SuspicionMap`, aggregates net assert deltas and deleted test files, and optionally invokes the native `review-range-auditor` agent (`--llm`) to adversarially challenge the change history under `skill://range-audit`. The `--llm` run passes no model flag and runs on OMP's default role; the review gate's child runs on the `@task` role.
 
-### Pre-Review Check Execution & Red-Proof Matrix
-
-When `OMP_REVIEW_KIT_EXECUTE=1` is configured with `OMP_REVIEW_KIT_EXECUTE_COMMAND`, the dispatcher executes the command in the staged snapshot before starting the review. If `OMP_REVIEW_KIT_RED_PROOF=1` is also enabled and both test and non-test files were modified, it creates a reverted snapshot (non-test files reverted to HEAD) and runs the same command to verify whether tests can fail without the code changes.
-
-The 2×2 interpretation matrix is passed directly to the review agents:
-- **staged pass + reverted fail**: tests prove the change; red proof achieved.
-- **staged pass + reverted pass**: tests do not discriminate the change; raises a P2 correctness candidate when test files were touched.
-- **staged fail + reverted pass**: change breaks the project's own checks; raises a P1 correctness candidate.
-- **staged fail + reverted fail**: pre-existing failure; compare output tails.
-- **unavailable**: check execution was unavailable or failed; absence proves nothing (fail-open).
-
-Point `modelRoles.smol` and `modelRoles.task` in `~/.omp/agent/config.yml` at
-fast, available models to keep reviews quick. Note that `agentModelOverrides`
-in that file silently override agent `model:` frontmatter.
-
-## Run Telemetry & Incident Analysis
-
-Every run appends `review-run-event@1` records to
-`audit-reports/commit-reviews/runs.jsonl` (attempts, probes, PIDs, timings,
-verdict) and maintains `last-run.json` as the live status channel — the OMP
-status bar polls it while a commit is running, and `/reviewer-kit:status`
-surfaces the last run. Each run also writes its own record, `~/.omp/review-kit-runs/<runId>.json` (`review-run-record@1`), which the progress views read, so concurrent reviews never share a file.
-
-```sh
-npm run analyze-review            # latest run: per-attempt timing + OMP log trace
-node scripts/analyze-review-run.mjs --all   # all recorded runs
-node scripts/analyze-review-run.mjs --log ~/.omp/logs/omp.<date>.<pid>.log
-```
-
-See `audit-reports/review-observability-domain-spec.md` for the domain spec and
-`.devin/skills/omp-review-incidents/SKILL.md` for the investigation playbook.
-
-### Review progress
-
-Several commit reviews can run at once, in one repository or across sessions. Each review writes its own run record, so none of them overwrites another's status. When a review starts, the hook prints its run id with the command that follows it, and how many other reviews of the repository are running. They never block the commit.
-
-```sh
-node scripts/review-progress.mjs                  # runs of this repository
-node scripts/review-progress.mjs --all            # runs of every repository in the records
-node scripts/review-progress.mjs --mine           # runs tagged with this Claude Code session
-node scripts/review-progress.mjs --run <runId>    # one run; add --follow to wait for its end
-node scripts/review-progress.mjs --commit <sha>   # the run that reviewed that commit
-```
-
-`--commit` matches on the commit's parent and its diff hash, so it reports nothing when no run reviewed exactly that diff. `--json` prints machine-readable output; `--commit` with no match prints `[]`. A record that changed within the quiet period and cannot be read yet ends a lookup with exit 3 instead of "not reviewed", and `--run` on a record that exists but cannot be read exits 3 too. `/reviewer-kit:progress` in OMP shows the active repository's runs. In Claude Code, the `review-progress` skill runs the same reader, and a session that starts in a repository with runs that need attention gets one line of context about them.
-
-A run is `active` while its review child logs or changes stage. It is `quiet` once `OMP_REVIEW_KIT_QUIET_MS` (default 600000) passes without activity while its runner still lives, and `orphaned` when its runner has exited without recording a result. Quiet runs are only reported: the kit never stops a review on a timer. For a quiet run the detail view prints the command that would stop the review process (`taskkill` on Windows, `kill` elsewhere) and says that nothing in the kit stops it.
-
-When you install a newer plugin, reviews that are still running on an older runner are stopped, because they would otherwise finish on outdated review logic. This happens the first time the new plugin starts (a Claude Code or OMP session start), or on demand with `node scripts/stop-superseded-runs.mjs` (`--dry-run` shows what would stop, `--json` prints machine-readable output). Only live reviews on an older runner are stopped: finished reviews, quiet reviews on the current runner, and reviews on the current or a newer runner are left alone, and a review whose process cannot be verified is listed as unverified and not stopped. The commit of a stopped review is blocked; commit again to get a review on the new runner. The stop cannot run inside `omp plugin install` itself, because Bun does not run install scripts. Set `OMP_REVIEW_KIT_STOP_SUPERSEDED=0` to turn off the automatic stop at session start; the explicit command always works. `--follow` exits 0 when the commit may go ahead (PASS or a skipped review), 1 when the review blocked, failed or was interrupted, and 3 while the run is still quiet or orphaned.
-
 ## Development & Testing
 
 ```sh
-npm test                  # runs native node:test suites (unit, BDD, layout, marketplace, hook E2E)
-npm run test:mutation     # runs dependency-free safety mutation test gate (100% killed required)
-npm run check             # asserts repository layout integrity and zero runner drift
+bun install --frozen-lockfile   # the pinned OMP library
+npm test                        # node:test suites under tests/
+npm run test:mutation           # the safety mutation gate (every curated mutant must be killed)
+npm run check                   # layout integrity and runner drift
 ```
 
 ### Mutation gate execution
 
-The development mutation gate requires Node 22 or newer for precise native nested-test selection (the plugin runtime still supports Node 18). It uses four asynchronous workers by default (`OMP_MUTATION_WORKERS` overrides the count for diagnostics). Each worker owns one reusable project copy; the runner restores and verifies every file, mode and path before reuse. Timing-sensitive and process-tree suites run exclusively after the parallel jobs drain.
+The development mutation gate requires Node 22 or newer. It uses four asynchronous workers by default (`OMP_MUTATION_WORKERS` overrides the count for diagnostics). Each worker owns one reusable project copy; the runner restores and verifies every file, mode and path before reuse. Timing-sensitive and process-tree suites run exclusively after the parallel jobs drain.
 
-`scripts/mutation-selectors.json` maps every curated mutant to a calibrated deciding test. An ordinary run verifies its green baseline and then requires an assertion failure from the selected test. Timeout, process/import/reporter failure, missing tests and incomplete catalogs block the gate rather than count as kills. `node scripts/run-mutation-tests.mjs --calibrate` compares full-suite reference results with focused selectors and generates the mapping; this is migration/maintenance work, not the default per-commit path. Calibration must be repeated for changed mutant definitions or deciding tests. Run records include worker concurrency and setup/test/reset timings; no fixed speedup is promised.
+`scripts/mutation-selectors.json` maps every curated mutant to a calibrated deciding test. An ordinary run verifies its green baseline and then requires an assertion failure from the selected test. A timeout, a process, import or reporter failure, a missing test, or an incomplete catalog blocks the gate rather than counting as a kill. `node scripts/run-mutation-tests.mjs --calibrate-stale` recalibrates only the mutants whose selector no longer fits, keeps proven selectors when part of a run fails, and then runs the ordinary gate over every mutant. Its exit code is always the verdict of the full gate.
 
-### Opt-in Live OMP End-to-End Verification
+### Live check
 
-To exercise real model execution with native OMP CLI without mocks:
+The live case of the hook suite runs a real `git commit` through the installed hook with the owner's OMP configuration and spends model budget. It is opt-in:
 
 ```sh
-OMP_REVIEW_KIT_LIVE_E2E=1 node --test tests/live-e2e-omp.test.mjs
+OMP_REVIEW_KIT_LIVE_E2E=1 node --test --test-reporter=spec tests/e2e-native-hook.test.mjs > live-e2e.log 2>&1
 ```

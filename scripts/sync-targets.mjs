@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isHookNewer } from '../src/domain/hook-template.mjs';
 import { isRunnerNewer } from '../src/domain/runner-version.mjs';
+import { PluginInstallerService } from '../src/application/installer-service.mjs';
 import { isSkippedTarget } from '../src/domain/target-policy.mjs';
 import { FileTargetRegistry } from '../src/infra/target-registry.mjs';
 
@@ -44,7 +45,17 @@ export async function syncTarget(repo, { apply = false, source = root } = {}) {
     }
     files.push({ file: to, want: want.slice(0, 16), have: have ? have.slice(0, 16) : null, state });
   }
-  return { repo, status: files.every((f) => f.state === 'ok' || f.state === 'updated' || f.state === 'newer') ? 'synced' : 'drift', files };
+  // Copies being current says nothing about whether git runs them: core.hooksPath can point elsewhere.
+  const installer = new PluginInstallerService();
+  let hook = await installer.assessHook(repo).catch(() => null);
+  // --apply repairs a stray core.hooksPath the way a session start does (setup), never anything else.
+  if (apply && hook?.kitExpected && !hook.effective) {
+    await installer.setup(repo).catch(() => undefined);
+    hook = await installer.assessHook(repo).catch(() => hook);
+  }
+  const unreviewed = Boolean(hook?.kitExpected && !hook.effective);
+  const copied = files.every((f) => f.state === 'ok' || f.state === 'updated' || f.state === 'newer');
+  return { repo, status: copied && !unreviewed ? 'synced' : 'drift', files, hook: hook ? { kind: hook.kind, effective: hook.effective, kitExpected: hook.kitExpected, hooksPath: hook.hooksPath } : null };
 }
 
 export async function loadTargets(argv, configPath) {
@@ -68,7 +79,8 @@ async function main() {
   for (const repo of targets) {
     const result = await syncTarget(repo, { apply });
     if (result.status === 'drift' || result.status === 'not-a-repo') drift += 1;
-    const detail = result.files.map((f) => `${path.basename(f.file)}:${f.state}(${f.have ?? '-'}→${f.want})`).join(' ');
+    const detail = result.files.map((f) => `${path.basename(f.file)}:${f.state}(${f.have ?? '-'}→${f.want})`).join(' ')
+      + (result.hook?.kitExpected && !result.hook.effective ? ` NOT-REVIEWED(git runs a ${result.hook.kind} pre-commit, core.hooksPath ${result.hook.hooksPath ?? 'unset'}; run /reviewer-kit:setup there)` : '');
     console.log(`${result.status.padEnd(10)} ${repo} ${detail}`);
   }
   if (!apply && drift) console.log('\nRun with --apply to copy files, then commit each repository through its own review hook.');
