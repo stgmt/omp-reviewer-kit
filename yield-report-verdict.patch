@@ -1,0 +1,72 @@
+--- a/src/native/task-engine.mjs
++++ b/src/native/task-engine.mjs
+@@ -4,6 +4,7 @@
+ // configuration; this module reads none of them and writes no model settings.
+ 
+ import path from 'node:path';
++import { readVerdictMarker } from './verdict.mjs';
+ 
+ /**
+  * Structural overlay only: children must complete with a `yield`, otherwise OMP has no
+@@ -108,9 +109,10 @@
+ 
+ /**
+  * The reviewer's own final `yield`: the decoded Markdown and the yield status. `text` is `null`
+- * when the payload carries no Markdown report. The yield contract is one raw string; a payload of
+- * exactly one `report` string field is the same string after JSON serialization, decoded once.
+- * Any other shape has no report, and the verdict blocks on it.
++ * when the payload carries no usable Markdown report. The contract is one raw string. An object is
++ * accepted only as `{ report }` or `{ report, verdict }`, and a `verdict` must equal the marker inside
++ * `report`: the marker stays the decision and a disagreeing verdict is no report. Any other shape
++ * has no report, and the verdict blocks on it.
+  *
+  * @param {object|undefined} reviewer
+  * @returns {{ status: string|null, text: string|null } | undefined}
+@@ -123,9 +125,11 @@
+ 
+ function decodeReport(data) {
+   if (typeof data === 'string') return data;
+-  const keys = data && typeof data === 'object' && !Array.isArray(data) ? Object.keys(data) : [];
+-  if (keys.length === 1 && keys[0] === 'report' && typeof data.report === 'string') return data.report;
+-  return null;
++  if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
++  if (!Object.keys(data).every(key => key === 'report' || key === 'verdict')) return null;
++  if (!Object.hasOwn(data, 'report') || typeof data.report !== 'string') return null;
++  if (!Object.hasOwn(data, 'verdict')) return data.report;
++  return data.verdict === readVerdictMarker(data.report).verdict ? data.report : null;
+ }
+ 
+ /**
+--- a/tests/native-yield.test.mjs
++++ b/tests/native-yield.test.mjs
+@@ -19,10 +19,29 @@
+   assert.deepEqual(reviewerYield(yieldOf({ report: '## Report\n\nREVIEW_RESULT=PASS' })), { status: 'success', text: '## Report\n\nREVIEW_RESULT=PASS' });
+ });
+ 
+-test('Given the yield data is an object with other fields, When decoded, Then no report is recovered', () => {
++test('Given the yield data is a report whose verdict matches its marker, When decoded, Then the report is recovered', () => {
++  assert.deepEqual(reviewerYield(yieldOf({ report: '## Report\n\nREVIEW_RESULT=BLOCK', verdict: 'BLOCK' })), { status: 'success', text: '## Report\n\nREVIEW_RESULT=BLOCK' });
++});
++
++test('Given the yield verdict disagrees with the marker in its report, When decoded, Then no report is recovered', () => {
++  assert.deepEqual(reviewerYield(yieldOf({ report: '## Report\n\nREVIEW_RESULT=PASS', verdict: 'BLOCK' })), { status: 'success', text: null });
++});
++
++test('Given the yield verdict is set but the report carries no marker, When decoded, Then no report is recovered', () => {
+   assert.deepEqual(reviewerYield(yieldOf({ report: 'x', verdict: 'PASS' })), { status: 'success', text: null });
+ });
+ 
++test('Given the yield data is an object with a field other than report and verdict, When decoded, Then no report is recovered', () => {
++  assert.deepEqual(reviewerYield(yieldOf({ report: '## Report\n\nREVIEW_RESULT=PASS', extra: 1 })), { status: 'success', text: null });
++});
++
++test('Given a report and verdict yield whose marker passes, When the verdict is evaluated, Then the review passes', () => {
++  const yielded = reviewerYield(yieldOf({ report: '## Review\n\nREVIEW_RESULT=PASS', verdict: 'PASS' }));
++  const stages = everyStage.map(stage => (stage.agent === 'review-risk-hunter' ? { ...stage, data: { lane: 'correctness' } } : stage));
++  const reviewer = { exitCode: 0, aborted: false, yieldStatus: yielded.status, text: yielded.text };
++  assert.equal(evaluateReview({ reviewer, stages, profile: 'full', lanes: ['correctness'] }).pass, true);
++});
++
+ test('Given the yield data is a number, When decoded, Then no report is recovered', () => {
+   assert.equal(reviewerYield(yieldOf(42)).text, null);
+ });
