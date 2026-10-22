@@ -2077,7 +2077,40 @@
         "Feature: Commit-Range Audit CLI (scripts/audit-range.mjs)"
       ],
       "mutantHash": "780ba9ea222e0848d6246927f707d0a5c1d2e181ce11fa5803dff984c0a958e2",
-      "testHash": "e90cdeff119af6c003e35a82f7878da50a27d67481a570e2a3581a632ca4a41a"
+      "testHash": "e6320e57dbff393065084b59bd11e01658efd03fb7e1bd4d48098ed5df4f02b0"
+    },
+    "audit-range-llm-model-pin": {
+      "testFile": "tests/audit-range.test.mjs",
+      "tests": [
+        "runs review-range-auditor through the default OMP role with no model flag"
+      ],
+      "ancestors": [
+        "Feature: Commit-Range Audit CLI (scripts/audit-range.mjs)"
+      ],
+      "mutantHash": "343267cf7f0395d12a107227eb7813f016a9230329c001b2cf6e37583b6704eb",
+      "testHash": "e6320e57dbff393065084b59bd11e01658efd03fb7e1bd4d48098ed5df4f02b0"
+    },
+    "audit-range-launch-message-dropped": {
+      "testFile": "tests/audit-range.test.mjs",
+      "tests": [
+        "reports a failed OMP launch on stderr and exits 1"
+      ],
+      "ancestors": [
+        "Feature: Commit-Range Audit CLI (scripts/audit-range.mjs)"
+      ],
+      "mutantHash": "17ea5a8e40ab2844aef81905fe37b80cd335dd1f9e3b139ca29e2111d7dcff35",
+      "testHash": "e6320e57dbff393065084b59bd11e01658efd03fb7e1bd4d48098ed5df4f02b0"
+    },
+    "audit-range-launch-failure-exit-zero": {
+      "testFile": "tests/audit-range.test.mjs",
+      "tests": [
+        "reports a failed OMP launch on stderr and exits 1"
+      ],
+      "ancestors": [
+        "Feature: Commit-Range Audit CLI (scripts/audit-range.mjs)"
+      ],
+      "mutantHash": "dd00bb01647b907ce11f878d4469ab860bbcdad82304b627d0441f86e2152948",
+      "testHash": "e6320e57dbff393065084b59bd11e01658efd03fb7e1bd4d48098ed5df4f02b0"
     },
     "modular-skills-args-dropped": {
       "testFile": "tests/review-skills.test.mjs",

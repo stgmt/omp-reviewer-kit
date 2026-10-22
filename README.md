@@ -217,7 +217,7 @@ node scripts/audit-range.mjs <base>..<head> --out report.md
 node scripts/audit-range.mjs <base>..<head> --llm
 ```
 
-The CLI runs a deterministic pass across each commit using `SuspicionMap`, aggregates net assert deltas and deleted test files, and optionally invokes the native `review-range-auditor` agent (`--llm`) to adversarially challenge the change history under `skill://range-audit`.
+The CLI runs a deterministic pass across each commit using `SuspicionMap`, aggregates net assert deltas and deleted test files, and optionally invokes the native `review-range-auditor` agent (`--llm`) to adversarially challenge the change history under `skill://range-audit`. The `--llm` run passes no model flag and runs on OMP's default role; the review gate's child runs on the `@task` role.
 
 ### Pre-Review Check Execution & Red-Proof Matrix
 

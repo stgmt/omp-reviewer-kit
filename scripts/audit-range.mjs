@@ -146,18 +146,26 @@ async function runLlmAudit({ range, markdownReport, cwd }) {
   await writeFile(reportPath, markdownReport, 'utf8');
 
   const ompBin = process.env.OMP_REVIEW_KIT_OMP ?? 'omp';
-  const model = process.env.OMP_REVIEW_KIT_MODEL ?? '@slow';
+  // No model flag: OMP resolves its own default role, fallbacks and agent overrides.
+  // review-range-auditor declares no model, so the task call inherits that role.
+  const ompArgs = ['-p', '--no-session'];
 
   const prompt = [
     'You are the OMP headless range audit dispatcher.',
     'Run exactly one native task with agent "review-range-auditor".',
+    'Make the task call without a model field so the agent inherits the default role configured in OMP.',
     `The task must audit the commit range ${range} using skill://range-audit and skill://reality-first-review.`,
     `The deterministic suspicion report is at ${reportPath}. Address every flagged commit and aggregate entry.`,
     'Never emit REVIEW_RESULT=... markers — range audits are diagnostic and not commit gates.',
   ].join('\n');
 
+  // Same Windows wrapper handling as the review child (OmpCliReviewerAdapter.defaultRunner).
+  const isWindowsWrapper = /\.(cmd|bat)$/i.test(ompBin);
+  const executable = isWindowsWrapper ? (process.env.ComSpec ?? 'cmd.exe') : ompBin;
+  const args = isWindowsWrapper ? ['/d', '/c', 'call', ompBin, ...ompArgs] : ompArgs;
+
   return new Promise((resolve) => {
-    const child = spawn(ompBin, ['-p', '--model', model, '--no-session'], {
+    const child = spawn(executable, args, {
       cwd,
       stdio: ['pipe', 'inherit', 'inherit'],
       windowsHide: true,

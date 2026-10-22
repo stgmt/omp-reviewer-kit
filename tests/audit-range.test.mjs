@@ -1,6 +1,6 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -115,5 +115,73 @@ describe('Feature: Commit-Range Audit CLI (scripts/audit-range.mjs)', () => {
     });
     assert.equal(resInvalid.status, 2);
     assert.match(resInvalid.stderr, /Invalid git revision range/);
+  });
+
+  // Runs the real --llm spawn against a fake OMP and returns the argv and stdin it received.
+  async function runFakeLlm(envOverrides = {}) {
+    const fakeDir = await mkdtemp(path.join(tmpdir(), 'omp-range-llm-'));
+    try {
+      const isWindows = process.platform === 'win32';
+      const fakeOmp = path.join(fakeDir, isWindows ? 'fake-omp.cmd' : 'fake-omp.sh');
+      const argsPath = path.join(fakeDir, 'args.txt');
+      const stdinPath = path.join(fakeDir, 'stdin.txt');
+      const script = isWindows
+        ? '@echo off\n> "%AUDIT_RANGE_TEST_ARGS%" echo %*\nmore > "%AUDIT_RANGE_TEST_STDIN%"\nexit /b 0\n'
+        : '#!/bin/sh\nprintf "%s\\n" "$@" > "$AUDIT_RANGE_TEST_ARGS"\ncat > "$AUDIT_RANGE_TEST_STDIN"\n';
+      await writeFile(fakeOmp, script, 'utf8');
+      if (!isWindows) await chmod(fakeOmp, 0o755);
+
+      const env = {
+        ...process.env,
+        OMP_REVIEW_KIT_OMP: fakeOmp,
+        OMP_REVIEW_KIT_MODEL: '@bogus',
+        AUDIT_RANGE_TEST_ARGS: argsPath,
+        AUDIT_RANGE_TEST_STDIN: stdinPath,
+        ...envOverrides,
+      };
+      for (const [key, value] of Object.entries(envOverrides)) {
+        if (value === undefined) delete env[key];
+      }
+      const res = spawnSync(process.execPath, [scriptPath, 'HEAD~3..HEAD', '--llm'], {
+        cwd: tempRepo,
+        encoding: 'utf8',
+        windowsHide: true,
+        env,
+      });
+
+      assert.equal(res.status, 0, res.stderr);
+      const args = (await readFile(argsPath, 'utf8')).split(/\s+/).filter(Boolean);
+      const prompt = await readFile(stdinPath, 'utf8');
+      return { args, prompt };
+    } finally {
+      await rm(fakeDir, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+
+  it('runs review-range-auditor through the default OMP role with no model flag', async () => {
+    const { args, prompt } = await runFakeLlm();
+
+    assert.deepEqual(args, ['-p', '--no-session'], `OMP argv must carry no model pin: ${args.join(' ')}`);
+    assert.match(prompt, /agent "review-range-auditor"/);
+    assert.match(prompt, /Make the task call without a model field/);
+    assert.match(prompt, /HEAD~3\.\.HEAD/);
+  });
+
+  it('falls back to cmd.exe for the Windows wrapper when ComSpec is unset', { skip: process.platform !== 'win32' && 'Windows .cmd wrapper only' }, async () => {
+    const { args } = await runFakeLlm({ ComSpec: undefined });
+
+    assert.deepEqual(args, ['-p', '--no-session']);
+  });
+
+  it('reports a failed OMP launch on stderr and exits 1', () => {
+    const res = spawnSync(process.execPath, [scriptPath, 'HEAD~3..HEAD', '--llm'], {
+      cwd: tempRepo,
+      encoding: 'utf8',
+      windowsHide: true,
+      env: { ...process.env, OMP_REVIEW_KIT_OMP: path.join(tempRepo, 'no-such-omp') },
+    });
+
+    assert.equal(res.status, 1, res.stderr);
+    assert.match(res.stderr, /Failed to launch OMP for range audit/);
   });
 });
