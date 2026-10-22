@@ -2,148 +2,103 @@
 
 ## Project Overview
 
-`omp-reviewer-kit` is an OMP plugin for evidence-first review of staged Git changes. It coordinates a native 4-stage hierarchy: an orchestrator agent (`reviewer-kit`), specialist subagents (`review-context-scout`, `review-risk-hunter`, `review-finding-verifier`), review skills (`reality-first-review`, `multi-stage-review`), a fail-closed pre-commit runner, and an OMP extension module (`src/extension.mjs`). A commit proceeds only when OMP emits exactly one `REVIEW_RESULT=PASS`; every review is recorded under `audit-reports/commit-reviews/`.
+`omp-reviewer-kit` is an OMP plugin and Git pre-commit hook for evidence-first review of staged changes. Since 0.22.0 the review runs on OMP's native `TaskTool`: a Bun host calls the pinned OMP library directly with `agent: reviewer-kit`, and the orchestrator runs three read-only specialists through native `task`. A commit proceeds only when the host exits 0 (`review: PASS`). The reviewer's Markdown must also end with exactly one solitary `REVIEW_RESULT=PASS` line; anything else is BLOCK (fail-closed). Every review writes a report outside the repository, under `~/Documents/omp-reviewer-kit/`.
+
+## Binding requirement: model ownership
+
+- `.specs/native-task-review/REQUIREMENTS.md` is binding. `ACCEPTANCE_CRITERIA.md` lists the test matrix; `STATUS.md` records what is verified and what is not. Read them before changing the review entry point.
+- The review enters the native `TaskTool` with `agent: reviewer-kit`. Models, roles, effort, agent overrides, credentials and fallback belong to OMP and the owner's `~/.omp/agent/config.yml`.
+- Do not add a model dispatcher, a model preflight, a task-to-default chain overlay, a `--model` pin, a provider walk, or a whole-review model retry. Do not edit `~/.omp/agent/config.yml`.
+- Legacy CLI behavior (`omp -p --model @task`) is not compliance and must not return as a fallback.
+- The OMP fork is removed. The approved option 2 is implemented as a kit host (`src/native/task-engine.mjs`) that calls the pinned library's exported `TaskTool`, with no OMP source patch. `STATUS.md` states what that does and does not establish.
 
 ## Architecture & Data Flow
 
-1. **Standard Plugin Discovery**: When installed via `omp plugin install`, OMP automatically discovers:
-   - Agent definitions: `agents/reviewer-kit.md`, `agents/review-context-scout.md`, `agents/review-risk-hunter.md`, `agents/review-finding-verifier.md`.
-   - Review skills: `skills/reality-first-review/SKILL.md`, `skills/multi-stage-review/SKILL.md`.
-   - Native extension: `src/extension.mjs`.
-2. **In-Session Setup & Status**: The extension registers native slash commands:
-   - `/reviewer-kit:setup`: configures the Git pre-commit hook in the active project (`core.hooksPath .githooks`).
-   - `/reviewer-kit:status`: reports active repository hook status and latest review verdict.
-   - `/reviewer-kit:doctor`: checks Node.js, Git, OMP CLI, and hook integrity.
-   - `session_start` lifecycle hook: provides transparent status bar state (`reviewer-kit: active` / `unconfigured`), registers the repository in the target registry (`FileTargetRegistry`: one file per repository in `<registry file>.d/` so concurrent sessions never rewrite shared state, plus the owner-edited `~/.omp/review-kit-targets.json` or `OMP_REVIEW_KIT_TARGETS` that is only read; `src/domain/target-policy.mjs` keeps `tp-*`, the release checkout and `omp-tasks` worker checkouts out, `PluginInstallerService.registerTarget`) and heals every other registered repository whose hook or runner is stale (`healTargets`, state `stale` only, never a downgrade, copy-only, time-budgeted, skipping the same policy targets, `OMP_REVIEW_KIT_AUTO_SYNC=0` disables). The Claude Code SessionStart hook calls `refreshAtSessionStart` from the installed plugin for the same effect and repairs the current repository instead of only reporting it. `/reviewer-kit:doctor` reports stale registered repositories.
-3. **Pre-Commit Multi-Stage Review Flow**:
-   - `.githooks/pre-commit` resolves repository root and executes `.omp/review-kit/run-review.mjs` with Node.js, the thin stub that runs the installed plugin's `scripts/run-review.mjs`. In the kit repository (`package.json` name `omp-reviewer-kit`) it executes `scripts/run-review.mjs` directly, so the stub under `.omp/review-kit/` is never run there.
-   - Hook ownership: line 2 of `templates/githooks/pre-commit` is `# omp-reviewer-kit hook v<version> body-sha256:<digest>`, the digest covering every other line (`src/domain/hook-template.mjs`). A hook whose marker matches its body is the kit's own from any release, so an update replaces it without a version list; an edited body under an unchanged marker is a conflict; a hook from a newer release is never downgraded. Hooks written before markers existed are recognised only through the frozen `LEGACY_HOOK_DIGESTS` in `src/application/installer-service.mjs`; never add to that list. Run `node scripts/stamp-hook.mjs` after every edit of the template: `scripts/check-layout.mjs` (and `npm run check`) fails while the marker does not match the body or the package version.
-   - The runner queries `GitPort` (`SubprocessGitAdapter`) for `git diff --cached --binary --no-ext-diff --`. Empty staged changes exit with code 0 immediately without invoking OMP.
-   - `DiffIdentity` computes deterministic SHA-256 hash of the binary diff.
-   - Before any snapshot or reviewer call, `VerdictCachePort` (`FileSystemVerdictCacheAdapter`, `audit-reports/commit-reviews/verdict-cache.jsonl`) is consulted by (`git write-tree` index tree, diff hash): an identical earlier PASS whose report still exists at the absolute path stored in the cache, with the same hash and `result: PASS` (max 14 days), short-circuits to PASS (`verdict_cache_hit`). BLOCK is never cached; `OMP_REVIEW_KIT_CACHE=0` disables it. A BLOCK whose envelope is missing or malformed gets one verbatim re-emit that is accepted only if it is again a BLOCK with a valid non-failure envelope.
-   - Vendored kit files: `SubprocessGitAdapter` (given `vendoredFiles`, the runner passes `loadCanonicalVendoredFiles` from `src/infra/vendored-kit-files.mjs`) drops the staged `.omp/review-kit/run-review.mjs` and `.githooks/pre-commit` from the review diff via `:(exclude,literal)` pathspecs only when their staged bytes equal (CRLF-normalised) the installed OMP plugin's `templates/review-kit/run-review.mjs` (the stub) / `templates/githooks/pre-commit`; no installed plugin, a loader failure, or different bytes keeps them in review. A diff left empty is skipped.
-   - Review speed (0.18.0): the runner writes a deterministic scout context pack (`src/domain/context-pack.mjs`; changed files, changed symbols with references across the snapshot, test-file mapping) to `reviewer-kit-report-ctx-<run>-<pid>.md` in the temp dir (outside the snapshot, removed with the run) and names it in the prompt; the adapter reads the scout's result artifact into a `ScoutBaseline` (`src/domain/scout-baseline.mjs`) that the round record carries as historical context; reuse requires unchanged staged-snapshot fingerprints (all bytes/modes/paths), otherwise source/tests/consumers/harness conclusions are revalidated; truncated baseline bounds are explicit; diffs above `OMP_REVIEW_KIT_SHARD_BYTES` (default 40000, `0` off, `OMP_REVIEW_KIT_MAX_SHARDS` default 3) get a `HUNTER SHARDS` block (`src/domain/hunter-shards.mjs`, source files grouped with their tests) so the correctness hunter runs per shard in parallel; each attempt records `stage_stats` from `src/infra/stage-transcript-stats.mjs`; the kit repository has no runner mirror: its `.omp/review-kit/run-review.mjs` is the stub, which the vendored-file exemption leaves out of the diff as in any repository.
-   - Native batch gate: `src/domain/review-batch.mjs` plans scoped scout ownership and the exact native hunter batch. `src/infra/review-gate-entry.mjs` is passed via `omp -e` only for the review child; `review-batch-extension.mjs` validates/revises native task inputs before dispatch, checks native result IDs/completeness and merges completed scout reports. The runner independently requires all mandatory stage completions from per-attempt evidence; this is not telemetry and failure blocks. Native `task.batch: false` uses flat calls collected by exact planned task ID, with no setting writes and no next-stage dispatch before full completion. Empty scout discovery and missing candidate/gap/previous-finding verifier dispositions fail closed; confirmed verifier findings or harness-coverable gaps reject contradictory PASS synthesis. Task-level retry (0.21.2): results are matched to tasks by identity (`validateBatchTasks`), completed tasks are kept, and a failed specialist task (scout, hunter, verifier) is dispatched again exactly once with only the remaining tasks (`gateReviewBatch` `completed`); a second failure, a failed `reviewer-kit` task, or an error flag with every result intact ends the review (`failed`), after which every dispatch is answered with `Review already failed (<cause>)` before any field check. Gate events (`task_retry`, `dispatch_rejected`, and `complete: false` with `reason` and bounded `failures`, never provider or model text) are delivered into the review output by the adapter. The model orchestrator still initiates stages and synthesizes findings; concurrency/model policy stays native. Agent-owned frontmatter output schemas and a bounded invalid-yield repair prevent repeated malformed submissions. Recovery requires a solitary completed reviewer-kit result with matching invocation and original payload; substantive BLOCK and nonzero process cannot be overridden.
-   - Delta rounds: `RoundStorePort` (`FileSystemRoundStoreAdapter`, `audit-reports/commit-reviews/last-block.json`) keeps the last BLOCK with confirmed findings or coverage gaps (findings plus diff text, 12h TTL). The next review of a different diff gets a `PREVIOUS ROUND` prompt block (`ReviewRound`): previous findings, the files with lines added since, and round rules (verifier decides fixed/still-present for each previous finding; new P2 only inside the delta; new P1 anywhere). PASS clears it, review_failure leaves it; `OMP_REVIEW_KIT_ROUNDS=0` disables it.
-   - `ReviewPrompt` carrying the diff hash invokes `ReviewerPort` (`OmpCliReviewerAdapter`) headlessly via `omp -p --session-dir <per-attempt temp dir>` (the task tool persists each task's full result as a session artifact; the runner reads it back via `recoverTaskReport` when the dispatcher stdout lacks a verdict marker or carries an `execution_failure` envelope, telemetry `report_artifact_recovered`) with `--model @task`: OMP resolves the user's own `task` role and `retry.fallbackChains.task`; all four review agents declare `model: "@task"` to preserve native role-specific fallback identity (the path is overridable via `OMP_REVIEW_KIT_OMP`). A short no-tools preflight call through the same `task` role (`OMP_REVIEW_KIT_PREFLIGHT_TIMEOUT_MS`, default 90,000ms) runs first; if OMP cannot reach a model the commit is BLOCKed within seconds with an infrastructure-failure message pointing at the OMP configuration. The plugin never kills the review child on a timer; `OMP_REVIEW_KIT_MAX_TIME` is an opt-in child-side bound via `omp --max-time` (default off), and a hard child crash (Windows `0xC0000409`/`-1`) with no output is re-run once. Max-time hits are flagged `timedOut` (exit-0-with-empty-stdout at ~the bound) and flow through the existing missing-marker path fail-closed.
-   - The staged snapshot also carries the review inputs under `<snapshot>/.review/`: `diff.patch` (the complete staged diff, byte-exact from `DiffIdentity.bytes`) and `changed-files.txt` (the changed-file manifest parsed from `diff --git` headers). Agents read the diff from these files instead of running `git diff`/`git show`; a staged path under `.review/` fails loudly as a reserved-directory collision.
-   - OMP launches `reviewer-kit` (orchestrator), which executes the 4-stage protocol strictly in sequence:
-     1. **Stage 1 (Scout)**: Spawns `review-context-scout` (uses the native OMP `task` model role) to map diff scope, touched paths, callers via LSP/grep, invariants, tests, and the `coverage_map` of changed executable behaviors to their covering tests.
-     2. **Stage 2 (Parallel Risk Hunters)**: Spawns batch `task` with one `review-risk-hunter` (uses the native OMP `task` model role) agent per lane named by `OMP_REVIEW_KIT_LANES` (default `correctness` only for `full`, `content-risk` for `spec-docs`; `OMP_REVIEW_KIT_LANES=correctness,security` restores the security lane), generating candidate defects under strict anti-noise rules; the correctness lane also emits `coverage_gaps` for every `coverage_map` entry without a covering test, each carrying concrete required edge and mutation tests.
-     3. **Stage 3 (Adversarial Verifier)**: Spawns `review-finding-verifier` (uses the native OMP `task` model role) acting as the author's defense lawyer, verifying upstream protections and reachability to confirm or reject candidates, and verifying each coverage gap is real (not already covered, changed executable behavior, reachable) into `confirmed_coverage_gaps`.
-     4. **Stage 4 (Synthesis & Verdict)**: `reviewer-kit` synthesizes coverage, compiles confirmed findings, and emits the final report.
-   - Output is parsed into `ReviewVerdict`. Invariant: only an exact solitary `REVIEW_RESULT=PASS` yields approval; any confirmed `P1`/`P2`, confirmed coverage gap (changed executable behavior without a covering test while a runnable test harness exists), missing stage, malformed marker, or non-zero exit strictly yields `BLOCK`. A coverage-only BLOCK emits a `coverage_required` envelope whose `coverage_items` name the concrete edge and mutation tests the committer must add.
-   - `ReviewReport` formats the markdown audit trail, which `ReportStorePort` (`FileSystemReportStoreAdapter`) writes to `~/Documents/omp-reviewer-kit/<repository folder name>/<timestamp>-<hash>.md` (folder name: directory name plus 12-char hash of the absolute path) (`OMP_REVIEW_KIT_REPORTS_DIR` overrides the root).
-   - `TelemetryPort` (`FileSystemTelemetryAdapter`) records the run trace to `audit-reports/commit-reviews/runs.jsonl` (append-only `review-run-event@1` events: `run_started`, `diff_collected`, `snapshot_materialized`, `review_attempt_started/finished` with child PID, `preflight_started/finished`, `verdict_evaluated`, `report_written`, `run_finished`, `run_skipped`, `run_failed`) and maintains `audit-reports/commit-reviews/last-run.json` (`review-last-run@1`) as the live status channel, updated ~every 2s during active attempts. Telemetry failures are swallowed and never change the verdict; `OMP_REVIEW_KIT_TELEMETRY=0` disables it. Each run also writes one record, `~/.omp/review-kit-runs/<runId>.json` (`review-run-record@1`; `OMP_REVIEW_KIT_RUNS_DIR` overrides the directory), holding its state, stage, PIDs, timestamps, diff hash, excluded vendored paths, `parentSha`, verdict, report path and session tag (`OMP_REVIEW_KIT_RUN_TAG`). `scripts/review-progress.mjs` reads these records, and `--commit` matches a commit to its run through `parentSha` and the diff hash. When a new run starts, records older than seven days that are finished or whose runner is dead are pruned. `countOtherLiveRuns` counts the live runs of the same repository (runner alive, not finished), and `ReviewWorkflowService.#announceRun` prints the run id, the follow command and that count on stderr once a non-empty diff starts a review. The extension polls `last-run.json` while a `git commit` tool call is active and `/reviewer-kit:status` surfaces it via `installer.status().lastRun`.
-   - `ReviewWorkflowService` outputs verdict to stdout/stderr and sets exit code 0 on PASS or 1 on BLOCK.
+1. **Plugin discovery**: `package.json` (`omp.extensions` → `src/extension.mjs`), agents `agents/*.md`, skills `skills/*/SKILL.md`. The Claude Code shell is `claude-plugin/` (manifest, `hooks/hooks.json` with the SessionStart hook and the Bash PreToolUse commit guard, commands `setup`, `review`, `doctor`, `install-omp`, and `scripts/bridge.mjs`).
+2. **Extension** (`src/extension.mjs`): commands `reviewer-kit:setup`, `reviewer-kit:status`, `reviewer-kit:doctor` and `slop`; a `session_start` handler (sets up and heals the hook, status bar); a `tool_call` handler that runs the commit guard before `git commit`.
+3. **Installer** (`src/application/installer-service.mjs`, `PluginInstallerService`): installs and checks the hook, the target registry (`src/infra/target-registry.mjs`, `src/domain/target-policy.mjs`), and the hook guard. Hook ownership uses the marker in `src/domain/hook-template.mjs`; the runner version rule is `src/domain/runner-version.mjs`; the hook shim is `src/domain/hook-shim.mjs`; commit detection is `src/domain/git-commit-command.mjs`.
+   - Hook guard: `core.hooksPath` pointing at git's default hooks directory is a repairable stray value. A shim in `<git common dir>/hooks/pre-commit` runs the checkout's own `.githooks/pre-commit`. `guardCommit` checks which hook git would run before a commit, and `assessHook` reports the effective hook. Foreign hooks are never overwritten.
+4. **Hook chain**: `templates/githooks/pre-commit` → `.omp/review-kit/run-review.mjs` (thin stub, byte-identical to `templates/review-kit/run-review.mjs`, which runs the installed plugin's `scripts/run-review.mjs`) → `scripts/run-review.mjs` (Node launcher: checks Bun and the pinned library in the kit root, then runs `bun src/native/native-host.mjs <repo>`) → the native host.
+5. **Native host** (`src/native/native-host.mjs`, Bun):
+   - `readStagedChange` (`src/native/snapshot.mjs`) reads `git diff --cached --binary --no-ext-diff`. Vendored kit files are exempt only when they are byte-identical to the installed plugin's templates.
+   - `materializeStagedSnapshot` exports the index with `git checkout-index` into a temporary directory and writes `.review/diff.patch`, `.review/changed-files.txt` and `.review/file-classes.json`. It returns null when nothing is left to review, and the host prints `review: SKIPPED (no staged changes)`.
+   - `buildAssignment` (`src/native/assignment.mjs`) builds the reviewer task text. `runNativeReview` (`src/native/native-review.mjs`) runs it.
+   - `runReviewerTask` (`src/native/task-engine.mjs`) loads the pinned OMP library, creates a `TaskTool` session whose extension root is the kit, and calls `execute` with `agent: 'reviewer-kit'`. The only settings overlay is the structural `task.structured: true`.
+   - The reviewer completes with native `yield` containing one Markdown string. `decodeReport` decodes it once.
+   - `evaluateReview` (`src/native/verdict.mjs`) makes the verdict. `saveReport` writes the report through `src/infra/filesystem-report-store-adapter.mjs`.
+6. **Verdict invariant** (`src/native/verdict.mjs`): PASS requires all of the following. The reviewer result is a single completed, non-aborted native task with exit 0 and a valid yield. The Markdown has exactly one solitary `REVIEW_RESULT=PASS` line, and it is the last non-empty line. Every mandatory stage completed: the scout (at least one), a hunter for each planned lane, and the verifier for the `full` profile. No verifier-confirmed finding remains, and no confirmed coverage gap remains when the scout reports a runnable test harness. Anything else is BLOCK.
+7. **Agents**: `reviewer-kit` (orchestrator; `spawns: review-context-scout, review-risk-hunter, review-finding-verifier`), with `model: "@task"`. The specialists `review-context-scout`, `review-risk-hunter` and `review-finding-verifier` also declare `model: "@task"` and have read-only tools (`read, grep, glob, lsp, bash`). `reviewer-kit` also has `task`, restricted by its `spawns` list.
+8. **Outside the gate**: `/slop` (`src/domain/slop-prompt.mjs`, `src/domain/slop-report.mjs`, `agents/slop*.md`) and the range audit (`scripts/audit-range.mjs`, `agents/review-range-auditor.md`) do not run through the native host. The `slop` agents and `review-range-auditor` declare no model. `audit-range.mjs --llm` still launches `omp -p --model ${OMP_REVIEW_KIT_MODEL ?? '@slow'}`, which is a kit-side model pin. It is a known follow-up, not part of the review gate.
+9. **Scope of the release**: 0.22.0 removed the verdict cache, delta rounds, context pack, hunter shards, batch gate, run telemetry and records, progress commands, superseded-run stop, pre-review check execution, the rejection envelope, and all model-chain settings. Reports are the only audit trail.
 
-`scripts/run-review.mjs` is the algorithm: the self-contained distributable runner, installed with the plugin. `templates/review-kit/run-review.mjs` is the thin stub that every repository vendors as `.omp/review-kit/run-review.mjs`; it runs the installed plugin's `scripts/run-review.mjs` with the same arguments and forwards the exit code. `scripts/check-layout.mjs` enforces that the vendored copy in this repository is byte-identical to the stub and that the algorithm carries its version marker. `src/` provides modular OOP and DDD exports (`DiffIdentity`, `ReviewVerdict`, `ReviewPrompt`, `ReviewReport`, `ReviewExecutionResult`, `PluginInstallerService`, ports, adapters, telemetry adapters, and `ReviewWorkflowService`).
-
-`scripts/analyze-review-run.mjs` (`npm run analyze-review`) correlates `runs.jsonl` with OMP process logs (`~/.omp/logs/omp.<date>.<pid>.log`) by child PID — or by time window when `OMP_REVIEW_KIT_OMP` is a `.cmd` wrapper — and reports per-attempt timings, request counts, context growth, per-stage subagent timing (dispatch `Configured subagent …` → finish `subagent launch timing`; `Session exit recorded` is deferred cleanup, not stage duration), per-agent model/thinking/message spans from `%TEMP%/omp-task-*` transcripts, and provider-error classes. `.devin/skills/omp-review-incidents/SKILL.md` documents the incident-investigation playbook.
+`scripts/run-review.mjs` is the distributable launcher installed with the plugin. `templates/review-kit/run-review.mjs` is the stub every repository vendors; it is never edited, and `scripts/check-layout.mjs` enforces that the vendored copy is byte-identical. `src/index.mjs` exports the native review functions and the installer.
 
 ## Key Directories
 
-- `src/`: domain models, ports, application services (`installer-service.mjs`, `review-workflow-service.mjs`), infrastructure adapters, and native extension entry point (`extension.mjs`).
-- `agents/`: OMP agent definitions (`agents/reviewer-kit.md`, `agents/review-context-scout.md`, `agents/review-risk-hunter.md`, `agents/review-finding-verifier.md`).
-- `skills/`: reusable review methodology and protocol (`skills/reality-first-review/SKILL.md`, `skills/multi-stage-review/SKILL.md`).
-- `scripts/`: runner (`run-review.mjs`), mutation gate (`run-mutation-tests.mjs`), integrity check (`check-layout.mjs`), and fallback Windows/POSIX installers (`install-hook.ps1`, `install-hook.sh`).
-- `templates/githooks/`: pre-commit hook copied into target repositories (stamped with its marker by `scripts/stamp-hook.mjs`).
-- `templates/review-kit/`: the thin runner stub, vendored into every repository as `.omp/review-kit/run-review.mjs`. It is never edited.
-- `.omp/review-kit/`: this repository's vendored copy of the stub, which its pre-commit hook invokes.
-- `.omp-plugin/`: marketplace plugin catalog metadata.
-- `claude-plugin/`: the Claude Code shell (manifest, SessionStart hook, four commands, `scripts/bridge.mjs`); `.claude-plugin/marketplace.json` points at it. Its only skill is `skills/review-progress/SKILL.md`, a usage note for the read-only reader `scripts/review-progress.mjs` (shipped in the OMP plugin and reached through `scripts/bridge.mjs progress`); it contains no runner, installer, or agents. `npm run check` enforces the exact file set and a size cap. Invariant: the git hook and `.omp/review-kit/run-review.mjs` are written only by `PluginInstallerService` (reached through the OMP plugin), and a runner with a newer `// omp-reviewer-kit runner vX.Y.Z` marker is never overwritten.
-- `tests/`: flat native Node.js test suites (`*.test.mjs`), including contract, BDD, extension, marketplace, mutation, telemetry, and real Git hook E2E suites.
-- `.devin/skills/`: repository skills, including `omp-review-incidents` (incident-investigation playbook).
-- `.github/workflows/`: cross-platform CI automation (`ci.yml`).
-- `audit-reports/`: architecture records (`audit-reports/multi-stage-review-architecture.md`), the observability domain spec (`audit-reports/review-observability-domain-spec.md`), and run telemetry and the verdict cache (`audit-reports/commit-reviews/`: `runs.jsonl`, `last-run.json`, `verdict-cache.jsonl`; the per-run records live outside the repository in `~/.omp/review-kit-runs/`).
+- `src/native/`: the native review (`native-host.mjs`, `native-review.mjs`, `task-engine.mjs`, `snapshot.mjs`, `assignment.mjs`, `verdict.mjs`).
+- `src/application/`: `installer-service.mjs`.
+- `src/domain/`: value and policy modules (`diff-identity.mjs`, `file-class.mjs`, `hook-template.mjs`, `hook-shim.mjs`, `git-commit-command.mjs`, `runner-version.mjs`, `target-policy.mjs`, `suspicion-map.mjs`, `prompt-token.mjs`, `slop-*.mjs`).
+- `src/infra/`: `filesystem-report-store-adapter.mjs`, `target-registry.mjs`, `vendored-kit-files.mjs`, `process-tree.mjs`.
+- `src/extension.mjs`: the OMP extension.
+- `agents/`, `skills/`: agent and skill definitions loaded by OMP.
+- `scripts/`: launcher, hook stamp, sync and setup helpers, `check-layout.mjs`, `run-tests.mjs`, the mutation gate (`run-mutation-tests.mjs`, `mutation-runner.mjs`, `mutation-selectors.json`, `mutation-test-reporter.mjs`), and `audit-range.mjs`.
+- `templates/`: `githooks/pre-commit` and `review-kit/run-review.mjs`.
+- `claude-plugin/`: the Claude Code shell (see Architecture).
+- `tests/`: flat `node:test` suites (`*.test.mjs`).
+- `.specs/native-task-review/`: requirements, acceptance criteria, the variants document (`PLAN.md`), the status record (`STATUS.md`), and `MUTATION_RETIREMENT.json`.
+- `audit-reports/`: architecture notes and historical incident reports. Run records are not kept in the repository.
 
 ## Development Commands
 
 ```sh
-npm test                         # node scripts/run-tests.mjs (node --test tests/*.test.mjs, run records in a temp directory)
+bun install --frozen-lockfile    # the pinned OMP library (@oh-my-pi/pi-coding-agent 18.12.5)
+npm test                         # node scripts/run-tests.mjs
 npm run test:mutation            # node scripts/run-mutation-tests.mjs
 npm run check                    # node scripts/check-layout.mjs
 node scripts/run-review.mjs      # review the current staged diff
 ```
 
-Opt-in live OMP verification (requires local OMP executable). Run with the spec reporter for streaming progress, and capture output to a file instead of piping through `tail` so assertion failures keep the full OMP stdout/stderr:
+Opt-in live check (spends money through the owner's OMP configuration; never run it by default):
+
 ```sh
-OMP_REVIEW_KIT_LIVE_E2E=1 node --test --test-reporter=spec tests/live-e2e-omp.test.mjs > live-e2e.log 2>&1
-```
-Live checks 3/4 drive real `omp -p --model @slow` directly via `runLiveOmp` and assert on the raw stdout; `runLiveOmp` kills the whole process tree on timeout and rejects with stdout/stderr tails. The matrix cases exercise the full pre-commit hook path (runner + adapter + report) through the real Git hook.
-
-Risk-lane configuration (optional): `OMP_REVIEW_KIT_LANES` is a comma-separated allowlist over `correctness|security|content-risk`; unset defaults to `correctness` only (`full` profile) / `content-risk` (`spec-docs`), `correctness,security` restores the classic two-lane stage 2, unknown tokens fail closed.
-
-Model configuration: none. `OMP_REVIEW_KIT_MODEL`, `OMP_REVIEW_KIT_FALLBACK_MODELS`, `OMP_REVIEW_KIT_MAX_FALLBACKS`, `OMP_REVIEW_KIT_PROBE_TIMEOUT_MS`, `OMP_REVIEW_KIT_QUOTA_STALL_MS`, and `OMP_REVIEW_KIT_EFFORT` were removed in 0.14.0; models, roles, and fallbacks are configured only in OMP. `OMP_REVIEW_KIT_PREFLIGHT_TIMEOUT_MS` bounds the health call, `OMP_REVIEW_KIT_TELEMETRY=0` disables `runs.jsonl`, `last-run.json` and the per-run records. `OMP_REVIEW_KIT_RUNS_DIR` moves the per-run records, `OMP_REVIEW_KIT_RUN_TAG` tags a run with its Claude Code session, and `OMP_REVIEW_KIT_QUIET_MS` (default 600000) sets the silence after which a running review is shown as quiet; quiet reviews are reported and never stopped for being quiet. Full reviews are never cancelled by a timer, and quiet runs on the current runner are only reported. Installing a newer plugin stops live runs whose runner is older than the installed plugin: the stop runs when the new plugin first starts (session start in Claude or OMP) and through `scripts/stop-superseded-runs.mjs` (`--dry-run`, `--json`); finished runs and runs on the current or a newer runner are never touched, and a run whose process cannot be verified is listed as unverified and not killed. The stopped review's commit is blocked and must be committed again for a review on the new runner. The stop does not happen inside `omp plugin install` (Bun runs no install scripts); the first run of the new plugin does it. `OMP_REVIEW_KIT_STOP_SUPERSEDED=0` disables only the automatic stop at session start; the explicit command always works. `OMP_REVIEW_KIT_SKILLS` controls the skill catalog the review child lists via `omp --skills`: the plugin skills (`multi-stage-review`, `reality-first-review`, `range-audit`, `slop`) are always included so the orchestrator's autoloaded protocol skills resolve, the default extras are `*reviewer-kit*,*review-kit*`, a comma-separated list replaces the extras, `all` (any case, anywhere in the list) restores the full catalog, and an invalid list falls back to the default extras; the catalog is resent with every request of every stage, so a large autolearn skill store otherwise dominates request size. Note: `agentModelOverrides` in the user's `~/.omp/agent/config.yml` silently override agent frontmatter `model:` values and can defeat the intended fast chain.
-
-Installation via standard OMP commands:
-
-```bash
-omp plugin install github:stgmt/omp-reviewer-kit
+OMP_REVIEW_KIT_LIVE_E2E=1 node --test --test-reporter=spec tests/e2e-native-hook.test.mjs > live-e2e.log 2>&1
 ```
 
-There is no build, lint, format, or typecheck command. Run `npm test`, `npm run test:mutation`, and `npm run check` after modifying source, agents, skills, templates, or metadata.
+The live case runs a real `git commit` through the installed hook and asserts `review: PASS`. The offline cases of that suite use real git and the real hook, with no mocks.
+
+There is no build, lint, format or typecheck command. Run `npm test`, `npm run test:mutation` and `npm run check` after changing source, agents, skills, templates or metadata.
 
 ## Code Conventions & Common Patterns
 
-- Use native ESM in `.mjs` files: `import`/`export`, `node:` built-ins, semicolons, two-space indentation, and `camelCase` functions/variables.
-- Zero external runtime dependencies: standard Node.js built-in modules only (`node:crypto`, `node:fs/promises`, `node:child_process`, `node:path`, `node:url`, `node:os`).
-- Apply OOP and DDD principles:
-  - Domain invariants live in Value Objects (`DiffIdentity`, `ReviewVerdict`) and Entities (`ReviewReport`).
-  - Application orchestration lives in `ReviewWorkflowService` and `PluginInstallerService`.
-  - External capabilities are decoupled behind ports (`GitPort`, `ReviewerPort`, `ReportStorePort`) and adapters.
-- Preserve fail-closed behavior: only one exact standalone `REVIEW_RESULT=PASS` line permits a commit; any ambiguity or failure must return `BLOCK` (exit code 1).
-- Staged change isolation: review strictly targets `git diff --cached --binary --no-ext-diff --` and ignores unstaged worktree changes.
-- Tool Permissions & Mutation Prohibitions:
-  - None of the four review agents (`reviewer-kit`, `review-context-scout`, `review-risk-hunter`, `review-finding-verifier`) contain repository mutation tools (`edit`, `write`) or instructions that stage, reset, commit, checkout, or edit files.
-  - OMP Tool Classification Note: The orchestrator `reviewer-kit` declares `task` in its tool list to spawn subagents. In `@oh-my-pi/pi-coding-agent` 17.3.7, `task` is classified as a general tool rather than an internal read-only tool because subagents can theoretically run any agent. However, `reviewer-kit` strictly restricts spawning via its frontmatter `spawns: review-context-scout, review-risk-hunter, review-finding-verifier` allowlist, and all three specialist subagents have only read-only inspection tools (`read, grep, glob, lsp, bash`) with no `task` or mutation capabilities.
-- OMP skill discovery is authoritative: do not add manual directory scans for `.omp/skills` or create secondary registries.
-- BDD testing: write tests using `node:test` and `node:assert/strict` with Given / When / Then structure and assert observable outputs and side effects.
+- Native ESM `.mjs`: `import`/`export`, `node:` built-ins, semicolons, two-space indentation, `camelCase`.
+- Runtime dependencies: exactly one, `@oh-my-pi/pi-coding-agent`, pinned to `18.12.5` in `package.json`, with `bun.lock`. The host runs under Bun 1.4.1; the launcher, hook and installer run under Node. Do not add other dependencies without an explicit decision.
+- Fail-closed: only an exact solitary `REVIEW_RESULT=PASS` line with every mandatory stage completed permits a commit. Ambiguity, missing stages, aborted or malformed tasks and infrastructure errors are BLOCK.
+- Review inputs: `git diff --cached --binary --no-ext-diff` only. Unstaged worktree changes are ignored.
+- Tool permissions: none of the four review agents may edit, stage, reset, checkout or commit. Specialists have read-only tools only.
+- OMP skill discovery is authoritative: do not add manual scans for `.omp/skills`.
+- Tests: `node:test` with `node:assert/strict`, Given / When / Then. The hook tests use real git and the real hook. The verdict and yield unit tests use constructed native results; those are not acceptance evidence for the native path.
 
 ## Important Files
 
-- `src/index.mjs`: primary module export and composition root (`createReviewWorkflowService`).
-- `src/extension.mjs`: native OMP extension registering `/reviewer-kit:*` slash commands and `session_start` handler.
-- `src/application/installer-service.mjs`: hook installation and health check diagnostics.
-- `scripts/run-review.mjs`: self-contained pre-commit runner and backward-compatible `runReview` facade.
-- `scripts/analyze-review-run.mjs`: correlates `runs.jsonl` telemetry with OMP process logs by PID or time window (`npm run analyze-review`).
-- `src/infra/review-run-records.mjs`: reads the per-run records and classifies runs as `active`, `quiet`, `orphaned` or `done`.
-- `scripts/review-progress.mjs`: read-only progress CLI over the per-run records (`--mine`, `--all`, `--run`, `--follow`, `--commit`, `--json`).
-- `src/domain/superseded-runs.mjs`: decides which live runs a newer plugin supersedes (runner older than the installed plugin).
-- `src/infra/process-table.mjs`: verifies that a recorded run process is the one it claims to be before it is stopped.
-- `src/application/superseded-run-stopper.mjs`: stops superseded runs at session start and for the explicit command.
-- `scripts/stop-superseded-runs.mjs`: explicit command that stops superseded runs (`--dry-run`, `--json`).
-- `src/infra/filesystem-telemetry-adapter.mjs`: `RunTelemetry` sink, `FileSystemTelemetryAdapter`, `NullTelemetryAdapter`, `safeRunTelemetry`, `formatProviderOutageError`.
-- `scripts/run-mutation-tests.mjs`: dependency-free safety mutation test runner.
-- `.omp/review-kit/run-review.mjs`: this repository's copy of the thin stub (identical to `templates/review-kit/run-review.mjs`).
-- `agents/reviewer-kit.md`: orchestrator agent, spawns allowlist, and final verdict synthesis.
-- `agents/review-context-scout.md`: context discovery specialist.
-- `agents/review-risk-hunter.md`: correctness and security candidate defect specialist.
-- `agents/review-finding-verifier.md`: adversarial defense and finding validation specialist.
-- `skills/reality-first-review/SKILL.md`: 16 review rules, finding format, and skill-composition policy.
-- `skills/multi-stage-review/SKILL.md`: multi-stage protocol, schemas, anti-noise rules, and report format.
-- `ROADMAP.md`: engineering direction across development phases.
-- `CHANGELOG.md`: release version history following Keep a Changelog.
-- `.github/workflows/ci.yml`: GitHub Actions CI pipeline testing Ubuntu and Windows across Node 18, 20, and 22 plus mutation testing.
-- `scripts/check-layout.mjs`: layout integrity gate and runner synchronization validator.
-- `tests/bdd-scenarios.test.mjs`: executable BDD scenario suite.
-- `tests/extension.test.mjs`: extension and installer service test suite.
-- `tests/e2e-git-hook.test.mjs`: real Git pre-commit hook E2E integration suite.
-
-## Runtime/Tooling Preferences
-
-Use Node.js and npm scripts; this repository is not a Bun project. `package.json` specifies `"type": "module"` and `"engines": { "node": ">=18.0.0" }`. Zero npm dependencies and no lockfiles. Runtime review requires `git` and an `omp` executable in `PATH`, or configured via `OMP_REVIEW_KIT_OMP`.
-
-Releases and deliveries (tag, release workflow, plugin reinstall, registry heal, tokenplan) follow the repository skill `.claude/skills/release-and-deliver/SKILL.md`. Read it before any release step.
+- `src/native/native-host.mjs`: the host entry point.
+- `src/native/task-engine.mjs`: the native `TaskTool` call and yield handling.
+- `src/native/verdict.mjs`: the verdict invariant.
+- `src/application/installer-service.mjs`: hook installation, guard and health.
+- `src/extension.mjs`: OMP commands and lifecycle handlers.
+- `scripts/run-review.mjs`: the Node launcher.
+- `templates/githooks/pre-commit`: the hook template (stamped with `scripts/stamp-hook.mjs`).
+- `templates/review-kit/run-review.mjs`: the vendored stub.
+- `agents/reviewer-kit.md`: orchestrator and final verdict synthesis.
+- `skills/multi-stage-review/SKILL.md`, `skills/reality-first-review/SKILL.md`: review protocol and methodology.
+- `.specs/native-task-review/REQUIREMENTS.md`, `STATUS.md`: binding requirement and verification record.
+- `scripts/run-mutation-tests.mjs`, `scripts/mutation-selectors.json`: mutation catalog and selectors.
+- `.github/workflows/ci.yml`, `.github/workflows/release.yml`: CI and the release workflow.
+- `CHANGELOG.md`, `ROADMAP.md`: release history and direction.
 
 ## Testing & QA
 
-Before changing or running a mutation gate, follow `.claude/skills/mutation-fast-default/SKILL.md`. The development mutation gate requires Node 22+ for precise native nested selectors; the plugin runtime retains Node 18 support. The default runner uses four asynchronous workers, independently copied reusable trees with full reset verification, and calibrated precise selectors from `scripts/mutation-selectors.json`. Process/timing-sensitive suites are exclusive. Every curated mutant remains mandatory; only a deciding assertion failure with a green selected baseline counts as killed. Missing selectors, zero executed tests, timeouts, crashes and infrastructure failures block. `--calibrate` establishes full-suite/focused equivalence when maintaining the catalog; it is not a replacement for ordinary focused gate execution. `--calibrate-stale` recalibrates only the mutants whose selector is missing, moved to another test file, built for an edited mutant, or recorded against a test file whose bytes changed (`findStaleMutants`), merges the result into the catalog (`mergeCalibration`, order-stable, proven selectors kept when another mutant fails) and then runs the ordinary gate over every mutant; it is what a release runs after adding mutants or editing tests. The command line is `runCli` in `scripts/mutation-runner.mjs` (covered by `tests/run-mutation-tests-cli.test.mjs`) and its exit code is always the verdict of the whole catalog: 0 only when every curated mutant is killed by a deciding assertion, 1 when a stale mutant survives (the full gate then does not run) or the full gate fails; no invocation exits 0 on a subset or on nothing. A failed stale calibration marks its result file with `subset`.
+Before changing or running the mutation gate, follow `.claude/skills/mutation-fast-default/SKILL.md`. The gate uses four asynchronous workers, reusable worker trees verified before each reuse, and selectors calibrated in `scripts/mutation-selectors.json`. Every curated mutant must be killed by a deciding assertion of its test file. Missing or stale selectors, zero selected tests, timeouts, crashes and infrastructure errors block the gate. After adding or changing mutants or deciding tests, run `node scripts/run-mutation-tests.mjs --calibrate-stale`; its exit code is the verdict of the whole catalog.
 
-Tests use the built-in Node.js test runner (`node:test`) and strict assertions (`node:assert/strict`). Test suites live directly under `tests/` named `*.test.mjs`. Coverage spans domain units, BDD scenarios, extension commands, mutation testing, and full Git pre-commit hook E2E runs. Before declaring work complete, run:
+CI runs Node 22 and 24 on Ubuntu and Windows (Bun 1.4.1, `bun install --frozen-lockfile`), plus the mutation gate on Ubuntu. Node 18 and 20 are not in CI and are not verified for this release.
 
-```sh
-npm test
-npm run test:mutation
-npm run check
-```
+Releases follow `.claude/skills/release-and-deliver/SKILL.md`. Read it before any release step.

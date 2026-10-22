@@ -1,5 +1,5 @@
 import { diffBlockPaths } from './diff-identity.mjs';
-import { sanitizePromptToken } from './review-prompt.mjs';
+import { sanitizePromptToken } from './prompt-token.mjs';
 
 export const DEFAULT_ASSERT_PATTERNS = [
   '\\bassert\\b',

@@ -38,7 +38,7 @@ test('Given a consistent tree, check-layout passes', async () => {
   }
 });
 
-for (const name of ['infra/stage-transcript-stats.mjs', 'domain/context-pack.mjs', 'domain/scout-baseline.mjs', 'domain/hunter-shards.mjs', 'domain/target-policy.mjs', 'infra/target-registry.mjs', 'infra/review-run-records.mjs']) {
+for (const name of ['native/snapshot.mjs', 'native/verdict.mjs', 'native/task-engine.mjs', 'domain/file-class.mjs', 'domain/hook-shim.mjs', 'domain/target-policy.mjs', 'infra/target-registry.mjs']) {
   test(`check-layout rejects a tree that lacks src/${name}`, async () => {
     const fx = await layoutFixture();
     try {
@@ -53,30 +53,26 @@ for (const name of ['infra/stage-transcript-stats.mjs', 'domain/context-pack.mjs
   });
 }
 
-for (const file of ['src/domain/superseded-runs.mjs', 'src/infra/process-table.mjs', 'src/application/superseded-run-stopper.mjs', 'scripts/stop-superseded-runs.mjs']) {
-  test(`check-layout rejects a tree that lacks ${file}`, async () => {
-    // Given: the consistent tree the other cases build
-    const fx = await layoutFixture();
-    try {
-      // When: the file is removed (force: a gate that stopped requiring it also stops copying it, so the removal must not be the failure)
-      await rm(path.join(fx.dir, ...file.split('/')), { force: true });
-      const result = fx.check();
-      // Then: the gate fails and names the file
-      assert.notEqual(result.status, 0);
-      assert.match(failure(result), new RegExp(file.replace(/[./]/g, (char) => (char === '/' ? '[\\\\/]' : '\\.'))));
-    } finally {
-      await fx.cleanup();
-    }
-  });
-}
-
-test('check-layout rejects a tree that lacks scripts/review-progress.mjs', async () => {
+test('check-layout rejects a tree that lacks the native host entry', async () => {
   const fx = await layoutFixture();
   try {
-    await rm(path.join(fx.dir, 'scripts', 'review-progress.mjs'), { force: true });
+    // force: a gate that stopped requiring the file also stops copying it, so the removal must not be the failure.
+    await rm(path.join(fx.dir, 'src', 'native', 'native-host.mjs'), { force: true });
     const result = fx.check();
     assert.notEqual(result.status, 0);
-    assert.match(failure(result), /review-progress\.mjs/);
+    assert.match(failure(result), /native-host\.mjs/);
+  } finally {
+    await fx.cleanup();
+  }
+});
+
+test('check-layout rejects a package that does not pin the OMP library to one exact version', async () => {
+  const fx = await layoutFixture();
+  try {
+    await fx.edit('package.json', (text) => text.replace('"@oh-my-pi/pi-coding-agent": "18.12.5"', '"@oh-my-pi/pi-coding-agent": "^18.12.5"'));
+    const result = fx.check();
+    assert.notEqual(result.status, 0);
+    assert.match(failure(result), /pin @oh-my-pi\/pi-coding-agent to one exact version/);
   } finally {
     await fx.cleanup();
   }

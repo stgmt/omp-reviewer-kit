@@ -15,16 +15,18 @@ export default function probe(pi) {
   pi.on('tool_result', async (event) => {
     if (event.toolName === 'task') {
       state.gates.push({ type: 'result', ids: event.details?.results?.map((r) => r.id) });
-      state.outputs.push(...(event.details?.results ?? []).map((result) => ({ agent: result.agent, data: result.structuredOutput?.data, valid: result.structuredOutput?.status, source: result.structuredOutput?.source, mode: result.structuredOutput?.mode })));
+      state.outputs.push(...(event.details?.results ?? []).map((result) => ({ agent: result.agent, modelRole: result.modelRole, data: result.structuredOutput?.data, valid: result.structuredOutput?.status, source: result.structuredOutput?.source, mode: result.structuredOutput?.mode })));
       await writeFile(process.env.REVIEW_SDK_RESULT, JSON.stringify(state));
     }
   });
   pi.registerProvider('review-offline', {
     api: 'review-offline-api', apiKey: 'LOCAL_NOT_A_CREDENTIAL', baseUrl: 'http://127.0.0.1:1',
-    models: [{ id: 'fixture', name: 'Offline', reasoning: false, input: ['text'], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 8192 }],
+    models: ['fixture', 'forbidden-parent'].map((id) => ({ id, name: 'Offline', reasoning: false, input: ['text'], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 8192 })),
     streamSimple(model, context) {
       const system = String(context.systemPrompt);
-      const role = roleNames.find((name) => system.includes(`You are \`${name}\``)) ?? 'dispatcher';
+      const role = roleNames.find((name) => system.includes(`You are \`${name}\``));
+      if (!role || model.id !== 'fixture') throw new Error('OFFLINE_UNEXPECTED_PARENT_INFERENCE');
+      if (!(context.tools ?? []).length) throw new Error('OFFLINE_MODEL_PREFLIGHT_FORBIDDEN');
       const results = context.messages.filter((m) => m.role === 'toolResult');
       const user = context.messages.filter((m) => m.role === 'user').map((m) => JSON.stringify(m.content)).join('\n');
       const scope = manifest.scouts.find((s) => user.includes(`REVIEW_TASK_ID=${s.id}`)) ?? manifest.scouts[0];
@@ -57,16 +59,16 @@ export default function probe(pi) {
       const batchEnabled = process.env.REVIEW_SDK_BATCH !== '0';
       const taskCall = (tasks) => ({ type: 'toolCall', name: 'task', arguments: batchEnabled ? { tasks } : tasks[0] });
       let item;
-      if (!(context.tools ?? []).length) item = { type: 'text', text: 'READY' };
-      else if (role === 'dispatcher') item = results.length ? { type: 'text', text: 'REVIEW_RESULT=PASS' }
-        : taskCall([{ name: 'ReviewerKit', agent: 'reviewer-kit', task: user }]);
-      else if (role === 'reviewer-kit') {
+      if (role === 'reviewer-kit') {
         const scouts = manifest.scouts.map((s) => ({ name: s.id, agent: 'review-context-scout', task: 'scout' }));
         const hunters = manifest.hunters.filter((_, i) => process.env.REVIEW_SDK_OMIT_HUNTER !== '1' || i === 0).map((h) => ({ name: h.id, agent: 'review-risk-hunter', task: 'hunt' }));
-        const stages = batchEnabled ? [scouts, hunters] : [...scouts, ...hunters].map((task) => [task]);
+        // Failed scout fixtures must consume their one allowed task retry before synthesis.
+        // Advancing to hunters after the first failure only tests dispatch rejection, not terminal failure.
+        const stages = ['empty-scout', 'invalid-scout'].includes(scenario) ? [scouts, scouts]
+          : batchEnabled ? [scouts, hunters] : [...scouts, ...hunters].map((task) => [task]);
         if (needsVerifier) stages.push([{ name: 'Verifier', agent: 'review-finding-verifier', task: 'verify authoritative candidates and gaps' }]);
         item = results.length < stages.length ? taskCall(stages[results.length])
-          : { type: 'toolCall', name: 'yield', arguments: { data: { report: 'REVIEW_RESULT=PASS' } } };
+          : { type: 'toolCall', name: 'yield', arguments: { data: 'REVIEW_RESULT=PASS\n' } };
       } else item = { type: 'toolCall', name: 'yield', arguments: { data } };
       if (item.type === 'toolCall') item.id = `${role}-${results.length}`;
       const message = { role: 'assistant', content: [item], api: 'review-offline-api', provider: model.provider, model: model.id,

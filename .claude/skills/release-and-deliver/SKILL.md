@@ -34,7 +34,7 @@ Run them in a clean export of the index, not in the working tree (test runs writ
   `nohup git commit -F <message-file> > <log> 2>&1; echo "commit exit=$?" >> <log>`
 - Never use `--no-verify`.
 - The message ends with `Co-Authored-By: Claude Haiku 5.5 <noreply@anthropic.com>`.
-- A block that says "infrastructure failure" means OMP could not get an answer from its default model role. Report it. Do not edit `~/.omp/agent/config.yml` and do not commit around the hook.
+- An infrastructure BLOCK can mean unsupported native capability or a native task/provider failure. Report the exact diagnostic. Do not edit `~/.omp/agent/config.yml` and do not commit around the hook.
 
 ## 3. Push and pull request
 

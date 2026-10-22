@@ -1,138 +1,18 @@
+// Public entry point of the kit. The review itself is `src/native/`: one staged snapshot, one
+// native OMP task for `reviewer-kit`, and a verdict over the native evidence. The rest is the
+// hook installer, its guard and the target registry.
+
+export { runNativeReview } from './native/native-review.mjs';
+export { materializeStagedSnapshot, readStagedChange, removeSnapshot } from './native/snapshot.mjs';
+export { buildAssignment } from './native/assignment.mjs';
+export { evaluateReview, readVerdictMarker, PASS_MARKER, BLOCK_MARKER } from './native/verdict.mjs';
+export { runReviewerTask, reviewerYield, stageEvidence } from './native/task-engine.mjs';
+
 export { DiffIdentity } from './domain/diff-identity.mjs';
-export { StagedSnapshot } from './domain/staged-snapshot.mjs';
-export { ReviewVerdict } from './domain/review-verdict.mjs';
-export { ReviewRejectionEnvelope } from './domain/review-rejection-envelope.mjs';
-export { ReviewPrompt } from './domain/review-prompt.mjs';
-export { SlopPrompt } from './domain/slop-prompt.mjs';
-export { SlopReport } from './domain/slop-report.mjs';
-export { ExecutionEvidence } from './domain/execution-evidence.mjs';
-export { buildRevertedFiles } from './domain/reverted-snapshot.mjs';
-export {
-  SuspicionMap,
-  isTestPath,
-  parseDiffBlocks,
-  DEFAULT_ASSERT_PATTERNS,
-  DEFAULT_TEST_PATH_PATTERNS,
-  DEFAULT_TEST_DECLARATION_PATTERNS,
-} from './domain/suspicion-map.mjs';
-export { ReviewReport } from './domain/review-report.mjs';
-export { ReviewExecutionResult } from './domain/review-execution-result.mjs';
-
-export { GitPort, ReviewerPort, ReportStorePort, SnapshotStorePort, TelemetryPort, ExecutionPort, VerdictCachePort, RoundStorePort } from './application/ports.mjs';
-export { ReviewWorkflowService } from './application/review-workflow-service.mjs';
+export { classifyFilePath, classifyChangedPaths, reviewProfileFor, riskLanesFor } from './domain/file-class.mjs';
+export { sanitizePromptToken } from './domain/prompt-token.mjs';
+export { HOOK_SHIM, HOOK_SHIM_FORMAT, isOwnedShim } from './domain/hook-shim.mjs';
+export { isGitCommitCommand } from './domain/git-commit-command.mjs';
 export { PluginInstallerService } from './application/installer-service.mjs';
-
-export { SubprocessGitAdapter } from './infra/subprocess-git-adapter.mjs';
 export { VENDORED_KIT_FILES, loadCanonicalVendoredFiles } from './infra/vendored-kit-files.mjs';
-export { FileSystemSnapshotAdapter } from './infra/filesystem-snapshot-adapter.mjs';
-export { OmpCliReviewerAdapter, sanitizeReviewerOutput } from './infra/omp-cli-reviewer-adapter.mjs';
-export { FileSystemReportStoreAdapter } from './infra/filesystem-report-store-adapter.mjs';
-export { FileSystemVerdictCacheAdapter } from './infra/filesystem-verdict-cache-adapter.mjs';
-export { FileSystemRoundStoreAdapter } from './infra/filesystem-round-store-adapter.mjs';
-export { ReviewRound, addedLinesByFile, deltaSincePrevious, roundFindingsFromEnvelope, roundFindingsTotal } from './domain/review-round.mjs';
-export { SubprocessExecutionAdapter, linkDependencyDirs } from './infra/subprocess-execution-adapter.mjs';
-export {
-  FileSystemTelemetryAdapter,
-  NullTelemetryAdapter,
-  RunTelemetry,
-  NULL_RUN_TELEMETRY,
-  REVIEW_EVENT_SCHEMA,
-  REVIEW_LAST_RUN_SCHEMA,
-  formatProviderOutageError,
-} from './infra/filesystem-telemetry-adapter.mjs';
-
-import { SubprocessGitAdapter } from './infra/subprocess-git-adapter.mjs';
-import { FileSystemSnapshotAdapter } from './infra/filesystem-snapshot-adapter.mjs';
-import { OmpCliReviewerAdapter } from './infra/omp-cli-reviewer-adapter.mjs';
-import { FileSystemReportStoreAdapter } from './infra/filesystem-report-store-adapter.mjs';
-import { FileSystemVerdictCacheAdapter } from './infra/filesystem-verdict-cache-adapter.mjs';
-import { FileSystemRoundStoreAdapter } from './infra/filesystem-round-store-adapter.mjs';
-import { FileSystemTelemetryAdapter } from './infra/filesystem-telemetry-adapter.mjs';
-import { ReviewWorkflowService } from './application/review-workflow-service.mjs';
-
-/**
- * Convenience composition root for the default review workflow service.
- *
- * @param {{
- *   git?: (args: string[], cwd: string) => Buffer,
- *   omp?: (prompt: string, cwd: string, timeoutMs?: number) => { status: number, stdout?: string, stderr?: string },
- *   clock?: () => Date,
- *   logger?: { log: (msg: string) => void, error: (msg: string) => void },
- *   progress?: (event: { state: string, message: string, model?: string, elapsedMs?: number }) => void
- * }} [options]
- * @returns {ReviewWorkflowService}
- */
-export function createReviewWorkflowService({ git, vendoredFiles, omp, ompOptions, clock, logger, progress, telemetry, assertPatterns, testPathPatterns, testDeclarationPatterns, executionPort, execution } = {}) {
-  const gitPort = new SubprocessGitAdapter(git, { vendoredFiles });
-  const reviewerPort = new OmpCliReviewerAdapter({ runner: omp, progress, ...ompOptions });
-  const reportStorePort = new FileSystemReportStoreAdapter();
-  const snapshotStorePort = new FileSystemSnapshotAdapter();
-  const telemetryPort = telemetry ?? new FileSystemTelemetryAdapter();
-  const verdictCachePort = new FileSystemVerdictCacheAdapter({ clock });
-  const roundStorePort = new FileSystemRoundStoreAdapter();
-
-  return new ReviewWorkflowService({
-    gitPort,
-    reviewerPort,
-    reportStorePort,
-    snapshotStorePort,
-    telemetryPort,
-    verdictCachePort,
-    roundStorePort,
-    clock,
-    logger,
-    assertPatterns,
-    testPathPatterns,
-    testDeclarationPatterns,
-    executionPort,
-    execution,
-  });
-}
-
-/**
- * Public facade maintaining backward compatibility with existing Git pre-commit hooks and tests.
- *
- * @param {{
- *   cwd?: string,
- *   git?: (args: string[], cwd: string) => Buffer,
- *   omp?: (prompt: string, cwd: string, timeoutMs?: number) => { status: number, stdout?: string, stderr?: string },
- *   now?: Date,
- *   logger?: { log: (msg: string) => void, error: (msg: string) => void },
- * }} [options]
- * @returns {Promise<{ exitCode: number, skipped: boolean, verdict?: 'PASS'|'BLOCK', reportPath?: string }>}
- */
-export async function runReview({
-  cwd = process.cwd(),
-  git,
-  vendoredFiles,
-  omp,
-  ompOptions,
-  now = new Date(),
-  logger,
-  progress,
-  telemetry,
-  assertPatterns,
-  testPathPatterns,
-  testDeclarationPatterns,
-  executionPort,
-  execution,
-} = {}) {
-  const service = createReviewWorkflowService({
-    git,
-    vendoredFiles,
-    omp,
-    ompOptions,
-    clock: () => now,
-    logger,
-    progress,
-    telemetry,
-    assertPatterns,
-    testPathPatterns,
-    testDeclarationPatterns,
-    executionPort,
-    execution,
-  });
-
-  const result = await service.execute({ cwd });
-  return result.toJSON();
-}
+export { repoReportsDir, reportsRootDir } from './infra/filesystem-report-store-adapter.mjs';

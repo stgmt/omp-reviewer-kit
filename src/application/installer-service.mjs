@@ -6,9 +6,8 @@ import { spawnSync } from 'node:child_process';
 import { isRunnerNewer } from '../domain/runner-version.mjs';
 import { isSkippedTarget } from '../domain/target-policy.mjs';
 import { hookBodyDigest, isHookNewer, isOwnedHook } from '../domain/hook-template.mjs';
+import { HOOK_SHIM, isOwnedShim, isShimNewer } from '../domain/hook-shim.mjs';
 import { FileTargetRegistry } from '../infra/target-registry.mjs';
-import { resolveRunsDir } from '../infra/filesystem-telemetry-adapter.mjs';
-import { readRunnerFileVersion, stopSupersededRuns } from './superseded-run-stopper.mjs';
 import { repoReportsDir } from '../infra/filesystem-report-store-adapter.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -252,92 +251,18 @@ function writeFileAtomicallyOnWindows(directoryPath, destinationPath, content) {
   }
 }
 /**
- * Checks whether a process is alive, dead, or unknown via a signal 0 probe.
+ * Splits `git config --show-origin --get <key>` output (`file:<path><TAB><value>`).
  *
- * @param {number} pid
- * @param {((pid: number, signal: number) => void)} [killFn]
- * @returns {'alive'|'dead'|'unknown'}
+ * @param {string} stdout
+ * @returns {{ file: string|null, value: string }|null}
  */
-export function checkProcessLiveness(pid, killFn = process.kill) {
-  if (!Number.isInteger(pid)) {
-    return 'unknown';
-  }
-  try {
-    killFn(pid, 0);
-    return 'alive';
-  } catch (err) {
-    if (err?.code === 'ESRCH') {
-      return 'dead';
-    }
-    if (err?.code === 'EPERM') {
-      return 'alive';
-    }
-    return 'unknown';
-  }
-}
-
-/**
- * Live (non-terminal) last-run states that must be reconciled against process
- * liveness. Anything else is a terminal state and is returned untouched.
- */
-export const LIVE_LAST_RUN_STATES = Object.freeze([
-  'started',
-  'executing',
-  'reviewing',
-  'working',
-  'response',
-  'probe',
-  'probing',
-  'reemitting',
-]);
-
-/**
- * Reconciles a persisted last-run object against live process state.
- * When the state is live (review is in flight), checks whether the recorded
- * process is still alive; a dead pid marks the run interrupted.
- *
- * @param {object|undefined} lastRun
- * @param {((pid: number, signal: number) => void)} [killFn]
- * @returns {object|undefined}
- */
-export function reconcileLastRun(lastRun, killFn = process.kill) {
-  if (!lastRun || typeof lastRun !== 'object') {
-    return lastRun;
-  }
-  if (LIVE_LAST_RUN_STATES.includes(lastRun.state)) {
-    // The hook runner owns every live state; the attempt pid only covers the
-    // child and is absent from 'started'/'executing'/'probing'/'reemitting'.
-    const ownerPid = Number.isInteger(lastRun.runnerPid) ? lastRun.runnerPid : lastRun.pid;
-    if (Number.isInteger(ownerPid)) {
-      const liveness = checkProcessLiveness(ownerPid, killFn);
-      if (liveness === 'dead') {
-        const detail = 'review process gone; no finish event recorded';
-        return {
-          ...lastRun,
-          state: 'interrupted',
-          error: lastRun.error ?? detail,
-          message: lastRun.message ?? detail,
-        };
-      }
-      if (liveness === 'unknown') {
-        return {
-          ...lastRun,
-          state: 'unknown',
-        };
-      }
-      return lastRun;
-    }
-    if (lastRun.state === 'reviewing') {
-      // 'reviewing' implies an attempt pid was already recorded; a missing or
-      // malformed pid cannot be reconciled.
-      return {
-        ...lastRun,
-        state: 'unknown',
-      };
-    }
-    return lastRun;
-  }
-  return lastRun;
+export function parseConfigOrigin(stdout) {
+  const line = String(stdout ?? '').split(/\r?\n/).find((l) => l.trim());
+  if (!line) return null;
+  const tab = line.indexOf('\t');
+  if (tab < 0) return { file: null, value: line.trim() };
+  const origin = line.slice(0, tab).replace(/^file:/, '').replace(/^"(.*)"$/, '$1');
+  return { file: origin || null, value: line.slice(tab + 1).trim() };
 }
 
 /**
@@ -345,12 +270,10 @@ export function reconcileLastRun(lastRun, killFn = process.kill) {
  */
 export class PluginInstallerService {
   #pluginRoot;
-  #killFn;
   #targets;
 
-  constructor({ pluginRoot = PLUGIN_ROOT, killFn = process.kill, targetRegistry = new FileTargetRegistry() } = {}) {
+  constructor({ pluginRoot = PLUGIN_ROOT, targetRegistry = new FileTargetRegistry() } = {}) {
     this.#pluginRoot = pluginRoot;
-    this.#killFn = killFn;
     this.#targets = targetRegistry;
   }
 
@@ -490,6 +413,196 @@ export class PluginInstallerService {
   }
 
   /**
+   * Git's default hooks directory of the repository that owns this checkout. Worktrees share it.
+   *
+   * @param {string} repoRoot
+   * @returns {string|null}
+   */
+  #commonHooksDir(repoRoot) {
+    const res = this.runGit(['rev-parse', '--git-common-dir'], repoRoot);
+    if (res.status !== 0 || !res.stdout.trim()) return null;
+    return path.join(path.resolve(repoRoot, res.stdout.trim()), 'hooks');
+  }
+
+  /**
+   * Names in a hooks directory that would run when git used it: everything except samples and the
+   * kit's own shim. A missing directory holds none.
+   *
+   * @param {string} dir
+   * @returns {Promise<string[]>}
+   * @throws when the directory exists but cannot be read
+   */
+  async #foreignHooksIn(dir) {
+    let entries;
+    try {
+      entries = await readdir(dir);
+    } catch (error) {
+      if (error?.code === 'ENOENT') return [];
+      throw error;
+    }
+    const foreign = [];
+    for (const name of entries) {
+      if (name.endsWith('.sample')) continue;
+      if (name === 'pre-commit') {
+        const text = await readFile(path.join(dir, name), 'utf8').catch(() => null);
+        if (text !== null && isOwnedShim(text)) continue;
+      }
+      foreign.push(name);
+    }
+    return foreign;
+  }
+
+  /**
+   * Stores the hook shim in the repository's default hooks directory, so that a stray core.hooksPath
+   * pointing there still starts .githooks/pre-commit. Never replaces a hook it does not own, never
+   * writes through a symlinked directory, and never throws.
+   *
+   * @param {string|null} hooksDir
+   * @returns {Promise<'written'|'current'|'foreign'|'skipped'>}
+   */
+  async #ensureShim(hooksDir) {
+    if (!hooksDir) return 'skipped';
+    try {
+      // A hooks directory shared between repositories (a symlink) would run this shim in repositories without .githooks.
+      const real = await realpath(hooksDir).catch((error) => (error?.code === 'ENOENT' ? null : Promise.reject(error)));
+      if (real !== null && normalizePath(real) !== normalizePath(hooksDir)) return 'skipped';
+      const target = path.join(hooksDir, 'pre-commit');
+      let existing = null;
+      try {
+        const info = await lstat(target);
+        if (!info.isFile()) return 'foreign';
+        existing = await readFile(target, 'utf8');
+      } catch (error) {
+        if (error?.code !== 'ENOENT') return 'skipped';
+      }
+      if (existing !== null) {
+        if (!isOwnedShim(existing)) return 'foreign';
+        if (existing === HOOK_SHIM || isShimNewer(existing)) return 'current';
+      }
+      await mkdir(hooksDir, { recursive: true });
+      const tmpPath = path.join(hooksDir, '.tmp-pre-commit-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+      try {
+        await writeFile(tmpPath, HOOK_SHIM, { encoding: 'utf8', flag: 'wx', mode: 0o755 });
+        if (process.platform !== 'win32') await verifyRegularFile(tmpPath, 0o755);
+        await rename(tmpPath, target);
+      } catch (error) {
+        await unlink(tmpPath).catch(() => {});
+        throw error;
+      }
+      return 'written';
+    } catch {
+      return 'skipped';
+    }
+  }
+
+  /**
+   * Which pre-commit hook git runs for the next commit in this checkout, and whether it starts the review.
+   * Independent of the installation state: it only reads what git would execute.
+   *
+   * @param {string} repoRoot
+   * @returns {Promise<{
+   *   hooksDir: string,
+   *   hookPath: string,
+   *   kind: 'kit'|'shim'|'chained'|'foreign'|'missing'|'not-executable',
+   *   effective: boolean,
+   *   hooksPath: string|null
+   * }>}
+   */
+  async #effectiveHook(repoRoot) {
+    const configured = this.runGit(['config', '--get', 'core.hooksPath'], repoRoot);
+    const hooksPath = configured.status === 0 && configured.stdout.trim() ? configured.stdout.trim() : null;
+    const res = this.runGit(['rev-parse', '--git-path', 'hooks'], repoRoot);
+    const hooksDir = path.resolve(repoRoot, res.status === 0 && res.stdout.trim() ? res.stdout.trim() : path.join('.git', 'hooks'));
+    const hookPath = path.join(hooksDir, 'pre-commit');
+    const result = (kind) => ({ hooksDir, hookPath, kind, effective: kind === 'kit' || kind === 'shim' || kind === 'chained', hooksPath });
+    let info;
+    try {
+      info = await stat(hookPath);
+    } catch {
+      return result('missing');
+    }
+    if (!info.isFile()) return result('missing');
+    if (process.platform !== 'win32' && (info.mode & 0o111) === 0) return result('not-executable');
+    const text = await readFile(hookPath, 'utf8').catch(() => null);
+    if (text === null) return result('missing');
+    if (isOwnedHook(text) || LEGACY_HOOK_DIGESTS.includes(hookBodyDigest(text))) return result('kit');
+    if (isOwnedShim(text)) return result('shim');
+    if (CHAINED_HOOK_RE.test(normalizeLineEndings(text))
+        && await stat(path.join(hooksDir, CHAINED_HOOK_PATH)).then((s) => s.isFile(), () => false)) return result('chained');
+    return result('foreign');
+  }
+
+  /**
+   * True when the kit's review is expected to run in this checkout: it carries the kit's own hook (or a
+   * foreign hook that chains into it). Repositories that never adopted the kit are not guarded.
+   *
+   * @param {string} repoRoot
+   * @returns {Promise<boolean>}
+   */
+  async #kitExpected(repoRoot) {
+    if (isSkippedTarget(repoRoot)) return false;
+    const text = await readFile(path.join(repoRoot, '.githooks', 'pre-commit'), 'utf8').catch(() => null);
+    if (text === null) return false;
+    return isOwnedHook(text) || LEGACY_HOOK_DIGESTS.includes(hookBodyDigest(text))
+      || CHAINED_HOOK_RE.test(normalizeLineEndings(text));
+  }
+
+  /**
+   * Reports whether the next commit in a checkout would run the review hook. Read-only.
+   *
+   * @param {string} targetDir
+   * @returns {Promise<null | {
+   *   repoRoot: string,
+   *   kitExpected: boolean,
+   *   hooksDir: string,
+   *   hookPath: string,
+   *   kind: 'kit'|'shim'|'chained'|'foreign'|'missing'|'not-executable',
+   *   effective: boolean,
+   *   hooksPath: string|null
+   * }>} null outside a Git repository
+   */
+  async assessHook(targetDir) {
+    const repoRoot = this.getRepoRoot(targetDir);
+    if (!repoRoot) return null;
+    return { repoRoot, kitExpected: await this.#kitExpected(repoRoot), ...(await this.#effectiveHook(repoRoot)) };
+  }
+
+  /**
+   * Commit-time guard: a commit in a checkout where the kit is installed must run the review hook.
+   * When git would run something else (a stray core.hooksPath), the guard repairs the checkout through
+   * setup() and lets the commit go on; when it cannot, it refuses the commit with the reason instead of
+   * letting it through unreviewed. Never throws; an internal failure allows the commit, as before the guard.
+   * OMP_REVIEW_KIT_GUARD=0 turns it off.
+   *
+   * @param {string} cwd
+   * @returns {Promise<{ action: 'allow'|'block', repaired?: boolean, message?: string }>}
+   */
+  async guardCommit(cwd) {
+    if (process.env.OMP_REVIEW_KIT_GUARD === '0') return { action: 'allow' };
+    try {
+      const repoRoot = this.getRepoRoot(cwd);
+      if (!repoRoot || !(await this.#kitExpected(repoRoot))) return { action: 'allow' };
+      let effective = await this.#effectiveHook(repoRoot);
+      if (effective.effective) return { action: 'allow' };
+      if (process.env.OMP_REVIEW_KIT_AUTO_SYNC !== '0') {
+        await this.setup(repoRoot).catch(() => undefined);
+        const again = await this.#effectiveHook(repoRoot);
+        if (again.effective) {
+          return { action: 'allow', repaired: true, message: `reviewer-kit repaired this checkout: git was set to run "${effective.hookPath}" (core.hooksPath ${effective.hooksPath ?? 'unset'}), which does not start the review; the commit is reviewed again.` };
+        }
+        effective = again;
+      }
+      const why = { missing: 'it does not exist', 'not-executable': 'it is not executable', foreign: 'it is another tool\'s hook that does not call the review' }[effective.kind];
+      return {
+        action: 'block',
+        message: `reviewer-kit stopped this commit: git would run "${effective.hookPath}" (core.hooksPath ${effective.hooksPath ?? 'unset'}) and ${why}, so the staged change would not be reviewed. Fix it with: git -C "${repoRoot}" config core.hooksPath .githooks (or run /reviewer-kit:setup), then commit again. OMP_REVIEW_KIT_GUARD=0 turns this check off.`,
+      };
+    } catch {
+      return { action: 'allow' };
+    }
+  }
+
+  /**
    * Inspects repository hook state without performing mutations.
    *
    * @param {string} targetDir
@@ -518,6 +631,9 @@ export class PluginInstallerService {
         state: 'not-git',
         configuredHooksPath: null,
         hooksPathConfigured: false,
+        hooksPathRepairable: false,
+        hooksPathOrigin: null,
+        commonHooksDir: null,
         hookFilePresent: false,
         hookOwned: false,
         hookCurrent: false,
@@ -559,39 +675,50 @@ export class PluginInstallerService {
           }
         }
 
-    const hookRes = this.runGit(['config', '--get', 'core.hooksPath'], repoRoot);
-    const configuredHooksPath = hookRes.status === 0 && hookRes.stdout.trim() ? hookRes.stdout.trim() : null;
+    const hookRes = this.runGit(['config', '--show-origin', '--get', 'core.hooksPath'], repoRoot);
+    const configuredOrigin = hookRes.status === 0 ? parseConfigOrigin(hookRes.stdout) : null;
+    const configuredHooksPath = configuredOrigin?.value ? configuredOrigin.value : null;
+    const hooksPathOrigin = configuredHooksPath !== null ? configuredOrigin.file : null;
+    const commonHooksDir = this.#commonHooksDir(repoRoot);
+    // The standard hooks directory of this checkout: where git looks when core.hooksPath is unset.
+    const gitPathRes = this.runGit(['rev-parse', '--git-path', 'hooks'], repoRoot);
+    const standardHooksDir = path.resolve(repoRoot, gitPathRes.status === 0 && gitPathRes.stdout.trim()
+      ? gitPathRes.stdout.trim()
+      : path.join('.git', 'hooks'));
+    // A core.hooksPath that names git's own default hooks directory is a stray value (Claude Code Agent Teams
+    // writes it when it creates a worktree), not a deliberate choice of another hook system: the kit repairs it.
+    let hooksPathRepairable = false;
 
     if (configuredHooksPath !== null) {
       const resolvedConfigured = path.resolve(repoRoot, configuredHooksPath);
       if (normalizePath(resolvedConfigured) === normalizePath(expectedGithooksDir)) {
         hooksPathConfigured = true;
       } else {
-        conflictReason = `core.hooksPath is configured to "${configuredHooksPath}" (expected ".githooks")`;
+        const defaults = [commonHooksDir, path.join(repoRoot, '.git', 'hooks')].filter(Boolean);
+        const isDefault = defaults.some((dir) => normalizePath(dir) === normalizePath(resolvedConfigured));
+        const foreign = isDefault ? await this.#foreignHooksIn(resolvedConfigured).catch(() => null) : null;
+        if (isDefault && Array.isArray(foreign) && foreign.length === 0) {
+          hooksPathRepairable = true;
+        } else {
+          conflictReason = `core.hooksPath is configured to "${configuredHooksPath}" (expected ".githooks")`;
+        }
       }
     } else {
-      const gitPathRes = this.runGit(['rev-parse', '--git-path', 'hooks'], repoRoot);
-      const standardHooksRelative = gitPathRes.status === 0 && gitPathRes.stdout.trim()
-        ? gitPathRes.stdout.trim()
-        : path.join('.git', 'hooks');
-      const standardHooksDir = path.resolve(repoRoot, standardHooksRelative);
-
       try {
-        const entries = await readdir(standardHooksDir);
-        const activeHooks = entries.filter((name) => !name.endsWith('.sample'));
-        if (activeHooks.length > 0) {
-          conflictReason = `Existing hooks found in standard hooks directory (${activeHooks.join(', ')}); switching core.hooksPath would bypass them`;
+        const foreign = await this.#foreignHooksIn(standardHooksDir);
+        if (foreign.length > 0) {
+          conflictReason = `Existing hooks found in standard hooks directory (${foreign.join(', ')}); switching core.hooksPath would bypass them`;
         }
       } catch (error) {
-        if (error?.code === 'ENOENT') {
-          // Standard hooks directory does not exist.
-        } else if (!conflictReason) {
+        if (!conflictReason) {
           conflictReason = 'Unable to inspect standard hooks directory: ' + (error?.message ?? error);
         }
       }
     }
 
-    if (foreignHooksReason && !hooksPathConfigured && !conflictReason) conflictReason = foreignHooksReason;
+    // A stray core.hooksPath (repairable) is judged after the kit's own hook is known: when the repository already
+    // carries it, .githooks is the repository's chosen hooks directory and its other hooks were active before the stray value.
+    if (foreignHooksReason && !hooksPathConfigured && !conflictReason && !hooksPathRepairable) conflictReason = foreignHooksReason;
 
     const hookPath = path.join(expectedGithooksDir, 'pre-commit');
     let hookFilePresent = false;
@@ -704,6 +831,7 @@ export class PluginInstallerService {
         }
       }
     }
+    if (foreignHooksReason && hooksPathRepairable && !conflictReason && !hookOwned && !hookChained) conflictReason = foreignHooksReason;
     let state;
     const hookUsable = hookFilePresent && hookOwned && hookCurrent && hookExecutable;
     const chainUsable = hookChained && chainedHookPresent && chainedHookCurrent
@@ -721,6 +849,9 @@ export class PluginInstallerService {
     } else if (hooksPathConfigured && (hookOwned || hookChained) && runnerPresent
         && ((!hookUsable && !chainUsable) || !runnerCurrent)) {
       state = 'stale';
+    } else if (hooksPathRepairable && (hookOwned || hookChained) && runnerPresent) {
+      // Installed, but core.hooksPath was moved to git's default hooks directory: setup() puts it back.
+      state = 'stale';
     } else {
       state = 'inactive';
     }
@@ -731,6 +862,9 @@ export class PluginInstallerService {
       state,
       configuredHooksPath,
       hooksPathConfigured,
+      hooksPathRepairable,
+      hooksPathOrigin,
+      commonHooksDir,
       hookFilePresent,
       hookOwned,
       hookCurrent,
@@ -784,6 +918,7 @@ export class PluginInstallerService {
     }
 
     if (inspection.state === 'active') {
+      await this.#ensureShim(inspection.commonHooksDir);
       return {
         success: true,
         state: 'active',
@@ -846,17 +981,26 @@ export class PluginInstallerService {
       }
     }
 
-    // 3. Configure repository-local core.hooksPath
+    // 3. Configure repository-local core.hooksPath. A stray value in this worktree's own config (config.worktree)
+    // would keep winning over the shared one, so it is replaced where it lives.
+    let repairedFrom = null;
     if (!inspection.hooksPathConfigured) {
-      const configRes = this.runGit(['config', 'core.hooksPath', '.githooks'], repoRoot);
+      const perWorktree = /(^|[\\/])config\.worktree$/.test(inspection.hooksPathOrigin ?? '');
+      const configRes = this.runGit(['config', ...(perWorktree ? ['--worktree'] : []), 'core.hooksPath', '.githooks'], repoRoot);
       if (configRes.status !== 0) {
         throw new Error(`Failed to configure core.hooksPath: ${configRes.stderr.trim()}`);
       }
+      if (inspection.hooksPathRepairable) repairedFrom = inspection.configuredHooksPath;
       installed = true;
     }
 
-    const finalState = installed ? 'installed' : (updated ? 'updated' : 'active');
-    const message = finalState === 'installed'
+    // 4. Safety net for a later stray core.hooksPath (see src/domain/hook-shim.mjs)
+    await this.#ensureShim(inspection.commonHooksDir);
+
+    const finalState = repairedFrom !== null ? 'updated' : installed ? 'installed' : (updated ? 'updated' : 'active');
+    const message = repairedFrom !== null
+      ? `Repaired core.hooksPath in ${repoRoot}: it pointed at "${repairedFrom}", which does not start the review; it is .githooks again`
+      : finalState === 'installed'
       ? `Configured pre-commit hook in ${repoRoot} (core.hooksPath .githooks)`
       : (finalState === 'updated'
         ? `Updated pre-commit hook runner in ${repoRoot}`
@@ -935,19 +1079,11 @@ export class PluginInstallerService {
    *
    * @param {string} cwd
    * @param {{ budgetMs?: number }} [options] time allowed for healing the other repositories
-   * @returns {Promise<{ current: object|null, targets: { checked: number, healed: string[], failed: string[], pruned: string[] }, stopped: object[] }>}
-   *   `stopped` lists the live reviews on an older runner that this session start stopped
+   * @returns {Promise<{ current: object|null, targets: { checked: number, healed: string[], failed: string[], pruned: string[] } }>}
    */
   async refreshAtSessionStart(cwd, { budgetMs = 8000 } = {}) {
     let current = null;
     let repoRoot = null;
-    let stopped = [];
-    try {
-      // First: a review on the old runner must not outlive the plugin update by one more stage.
-      stopped = (await this.stopSupersededRuns({ automatic: true })).stopped;
-    } catch {
-      stopped = [];
-    }
     try {
       const info = await this.#inspectInstallation(cwd);
       if (info.isGitRepo && (info.state === 'stale' || info.state === 'active')) {
@@ -958,25 +1094,7 @@ export class PluginInstallerService {
     } catch {
       // the other repositories are still worth healing
     }
-    return { current, targets: await this.healTargets({ exceptRoot: repoRoot, budgetMs }), stopped };
-  }
-
-  /**
-   * Stops live review runs whose runner is older than the installed plugin's
-   * runner and marks their records interrupted (see superseded-run-stopper.mjs).
-   * Runs of the same or a newer runner, finished runs and quiet runs on the
-   * current runner are never touched. The automatic call made at session start
-   * honours OMP_REVIEW_KIT_STOP_SUPERSEDED=0; an explicit call never does.
-   *
-   * @param {{ dryRun?: boolean, automatic?: boolean }} [options]
-   * @returns {Promise<{ currentVersion: string|null, dryRun: boolean, stopped: object[], unverified: object[], kept: number, disabled?: true }>}
-   */
-  async stopSupersededRuns({ dryRun = false, automatic = false } = {}) {
-    const nothing = { currentVersion: null, dryRun, stopped: [], unverified: [], kept: 0 };
-    const currentVersion = await readRunnerFileVersion(path.join(PLUGIN_ROOT, 'scripts', 'run-review.mjs'));
-    if (currentVersion === null) return nothing;
-    if (automatic && process.env.OMP_REVIEW_KIT_STOP_SUPERSEDED === '0') return { ...nothing, currentVersion, disabled: true };
-    return stopSupersededRuns({ runsDir: resolveRunsDir(), currentVersion, dryRun });
+    return { current, targets: await this.healTargets({ exceptRoot: repoRoot, budgetMs }) };
   }
 
   /**
@@ -1002,10 +1120,6 @@ export class PluginInstallerService {
    *   isFullyActive: boolean,
    *   conflictReason: string|null,
    *   latestReview?: { date: string, verdict: string, file: string },
-   *   lastRun?: { runId?: string, state?: string, verdict?: string, model?: string,
-   *     modelsTried?: string[], stage?: string, stagesCompleted?: number, stageHistory?: Array<object>,
-   *     durationMs?: number, elapsedMs?: number, pid?: number,
-   *     updatedAt?: string, startedAt?: string, reportPath?: string, error?: string }
    * }>}
    */
   async status(targetDir) {
@@ -1023,7 +1137,7 @@ export class PluginInstallerService {
       if (mdFiles.length > 0) {
         const latestFile = mdFiles[0];
         const content = await readFile(path.join(reportsDir, latestFile), 'utf8');
-        const verdictMatch = content.match(/- result: (PASS|BLOCK)/);
+        const verdictMatch = content.match(/^# reviewer-kit review: (PASS|BLOCK)/m);
         latestReview = {
           file: latestFile,
           path: path.join(reportsDir, latestFile),
@@ -1035,39 +1149,12 @@ export class PluginInstallerService {
       // No reports directory yet
     }
 
-    // Persisted live/last review state written by the runner; absent or
-    // malformed files degrade silently (older runner versions lack it).
-    let lastRun;
-    try {
-      const raw = await readFile(path.join(inspection.repoRoot, 'audit-reports', 'commit-reviews', 'last-run.json'), 'utf8');
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        lastRun = reconcileLastRun({
-          runId: parsed.runId,
-          state: parsed.state,
-          verdict: parsed.verdict,
-          model: parsed.model,
-          modelsTried: Array.isArray(parsed.modelsTried) ? parsed.modelsTried : undefined,
-          stage: typeof parsed.stage === 'string' ? parsed.stage : undefined,
-          stagesCompleted: Number.isFinite(parsed.stagesCompleted) ? parsed.stagesCompleted : undefined,
-          stageHistory: Array.isArray(parsed.stageHistory) ? parsed.stageHistory : undefined,
-          durationMs: Number.isFinite(parsed.durationMs) ? parsed.durationMs : undefined,
-          elapsedMs: Number.isFinite(parsed.elapsedMs) ? parsed.elapsedMs : undefined,
-          pid: Number.isInteger(parsed.pid) ? parsed.pid : undefined,
-          updatedAt: parsed.updatedAt,
-          startedAt: parsed.startedAt,
-          reportPath: parsed.reportPath,
-          error: typeof parsed.error === 'string' ? parsed.error : undefined,
-        }, this.#killFn);
-      }
-    } catch {
-      // No live-state file yet
-    }
+    const effectiveHook = await this.assessHook(inspection.repoRoot).catch(() => null);
 
     return {
       ...inspection,
       latestReview,
-      lastRun,
+      effectiveHook,
     };
   }
 
@@ -1148,9 +1235,11 @@ export class PluginInstallerService {
         const notExecutable = hookStatus.hookExecutable === false;
         const message = isSkippedTarget(repoRoot)
           ? `This worker checkout is outside the kit's reach: ${notExecutable ? 'the pre-commit hook is not executable' : 'the review runner script is stale'}, and no session repairs it. Refresh it by hand.`
-          : notExecutable
-            ? 'Pre-commit hook is not executable and will be repaired on next session.'
-            : 'Review runner script is stale and will be updated on next session.';
+          : hookStatus.hooksPathRepairable
+            ? `core.hooksPath points at git's default hooks directory ("${hookStatus.configuredHooksPath}"), so commits skip the review; it is repaired on the next session or commit.`
+            : notExecutable
+              ? 'Pre-commit hook is not executable and will be repaired on next session.'
+              : 'Review runner script is stale and will be updated on next session.';
         checks.push({ name: 'Pre-commit hook', status: 'WARN', message });
       } else {
         checks.push({
@@ -1161,20 +1250,37 @@ export class PluginInstallerService {
       }
     }
 
+    if (repoRoot) {
+      const hook = await this.assessHook(repoRoot).catch(() => null);
+      if (hook?.kitExpected) {
+        checks.push(hook.effective
+          ? { name: 'Effective pre-commit hook', status: 'OK', message: `git runs ${hook.hookPath} (${hook.kind})` }
+          : { name: 'Effective pre-commit hook', status: 'FAIL', message: `commits here are NOT reviewed: git runs "${hook.hookPath}" (core.hooksPath ${hook.hooksPath ?? 'unset'}), ${hook.kind === 'foreign' ? "another tool's hook that does not call the review" : hook.kind === 'not-executable' ? 'which is not executable' : 'which does not exist'}. Run /reviewer-kit:setup, or: git config core.hooksPath .githooks` });
+      }
+    }
+
     try {
       // Skipped worker checkouts are outside the kit's reach: nothing repairs a stale runner there, so none is reported.
       const targets = (await this.#targets.list()).filter((repo) => !isSkippedTarget(repo));
       if (targets.length > 0) {
         let stale = 0;
+        const unreviewed = [];
         for (const repo of targets) {
           const info = await this.#inspectInstallation(repo).catch(() => null);
           if (info?.isGitRepo && info.state === 'stale') stale += 1;
+          if (info?.isGitRepo) {
+            const hook = await this.assessHook(repo).catch(() => null);
+            if (hook?.kitExpected && !hook.effective) unreviewed.push(repo);
+          }
         }
         checks.push({
           name: 'Registered repositories',
-          status: stale > 0 ? 'WARN' : 'OK',
-          message: stale > 0
-            ? `${stale} of ${targets.length} registered repositories carry a stale hook or runner; they are repaired when a session starts in any repository`
+          status: stale > 0 || unreviewed.length > 0 ? 'WARN' : 'OK',
+          message: stale > 0 || unreviewed.length > 0
+            ? [
+              stale > 0 ? `${stale} of ${targets.length} registered repositories carry a stale hook or runner; they are repaired when a session starts in any repository` : '',
+              unreviewed.length > 0 ? `${unreviewed.length} would commit without the review (git does not run the kit hook): ${unreviewed.slice(0, 5).join(', ')}${unreviewed.length > 5 ? ', ...' : ''}` : '',
+            ].filter(Boolean).join('; ')
             : `${targets.length} registered, all current`,
         });
       }

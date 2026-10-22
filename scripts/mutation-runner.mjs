@@ -1,13 +1,14 @@
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { appendFile, cp, mkdir, mkdtemp, readdir, lstat, readFile, writeFile, readlink, symlink, chmod, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
-import { terminateProcessTree } from '../src/infra/omp-cli-reviewer-adapter.mjs';
+import { terminateProcessTree } from '../src/infra/process-tree.mjs';
 
 const reporter = new URL('./mutation-test-reporter.mjs', import.meta.url).href;
-const DIRECTORIES_TO_COPY = ['src', 'scripts', 'agents', 'skills', 'tests', 'templates', '.omp-plugin', '.omp/review-kit', '.claude-plugin', 'claude-plugin', '.github'];
+const DIRECTORIES_TO_COPY = ['src', 'scripts', 'agents', 'skills', 'tests', 'templates', '.omp-plugin', '.omp/review-kit', '.claude-plugin', 'claude-plugin', '.github', '.specs/native-task-review'];
 const FILES_TO_COPY = ['package.json', 'README.md', 'AGENTS.md', 'ROADMAP.md', 'CHANGELOG.md'];
 const exclusiveSuites = new Set(['execution-timeout', 'superseded-runs', 'run-signal-guard', 'review-run-records', 'omp-cli-reviewer-adapter', 'extension', 'run-tests-wrapper', 'claude-bridge', 'review-progress', 'target-heal', 'target-switches', 'status-latest-review', 'mutation-runner']);
 const catalogCheck = (event) => /mutation manifest:|mutant anchors|curated mutant/i.test(event.name);
@@ -107,6 +108,9 @@ export async function runTest(root, testFile, names = [], { timeoutMs = 120_000,
   delete env.NODE_TEST_CONTEXT;
   delete env.OMP_REVIEW_KIT_OFFLINE_SDK;
   delete env.OMP_REVIEW_KIT_LIVE_E2E;
+  delete env.OMP_REVIEW_KIT_NATIVE_CLI;
+  delete env.OMP_REVIEW_KIT_NATIVE_RUNTIME;
+  delete env.OMP_REVIEW_KIT_NATIVE_KEEP;
   const localReporter = path.join(root, 'scripts', 'mutation-test-reporter.mjs');
   const reporterUrl = await lstat(localReporter).then(() => pathToFileURL(localReporter).href).catch(() => reporter);
   // Older native runners select all siblings when a describe ancestor matches.
@@ -198,6 +202,8 @@ export async function runMutationGate(mutants, { root = process.cwd(), workers =
       const dir = path.join(base, `worker-${i}`);
       await mkdir(dir);
       for (const name of [...DIRECTORIES_TO_COPY, ...FILES_TO_COPY]) await cp(path.join(root, name), path.join(dir, name), { recursive: true });
+      // The OMP library is 800 MB and read-only for every worker: each worker links the project's node_modules instead of copying it.
+      if (existsSync(path.join(root, 'node_modules'))) await symlink(path.join(root, 'node_modules'), path.join(dir, 'node_modules'), 'junction');
       const baseline = await captureTree(dir);
       if (copies.length && JSON.stringify(baseline) !== JSON.stringify(copies[0].baseline)) throw new Error('Source changed while worker copies were being created');
       copies.push({ dir, baseline });

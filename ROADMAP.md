@@ -4,6 +4,18 @@ This roadmap defines the engineering direction and release milestones for `omp-r
 
 ---
 
+## Shipped in 0.22.0: native OMP task review
+
+The review calls OMP's native `TaskTool` (agent `reviewer-kit`) directly through the pinned library, with no kit model dispatcher, preflight, chain overlay or provider walk. The earlier CLI and overlay behavior is gone.
+
+- [Requirements](.specs/native-task-review/REQUIREMENTS.md)
+- [Implementation options and approval gates](.specs/native-task-review/PLAN.md)
+- [Acceptance/test matrix](.specs/native-task-review/ACCEPTANCE_CRITERIA.md)
+
+[Status and open checks](.specs/native-task-review/STATUS.md) list what is verified and what is not, including the AT-09 owner-state acceptance that remains open.
+
+---
+
 ## Phase 1: Fail-Closed Staged Review Gate (Completed - v0.1.0)
 
 Deliver an automated, fail-closed pre-commit gate that prevents unreviewed or violating code from entering Git history.
@@ -38,7 +50,9 @@ Replace the single-pass reviewer with a repository-native 4-stage hierarchy to a
 
 ---
 
-## Phase 3: Caller-Owned Review Rejection Feedback (v0.3.0)
+## Phase 3: Caller-Owned Review Rejection Feedback (v0.3.0, superseded)
+
+> Superseded by the native rewrite (0.22.0). The rejection envelope and the two-line caller signal were removed with the previous pipeline. The items below are not planned.
 
 Give the triggering AI agent a strict, machine-readable rejection signal while keeping the full reviewer evidence in the immutable audit report. The plugin reports the rejection; it never fixes the code itself.
 
@@ -61,6 +75,8 @@ Root cause: `test_harness` was repo-global, so any changed executable line in a 
 - [x] **Suppressed-Gap Observability (done)**: `### Notes` now mandates mirroring every suppressed coverage item with file, line range, and ground, sourced from structured producer records — scout `non_coverable_items`, hunter `suppressed_coverage_items`, verifier `rejected_coverage_gaps` (`agents/reviewer-kit.md`, `skills/multi-stage-review/SKILL.md`).
 
 ## Phase 4b: Review Latency & Iteration Cost (incident 2026-09-28)
+
+> Partly superseded (0.22.0). The verdict cache, delta rounds, snapshot and stage reuse, and the context pack were removed with the previous pipeline. The levers below are open again against the native path and are not implemented.
 
 Measured on the v0.12.4 release round: a 40-file / ~2700-line spec+contract diff took 8 sequential full reviews at ~14-40 min each (~2.5h wall) before converging, each attempt re-running all 4 stages and ~30+ model requests from scratch on near-identical input. Historical baselines: small diffs 3.6-16m, today's large spec diffs 18-40m. Levers ranked by cost/quality, no model downgrades or effort cuts:
 

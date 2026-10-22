@@ -8,10 +8,11 @@ import { runPool, classifyTestRun, captureTree, restoreTree, runTest, runMutatio
 test('Given two mutants of one behavior, When calibrated with reusable workers, Then all IDs have reference and focused assertion proof', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'rk-gate-test-'));
   try {
-    for (const directory of ['src', 'scripts', 'agents', 'skills', 'tests', 'templates', '.omp-plugin', '.omp/review-kit', '.claude-plugin', 'claude-plugin', '.github']) await mkdir(path.join(root, directory), { recursive: true });
+    for (const directory of ['src', 'scripts', 'agents', 'skills', 'tests', 'templates', '.omp-plugin', '.omp/review-kit', '.claude-plugin', 'claude-plugin', '.github', '.specs/native-task-review']) await mkdir(path.join(root, directory), { recursive: true });
     for (const file of ['package.json', 'README.md', 'AGENTS.md', 'ROADMAP.md', 'CHANGELOG.md']) await writeFile(path.join(root, file), file === 'package.json' ? '{"type":"module"}' : 'fixture');
     await writeFile(path.join(root, 'src', 'value.mjs'), 'export const value = 1;');
-    await writeFile(path.join(root, 'tests', 'value.test.mjs'), "import {test} from 'node:test'; import assert from 'node:assert/strict'; import {value} from '../src/value.mjs'; test('value contract',()=>assert.equal(value,1));");
+    await writeFile(path.join(root, '.specs/native-task-review', 'REQUIREMENTS.md'), 'native task requirements fixture');
+    await writeFile(path.join(root, 'tests', 'value.test.mjs'), "import {test} from 'node:test'; import assert from 'node:assert/strict'; import {readFile} from 'node:fs/promises'; import {value} from '../src/value.mjs'; test('value contract',async()=>{assert.equal(await readFile('.specs/native-task-review/REQUIREMENTS.md','utf8'),'native task requirements fixture'); assert.equal(value,1);});");
     const mutants = [2, 3].map((value) => ({ id: `value-${value}`, file: 'src/value.mjs', testFile: 'tests/value.test.mjs', original: 'value = 1', replacement: `value = ${value}` }));
     const result = await runMutationGate(mutants, { root, workers: 2, calibrate: true, log: () => {} });
     assert.equal(result.passed, true);
@@ -129,12 +130,21 @@ test('Given a dirty reusable tree, When restored, Then changes, deletions and ne
 
 test('Given an inherited test context and persistent paths, When a job starts, Then native subprocess state is isolated', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'rk-env-test-'));
+  const nativeKeys = ['OMP_REVIEW_KIT_NATIVE_CLI', 'OMP_REVIEW_KIT_NATIVE_RUNTIME', 'OMP_REVIEW_KIT_NATIVE_KEEP'];
+  const original = new Map(nativeKeys.map((key) => [key, process.env[key]]));
   try {
-    await writeFile(path.join(root, 'test.mjs'), "import { test } from 'node:test'; import assert from 'node:assert/strict'; import os from 'node:os'; import path from 'node:path'; test('isolated',()=>{ for(const key of ['OMP_REVIEW_KIT_RUNS_DIR','OMP_REVIEW_KIT_TARGETS','OMP_REVIEW_KIT_REPORTS_DIR']) assert.ok(process.env[key]?.startsWith(os.tmpdir()+path.sep)); });");
+    for (const key of nativeKeys) process.env[key] = 'unapproved-native-fixture';
+    await writeFile(path.join(root, 'test.mjs'), "import { test } from 'node:test'; import assert from 'node:assert/strict'; import os from 'node:os'; import path from 'node:path'; test('isolated',()=>{ for(const key of ['OMP_REVIEW_KIT_RUNS_DIR','OMP_REVIEW_KIT_TARGETS','OMP_REVIEW_KIT_REPORTS_DIR']) assert.ok(process.env[key]?.startsWith(os.tmpdir()+path.sep)); for(const key of ['OMP_REVIEW_KIT_NATIVE_CLI','OMP_REVIEW_KIT_NATIVE_RUNTIME','OMP_REVIEW_KIT_NATIVE_KEEP']) assert.equal(process.env[key],undefined,'A mutant must never inherit an opt-in native launch'); });");
     const result = await runTest(root, 'test.mjs', ['isolated']);
     assert.equal(classifyTestRun(result, ['isolated']), 'survived', JSON.stringify(result));
     assert.ok(!result.events.some((event) => event.message?.includes('startsWith')));
-  } finally { await rm(root, { recursive: true, force: true }); }
+  } finally {
+    for (const [key, value] of original) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test('Given a native nested test, When selected precisely, Then reporter proves the deciding assertion instead of a suite heading', async () => {

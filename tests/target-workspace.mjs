@@ -27,12 +27,6 @@ async function installEarlierRelease(dir) {
 export async function workspace() {
   const base = await mkdtemp(path.join(tmpdir(), 'omp-target-sync-'));
   const registryFile = path.join(base, 'targets.json');
-  // A session start stops live reviews on an older runner, and that stop reads the run records
-  // from OMP_REVIEW_KIT_RUNS_DIR or, unset, from the developer's ~/.omp/review-kit-runs. Every
-  // test that reaches it points the variable into its own temp folder until cleanup().
-  const runsDir = path.join(base, 'runs');
-  const savedRunsDir = process.env.OMP_REVIEW_KIT_RUNS_DIR;
-  process.env.OMP_REVIEW_KIT_RUNS_DIR = runsDir;
   const registry = new FileTargetRegistry({ filePath: registryFile, ignoreTemp: false });
   const installer = new PluginInstallerService({ targetRegistry: registry });
   const repos = [];
@@ -49,10 +43,6 @@ export async function workspace() {
   };
   const runnerOf = (dir) => path.join(dir, '.omp', 'review-kit', 'run-review.mjs');
   const makeStale = (dir) => writeFile(runnerOf(dir), STALE_RUNNER);
-  const cleanup = async () => {
-    if (savedRunsDir === undefined) delete process.env.OMP_REVIEW_KIT_RUNS_DIR;
-    else process.env.OMP_REVIEW_KIT_RUNS_DIR = savedRunsDir;
-    await rm(base, { recursive: true, force: true });
-  };
-  return { base, runsDir, registry, registryFile, installer, makeRepo, runnerOf, makeStale, cleanup };
+  const cleanup = () => rm(base, { recursive: true, force: true });
+  return { base, registry, registryFile, installer, makeRepo, runnerOf, makeStale, cleanup };
 }

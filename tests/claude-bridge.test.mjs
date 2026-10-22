@@ -11,7 +11,6 @@ import {
   HEAL_BUDGET_MS,
   OMP_PROBE_TIMEOUT_MS,
   PLUGIN_LIST_TIMEOUT_MS,
-  PROGRESS_SUMMARY_TIMEOUT_MS,
   STDIN_TIMEOUT_MS,
   assess,
   chooseOmpInstall,
@@ -19,9 +18,9 @@ import {
   doctor,
   findPlugin,
   installOmp,
+  libraryLines,
   main,
   probeOmp,
-  progress,
   readHookInput,
   review,
   run,
@@ -94,7 +93,10 @@ async function tempRepo() {
   return { dir, cleanup: () => rm(dir, { recursive: true, force: true }) };
 }
 
-const healthyExec = () => fakeExec({ 'omp --version': { stdout: 'omp/18.2.11\n' } });
+const healthyExec = () => fakeExec({
+  'omp --version': { stdout: 'omp/18.12.5\n' },
+  'bun --version': { stdout: '1.4.1\n' },
+});
 const pluginEnv = (home) => envFor(home, { OMP_REVIEW_KIT_PLUGIN_DIR: PLUGIN_DIR });
 
 test('Given the shipped Claude shell, Then it contains only the whitelisted files in under 100 KB', async () => {
@@ -111,16 +113,16 @@ test('Given the shipped Claude shell, Then it contains only the whitelisted file
   for (const file of files) bytes += (await stat(file)).size;
   assert.deepEqual(
     files.map((file) => path.relative('claude-plugin', file).split(path.sep).join('/')).sort(),
-    ['.claude-plugin/plugin.json', 'commands/doctor.md', 'commands/install-omp.md', 'commands/review.md', 'commands/setup.md', 'hooks/hooks.json', 'scripts/bridge.mjs', 'skills/review-progress/SKILL.md'],
+    ['.claude-plugin/plugin.json', 'commands/doctor.md', 'commands/install-omp.md', 'commands/review.md', 'commands/setup.md', 'hooks/hooks.json', 'scripts/bridge.mjs'],
   );
   assert.ok(bytes < 100 * 1024, `payload is ${bytes} bytes`);
   const hooks = JSON.parse(await readFile('claude-plugin/hooks/hooks.json', 'utf8'));
   assert.match(hooks.hooks.SessionStart[0].hooks[0].command, /bridge\.mjs" session$/);
-  // The hook budget (seconds) must exceed the probes a session run can chain: omp --version, then plugin list.
+  // The hook budget (seconds) must exceed the steps a session run can chain: stdin, omp --version, plugin list, heal.
   const budgetMs = hooks.hooks.SessionStart[0].hooks[0].timeout * 1000;
   assert.equal(hooks.hooks.SessionStart[0].hooks[0].timeout, 30);
-  const chained = STDIN_TIMEOUT_MS + OMP_PROBE_TIMEOUT_MS + PLUGIN_LIST_TIMEOUT_MS + HEAL_BUDGET_MS + PROGRESS_SUMMARY_TIMEOUT_MS;
-  assert.ok(budgetMs > chained, `${budgetMs} ms must exceed the chained stdin, probe, list, heal and summary budgets (${chained} ms)`);
+  const chained = STDIN_TIMEOUT_MS + OMP_PROBE_TIMEOUT_MS + PLUGIN_LIST_TIMEOUT_MS + HEAL_BUDGET_MS;
+  assert.ok(budgetMs > chained, `${budgetMs} ms must exceed the chained stdin, probe, list and heal budgets (${chained} ms)`);
 });
 
 test('Given the slash commands, Then only read-only commands pre-approve node and install-omp asks the user', async () => {
@@ -217,7 +219,7 @@ test('install-omp checks first: with OMP and a current plugin it installs nothin
     const sink = collect();
     const code = installOmp({ argv: ['--yes'], env: pluginEnv(home), exec, out: sink.out, err: sink.err });
     assert.equal(code, EXIT.ok);
-    assert.match(sink.lines.join('\n'), /already installed \(omp\/18\.2\.11\)/);
+    assert.match(sink.lines.join('\n'), /already installed \(omp\/18\.12\.5\)/);
     assert.match(sink.lines.join('\n'), /Nothing to install/);
     assert.deepEqual(exec.calls.map((c) => c.line), ['omp --version']);
   } finally {
@@ -417,59 +419,6 @@ test('setup stops with the infrastructure code when OMP is missing', async () =>
     await assert.rejects(stat(path.join(repo.dir, '.githooks')));
   } finally {
     await repo.cleanup();
-    await cleanup();
-  }
-});
-
-test('SessionStart shows the progress line only when the reader succeeds', async () => {
-  const { home, cleanup } = await tempHome();
-  const repo = await tempRepo();
-  try {
-    const summary = 'reviewer-kit: 1 review running in this repository';
-    const readerExec = (status) => fakeExec({
-      'omp --version': { stdout: 'omp/18.2.11\n' },
-      node: { status, stdout: `${summary}\n` },
-    });
-
-    const reading = collect();
-    assert.equal(await session({ cwd: repo.dir, env: pluginEnv(home), exec: readerExec(0), out: reading.out }), EXIT.ok);
-    assert.ok(reading.lines.join('\n').includes(summary));
-
-    const failing = collect();
-    assert.equal(await session({ cwd: repo.dir, env: pluginEnv(home), exec: readerExec(1), out: failing.out }), EXIT.ok);
-    assert.ok(!failing.lines.join('\n').includes(summary), 'a reader that exits non-zero contributes no line');
-  } finally {
-    await repo.cleanup();
-    await cleanup();
-  }
-});
-
-test('bridge.mjs routes progress to the installed reader with its arguments, and lists it in the usage line', async () => {
-  const { home, cleanup } = await tempHome();
-  const plugin = await mkdtemp(path.join(tmpdir(), 'omp-bridge-reader-'));
-  try {
-    await writeFile(path.join(plugin, 'package.json'), JSON.stringify({ name: 'omp-reviewer-kit', version: WANTED }));
-    await mkdir(path.join(plugin, 'scripts'), { recursive: true });
-    await writeFile(path.join(plugin, 'scripts', 'review-progress.mjs'), [
-      'process.stdout.write(`argv:${process.argv.slice(2).join(\',\')}\\n`);',
-      'process.exitCode = 2;',
-    ].join('\n'));
-
-    const routed = spawnSync(process.execPath, ['claude-plugin/scripts/bridge.mjs', 'progress', '--bogus'], {
-      encoding: 'utf8',
-      env: envFor(home, { OMP_REVIEW_KIT_PLUGIN_DIR: plugin }),
-    });
-    assert.equal(routed.status, 2);
-    assert.match(routed.stdout, /argv:--bogus/);
-
-    const usage = spawnSync(process.execPath, ['claude-plugin/scripts/bridge.mjs', 'nonsense'], {
-      encoding: 'utf8',
-      env: envFor(home),
-    });
-    assert.equal(usage.status, 1);
-    assert.match(usage.stderr, /progress \[--mine/);
-  } finally {
-    await rm(plugin, { recursive: true, force: true });
     await cleanup();
   }
 });
@@ -728,84 +677,81 @@ test('doctor warns when the repository runner is newer than the installed OMP pl
   }
 });
 
-test('SessionStart adds one line naming the runs the plugin stopped, and says nothing about them when none was stopped', async () => {
-  const { home, cleanup } = await tempHome();
-  try {
-    const stopping = await stubPlugin(home, `export class PluginInstallerService {
-      async refreshAtSessionStart() { return { current: null, targets: {}, stopped: [{ runId: 'run-old-1' }, { runId: 'run-old-2' }] }; }
-      async status() { return { isGitRepo: true, state: 'active' }; }
-    }\n`);
-    const sink = collect();
-    assert.equal(await session({ cwd: home, env: envFor(home, { OMP_REVIEW_KIT_PLUGIN_DIR: stopping }), exec: healthyExec(), out: sink.out }), EXIT.ok);
-    assert.equal(sink.lines.length, 1);
-    const context = JSON.parse(sink.lines[0]).hookSpecificOutput.additionalContext;
-    assert.match(context, /Stopped 2 review\(s\) running on an older runner: run-old-1, run-old-2\./);
-    assert.match(context, /commits were blocked; commit again to review on this runner/);
-
-    const quiet = await stubPlugin(home, `export class PluginInstallerService {
-      async refreshAtSessionStart() { return { current: null, targets: {}, stopped: [] }; }
-      async status() { return { isGitRepo: true, state: 'active' }; }
-    }\n`);
-    const silent = collect();
-    assert.equal(await session({ cwd: home, env: envFor(home, { OMP_REVIEW_KIT_PLUGIN_DIR: quiet }), exec: healthyExec(), out: silent.out }), EXIT.ok);
-    assert.deepEqual(silent.lines, [], 'nothing stopped and nothing wrong: the hook stays silent');
-
-    const malformed = await stubPlugin(home, `export class PluginInstallerService {
-      async refreshAtSessionStart() { return { stopped: 'not a list' }; }
-      async status() { return { isGitRepo: true, state: 'active' }; }
-    }\n`);
-    const ignored = collect();
-    assert.equal(await session({ cwd: home, env: envFor(home, { OMP_REVIEW_KIT_PLUGIN_DIR: malformed }), exec: healthyExec(), out: ignored.out }), EXIT.ok);
-    assert.deepEqual(ignored.lines, []);
-  } finally {
-    await cleanup();
-  }
-});
-
 let stubCounter = 0;
 
 async function stubPlugin(home, installerSource) {
   // A fresh folder per call: the ESM loader caches a module by URL, so a reused path keeps the first stub.
   const dir = path.join(home, `stub-plugin-${(stubCounter += 1)}`);
   await mkdir(path.join(dir, 'src', 'application'), { recursive: true });
-  await mkdir(path.join(dir, 'src', 'infra'), { recursive: true });
   await writeFile(path.join(dir, 'package.json'), JSON.stringify({ name: 'omp-reviewer-kit', version: WANTED }));
   await writeFile(
     path.join(dir, 'src', 'application', 'installer-service.mjs'),
     installerSource ?? 'export class PluginInstallerService { async doctor() { return { ok: true, checks: [] }; } async status() { return { isGitRepo: false }; } }\n',
   );
-  await writeFile(
-    path.join(dir, 'src', 'infra', 'omp-cli-reviewer-adapter.mjs'),
-    'export class OmpCliReviewerAdapter { static defaultPreflight() { return globalThis.__bridgeProbe(); } }\n',
-  );
   return dir;
 }
 
-test('doctor --probe sends one model request and passes only on status 0 with READY', async () => {
+test('doctor checks Bun and the pinned OMP library, and never asks OMP for a model answer', async () => {
   const { home, cleanup } = await tempHome();
+  const repo = await tempRepo();
   try {
-    const dir = await stubPlugin(home);
-    const env = envFor(home, { OMP_REVIEW_KIT_PLUGIN_DIR: dir });
-    const cases = [
-      [{ status: 0, stdout: 'READY' }, EXIT.ok, /\[OK\] OMP answered a model request\./],
-      [{ status: 1, stdout: '' }, EXIT.fail, /\[FAIL\] .*modelRoles/],
-      [{ status: 0, stdout: 'nope' }, EXIT.fail, /\[FAIL\] .*modelRoles/],
-      [{ status: 1, stdout: 'READY' }, EXIT.fail, /\[FAIL\] .*modelRoles/],
-    ];
-    for (const [probe, expectedCode, expectedLine] of cases) {
-      let calls = 0;
-      globalThis.__bridgeProbe = () => { calls += 1; return probe; };
-      const sink = collect();
-      const code = await doctor({ cwd: home, argv: ['--probe'], env, exec: healthyExec(), out: sink.out });
-      assert.equal(calls, 1, 'exactly one model request');
-      assert.equal(code, expectedCode, JSON.stringify(probe));
-      assert.match(sink.lines.join('\n'), expectedLine);
-    }
-    globalThis.__bridgeProbe = () => { throw new Error('must not be called without --probe'); };
-    assert.equal(await doctor({ cwd: home, argv: [], env, exec: healthyExec(), out: () => {} }), EXIT.ok);
+    const exec = healthyExec();
+    const sink = collect();
+    assert.equal(await doctor({ cwd: repo.dir, env: pluginEnv(home), exec, out: sink.out }), EXIT.ok);
+    assert.match(sink.lines.join('\n'), /\[OK\] Bun 1\.4\.1/);
+    assert.match(sink.lines.join('\n'), /\[OK\] OMP library 18\.12\.5 \(native review\)/);
+    assert.ok(
+      exec.calls.every((call) => !/ -p | READY|--model/.test(` ${call.line} `)),
+      exec.calls.map((call) => call.line).join(' | '),
+    );
   } finally {
-    delete globalThis.__bridgeProbe;
+    await repo.cleanup();
     await cleanup();
+  }
+});
+
+test('doctor fails with an actionable line when Bun is not on PATH', async () => {
+  const { home, cleanup } = await tempHome();
+  const repo = await tempRepo();
+  try {
+    const exec = fakeExec({ 'omp --version': { stdout: 'omp/18.12.5\n' } });
+    const sink = collect();
+    assert.equal(await doctor({ cwd: repo.dir, env: pluginEnv(home), exec, out: sink.out }), EXIT.fail);
+    assert.match(sink.lines.join('\n'), /\[FAIL\] Bun is not on PATH; the native review runs on Bun/);
+  } finally {
+    await repo.cleanup();
+    await cleanup();
+  }
+});
+
+test('libraryLines fails on a missing or differing library, warns on another omp, and passes when all match', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'omp-bridge-library-'));
+  const plugin = { dir, version: WANTED };
+  const libraryDir = path.join(dir, 'node_modules', '@oh-my-pi', 'pi-coding-agent');
+  try {
+    await writeFile(path.join(dir, 'package.json'), JSON.stringify({
+      name: 'omp-reviewer-kit',
+      version: WANTED,
+      dependencies: { '@oh-my-pi/pi-coding-agent': '18.12.5' },
+    }));
+    const omp = { version: 'omp/18.12.5' };
+
+    const missing = libraryLines({ plugin, omp });
+    assert.equal(missing[0].status, 'FAIL');
+    assert.match(missing[0].text, /is not installed next to the plugin\. Run: bun install --cwd/);
+
+    await mkdir(libraryDir, { recursive: true });
+    await writeFile(path.join(libraryDir, 'package.json'), JSON.stringify({ version: '18.12.4' }));
+    assert.match(libraryLines({ plugin, omp })[0].text, /18\.12\.4 is installed, but the plugin pins 18\.12\.5/);
+
+    await writeFile(path.join(libraryDir, 'package.json'), JSON.stringify({ version: '18.12.5' }));
+    assert.deepEqual(libraryLines({ plugin, omp }), [{ status: 'OK', text: 'OMP library 18.12.5 (native review)' }]);
+
+    const newer = libraryLines({ plugin, omp: { version: 'omp/18.13.0' } });
+    assert.deepEqual(newer.map((line) => line.status), ['OK', 'WARN']);
+    assert.match(newer[1].text, /omp 18\.13\.0 differs from the library 18\.12\.5/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
   }
 });
 
