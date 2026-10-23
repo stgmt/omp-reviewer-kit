@@ -82,6 +82,16 @@ test('Given one outdated selector, When --calibrate-stale runs, Then that mutant
   } finally { await cleanup(setup); }
 });
 
+test('Given stale mutants with recorded selectors, When --calibrate-stale starts, Then the recorded selectors are passed to the calibration as hints', async () => {
+  const setup = await fixture(['m2']);
+  try {
+    const gate = fakeGate();
+    await run(setup, ['--calibrate-stale'], gate);
+    assert.deepEqual(gate.calls[0].selectors, { m2: setup.mappings.m2 }, 'the recorded selector is a hint for the fast re-prove');
+    assert.deepEqual(gate.calls[1].selectors.m2.tests, ['fresh'], 'the ordinary phase uses the freshly calibrated selector');
+  } finally { await cleanup(setup); }
+});
+
 test('Given every selector is current, When --calibrate-stale runs, Then nothing is calibrated but the full gate still runs and decides the exit code', async () => {
   const setup = await fixture();
   try {

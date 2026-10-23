@@ -12,6 +12,12 @@ const DIRECTORIES_TO_COPY = ['src', 'scripts', 'agents', 'skills', 'tests', 'tem
 const FILES_TO_COPY = ['package.json', 'README.md', 'AGENTS.md', 'ROADMAP.md', 'CHANGELOG.md'];
 const exclusiveSuites = new Set(['execution-timeout', 'superseded-runs', 'run-signal-guard', 'review-run-records', 'omp-cli-reviewer-adapter', 'extension', 'run-tests-wrapper', 'claude-bridge', 'review-progress', 'target-heal', 'target-switches', 'status-latest-review', 'mutation-runner']);
 const catalogCheck = (event) => /mutation manifest:|mutant anchors|curated mutant/i.test(event.name);
+// Windows keeps transient handles on files that were just executed or written, so a plain removal fails with EBUSY.
+// The removal keeps retrying while a handle holds the tree. A tree still held when the retries run out rejects the job as infrastructure_error, never as a killed mutant.
+export const REMOVE_OPTIONS = { recursive: true, force: true, maxRetries: 20, retryDelay: 250 };
+export const removeTree = (target) => rm(target, REMOVE_OPTIONS);
+// Full-file runs (the baseline and the mutated reference) run a whole suite; the guard suites take minutes on Windows. Focused mutant runs keep the 120 s limit.
+export const FULL_SUITE_TIMEOUT_MS = 30 * 60_000;
 export const mutantIdentity = (mutant) => createHash('sha256').update(JSON.stringify([mutant.id, mutant.file, mutant.testFile, mutant.original, mutant.replacement])).digest('hex');
 const assertionFailure = (event) => !event.suite && !event.skipped && !catalogCheck(event)
   && event.type === 'test:fail' && (event.causeCode === 'ERR_ASSERTION' || event.code === 'ERR_ASSERTION');
@@ -66,7 +72,7 @@ export async function restoreTree(root, baseline) {
   for (const entry of [...current].sort((a, b) => b.path.length - a.path.length)) {
     const target = wanted.get(entry.path);
     if (!target || target.kind !== entry.kind) {
-      await rm(path.join(root, entry.path), { recursive: true, force: true });
+      await removeTree(path.join(root, entry.path));
       for (const relative of actual.keys()) if (relative === entry.path || relative.startsWith(`${entry.path}/`)) actual.delete(relative);
     }
   }
@@ -76,7 +82,7 @@ export async function restoreTree(root, baseline) {
     if (entry.kind === 'directory') await mkdir(absolute, { recursive: true });
     else if (entry.kind === 'file' && (old?.kind !== 'file' || old.bytes !== entry.bytes)) await writeFile(absolute, Buffer.from(entry.bytes, 'base64'));
     else if (entry.kind === 'link' && (old?.kind !== 'link' || old.target !== entry.target)) {
-      await rm(absolute, { force: true });
+      await removeTree(absolute);
       await symlink(entry.target, absolute);
     }
     if (entry.kind !== 'link' && (old?.kind !== entry.kind || old?.mode !== entry.mode)) await chmod(absolute, entry.mode);
@@ -117,7 +123,7 @@ export async function runTest(root, testFile, names = [], { timeoutMs = 120_000,
   // Do not pretend that broad execution is a precise selector.
   const legacyNestedSelection = Number(process.versions.node.split('.')[0]) < 22 && ancestors.length > 0;
   if (legacyNestedSelection) {
-    await rm(scratch, { recursive: true, force: true });
+    await removeTree(scratch);
     return { status: 1, events: [], error: 'Precise nested mutation selectors require Node 22 or newer', durationMs: 0 };
   }
   const patternNames = ancestors.length ? names.map((name) => [...ancestors, name].join(' ')) : names;
@@ -158,11 +164,11 @@ export async function runTest(root, testFile, names = [], { timeoutMs = 120_000,
       });
     });
   } finally {
-    if (closed) await rm(scratch, { recursive: true, force: true });
+    if (closed) await removeTree(scratch);
   }
 }
 
-export async function runMutationGate(mutants, { root = process.cwd(), workers = 4, calibrate = false, selectors = {}, log = console.log, signal, onResult = async () => {} } = {}) {
+export async function runMutationGate(mutants, { root = process.cwd(), workers = 4, calibrate = false, selectors = {}, log = console.log, signal, onResult = async () => {}, runTestImpl = runTest } = {}) {
   if (!Number.isInteger(workers) || workers < 1 || workers > 16) throw new Error('Workers must be an integer between 1 and 16');
   if (!mutants.length || new Set(mutants.map((mutant) => mutant.id)).size !== mutants.length) throw new Error('Empty catalog or duplicate mutant IDs');
   for (const mutant of mutants) {
@@ -180,15 +186,16 @@ export async function runMutationGate(mutants, { root = process.cwd(), workers =
   const copies = [];
   const results = [];
   const mappings = {};
-  const greenBaselines = new Set();
+  // One full-suite baseline per test file: concurrent workers share its promise instead of each running the whole suite.
+  const baselineRuns = new Map();
   const focusedBaselines = new Map();
   let unsafeWorker = false;
   let active = 0;
   let maxActive = 0;
   let setupMs = 0;
   const timings = { testMs: 0, resetMs: 0 };
-  const inspect = async (copy, file, names, ancestors = []) => {
-    const result = await runTest(copy.dir, file, names, { signal, stateRoot: base, ancestors });
+  const inspect = async (copy, file, names, ancestors = [], timeoutMs = undefined) => {
+    const result = await runTestImpl(copy.dir, file, names, { signal, stateRoot: base, ancestors, ...(timeoutMs ? { timeoutMs } : {}) });
     timings.testMs += result.durationMs;
     return result;
   };
@@ -232,53 +239,72 @@ export async function runMutationGate(mutants, { root = process.cwd(), workers =
         const anchor = mutant.original.replace(/\r\n/g, '\n');
         if (original.split(anchor).length !== 2) throw new Error('Mutation target must match exactly once');
         const mutated = original.replace(anchor, mutant.replacement.replace(/\r\n/g, '\n'));
-        if (calibrate) {
-          if (!greenBaselines.has(mutant.testFile)) {
-            const baseline = await inspect(copy, mutant.testFile, []);
-            if (classifyTestRun(baseline) !== 'survived') throw new Error(`Full-suite baseline is not green: ${baseline.stderr || JSON.stringify(baseline.events.filter((event) => event.type === 'test:fail')).slice(0, 2000)}`);
-            greenBaselines.add(mutant.testFile);
+        // A recorded selector (--calibrate-stale passes it as a hint) is re-proved first: if the recorded names still
+        // decide, the focused proof below verifies the kill without a full-suite reference run. When they no longer
+        // decide, the reference locates the deciding assertions and the same proof verifies them.
+        let provingHint = Boolean(calibrate && names?.length);
+        for (;;) {
+          if (calibrate && !provingHint) {
+            await reset(copy);
+            if (!baselineRuns.has(mutant.testFile)) {
+              baselineRuns.set(mutant.testFile, inspect(copy, mutant.testFile, [], [], FULL_SUITE_TIMEOUT_MS).then((baseline) => {
+                if (classifyTestRun(baseline) !== 'survived') throw new Error(`Full-suite baseline is not green: ${baseline.stderr || JSON.stringify(baseline.events.filter((event) => event.type === 'test:fail')).slice(0, 2000)}`);
+              }));
+            }
+            await baselineRuns.get(mutant.testFile);
+            await reset(copy);
+            await writeFile(file, mutated);
+            const reference = await inspect(copy, mutant.testFile, [], [], FULL_SUITE_TIMEOUT_MS);
+            if (reference.timedOut || reference.error || reference.signal || reference.status === null) {
+              outcome = classifyTestRun(reference);
+              detail = reference.stderr;
+              return;
+            }
+            // A reference suite may contain secondary failures caused by the mutant.
+            // Only deciding assertions become selectors; infrastructure failures never prove a kill.
+            const deciding = reference.events.filter(assertionFailure).sort((a, b) => a.durationMs - b.durationMs || a.name.localeCompare(b.name))[0];
+            names = deciding ? [deciding.name] : [];
+            ancestors = deciding?.ancestors ?? [];
+            if (!names.length) {
+              outcome = 'infrastructure_error';
+              detail = reference.stderr || JSON.stringify(reference.events.filter((event) => event.type === 'test:fail')).slice(0, 2000);
+              return;
+            }
           }
+          if (!Array.isArray(names) || !names.length || (!calibrate && (selectors[mutant.id]?.testFile !== mutant.testFile || selectors[mutant.id]?.mutantHash !== mutantIdentity(mutant)))) { outcome = 'selector_invalid'; return; }
+          await reset(copy);
+          const testHash = createHash('sha256').update((await readFile(path.join(copy.dir, mutant.testFile), 'utf8')).replace(/\r\n/g, '\n')).digest('hex');
+          if (!calibrate && selectors[mutant.id]?.testHash !== testHash) { outcome = 'selector_invalid'; detail = 'Deciding test changed; recalibration required'; return; }
+          const baselineKey = JSON.stringify([mutant.testFile, names, ancestors]);
+          if (!focusedBaselines.has(baselineKey)) {
+            const baseline = await inspect(copy, mutant.testFile, names, ancestors);
+            if (classifyTestRun(baseline, names) !== 'survived') {
+              outcome = 'selector_invalid';
+              detail = baseline.stderr;
+              if (provingHint) { provingHint = false; continue; }
+              return;
+            }
+            const selected = baseline.events.filter((event) => event.type === 'test:pass' && !event.suite && !event.skipped);
+            if (!ancestors.length && selected.length === 1 && selected[0].ancestors?.length) {
+              ancestors = selected[0].ancestors;
+              const precise = await inspect(copy, mutant.testFile, names, ancestors);
+              if (classifyTestRun(precise, names) !== 'survived') {
+                outcome = 'selector_invalid';
+                if (provingHint) { provingHint = false; continue; }
+                return;
+              }
+            }
+            focusedBaselines.set(baselineKey, ancestors);
+          } else ancestors = focusedBaselines.get(baselineKey);
           await reset(copy);
           await writeFile(file, mutated);
-          const reference = await inspect(copy, mutant.testFile, []);
-          if (reference.timedOut || reference.error || reference.signal || reference.status === null) {
-            outcome = classifyTestRun(reference);
-            detail = reference.stderr;
-            return;
-          }
-          // A reference suite may contain secondary failures caused by the mutant.
-          // Only deciding assertions become selectors; infrastructure failures never prove a kill.
-          const deciding = reference.events.filter(assertionFailure).sort((a, b) => a.durationMs - b.durationMs || a.name.localeCompare(b.name))[0];
-          names = deciding ? [deciding.name] : [];
-          ancestors = deciding?.ancestors ?? [];
-          if (!names.length) {
-            outcome = 'infrastructure_error';
-            detail = reference.stderr || JSON.stringify(reference.events.filter((event) => event.type === 'test:fail')).slice(0, 2000);
-            return;
-          }
+          const focused = await inspect(copy, mutant.testFile, names, ancestors);
+          outcome = classifyTestRun(focused, names);
+          detail = outcome === 'killed' ? undefined : focused.stderr || JSON.stringify(focused.events.filter((event) => event.type === 'test:fail')).slice(0, 2000);
+          if (outcome === 'killed') mappings[mutant.id] = { testFile: mutant.testFile, tests: names, ancestors, mutantHash: mutantIdentity(mutant), testHash };
+          if (provingHint && outcome !== 'killed') { provingHint = false; continue; }
+          break;
         }
-        if (!Array.isArray(names) || !names.length || (!calibrate && (selectors[mutant.id]?.testFile !== mutant.testFile || selectors[mutant.id]?.mutantHash !== mutantIdentity(mutant)))) { outcome = 'selector_invalid'; return; }
-        await reset(copy);
-        const testHash = createHash('sha256').update((await readFile(path.join(copy.dir, mutant.testFile), 'utf8')).replace(/\r\n/g, '\n')).digest('hex');
-        if (!calibrate && selectors[mutant.id]?.testHash !== testHash) { outcome = 'selector_invalid'; detail = 'Deciding test changed; recalibration required'; return; }
-        const baselineKey = JSON.stringify([mutant.testFile, names, ancestors]);
-        if (!focusedBaselines.has(baselineKey)) {
-          const baseline = await inspect(copy, mutant.testFile, names, ancestors);
-          if (classifyTestRun(baseline, names) !== 'survived') { outcome = 'selector_invalid'; detail = baseline.stderr; return; }
-          const selected = baseline.events.filter((event) => event.type === 'test:pass' && !event.suite && !event.skipped);
-          if (!ancestors.length && selected.length === 1 && selected[0].ancestors?.length) {
-            ancestors = selected[0].ancestors;
-            const precise = await inspect(copy, mutant.testFile, names, ancestors);
-            if (classifyTestRun(precise, names) !== 'survived') { outcome = 'selector_invalid'; return; }
-          }
-          focusedBaselines.set(baselineKey, ancestors);
-        } else ancestors = focusedBaselines.get(baselineKey);
-        await reset(copy);
-        await writeFile(file, mutated);
-        const focused = await inspect(copy, mutant.testFile, names, ancestors);
-        outcome = classifyTestRun(focused, names);
-        detail = outcome === 'killed' ? undefined : focused.stderr || JSON.stringify(focused.events.filter((event) => event.type === 'test:fail')).slice(0, 2000);
-        if (outcome === 'killed') mappings[mutant.id] = { testFile: mutant.testFile, tests: names, ancestors, mutantHash: mutantIdentity(mutant), testHash };
       } catch (error) {
         if (error.unsafeWorker) { unsafeWorker = true; controller.abort(); throw error; }
         detail = error.message;
@@ -296,7 +322,7 @@ export async function runMutationGate(mutants, { root = process.cwd(), workers =
       passed: results.every((result) => result.outcome === 'killed') };
   } finally {
     parentSignal?.removeEventListener('abort', forwardAbort);
-    if (!unsafeWorker) await rm(base, { recursive: true, force: true });
+    if (!unsafeWorker) await removeTree(base);
   }
 }
 
@@ -345,12 +371,19 @@ export function mergeCalibration(mutants, previous, fresh, { complete = true } =
 // killed by a deciding assertion, 1 otherwise. `--calibrate-stale` first recalibrates the stale selectors (a survivor there ends the run
 // with 1 and keeps the selectors it proved) and then runs the ordinary gate over every mutant, so no invocation exits 0 on a subset or on nothing.
 export async function runCli({ mutants, argv = process.argv.slice(2), env = process.env, cwd = process.cwd(),
-  selectorPath = new URL('./mutation-selectors.json', import.meta.url), gate = runMutationGate, log = console.log } = {}) {
+  selectorPath = new URL('./mutation-selectors.json', import.meta.url), gate = runMutationGate, log = console.log, writeFileImpl = writeFile } = {}) {
   const staleOnly = argv.includes('--calibrate-stale');
   const calibrate = argv.includes('--calibrate');
   const workers = Number(env.OMP_MUTATION_WORKERS ?? 4);
   const resultPath = env.OMP_MUTATION_RESULT ?? path.join(cwd, 'audit-reports', 'mutation-result.json');
-  const writeCatalog = (mappings) => writeFile(selectorPath, JSON.stringify({ schema: 'mutation-selectors@1', mappings }, null, 2) + '\n');
+  // Workers prove selectors concurrently and each proof rewrites the whole catalog. Writes are queued in call order,
+  // so two snapshots never overlap in the file; a failed write does not block the writes after it.
+  let catalogWrites = Promise.resolve();
+  const writeCatalog = (mappings) => {
+    const write = catalogWrites.then(() => writeFileImpl(selectorPath, JSON.stringify({ schema: 'mutation-selectors@1', mappings }, null, 2) + '\n'));
+    catalogWrites = write.catch(() => {});
+    return write;
+  };
   let selectors = {};
   let stale = [];
   let previous = {};
@@ -371,17 +404,28 @@ export async function runCli({ mutants, argv = process.argv.slice(2), env = proc
   process.once('SIGINT', interrupt);
   process.once('SIGTERM', interrupt);
   try {
-    const prove = async (targets, options, mode, subset) => {
+    const prove = async (targets, options, mode, subset, onProven) => {
       log(`Starting safety mutation gate: ${targets.length} curated mutants, ${workers} workers, ${mode}...`);
       await writeFile(`${resultPath}.jsonl`, '');
       const result = await gate(targets, { workers, signal: controller.signal, ...options,
-        onResult: (record, mapping, fingerprint) => appendFile(`${resultPath}.jsonl`, JSON.stringify({ ...record, mapping, fingerprint }) + '\n') });
+        onResult: async (record, mapping, fingerprint) => {
+          await appendFile(`${resultPath}.jsonl`, JSON.stringify({ ...record, mapping, fingerprint }) + '\n');
+          if (onProven && record.outcome === 'killed' && mapping) await onProven(record.id, mapping);
+        } });
       await writeFile(resultPath, JSON.stringify(subset ? { ...result, subset: { mutants: targets.length, catalog: mutants.length } } : result, null, 2) + '\n');
       return result;
     };
     if (staleOnly) {
       if (stale.length) {
-        const calibrated = await prove(stale, { calibrate: true, selectors: {} }, 'stale-selector calibration', true);
+        // Every selector the calibration proves is written to the catalog right away: a run that dies halfway keeps the work it proved.
+        const provenSelectors = { ...previous };
+        // A recorded selector is a hint: when the recorded names still decide after the test file changed, the
+        // calibration verifies them with focused runs instead of a full-suite reference.
+        const hints = Object.fromEntries(stale.map((mutant) => [mutant.id, previous[mutant.id]]).filter(([, mapping]) => mapping));
+        const calibrated = await prove(stale, { calibrate: true, selectors: hints }, 'stale-selector calibration', true, async (id, mapping) => {
+          provenSelectors[id] = mapping;
+          await writeCatalog(mergeCalibration(mutants, previous, provenSelectors, { complete: false }));
+        });
         selectors = mergeCalibration(mutants, previous, calibrated.mappings, { complete: calibrated.passed });
         await writeCatalog(selectors);
         const proven = calibrated.results.filter((item) => item.outcome === 'killed').length;

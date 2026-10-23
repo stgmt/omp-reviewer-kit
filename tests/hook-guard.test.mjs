@@ -453,12 +453,15 @@ describe('Feature: the extension and the Claude shell stop an unreviewed commit'
   const claudeInput = (command, cwd) => ({ tool_name: 'Bash', tool_input: { command }, cwd });
 
   it('Given a Bash command that is not a commit, Then the Claude guard does not even load the plugin', async () => {
+    // The plugin is pinned to this checkout, so it is found on every machine (CI has no installed OMP
+    // plugin). Only the commit prefilter can then decide whether the plugin is loaded.
+    const env = { ...process.env, OMP_REVIEW_KIT_PLUGIN_DIR: path.resolve('.') };
     let loaded = 0;
     const out = [];
-    const status = await guard({ input: claudeInput('ls -la', '/x'), load: async () => { loaded += 1; return null; }, out: (line) => out.push(line) });
+    const status = await guard({ input: claudeInput('ls -la', '/x'), env, load: async () => { loaded += 1; return null; }, out: (line) => out.push(line) });
     assert.equal(status, 0);
     for (const command of ['git status', 'git log --oneline', 'echo commit']) {
-      await guard({ input: claudeInput(command, '/x'), load: async () => { loaded += 1; return null; }, out: (line) => out.push(line) });
+      await guard({ input: claudeInput(command, '/x'), env, load: async () => { loaded += 1; return null; }, out: (line) => out.push(line) });
     }
     assert.equal(loaded, 0);
     assert.deepEqual(out, []);
