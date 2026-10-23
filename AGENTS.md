@@ -97,7 +97,18 @@ There is no build, lint, format or typecheck command. Run `npm test`, `npm run t
 
 ## Testing & QA
 
-Before changing or running the mutation gate, follow `.claude/skills/mutation-fast-default/SKILL.md`. The gate uses four asynchronous workers, reusable worker trees verified before each reuse, and selectors calibrated in `scripts/mutation-selectors.json`. Every curated mutant must be killed by a deciding assertion of its test file. Missing or stale selectors, zero selected tests, timeouts, crashes and infrastructure errors block the gate. After adding or changing mutants or deciding tests, run `node scripts/run-mutation-tests.mjs --calibrate-stale`; its exit code is the verdict of the whole catalog.
+Before changing or running the mutation gate, follow `.claude/skills/mutation-fast-default/SKILL.md`. The gate uses four asynchronous workers (`OMP_MUTATION_WORKERS`, 1–16; this workstation runs 8), reusable worker trees verified before each reuse, and selectors calibrated in `scripts/mutation-selectors.json`. Every curated mutant must be killed by a deciding assertion of its test file. Missing or stale selectors, zero selected tests, timeouts, crashes and infrastructure errors block the gate. On `--calibrate-stale`, a recorded selector is first re-proved with focused runs (same proof class as the ordinary gate); the full-suite reference only runs when the recorded names no longer decide. After adding or changing mutants or deciding tests, run `node scripts/run-mutation-tests.mjs --calibrate-stale`; its exit code is the verdict of the whole catalog.
+
+Mutant work rules (the full standard is in the skill; these are the ones that cost hours before):
+
+- Removing a temporary tree always retries (`removeTree`, `REMOVE_OPTIONS`). A plain `rm` with `recursive` on a tree is a defect, not a flake.
+- Every proof is persisted at once (`onProven`). A run that dies keeps what it proved.
+- Infrastructure errors (timeout, crash, cleanup failure, zero selected tests, a red suite on the pristine tree) are never kills. Fix the cause and rerun; do not rerun blindly.
+- After editing a mutant's target file, check that each `original` still matches exactly once before a long run.
+- After editing a deciding test or a mutant, the selector is stale. Run `--calibrate-stale`; do not carry an old green result over to changed bytes.
+- Verify on an export of the index: stage the paths first, because `checkout-index` reads the index, not the working tree.
+- Run the gate in the background with a log file. Measure the time from the log; do not promise a duration.
+- Never commit `audit-reports/mutation-result*`.
 
 CI runs Node 22 and 24 on Ubuntu and Windows (Bun 1.4.1, `bun install --frozen-lockfile`), plus the mutation gate on Ubuntu. Node 18 and 20 are not in CI and are not verified for this release.
 
