@@ -28,6 +28,42 @@ test('Given two mutants of one behavior, When calibrated with reusable workers, 
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test('Given a recorded selector whose names still decide, When calibrated on an edited test file, Then the hint proves the kill without a full-suite reference', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'rk-gate-hint-'));
+  const mutant = { id: 'value-9', file: 'src/value.mjs', testFile: 'tests/value.test.mjs', original: 'value = 1', replacement: 'value = 9' };
+  try {
+    for (const directory of ['src', 'scripts', 'agents', 'skills', 'tests', 'templates', '.omp-plugin', '.omp/review-kit', '.claude-plugin', 'claude-plugin', '.github', '.specs/native-task-review']) await mkdir(path.join(root, directory), { recursive: true });
+    for (const file of ['package.json', 'README.md', 'AGENTS.md', 'ROADMAP.md', 'CHANGELOG.md']) await writeFile(path.join(root, file), file === 'package.json' ? '{"type":"module"}' : 'fixture');
+    await writeFile(path.join(root, 'src', 'value.mjs'), 'export const value = 1;');
+    await writeFile(path.join(root, '.specs/native-task-review', 'REQUIREMENTS.md'), 'native task requirements fixture');
+    // The suite is red as a whole (an always-failing second test), so any full-suite baseline or reference would fail:
+    // only the recorded selector that still decides can prove this mutant.
+    await writeFile(path.join(root, 'tests', 'value.test.mjs'), "import {test} from 'node:test'; import assert from 'node:assert/strict'; import {value} from '../src/value.mjs'; test('value contract',() => { assert.equal(value,1); }); test('decoy',() => { throw new Error('The full-suite reference must not run when a recorded selector still decides'); });");
+    const result = await runMutationGate([mutant], { root, workers: 1, calibrate: true, selectors: { 'value-9': { testFile: 'tests/value.test.mjs', tests: ['value contract'], ancestors: [], mutantHash: mutantIdentity(mutant), testHash: 'outdated' } }, log: () => {} });
+    assert.equal(result.passed, true, 'the hint re-prove kills the mutant without the impossible full-suite reference');
+    assert.deepEqual(result.results.map((record) => [record.id, record.outcome]), [['value-9', 'killed']]);
+    assert.deepEqual(result.mappings['value-9'].tests, ['value contract'], 'the recorded selector stays; the decoy never becomes evidence');
+    assert.notEqual(result.mappings['value-9'].testHash, 'outdated', 'the mapping carries the hash of the edited test file');
+    assert.equal(result.mappings['value-9'].mutantHash, mutantIdentity(mutant));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('Given a recorded selector whose names no longer exist, When calibrated, Then the full-suite reference discovers the deciding assertion', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'rk-gate-fallback-'));
+  const mutant = { id: 'value-9', file: 'src/value.mjs', testFile: 'tests/value.test.mjs', original: 'value = 1', replacement: 'value = 9' };
+  try {
+    for (const directory of ['src', 'scripts', 'agents', 'skills', 'tests', 'templates', '.omp-plugin', '.omp/review-kit', '.claude-plugin', 'claude-plugin', '.github', '.specs/native-task-review']) await mkdir(path.join(root, directory), { recursive: true });
+    for (const file of ['package.json', 'README.md', 'AGENTS.md', 'ROADMAP.md', 'CHANGELOG.md']) await writeFile(path.join(root, file), file === 'package.json' ? '{"type":"module"}' : 'fixture');
+    await writeFile(path.join(root, 'src', 'value.mjs'), 'export const value = 1;');
+    await writeFile(path.join(root, '.specs/native-task-review', 'REQUIREMENTS.md'), 'native task requirements fixture');
+    await writeFile(path.join(root, 'tests', 'value.test.mjs'), "import {test} from 'node:test'; import assert from 'node:assert/strict'; import {value} from '../src/value.mjs'; test('value contract',async()=>{assert.equal(value,1);});");
+    const result = await runMutationGate([mutant], { root, workers: 1, calibrate: true, selectors: { 'value-9': { testFile: 'tests/value.test.mjs', tests: ['renamed away'], ancestors: [], mutantHash: mutantIdentity(mutant), testHash: 'outdated' } }, log: () => {} });
+    assert.equal(result.passed, true, 'the failed hint falls back to the reference and the mutant is still killed');
+    assert.deepEqual(result.results.map((record) => [record.id, record.outcome]), [['value-9', 'killed']]);
+    assert.deepEqual(result.mappings['value-9'].tests, ['value contract'], 'the fallback reference re-discovers the deciding assertion');
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test('Given missing, duplicate or escaping catalog entries, When admitted, Then the gate rejects them before copying', async () => {
   for (const mutants of [[], [{ id: 'same' }, { id: 'same' }], [{ id: 'escape', file: '../outside', testFile: 'test.mjs' }]]) {
     await assert.rejects(runMutationGate(mutants, { log: () => {} }), mutants.length === 2 ? /duplicate mutant IDs/ : /catalog|paths/);
