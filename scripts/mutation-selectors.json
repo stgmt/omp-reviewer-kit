@@ -55,7 +55,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "3b8b9f13183f712947d9958a05016511c9185fc239e9f7c3af718470e0abef6b",
-      "testHash": "b1d56b53bf5542030d3ced34c504811fa1537f3a82118f5b231f46767f16bf87"
+      "testHash": "71db18fc8fc806c9757e67ae2bea641f3686d9de99d3d4666346e374bd51a5b4"
     },
     "anti-parasitic-both-to-either": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -66,7 +66,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "b8607c1dd6f7ba93c3e0b7431e95eb44980c25c7b9974dd0fc887acbf309bb74",
-      "testHash": "b1d56b53bf5542030d3ced34c504811fa1537f3a82118f5b231f46767f16bf87"
+      "testHash": "71db18fc8fc806c9757e67ae2bea641f3686d9de99d3d4666346e374bd51a5b4"
     },
     "anti-parasitic-port-protection-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -77,7 +77,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "7cb2ae5cc876247bae2a345f17644a022a04d18c3ed82d839556f279b8e7e2e7",
-      "testHash": "b1d56b53bf5542030d3ced34c504811fa1537f3a82118f5b231f46767f16bf87"
+      "testHash": "71db18fc8fc806c9757e67ae2bea641f3686d9de99d3d4666346e374bd51a5b4"
     },
     "multi-stage-snapshot-boundary-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -88,7 +88,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "db7a8493b32121111624ef1add91a1b21b8c908d6e5da232df1a148e0af79373",
-      "testHash": "b1d56b53bf5542030d3ced34c504811fa1537f3a82118f5b231f46767f16bf87"
+      "testHash": "71db18fc8fc806c9757e67ae2bea641f3686d9de99d3d4666346e374bd51a5b4"
     },
     "multi-stage-yagni-boundary-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -99,7 +99,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "465a5de25c5a83dda3e244302a6b7eab09c0169bb39c82b5688b001fb8d5560c",
-      "testHash": "b1d56b53bf5542030d3ced34c504811fa1537f3a82118f5b231f46767f16bf87"
+      "testHash": "71db18fc8fc806c9757e67ae2bea641f3686d9de99d3d4666346e374bd51a5b4"
     },
     "sync-hook-newer-overwritten": {
       "testFile": "tests/sync-targets.test.mjs",
@@ -166,7 +166,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "ec31109e99d1fdb90e4b481cab9c38734f3857a530dd4a68f4327ef171a166d5",
-      "testHash": "b1d56b53bf5542030d3ced34c504811fa1537f3a82118f5b231f46767f16bf87"
+      "testHash": "71db18fc8fc806c9757e67ae2bea641f3686d9de99d3d4666346e374bd51a5b4"
     },
     "hunter-red-proof-field-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -177,7 +177,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "61f3ac262a7e6643d183a03c1ffd0e7ebebf3d58d8cbaacaf70427b43ac14e8e",
-      "testHash": "b1d56b53bf5542030d3ced34c504811fa1537f3a82118f5b231f46767f16bf87"
+      "testHash": "71db18fc8fc806c9757e67ae2bea641f3686d9de99d3d4666346e374bd51a5b4"
     },
     "verifier-triage-field-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -188,7 +188,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "e6356f58a6e2d47ec64b32c1f6f7664d120a06d1b1d697a3dac8517b2c7b5ea5",
-      "testHash": "b1d56b53bf5542030d3ced34c504811fa1537f3a82118f5b231f46767f16bf87"
+      "testHash": "71db18fc8fc806c9757e67ae2bea641f3686d9de99d3d4666346e374bd51a5b4"
     },
     "modular-suspicion-assert-delta": {
       "testFile": "tests/suspicion-map.test.mjs",
