@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.22.1] - 2026-10-24
+
+### Fixed
+- Windows: the hook guard and `sync-targets` compared a hooks path spelled with an 8.3 short name (`RUNNER~1`) against the long path git prints. A stray `core.hooksPath` was then reported as a conflict instead of a repairable stale value, and the Windows CI failed. Paths are compared in canonical spelling: the parent is resolved, the last name is kept, so a hooks junction is still treated as a link.
+
+### Changed
+- The release workflow verifies the tag on Windows and Linux before it publishes: layout and tests on both, the mutation gate on Linux as in CI. 0.22.0 was published after an Ubuntu-only verification.
+
 ## [0.22.0] - 2026-10-22
 
 ### Replaced

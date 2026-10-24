@@ -1,4 +1,4 @@
-import { constants, lstatSync } from 'node:fs';
+import { constants, lstatSync, realpathSync } from 'node:fs';
 import { lstat, mkdir, open, readdir, readFile, realpath, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -72,9 +72,27 @@ const CHAINED_HOOK_RE = new RegExp(
   CHAINED_HOOK_DIR_RE + ')?"?/\\*' + '(?:' + CHAINED_HOOK_SUFFIX_RE + ')?"?'
 );
 
-function normalizePath(p) {
+// Git prints the long form of a path, but a temporary directory on Windows can be spelled with an 8.3 short name
+// (RUNNER~1). The parent is resolved to its canonical spelling; the last name stays as written, so a link (a junction
+// at the hooks directory) is still compared as a link and not as its target.
+function canonicalPath(p) {
   const resolved = path.resolve(p);
-  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+  const parent = path.dirname(resolved);
+  if (parent === resolved) return resolved;
+  const rest = [path.basename(resolved)];
+  for (let current = parent; ; current = path.dirname(current)) {
+    try {
+      return path.join(realpathSync.native(current), ...rest);
+    } catch {
+      if (path.dirname(current) === current) return resolved;
+      rest.unshift(path.basename(current));
+    }
+  }
+}
+
+function normalizePath(p) {
+  const canonical = canonicalPath(p);
+  return process.platform === 'win32' ? canonical.toLowerCase() : canonical;
 }
 
 function normalizeLineEndings(str) {

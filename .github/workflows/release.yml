@@ -14,9 +14,13 @@ permissions:
   attestations: write
 
 jobs:
-  release:
-    name: Verify and publish immutable release
-    runs-on: ubuntu-latest
+  verify:
+    name: Verify tag on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     env:
       TAG: ${{ inputs.tag }}
       GH_TOKEN: ${{ github.token }}
@@ -67,7 +71,28 @@ jobs:
         run: npm test
 
       - name: Run mutation gate
+        if: runner.os == 'Linux'
         run: npm run test:mutation
+
+  release:
+    name: Verify and publish immutable release
+    needs: verify
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout tagged repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
 
       - name: Build immutable tag archive
         id: package
