@@ -182,6 +182,66 @@ test('Given a PASS that stands against a confirmed gap while a test harness exis
   assert.match(result.reasons.join(' '), /coverage gap/);
 });
 
+const withGap = gap => everyStage.map(stage => (stage.agent === 'review-finding-verifier'
+  ? { ...stage, data: { confirmed_findings: [], confirmed_coverage_gaps: [gap] } }
+  : stage));
+
+test('Given a blocking gap with a concrete impact, When evaluated, Then the PASS is rejected', () => {
+  const gap = { coverage_id: 'coverage-1', severity: 'blocking', impact: 'a caller writes to the wrong account' };
+  const result = evaluateReview({ reviewer: reviewerPass('REVIEW_RESULT=PASS'), stages: withGap(gap), ...FULL });
+  assert.equal(result.pass, false);
+  assert.match(result.reasons.join(' '), /blocking coverage gap/);
+});
+
+test('Given a blocking gap without a concrete impact, When evaluated, Then the impact floor keeps the PASS', () => {
+  const gap = { coverage_id: 'coverage-1', severity: 'blocking', impact: '   ' };
+  const result = evaluateReview({ reviewer: reviewerPass('REVIEW_RESULT=PASS'), stages: withGap(gap), ...FULL });
+  assert.equal(result.pass, true);
+  assert.deepEqual(result.reasons, []);
+});
+
+test('Given an advisory gap, When evaluated, Then it never blocks the PASS', () => {
+  const gap = { coverage_id: 'coverage-1', severity: 'advisory', impact: 'presentation text only' };
+  const result = evaluateReview({ reviewer: reviewerPass('REVIEW_RESULT=PASS'), stages: withGap(gap), ...FULL });
+  assert.equal(result.pass, true);
+  assert.deepEqual(result.reasons, []);
+});
+
+test('Given a blocking gap whose own per-entry harness is absent, When evaluated, Then it never blocks the PASS', () => {
+  const gap = { coverage_id: 'coverage-1', severity: 'blocking', impact: 'a caller writes to the wrong account', test_harness: 'absent' };
+  const result = evaluateReview({ reviewer: reviewerPass('REVIEW_RESULT=PASS'), stages: withGap(gap), ...FULL });
+  assert.equal(result.pass, true);
+});
+
+test('Given a blocking gap in a test-class file from the manifest, When evaluated, Then the test-class exemption keeps the PASS', () => {
+  const gap = { coverage_id: 'coverage-1', file_path: 'tests/feature.test.mjs', severity: 'blocking', impact: 'a helper returns the wrong fixture' };
+  const result = evaluateReview({
+    reviewer: reviewerPass('REVIEW_RESULT=PASS'),
+    stages: withGap(gap),
+    fileClasses: [{ path: 'tests/feature.test.mjs', fileClass: 'test' }],
+    ...FULL,
+  });
+  assert.equal(result.pass, true);
+  assert.deepEqual(result.reasons, []);
+});
+
+test('Given a blocking gap that declares its own test file class, When evaluated, Then the test-class exemption keeps the PASS', () => {
+  const gap = { coverage_id: 'coverage-1', file_path: 'feature.test.mjs', file_class: 'test', severity: 'blocking', impact: 'a helper returns the wrong fixture' };
+  const result = evaluateReview({ reviewer: reviewerPass('REVIEW_RESULT=PASS'), stages: withGap(gap), ...FULL });
+  assert.equal(result.pass, true);
+});
+
+test('Given a blocking gap in an executable file, When evaluated with the manifest, Then the PASS remains blocked', () => {
+  const gap = { coverage_id: 'coverage-1', file_path: 'src/feature.mjs', severity: 'blocking', impact: 'a caller writes to the wrong account' };
+  const result = evaluateReview({
+    reviewer: reviewerPass('REVIEW_RESULT=PASS'),
+    stages: withGap(gap),
+    fileClasses: [{ path: 'src/feature.mjs', fileClass: 'executable' }],
+    ...FULL,
+  });
+  assert.equal(result.pass, false);
+});
+
 test('Given a confirmed gap while the scout reports no test harness, When evaluated, Then the PASS stands', () => {
   const stages = everyStage.map(stage => {
     if (stage.agent === 'review-finding-verifier') return { ...stage, data: { confirmed_findings: [], confirmed_coverage_gaps: [{ id: 'coverage-1' }] } };

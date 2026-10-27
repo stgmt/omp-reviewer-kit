@@ -12,7 +12,7 @@ function git(cwd, args) {
   return execFileSync('git', ['-c', 'core.autocrlf=false', '-c', 'core.eol=lf', ...args], { cwd, encoding: 'utf8' });
 }
 
-async function stagedRepo() {
+async function stagedRepo(featurePath = 'feature.mjs') {
   const repo = await mkdtemp(path.join(tmpdir(), 'native-review-repo-'));
   git(repo, ['init', '-q']);
   git(repo, ['config', 'user.email', 'test@example.invalid']);
@@ -21,8 +21,8 @@ async function stagedRepo() {
   await writeFile(path.join(repo, 'base.mjs'), 'export const base = 1;\n');
   git(repo, ['add', 'base.mjs']);
   git(repo, ['commit', '-q', '-m', 'base']);
-  await writeFile(path.join(repo, 'feature.mjs'), 'export const feature = 2;\n');
-  git(repo, ['add', 'feature.mjs']);
+  await writeFile(path.join(repo, featurePath), 'export const feature = 2;\n');
+  git(repo, ['add', featurePath]);
   return repo;
 }
 
@@ -132,7 +132,36 @@ test('Given the reviewer passes with every stage completed, When the review runs
       { agent: 'review-finding-verifier', exitCode: 0, aborted: false, structuredStatus: 'valid', role: 'task', model: 'm' },
     ]);
     assert.equal(result.text, PASS_REPORT);
+    assert.deepEqual(result.fileClasses, [{ path: 'feature.mjs', fileClass: 'executable' }]);
     assert.deepEqual(await snapshotsLeft(parent), []);
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test('Given a test-class file with a confirmed blocking gap, When the review runs, Then the file-class manifest keeps the verdict PASS', async () => {
+  const repo = await stagedRepo('feature.test.mjs');
+  const parent = await mkdtemp(path.join(tmpdir(), 'native-review-parent-'));
+  try {
+    const stages = [
+      completed('review-context-scout', { test_harness: 'present' }),
+      completed('review-risk-hunter', { lane: 'correctness' }),
+      completed('review-finding-verifier', {
+        confirmed_findings: [],
+        confirmed_coverage_gaps: [{ coverage_id: 'coverage-1', file_path: 'feature.test.mjs', severity: 'blocking', impact: 'a helper returns the wrong fixture' }],
+      }),
+    ];
+    const result = await runNativeReview({
+      repo,
+      kitRoot: repo,
+      parentDir: parent,
+      env: {},
+      runTask: async () => ({ reviewer: reviewerWithYield(PASS_REPORT), stages }),
+    });
+    assert.deepEqual(result.fileClasses, [{ path: 'feature.test.mjs', fileClass: 'test' }]);
+    assert.equal(result.verdict.pass, true);
+    assert.deepEqual(result.verdict.reasons, []);
   } finally {
     await rm(repo, { recursive: true, force: true });
     await rm(parent, { recursive: true, force: true });

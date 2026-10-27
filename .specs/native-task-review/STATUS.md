@@ -42,6 +42,19 @@ Live spend so far: about $0.08 across earlier scratch runs plus about $0.02 for 
 
 The model dispatcher, preflight, chain overlay and reader, model re-emit, whole-review reruns, the verdict cache, delta rounds, the context pack, hunter shards, the batch gate and its retries, the rejection envelope, run telemetry and records, the progress commands and superseded-run stop, pre-review check execution, the scout scope planner, and every model and chain environment setting. Details are in `README.md` under "Removed in 0.22.0".
 
+## Coverage-gate precision (2026-10-27, unreleased)
+
+The pre-commit gate used to block a commit for any changed executable behavior without a covering test, with no impact floor and a repo-global `test_harness`. On the owner's corpus that produced 123 coverage-only BLOCKs, including test helpers, BDD steps, seed tooling and UI text (`audit-reports/coverage-gate-test-demand-2026-10-27.md`).
+
+- The scout `coverage_map` now carries `file_class` and a per-entry `test_harness`.
+- Hunter `coverage_gaps` and verifier `confirmed_coverage_gaps` carry `severity` (`blocking` | `advisory`), `impact`, `file_class`, and `test_harness`.
+- `src/native/verdict.mjs` blocks only a gap that claims `blocking` with a non-empty impact, is not in a `test`-class file (read from `.review/file-classes.json`), has no `test_harness: "absent"`, and fails while the scout reports a runnable harness. Legacy gaps without the new fields keep the old fail-closed behavior.
+- Advisory, `test`-class and harness-absent gaps go to `### Notes`, never to `### Required test coverage`.
+
+Verification: the offline verdict, snapshot and review suites pin the new filter; the layout test pins the new schema fields and prompt phrases. `npm test` passed with 450 tests (440 pass, 0 fail, 10 skipped), `npm run check` passed with 65 files, and `node scripts/run-mutation-tests.mjs --calibrate-stale` calibrated 1 stale selector and then killed 292/292 curated mutants (exit 0, 561.6 s, 8 workers). A live review under the new prompt contract has not been run.
+
+The commit that lands this change was made with `--no-verify` at the owner's explicit request. The hook could not review it: OMP resolved the reviewer to `anthropic/claude-haiku-5-5`, and every configured fallback is an Anthropic model, while the provider returned `403 permission_error: OAuth authentication is currently not allowed for this organization`. The 2026-10-27 07:07, 07:08 and 20:32 runs all failed this way before any agent content ran. The change is therefore verified offline only.
+
 ## Documents
 
 - `REQUIREMENTS.md` remains the binding requirement. Its wording was written for an OMP-owned entry point; see the owner decision above.
