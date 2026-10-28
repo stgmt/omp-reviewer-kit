@@ -53,7 +53,7 @@ The pre-commit gate used to block a commit for any changed executable behavior w
 
 Verification: the offline verdict, snapshot and review suites pin the new filter; the layout test pins the new schema fields and prompt phrases. `npm test` passed with 450 tests (440 pass, 0 fail, 10 skipped), `npm run check` passed with 65 files, and `node scripts/run-mutation-tests.mjs --calibrate-stale` calibrated 1 stale selector and then killed 292/292 curated mutants (exit 0, 561.6 s, 8 workers). A live review under the new prompt contract has not been run.
 
-The commit that lands this change was made with `--no-verify` at the owner's explicit request. The hook could not review it: OMP resolved the reviewer to `anthropic/claude-haiku-5-5`, and every configured fallback is an Anthropic model, while the provider returned `403 permission_error: OAuth authentication is currently not allowed for this organization`. The 2026-10-27 07:07, 07:08 and 20:32 runs all failed this way before any agent content ran. The change is therefore verified offline only.
+The commits that land this change and the 0.23.0 release bump were made with `--no-verify` at the owner's explicit request. The hook could not review them: OMP resolved the reviewer to `anthropic/claude-haiku-5-5`, and every configured fallback is an Anthropic model, while the provider returned `403 permission_error: OAuth authentication is currently not allowed for this organization`. The 2026-10-27 07:07, 07:08 and 20:32 runs and the 2026-10-28 10:56 run all failed this way before any agent content ran. The change is therefore verified offline only.
 
 ## Documents
 
