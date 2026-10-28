@@ -49,7 +49,7 @@ const manifest = JSON.parse(await readFile('package.json', 'utf8'));
 describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
   it('manifest and skills declare fixed reviewer identities', () => {
     assert.equal(manifest.name, 'omp-reviewer-kit');
-    assert.equal(manifest.version, '0.22.1');
+    assert.equal(manifest.version, '0.23.0');
     assert.match(realitySkill, /name: reality-first-review/);
     assert.match(multiStageSkill, /name: multi-stage-review/);
     assert.match(rangeAuditSkill, /name: range-audit/);
@@ -197,6 +197,38 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(snapshotSrc, /file-classes\.json/);
     assert.match(snapshotSrc, /'--binary', '--no-ext-diff'/);
   });
+  it('coverage gate pins the impact floor, the test-class exemption, and per-item harness scoping', () => {
+    const scout = JSON.parse(parseFrontmatter(scoutAgent).output);
+    const scoutItem = scout.properties.coverage_map.items;
+    assert.ok(scoutItem.required.includes('file_class'));
+    assert.ok(scoutItem.required.includes('test_harness'));
+    assert.deepEqual(scoutItem.properties.file_class.enum, ['executable', 'test', 'prompt', 'spec', 'docs', 'config', 'data']);
+    assert.deepEqual(scoutItem.properties.test_harness.enum, ['present', 'absent']);
+
+    const hunter = JSON.parse(parseFrontmatter(hunterAgent).output);
+    const hunterGap = hunter.properties.coverage_gaps.items;
+    assert.ok(hunterGap.required.includes('severity'));
+    assert.ok(hunterGap.required.includes('impact'));
+    assert.deepEqual(hunterGap.properties.severity.enum, ['blocking', 'advisory']);
+    assert.equal(hunterGap.properties.impact.type, 'string');
+    assert.equal(hunterGap.properties.test_harness.type, 'string');
+
+    const verifier = JSON.parse(parseFrontmatter(verifierAgent).output);
+    const verifiedGap = verifier.properties.confirmed_coverage_gaps.items;
+    assert.ok(verifiedGap.required.includes('severity'));
+    assert.ok(verifiedGap.required.includes('impact'));
+    assert.deepEqual(verifiedGap.properties.severity.enum, ['blocking', 'advisory']);
+
+    assert.match(hunterAgent, /say which impact you could not prove/);
+    assert.match(hunterAgent, /Skip every `test`-class entry on ground `test-class`/);
+    assert.match(verifierAgent, /Reject a gap in a `test`-class file/);
+    assert.match(verifierAgent, /advisory-impact/);
+    assert.match(reviewerKitAgent, /Never list an advisory gap, a `test`-class gap, or a gap whose per-entry `test_harness` is `absent`/);
+    assert.match(reviewerKitAgent, /A coverage gap never blocks on its own/);
+    assert.match(multiStageSkill, /Impact floor: a gap is `severity: "blocking"` only/);
+    assert.match(realitySkill, /A gap blocks only when it states a concrete, reachable failure or cost/);
+  });
+
   it('dispatcher dispatches without reading files and passes skill names downstream', () => {
     assert.match(reviewerKitAgent, /without reading any files yourself/);
     assert.match(reviewerKitAgent, /pass those names to the scout in its task text/);

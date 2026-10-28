@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.0] - 2026-10-28
+
+### Changed
+- **Coverage gate precision.** A coverage gap now blocks a commit only when all of the following hold: it carries `severity: "blocking"` with a non-empty concrete `impact`, its file class is not `test`, its per-entry `test_harness` is not `absent`, and the scout reports a runnable harness. Advisory gaps, `test`-class files and harness-absent entries are mirrored to `### Notes` and never block. The verdict applies this filter deterministically from the staged file-class manifest (`.review/file-classes.json`), not only from prompt text.
+- Scout `coverage_map` entries carry `file_class` and a per-entry `test_harness`; hunter gaps and verifier-confirmed gaps carry `severity`, `impact`, `file_class`, and `test_harness`. Rejection grounds add `test-class` and `advisory-impact`. A gap that omits the new fields keeps the legacy fail-closed behavior.
+- The impact floor closes the reported class where test helpers, BDD steps, seed tooling and presentation text produced blocking test demands with no proven reachable impact (`audit-reports/coverage-gate-test-demand-2026-10-27.md`).
+
+### Verified
+- `npm test`: 450 tests, 440 pass, 0 fail, 10 skipped.
+- `npm run check`: layout ok, 65 files.
+- `node scripts/run-mutation-tests.mjs --calibrate-stale` (8 workers): 1 stale selector calibrated (`native-snapshot-file-classes-dropped`), then 292/292 curated mutants killed, exit 0, 561.6 s.
+
 
 
 ## [0.22.1] - 2026-10-24

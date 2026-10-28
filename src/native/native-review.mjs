@@ -23,6 +23,7 @@ import { evaluateReview } from './verdict.mjs';
  *     profile: 'full'|'spec-docs',
  *     lanes: string[],
  *     changedPaths: string[],
+ *     fileClasses: Array<{ path: string, fileClass: string }>,
  *     provenance: { role: string|null, model: string|null },
  *     stages: Array<{ agent: string|null, exitCode: number|null, aborted: boolean, structuredStatus: string|null, role: string|null, model: string|null }>,
  *     text: string,
@@ -34,7 +35,7 @@ export async function runNativeReview({ repo, kitRoot, parentDir, env = process.
   const snapshot = await materializeStagedSnapshot({ repo, parentDir, env });
   if (!snapshot) return { staged: false };
   try {
-    const { dir, diffHash, profile, lanes, changedPaths } = snapshot;
+    const { dir, diffHash, profile, lanes, changedPaths, fileClasses } = snapshot;
     onProgress(`review: ${changedPaths.length} staged path(s), profile ${profile}, lanes ${lanes.join(', ')}`);
     const assignment = buildAssignment({ snapshotDir: dir, repoRoot: repo, diffHash, profile, lanes, changedPaths });
     const { reviewer, stages } = await runTask({ cwd: repo, kitRoot, assignment, onProgress });
@@ -45,13 +46,14 @@ export async function runNativeReview({ repo, kitRoot, parentDir, env = process.
       yieldStatus: yielded?.status ?? null,
       text: yielded?.text ?? null,
     };
-    const verdict = evaluateReview({ reviewer: reviewerView, stages, profile, lanes });
+    const verdict = evaluateReview({ reviewer: reviewerView, stages, profile, lanes, fileClasses });
     return {
       staged: true,
       diffHash,
       profile,
       lanes,
       changedPaths,
+      fileClasses,
       provenance: reviewer ? provenanceOf(reviewer) : { role: null, model: null },
       stages: stages.map(({ agent, exitCode, aborted, structuredStatus, role, model }) => ({ agent, exitCode, aborted, structuredStatus, role, model })),
       text: reviewerView?.text ?? '',

@@ -55,7 +55,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "3b8b9f13183f712947d9958a05016511c9185fc239e9f7c3af718470e0abef6b",
-      "testHash": "71db18fc8fc806c9757e67ae2bea641f3686d9de99d3d4666346e374bd51a5b4"
+      "testHash": "a5afefcd58f29f593f4605ecae8d10227748d1f4f89bf7e27d135c29204e9179"
     },
     "anti-parasitic-both-to-either": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -66,7 +66,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "b8607c1dd6f7ba93c3e0b7431e95eb44980c25c7b9974dd0fc887acbf309bb74",
-      "testHash": "71db18fc8fc806c9757e67ae2bea641f3686d9de99d3d4666346e374bd51a5b4"
+      "testHash": "a5afefcd58f29f593f4605ecae8d10227748d1f4f89bf7e27d135c29204e9179"
     },
     "anti-parasitic-port-protection-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -77,7 +77,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "7cb2ae5cc876247bae2a345f17644a022a04d18c3ed82d839556f279b8e7e2e7",
-      "testHash": "71db18fc8fc806c9757e67ae2bea641f3686d9de99d3d4666346e374bd51a5b4"
+      "testHash": "a5afefcd58f29f593f4605ecae8d10227748d1f4f89bf7e27d135c29204e9179"
     },
     "multi-stage-snapshot-boundary-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -88,7 +88,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "db7a8493b32121111624ef1add91a1b21b8c908d6e5da232df1a148e0af79373",
-      "testHash": "71db18fc8fc806c9757e67ae2bea641f3686d9de99d3d4666346e374bd51a5b4"
+      "testHash": "a5afefcd58f29f593f4605ecae8d10227748d1f4f89bf7e27d135c29204e9179"
     },
     "multi-stage-yagni-boundary-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -99,7 +99,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "465a5de25c5a83dda3e244302a6b7eab09c0169bb39c82b5688b001fb8d5560c",
-      "testHash": "71db18fc8fc806c9757e67ae2bea641f3686d9de99d3d4666346e374bd51a5b4"
+      "testHash": "a5afefcd58f29f593f4605ecae8d10227748d1f4f89bf7e27d135c29204e9179"
     },
     "sync-hook-newer-overwritten": {
       "testFile": "tests/sync-targets.test.mjs",
@@ -166,7 +166,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "ec31109e99d1fdb90e4b481cab9c38734f3857a530dd4a68f4327ef171a166d5",
-      "testHash": "71db18fc8fc806c9757e67ae2bea641f3686d9de99d3d4666346e374bd51a5b4"
+      "testHash": "a5afefcd58f29f593f4605ecae8d10227748d1f4f89bf7e27d135c29204e9179"
     },
     "hunter-red-proof-field-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -177,7 +177,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "61f3ac262a7e6643d183a03c1ffd0e7ebebf3d58d8cbaacaf70427b43ac14e8e",
-      "testHash": "71db18fc8fc806c9757e67ae2bea641f3686d9de99d3d4666346e374bd51a5b4"
+      "testHash": "a5afefcd58f29f593f4605ecae8d10227748d1f4f89bf7e27d135c29204e9179"
     },
     "verifier-triage-field-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -188,7 +188,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "e6356f58a6e2d47ec64b32c1f6f7664d120a06d1b1d697a3dac8517b2c7b5ea5",
-      "testHash": "71db18fc8fc806c9757e67ae2bea641f3686d9de99d3d4666346e374bd51a5b4"
+      "testHash": "a5afefcd58f29f593f4605ecae8d10227748d1f4f89bf7e27d135c29204e9179"
     },
     "modular-suspicion-assert-delta": {
       "testFile": "tests/suspicion-map.test.mjs",
@@ -2390,7 +2390,7 @@
       ],
       "ancestors": [],
       "mutantHash": "84a6e752ad59e70217704ce6eb2912ff2cdb618e7ee8dad50347577a724753ad",
-      "testHash": "42551364741c0562038eda13f0d5f6cd31d1320b47609c909ed1391a86615c0e"
+      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
     },
     "native-verdict-marker-not-last-accepted": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2399,7 +2399,7 @@
       ],
       "ancestors": [],
       "mutantHash": "fbba8a5f8368b301aca5a4fd17782054e2f3a96f11cee5e3f26e5ee85303b4c6",
-      "testHash": "42551364741c0562038eda13f0d5f6cd31d1320b47609c909ed1391a86615c0e"
+      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
     },
     "native-verdict-aborted-reviewer-ignored": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2408,7 +2408,7 @@
       ],
       "ancestors": [],
       "mutantHash": "286b644bdfc3363faad10c76bffc2ae94a62a8859ee5c580ee97931b3bb420f8",
-      "testHash": "42551364741c0562038eda13f0d5f6cd31d1320b47609c909ed1391a86615c0e"
+      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
     },
     "native-verdict-yield-status-ignored": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2417,7 +2417,7 @@
       ],
       "ancestors": [],
       "mutantHash": "d4022cbeb5b998904dcc760d8ba6d5479007c9b390cc9dd361c65988fc84922f",
-      "testHash": "42551364741c0562038eda13f0d5f6cd31d1320b47609c909ed1391a86615c0e"
+      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
     },
     "native-verdict-scout-optional": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2426,7 +2426,7 @@
       ],
       "ancestors": [],
       "mutantHash": "ab13419a2a1829adaf4ca0016c0a42f16bc765dcfa98534c1943de2fffc5ca05",
-      "testHash": "42551364741c0562038eda13f0d5f6cd31d1320b47609c909ed1391a86615c0e"
+      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
     },
     "native-verdict-hunters-optional": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2435,7 +2435,7 @@
       ],
       "ancestors": [],
       "mutantHash": "5e632be74b97ba69b28e161e72f897517c998dd3dc1174531bad4bc6c27d0536",
-      "testHash": "42551364741c0562038eda13f0d5f6cd31d1320b47609c909ed1391a86615c0e"
+      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
     },
     "native-verdict-verifier-optional-full": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2444,7 +2444,7 @@
       ],
       "ancestors": [],
       "mutantHash": "8bd9d6305e5f9b4081f61320b2c32eadf16344bc093ad0f9c97ad9ae50cf7ee5",
-      "testHash": "42551364741c0562038eda13f0d5f6cd31d1320b47609c909ed1391a86615c0e"
+      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
     },
     "native-verdict-confirmed-finding-tolerated": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2453,16 +2453,7 @@
       ],
       "ancestors": [],
       "mutantHash": "03d7be91187255c8b28ab966af8d1448d1d0beacd72f5555b4dae71402f2d699",
-      "testHash": "42551364741c0562038eda13f0d5f6cd31d1320b47609c909ed1391a86615c0e"
-    },
-    "native-verdict-gap-harness-ignored": {
-      "testFile": "tests/native-verdict.test.mjs",
-      "tests": [
-        "Given a confirmed gap while the scout reports no test harness, When evaluated, Then the PASS stands"
-      ],
-      "ancestors": [],
-      "mutantHash": "9179a9bf4a1d061a0f75d95ee6b8402bb298c66f48b59b591a484ce8b5a13ab6",
-      "testHash": "42551364741c0562038eda13f0d5f6cd31d1320b47609c909ed1391a86615c0e"
+      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
     },
     "native-verdict-pass-ignores-reasons": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2471,7 +2462,7 @@
       ],
       "ancestors": [],
       "mutantHash": "f0b05122a9c0e0a589d3baf14094128a408a763200f9734996df0fab8ba7bd37",
-      "testHash": "42551364741c0562038eda13f0d5f6cd31d1320b47609c909ed1391a86615c0e"
+      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
     },
     "native-verdict-stage-aborted-counts": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2480,7 +2471,7 @@
       ],
       "ancestors": [],
       "mutantHash": "69415f6448cd2b504e24593ff2509d0662690b951ff034a6ab7a56cd7bf4fd0a",
-      "testHash": "42551364741c0562038eda13f0d5f6cd31d1320b47609c909ed1391a86615c0e"
+      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
     },
     "native-verdict-invalid-structure-counts": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2489,7 +2480,7 @@
       ],
       "ancestors": [],
       "mutantHash": "66f9b4ada25c354df0eb329720d77e0d86811e0f8e35da57b719051c920b5b2d",
-      "testHash": "42551364741c0562038eda13f0d5f6cd31d1320b47609c909ed1391a86615c0e"
+      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
     },
     "native-yield-plain-string-rejected": {
       "testFile": "tests/native-yield.test.mjs",
@@ -2507,7 +2498,7 @@
       ],
       "ancestors": [],
       "mutantHash": "de95df9b06c524aca43a874b9028fe253f5c750a5e6104801dd3d56bf4f03bd9",
-      "testHash": "4f400994a48403436310383b922aa29cc162bcda5b79d3deae37ac9faed221e1"
+      "testHash": "c7d7f1d2a7e781791742235da10c55c9b67ea277714232309ce8aef43c04f7ea"
     },
     "native-snapshot-vendored-not-exempt": {
       "testFile": "tests/native-snapshot.test.mjs",
@@ -2516,7 +2507,7 @@
       ],
       "ancestors": [],
       "mutantHash": "d8987314915806f13bf9588923c9f03ce7dd1fc00ef6f1f0dbe5fe63690cb8c7",
-      "testHash": "4f400994a48403436310383b922aa29cc162bcda5b79d3deae37ac9faed221e1"
+      "testHash": "c7d7f1d2a7e781791742235da10c55c9b67ea277714232309ce8aef43c04f7ea"
     },
     "native-snapshot-vendored-exempt-not-recorded": {
       "testFile": "tests/native-snapshot.test.mjs",
@@ -2525,7 +2516,7 @@
       ],
       "ancestors": [],
       "mutantHash": "f82815254e26bfca24a91152e947972914e2ec6d14b7a9af73459f4b0df4916a",
-      "testHash": "4f400994a48403436310383b922aa29cc162bcda5b79d3deae37ac9faed221e1"
+      "testHash": "c7d7f1d2a7e781791742235da10c55c9b67ea277714232309ce8aef43c04f7ea"
     },
     "native-snapshot-pathspec-exclusion-dropped": {
       "testFile": "tests/native-snapshot.test.mjs",
@@ -2534,7 +2525,7 @@
       ],
       "ancestors": [],
       "mutantHash": "d77a94da3ced353a047d2804923d7f90a468050c61bcec6198ac6932ca18b299",
-      "testHash": "4f400994a48403436310383b922aa29cc162bcda5b79d3deae37ac9faed221e1"
+      "testHash": "c7d7f1d2a7e781791742235da10c55c9b67ea277714232309ce8aef43c04f7ea"
     },
     "native-snapshot-empty-stage-exports": {
       "testFile": "tests/native-snapshot.test.mjs",
@@ -2543,7 +2534,7 @@
       ],
       "ancestors": [],
       "mutantHash": "202444d606af245c713da7c23c4a5040a10a907cdb382c7e9b0f064e3caac907",
-      "testHash": "4f400994a48403436310383b922aa29cc162bcda5b79d3deae37ac9faed221e1"
+      "testHash": "c7d7f1d2a7e781791742235da10c55c9b67ea277714232309ce8aef43c04f7ea"
     },
     "native-snapshot-diff-patch-emptied": {
       "testFile": "tests/native-snapshot.test.mjs",
@@ -2552,7 +2543,7 @@
       ],
       "ancestors": [],
       "mutantHash": "9a2dac26f772745a04804d6bc89430897d6e99fb36fdf6a7647bdec31a1eafb1",
-      "testHash": "4f400994a48403436310383b922aa29cc162bcda5b79d3deae37ac9faed221e1"
+      "testHash": "c7d7f1d2a7e781791742235da10c55c9b67ea277714232309ce8aef43c04f7ea"
     },
     "native-assignment-lanes-dropped": {
       "testFile": "tests/native-assignment.test.mjs",
@@ -2659,7 +2650,7 @@
       ],
       "ancestors": [],
       "mutantHash": "0c9740270235004aaceb9d10b62ea5b7fd70756791fe4761bbdf721c7c011b1f",
-      "testHash": "42551364741c0562038eda13f0d5f6cd31d1320b47609c909ed1391a86615c0e"
+      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
     },
     "native-yield-other-field-decoded": {
       "testFile": "tests/native-yield.test.mjs",
@@ -2704,7 +2695,7 @@
       ],
       "ancestors": [],
       "mutantHash": "012d5e67db111a0db36a17af1ccb0df32fa0e073849004c2b52d54d43734d022",
-      "testHash": "4f400994a48403436310383b922aa29cc162bcda5b79d3deae37ac9faed221e1"
+      "testHash": "c7d7f1d2a7e781791742235da10c55c9b67ea277714232309ce8aef43c04f7ea"
     },
     "native-assignment-profile-fixed": {
       "testFile": "tests/native-assignment.test.mjs",
@@ -2731,7 +2722,7 @@
       ],
       "ancestors": [],
       "mutantHash": "477cfb1613fdf60dada9265988fdc00fd6d52e338fc2ed1f92f09e2363ee20cb",
-      "testHash": "42551364741c0562038eda13f0d5f6cd31d1320b47609c909ed1391a86615c0e"
+      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
     },
     "commit-command-attached-value-letters-read": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -2743,6 +2734,69 @@
       ],
       "mutantHash": "c169093335c42c42aefdcd8438e8f0731587312c67ff57b9a870ea45ffdc5305",
       "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+    },
+    "native-verdict-gap-blocking-ignored": {
+      "testFile": "tests/native-verdict.test.mjs",
+      "tests": [
+        "Given a blocking gap in an executable file, When evaluated with the manifest, Then the PASS remains blocked"
+      ],
+      "ancestors": [],
+      "mutantHash": "74dd7ef3ac760e24e988580f0b31a53bd96c723273bedbf2efed280821dbe845",
+      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
+    },
+    "native-verdict-gap-advisory-blocks": {
+      "testFile": "tests/native-verdict.test.mjs",
+      "tests": [
+        "Given an advisory gap, When evaluated, Then it never blocks the PASS"
+      ],
+      "ancestors": [],
+      "mutantHash": "dab95724e963379eccd12e684cd1213f8e8e8c7d07c6cd1d44bfb9f54233f048",
+      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
+    },
+    "native-verdict-gap-impact-floor-ignored": {
+      "testFile": "tests/native-verdict.test.mjs",
+      "tests": [
+        "Given a blocking gap without a concrete impact, When evaluated, Then the impact floor keeps the PASS"
+      ],
+      "ancestors": [],
+      "mutantHash": "92f7a8ffabc5bc9d94f2fc7797dc81a54f644e6c840fb72833b7a08a19e1fdcf",
+      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
+    },
+    "native-verdict-gap-test-class-ignored": {
+      "testFile": "tests/native-verdict.test.mjs",
+      "tests": [
+        "Given a blocking gap that declares its own test file class, When evaluated, Then the test-class exemption keeps the PASS"
+      ],
+      "ancestors": [],
+      "mutantHash": "fe400140e302f36ddc1ba47cdcbdaef92c6459d0f0bb2150980943bbcc66f7b6",
+      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
+    },
+    "native-verdict-gap-item-harness-ignored": {
+      "testFile": "tests/native-verdict.test.mjs",
+      "tests": [
+        "Given a blocking gap whose own per-entry harness is absent, When evaluated, Then it never blocks the PASS"
+      ],
+      "ancestors": [],
+      "mutantHash": "f5c10276c9bdfaa82db7dce98702fbe6ae5213f871792102fee20efe72f5b394",
+      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
+    },
+    "native-verdict-gap-global-harness-ignored": {
+      "testFile": "tests/native-verdict.test.mjs",
+      "tests": [
+        "Given a confirmed gap while the scout reports no test harness, When evaluated, Then the PASS stands"
+      ],
+      "ancestors": [],
+      "mutantHash": "7bcd26ba6b102cbbfffd3e587ea5485cdc1a162f2fbfee1925dd64c8f8366257",
+      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
+    },
+    "native-snapshot-file-classes-dropped": {
+      "testFile": "tests/native-snapshot.test.mjs",
+      "tests": [
+        "Given a staged test file, When the snapshot is materialized, Then the manifest exposes its test class for the verdict"
+      ],
+      "ancestors": [],
+      "mutantHash": "0e9437f63fe418fb07835da236e7249457d6aff8e97c0caaf3f21dceeae35827",
+      "testHash": "c7d7f1d2a7e781791742235da10c55c9b67ea277714232309ce8aef43c04f7ea"
     }
   }
 }

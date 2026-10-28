@@ -5,7 +5,7 @@ const roleNames = ['reviewer-kit', 'review-context-scout', 'review-risk-hunter',
 const state = { externalRequests: 0, calls: [], gates: [], outputs: [] };
 const scenario = process.env.REVIEW_SDK_SCENARIO ?? 'clean';
 const candidate = { candidate_id: 'correctness-1', lane: 'correctness', priority: 'P1', title: 'Fixture defect', file_path: 'src/a.mjs', line_start: 1, line_end: 1, observed_behavior: 'incorrect', expected_behavior: 'correct', trigger_scenario: 'fixture input', impact: 'fixture loss', red_proof: 'fixture red control', evidence: ['src/a.mjs:1'] };
-const gap = { coverage_id: 'coverage-1', file_path: 'src/a.mjs', line_start: 1, line_end: 1, behavior: 'fixture changed behavior', required_tests: [{ kind: 'edge', scenario: 'fixture edge', mutant: '' }, { kind: 'mutation', scenario: 'fixture mutation', mutant: 'fixture changed lines' }] };
+const gap = { coverage_id: 'coverage-1', file_path: 'src/a.mjs', line_start: 1, line_end: 1, behavior: 'fixture changed behavior', severity: 'blocking', impact: 'fixture reachable impact', file_class: 'executable', test_harness: 'present', required_tests: [{ kind: 'edge', scenario: 'fixture edge', mutant: '' }, { kind: 'mutation', scenario: 'fixture mutation', mutant: 'fixture changed lines' }] };
 const { red_proof, ...finding } = candidate;
 const manifest = JSON.parse(readFileSync(process.env.OMP_REVIEW_KIT_BATCH_MANIFEST, 'utf8'));
 globalThis.fetch = async () => { state.externalRequests++; throw new Error('OFFLINE_NETWORK_DENIED'); };

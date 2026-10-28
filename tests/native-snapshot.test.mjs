@@ -51,6 +51,7 @@ test('Given a staged source change, When the snapshot is materialized, Then file
     assert.equal(snapshot.profile, 'full');
     assert.deepEqual(snapshot.lanes, ['correctness']);
     assert.deepEqual(snapshot.changedPaths, ['greet.mjs']);
+    assert.deepEqual(snapshot.fileClasses, [{ path: 'greet.mjs', fileClass: 'executable' }]);
     assert.equal(
       (await readFile(path.join(snapshot.dir, 'greet.mjs'))).equals(git(repo, ['show', ':greet.mjs'])),
       true,
@@ -85,6 +86,25 @@ test('Given only documentation is staged, When the snapshot is materialized, The
     const snapshot = await materializeStagedSnapshot({ repo, parentDir: parent, env: {} });
     assert.equal(snapshot.profile, 'spec-docs');
     assert.deepEqual(snapshot.lanes, ['content-risk']);
+    await removeSnapshot(snapshot.dir);
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test('Given a staged test file, When the snapshot is materialized, Then the manifest exposes its test class for the verdict', async () => {
+  const repo = await newRepo();
+  const parent = await mkdtemp(path.join(tmpdir(), 'snapshot-test-parent-'));
+  try {
+    await mkdir(path.join(repo, 'tests'));
+    await writeFile(path.join(repo, 'tests', 'greet.test.mjs'), 'export const testOnly = 1;\n');
+    git(repo, ['add', 'tests/greet.test.mjs']);
+    const snapshot = await materializeStagedSnapshot({ repo, parentDir: parent, env: {} });
+    assert.equal(snapshot.profile, 'full');
+    assert.deepEqual(snapshot.fileClasses, [{ path: 'tests/greet.test.mjs', fileClass: 'test' }]);
+    const classes = JSON.parse(await readFile(path.join(snapshot.dir, '.review', 'file-classes.json'), 'utf8'));
+    assert.deepEqual(classes.files, snapshot.fileClasses);
     await removeSnapshot(snapshot.dir);
   } finally {
     await rm(repo, { recursive: true, force: true });

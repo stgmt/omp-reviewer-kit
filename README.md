@@ -43,7 +43,9 @@ Staged Diff (git diff --cached --binary --no-ext-diff --)
   - Ends the report with the verdict marker.
 ```
 
-The hook lets the commit proceed only when the native host exits 0 and prints `review: PASS`. The reviewer's report must also end with exactly one solitary `REVIEW_RESULT=PASS` line. Any confirmed finding, a confirmed coverage gap when the scout reports a runnable test harness, a missing or failed stage, an aborted task, a malformed marker, or an infrastructure error blocks the commit (exit 1). The review has no wall-clock cap.
+The hook lets the commit proceed only when the native host exits 0 and prints `review: PASS`. The reviewer's report must also end with exactly one solitary `REVIEW_RESULT=PASS` line. Any confirmed finding, a blocking coverage gap when the scout reports a runnable test harness, a missing or failed stage, an aborted task, a malformed marker, or an infrastructure error blocks the commit (exit 1). The review has no wall-clock cap.
+
+A coverage gap blocks only when it carries `severity: "blocking"` with a concrete reachable `impact`, its file class is not `test`, its per-entry `test_harness` is `present`, and the scout reports a runnable harness. Advisory gaps, `test`-class files, harness-mismatched items and impact-free gaps are recorded under `### Notes` and never block. The verdict applies this filter deterministically from the staged file-class manifest, not only from the prompt.
 
 ### Review Profiles & Risk Lanes
 

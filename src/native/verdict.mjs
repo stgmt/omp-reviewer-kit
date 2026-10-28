@@ -33,15 +33,55 @@ export function stageCompleted(stage) {
 }
 
 /**
+ * Whether one verifier-confirmed coverage gap may block the commit. The gate never demands a
+ * test for code that its own file class exempts, for a file class no runnable harness can
+ * execute, or for a gap whose impact was not proven. A gap that omits the new fields keeps the
+ * legacy fail-closed behavior: an omitted severity is treated as blocking.
+ *
+ * @param {object} gap
+ * @param {{ harnessAbsent?: boolean, fileClasses?: Map<string, string> }} [context]
+ * @returns {boolean}
+ */
+export function coverageGapBlocks(gap, { harnessAbsent = false, fileClasses = new Map() } = {}) {
+  if (!gap || typeof gap !== 'object') return true;
+  if (harnessAbsent) return false;
+  if (gap.severity === 'advisory') return false;
+  if (gap.test_harness === 'absent') return false;
+  const fromManifest = fileClasses.get(normalizePath(gap.file_path));
+  const declaredClass = fromManifest ?? (typeof gap.file_class === 'string' ? gap.file_class : undefined);
+  if (declaredClass === 'test') return false;
+  if (gap.severity === 'blocking') return hasText(gap.impact);
+  return true;
+}
+
+function normalizePath(filePath) {
+  return typeof filePath === 'string' ? filePath.replace(/\\/g, '/') : '';
+}
+
+function hasText(value) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function classIndex(fileClasses) {
+  const index = new Map();
+  for (const entry of Array.isArray(fileClasses) ? fileClasses : []) {
+    if (!entry || typeof entry.path !== 'string') continue;
+    index.set(normalizePath(entry.path), entry.fileClass);
+  }
+  return index;
+}
+
+/**
  * @param {{
  *   reviewer: { exitCode: number|null, aborted: boolean, yieldStatus: string|null, text: string } | undefined,
  *   stages: Array<{ agent: string|null, exitCode: number|null, aborted: boolean, structuredStatus: string|null, data: object|null }>,
  *   profile: 'full'|'spec-docs',
  *   lanes: string[],
+ *   fileClasses?: Array<{ path: string, fileClass: string }>,
  * }} input
  * @returns {{ pass: boolean, verdict: 'PASS'|'BLOCK', reasons: string[] }}
  */
-export function evaluateReview({ reviewer, stages, profile, lanes }) {
+export function evaluateReview({ reviewer, stages, profile, lanes, fileClasses = [] }) {
   const reasons = [];
   if (!reviewer) {
     reasons.push('reviewer task result missing');
@@ -76,9 +116,14 @@ export function evaluateReview({ reviewer, stages, profile, lanes }) {
     const confirmedFindings = verifiers.reduce((count, stage) => count + listLength(stage.data?.confirmed_findings), 0);
     if (confirmedFindings > 0) reasons.push(`verifier confirmed ${confirmedFindings} finding(s) but the reviewer passed`);
     const testHarness = scouts.map(stage => stage.data?.test_harness);
-    const confirmedGaps = verifiers.reduce((count, stage) => count + listLength(stage.data?.confirmed_coverage_gaps), 0);
-    if (confirmedGaps > 0 && testHarness.includes('present')) {
-      reasons.push(`verifier confirmed ${confirmedGaps} coverage gap(s) with a test harness but the reviewer passed`);
+    const harnessAbsent = !testHarness.includes('present');
+    const classes = classIndex(fileClasses);
+    const confirmedGaps = verifiers.flatMap(stage => (Array.isArray(stage.data?.confirmed_coverage_gaps)
+      ? stage.data.confirmed_coverage_gaps
+      : []));
+    const blockingGaps = confirmedGaps.filter(gap => coverageGapBlocks(gap, { harnessAbsent, fileClasses: classes }));
+    if (blockingGaps.length > 0) {
+      reasons.push(`verifier confirmed ${blockingGaps.length} blocking coverage gap(s) with a test harness but the reviewer passed`);
     }
   }
 
