@@ -28,7 +28,7 @@ description: Use when a consumer repository's agent or the user reports a proble
 
 | Что | Где | Что смотреть |
 |---|---|---|
-| Отчёт прогона | `~/Documents/omp-reviewer-kit/<имя репо>-<hash12 абсолютного пути>/<UTC-время сохранения>-<hash12 диффа>.md`; корень меняет `OMP_REVIEW_KIT_REPORTS_DIR` | Первая строка `# reviewer-kit review: PASS` или `BLOCK`; `Diff SHA-256` (полный хэш); `Reviewer role/model (OMP resolved)`; `Stage evidence`; `Verdict reasons`; текст ревьюера |
+| Отчёт прогона | `~/Documents/omp-reviewer-kit/<имя репо>-<hash12 абсолютного пути>/<UTC-время сохранения>-<hash12 диффа>.md`; корень меняет `OMP_REVIEW_KIT_REPORTS_DIR` | Первая строка `# reviewer-kit review: PASS` или `BLOCK`; `Diff SHA-256` (полный хэш); `Reviewer role/model (OMP resolved)`; `Reviewer fallback` (`applied`/`not applied`, запрошенный селектор), `Reviewer fallback candidates` (сколько кандидатов было в цепочке), `Reviewer provider error` (чем закончилась задача без переключения); `Stage evidence`; `Verdict reasons`; текст ревьюера |
 | Строки хоста (stderr) | Терминал коммита. Кит их не сохраняет. Попадают ли они в вывод инструмента сессии OMP, если коммит шёл оттуда, не проверено | Раздел 2 |
 | Снимок индекса | `%TEMP%/staged-<случайный>/.review/` (`diff.patch`, `changed-files.txt`, `file-classes.json`) | Хост удаляет его в `finally` (`src/native/native-review.mjs`). Снимок, оставшийся после конца прогона, означает, что хост убит сигналом или упал до `finally` |
 | Сессия ревьюера | `~/.omp/agent/sessions/<папка по пути репо>/<UTC-время>_<uuid>.jsonl`; в заголовке `session` имя `reviewer-kit native review` | Корень прогона |
@@ -97,8 +97,8 @@ description: Use when a consumer repository's agent or the user reports a proble
 
 Что реально выбрал OMP — из фактов прогона, не из UI и не из файла:
 
-- stderr: `review: reviewer role=... model=...` и `review: stage ...`;
-- отчёт: `Reviewer role/model (OMP resolved)` и `Stage evidence`;
+- stderr: `review: reviewer role=... model=...`, `review: reviewer fallback=applied|not-applied candidates=...` и `review: stage ...`;
+- отчёт: `Reviewer role/model (OMP resolved)`, `Reviewer fallback`, `Reviewer fallback candidates`, при отказе без переключения — `Reviewer provider error`, и `Stage evidence`;
 - транскрипты: записи `model_change` с полями `model` и `resolvedModelIsFallback` (`true`: модель выбрана маршрутизацией retry fallback, `coding-agent/src/registry/agent-registry.ts`).
 
 Экран «Model roles» не доказательство. Доказательство — поля `model` и `resolvedModelIsFallback` в транскрипте именно этого прогона.

@@ -126,6 +126,7 @@ test('Given the reviewer passes with every stage completed, When the review runs
     assert.equal(result.verdict.pass, true);
     assert.deepEqual(result.verdict.reasons, []);
     assert.deepEqual(result.provenance, { role: 'task', model: 'm' });
+    assert.deepEqual(result.fallback, { applied: false, requested: null, chainLength: null, error: null });
     assert.deepEqual(result.stages, [
       { agent: 'review-context-scout', exitCode: 0, aborted: false, structuredStatus: 'valid', role: 'task', model: 'm' },
       { agent: 'review-risk-hunter', exitCode: 0, aborted: false, structuredStatus: 'valid', role: 'task', model: 'm' },

@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { STRUCTURAL_OVERLAY, describeUpdate, loadOmpEngine, provenanceOf, reviewerFromRun, runReviewerTask } from '../src/native/task-engine.mjs';
+import { STRUCTURAL_OVERLAY, describeUpdate, fallbackOf, loadOmpEngine, provenanceOf, reviewerFromRun, reviewerTranscript, runReviewerTask } from '../src/native/task-engine.mjs';
 
 test('Given the library cannot load one of its modules, When the engine is loaded, Then loading rejects and no partial engine is returned', async () => {
   const importer = specifier => (specifier.endsWith('/config/settings')
@@ -44,6 +44,32 @@ test('Given a reviewer with a resolved model and no role, When its provenance is
 
 test('Given no reviewer, When its provenance is read, Then both fields are null', () => {
   assert.deepEqual(provenanceOf(undefined), { role: null, model: null });
+});
+
+test('Given OMP moved the reviewer off its requested model, When its fallback is read, Then the move and the requested selector are reported', () => {
+  assert.deepEqual(fallbackOf({ resolvedModelIsFallback: true, modelOverride: ['anthropic/claude-haiku-5-5:medium'] }), {
+    applied: true,
+    requested: 'anthropic/claude-haiku-5-5:medium',
+  });
+});
+
+test('Given OMP reports a string override and no fallback, When its fallback is read, Then the request is kept and the move is false', () => {
+  assert.deepEqual(fallbackOf({ modelOverride: 'openai-codex/gpt-6-luna' }), { applied: false, requested: 'openai-codex/gpt-6-luna' });
+});
+
+test('Given no reviewer or no override, When its fallback is read, Then nothing is claimed', () => {
+  assert.deepEqual(fallbackOf(undefined), { applied: false, requested: null });
+  assert.deepEqual(fallbackOf({ resolvedModelIsFallback: 'true' }), { applied: false, requested: null });
+});
+
+test('Given a reviewer result with a Markdown output path, When its transcript is derived, Then the sibling JSONL log is named', () => {
+  assert.equal(reviewerTranscript({ outputPath: 'C:\\sessions\\Review\\Review.md' }), 'C:\\sessions\\Review\\Review.jsonl');
+});
+
+test('Given a reviewer result without a Markdown output path, When its transcript is derived, Then there is none', () => {
+  assert.equal(reviewerTranscript({ outputPath: 'C:\\sessions\\Review\\review.txt' }), null);
+  assert.equal(reviewerTranscript({}), null);
+  assert.equal(reviewerTranscript(undefined), null);
 });
 
 test('Given the library loads, When the engine is loaded, Then each export comes from its own module and all seven modules are requested', async () => {

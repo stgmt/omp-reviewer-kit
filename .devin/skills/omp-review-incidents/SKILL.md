@@ -102,6 +102,7 @@ JSON lines. Entry `type` values seen in native reviews:
 ## Diagnosing wrong-model runs
 
 - Compare `review: reviewer role=... model=...` and the report's `Reviewer role/model (OMP resolved)` with the `model_change` entries in `Review.jsonl` and the stage transcripts.
+- The report states the transition itself: `Reviewer fallback: applied|not applied` with the requested selector, `Reviewer fallback candidates: <n>` (the chain OMP installed for the reviewer), and `Reviewer provider error: <status …>` when no model was applied. Read these before opening the transcript; they are derived from the same `session_init` and error records.
 - `resolvedModelIsFallback: true` means a fallback happened. Read the failing message's `errorMessage` just before the change.
 - Owner config: `~/.omp/agent/config.yml` (`modelRoles`, `retry.fallbackChains`). Check the keys against OMP's settings source, not memory.
 - `agentModelOverrides` exists in OMP 18.12.5 (`coding-agent/src/task/settings.ts`, in the pinned package's source). If a stage ran on a model its role does not name, check that key. How it is applied is not verified.

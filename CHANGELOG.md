@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.1] - 2026-10-29
+
+### Added
+- The review report and the hook log name the reviewer's fallback transition: `Reviewer fallback: applied|not applied (requested <selector>)`, `Reviewer fallback candidates: <n>` for the chain OMP installed on the reviewer, and `Reviewer provider error: <status …>` when the task ended without a model switch. The host prints the same state as `review: reviewer fallback=… candidates=…`. The evidence is read from OMP's own `session_init` and assistant error records in the reviewer transcript (`src/native/fallback-evidence.mjs`): the kit reads no owner configuration, names no model, and the verdict is unchanged.
+- Why: a blocked review used to say only `reviewer task exit 1`, so "the chain had no usable candidate" and "no fallback was tried at all" were indistinguishable without opening the transcript by hand (`audit-reports/review-fallback-403-2026-10-29.md`).
+
+### Verified
+- `npm test` (clean export of the staged index): 465 tests, 455 pass, 0 fail, 10 skipped.
+- `npm run check` (clean export): layout ok, 66 files.
+- The local mutation gate was not re-run for this release at the owner's request; CI runs the curated catalog on Linux. The changed code carries no curated mutant, and the two mutants whose `original` strings live in `native-host.mjs` still match exactly once.
+
 ## [0.23.0] - 2026-10-28
 
 ### Changed

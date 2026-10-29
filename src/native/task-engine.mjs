@@ -158,6 +158,32 @@ export function provenanceOf(reviewer) {
   return { role: reviewer?.modelRole ?? null, model: reviewer?.resolvedModel ?? null };
 }
 
+/**
+ * Whether OMP moved the reviewer off the model it requested. The requested selector is the first
+ * entry of OMP's own `modelOverride`; the applied one is already in the provenance. Observability
+ * only: the verdict never branches on it.
+ *
+ * @param {object|undefined} reviewer
+ * @returns {{ applied: boolean, requested: string|null }}
+ */
+export function fallbackOf(reviewer) {
+  const override = reviewer?.modelOverride;
+  const requested = Array.isArray(override) ? (override[0] ?? null) : (typeof override === 'string' ? override : null);
+  return { applied: reviewer?.resolvedModelIsFallback === true, requested };
+}
+
+/**
+ * The reviewer's own OMP session log, derived from the `outputPath` OMP reports on the result. Null
+ * when OMP reports no Markdown path: the evidence is then unknown rather than absent.
+ *
+ * @param {object|undefined} reviewer
+ * @returns {string|null}
+ */
+export function reviewerTranscript(reviewer) {
+  const outputPath = typeof reviewer?.outputPath === 'string' ? reviewer.outputPath : '';
+  return /\.md$/i.test(outputPath) ? outputPath.replace(/\.md$/i, '.jsonl') : null;
+}
+
 export function describeUpdate(update) {
   const results = update?.details?.results ?? [];
   const running = results.filter(result => result.exitCode === undefined).length;
