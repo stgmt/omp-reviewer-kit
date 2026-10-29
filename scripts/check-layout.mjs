@@ -29,6 +29,7 @@ const required = [
   'src/native/assignment.mjs',
   'src/native/verdict.mjs',
   'src/native/task-engine.mjs',
+  'src/native/fallback-evidence.mjs',
   'src/domain/file-class.mjs',
   'src/domain/diff-identity.mjs',
   'src/domain/prompt-token.mjs',

@@ -37,8 +37,9 @@ export async function main(argv, { env = process.env, stderr = process.stderr, s
       return 0;
     }
 
-    const { verdict, provenance, stages } = result;
+    const { verdict, provenance, stages, fallback } = result;
     log(`review: reviewer role=${provenance.role ?? 'none'} model=${provenance.model ?? 'none'}`);
+    log(`review: reviewer fallback=${fallback?.applied ? 'applied' : 'not-applied'} candidates=${fallback?.chainLength ?? 'unknown'}`);
     for (const stage of stages) {
       log(`review: stage ${stage.agent} role=${stage.role ?? 'none'} model=${stage.model ?? 'none'} exit=${stage.exitCode} structured=${stage.structuredStatus ?? 'none'}`);
     }
@@ -71,6 +72,7 @@ async function saveReport(repo, result, env) {
     `- Diff SHA-256: ${result.diffHash}`,
     `- Profile: ${result.profile}; lanes: ${result.lanes.join(', ')}`,
     `- Reviewer role/model (OMP resolved): ${result.provenance.role ?? 'none'} / ${result.provenance.model ?? 'none'}`,
+    ...fallbackLines(result.fallback),
     `- Staged paths: ${result.changedPaths.length}`,
     '',
     '## Stage evidence',
@@ -88,6 +90,25 @@ async function saveReport(repo, result, env) {
   ];
   await writeFile(file, lines.join('\n'), 'utf8');
   return file;
+}
+
+/**
+ * Fallback evidence for the report header: whether OMP moved the reviewer off its requested model,
+ * how many candidates the reviewer's chain had, and the provider error that ended the task when no
+ * model was applied. Diagnostics only; the verdict is decided before these lines are written.
+ *
+ * @param {{ applied?: boolean, requested?: string|null, chainLength?: number|null, error?: string|null }|undefined} fallback
+ * @returns {string[]}
+ */
+function fallbackLines(fallback) {
+  if (!fallback) return ['- Reviewer fallback: unknown'];
+  const requested = fallback.requested ? ` (requested ${fallback.requested})` : '';
+  const lines = [
+    `- Reviewer fallback: ${fallback.applied ? 'applied' : 'not applied'}${requested}`,
+    `- Reviewer fallback candidates: ${fallback.chainLength ?? 'unknown'}`,
+  ];
+  if (fallback.error) lines.push(`- Reviewer provider error: ${fallback.error}`);
+  return lines;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
