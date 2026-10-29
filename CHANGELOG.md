@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Verified
 - `npm test` (clean export of the staged index): 465 tests, 455 pass, 0 fail, 10 skipped.
 - `npm run check` (clean export): layout ok, 66 files.
-- The local mutation gate was not re-run for this release at the owner's request; CI runs the curated catalog on Linux. The changed code carries no curated mutant, and the two mutants whose `original` strings live in `native-host.mjs` still match exactly once.
+- `node scripts/run-mutation-tests.mjs --calibrate-stale` (8 workers): the version assertion in `tests/plugin-layout.test.mjs` is the deciding test of eight curated mutants, so their selectors were stale; each was re-proved with a focused run, then the full catalog killed 292/292, exit 0, 761.0 s.
 
 ## [0.23.0] - 2026-10-28
 
