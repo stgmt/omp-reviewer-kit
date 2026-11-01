@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -125,6 +125,24 @@ test('Given a repository filter, When the command lists runs, Then only that rep
     const io = capture();
     assert.equal(await main(['--repo', repo], { env, out: io.out, err: io.err }), 0);
     assert.deepEqual(io.lines.map(line => line.split(' ')[0]), ['mine']);
+  });
+});
+
+test('Given one checkout spelled another way, When the command filters by it, Then the same runs are shown', async () => {
+  await withDir(async dir => {
+    // The checkout is a folder that really exists, so its identity is the real path: a junction and
+    // another letter case are the same repository and must reach the same record.
+    const checkout = path.join(dir, 'checkout');
+    await mkdir(checkout, { recursive: true });
+    const runsRoot = path.join(dir, 'runs');
+    await writeRunRecord(record({ runId: 'aliased', repoRoot: checkout }), { dir: runsRoot });
+
+    const spellings = [checkout, ...(process.platform === 'win32' ? [checkout.toUpperCase()] : [])];
+    for (const spelling of spellings) {
+      const io = capture();
+      assert.equal(await main(['--repo', spelling], { env: { OMP_REVIEW_KIT_RUNS_DIR: runsRoot }, out: io.out, err: io.err }), 0, spelling);
+      assert.deepEqual(io.lines.map(line => line.split(' ')[0]), ['aliased'], spelling);
+    }
   });
 });
 

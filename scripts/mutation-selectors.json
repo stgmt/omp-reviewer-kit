@@ -55,7 +55,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "3b8b9f13183f712947d9958a05016511c9185fc239e9f7c3af718470e0abef6b",
-      "testHash": "9fdddd4f49e14f639469291e9be43debf3d6aea7c01959b468033f905b48d690"
+      "testHash": "c6a6a05549a3a365baf2c0f2638ba6f2b3f96a2dea7993cd79d3f1768aec7dab"
     },
     "anti-parasitic-both-to-either": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -66,7 +66,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "b8607c1dd6f7ba93c3e0b7431e95eb44980c25c7b9974dd0fc887acbf309bb74",
-      "testHash": "9fdddd4f49e14f639469291e9be43debf3d6aea7c01959b468033f905b48d690"
+      "testHash": "c6a6a05549a3a365baf2c0f2638ba6f2b3f96a2dea7993cd79d3f1768aec7dab"
     },
     "anti-parasitic-port-protection-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -77,7 +77,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "7cb2ae5cc876247bae2a345f17644a022a04d18c3ed82d839556f279b8e7e2e7",
-      "testHash": "9fdddd4f49e14f639469291e9be43debf3d6aea7c01959b468033f905b48d690"
+      "testHash": "c6a6a05549a3a365baf2c0f2638ba6f2b3f96a2dea7993cd79d3f1768aec7dab"
     },
     "multi-stage-snapshot-boundary-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -88,7 +88,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "db7a8493b32121111624ef1add91a1b21b8c908d6e5da232df1a148e0af79373",
-      "testHash": "9fdddd4f49e14f639469291e9be43debf3d6aea7c01959b468033f905b48d690"
+      "testHash": "c6a6a05549a3a365baf2c0f2638ba6f2b3f96a2dea7993cd79d3f1768aec7dab"
     },
     "multi-stage-yagni-boundary-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -99,7 +99,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "465a5de25c5a83dda3e244302a6b7eab09c0169bb39c82b5688b001fb8d5560c",
-      "testHash": "9fdddd4f49e14f639469291e9be43debf3d6aea7c01959b468033f905b48d690"
+      "testHash": "c6a6a05549a3a365baf2c0f2638ba6f2b3f96a2dea7993cd79d3f1768aec7dab"
     },
     "sync-hook-newer-overwritten": {
       "testFile": "tests/sync-targets.test.mjs",
@@ -166,7 +166,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "ec31109e99d1fdb90e4b481cab9c38734f3857a530dd4a68f4327ef171a166d5",
-      "testHash": "9fdddd4f49e14f639469291e9be43debf3d6aea7c01959b468033f905b48d690"
+      "testHash": "c6a6a05549a3a365baf2c0f2638ba6f2b3f96a2dea7993cd79d3f1768aec7dab"
     },
     "hunter-red-proof-field-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -177,7 +177,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "61f3ac262a7e6643d183a03c1ffd0e7ebebf3d58d8cbaacaf70427b43ac14e8e",
-      "testHash": "9fdddd4f49e14f639469291e9be43debf3d6aea7c01959b468033f905b48d690"
+      "testHash": "c6a6a05549a3a365baf2c0f2638ba6f2b3f96a2dea7993cd79d3f1768aec7dab"
     },
     "verifier-triage-field-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -188,7 +188,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "e6356f58a6e2d47ec64b32c1f6f7664d120a06d1b1d697a3dac8517b2c7b5ea5",
-      "testHash": "9fdddd4f49e14f639469291e9be43debf3d6aea7c01959b468033f905b48d690"
+      "testHash": "c6a6a05549a3a365baf2c0f2638ba6f2b3f96a2dea7993cd79d3f1768aec7dab"
     },
     "modular-suspicion-assert-delta": {
       "testFile": "tests/suspicion-map.test.mjs",
@@ -985,7 +985,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "b47344754a1a0a7c74ac2b46bda84a0b9771e016d1166b29ffa4afedb2a0a194",
-      "testHash": "846a5c392670522f084d5f5da5e0796f9fe4ad7324a1c58b4a59cf12a9522532"
+      "testHash": "a26101ae9b06330086d0bd2a7030f2e0bede9658bdaf5c4bff68c268ea9acd1f"
     },
     "setup-refusal-silent": {
       "testFile": "tests/extension.test.mjs",
@@ -996,7 +996,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "a03c75fc2613e2c6aa1b13a81c9c1f4ea878624b7bd84c7e77668dc9b1dbe6d0",
-      "testHash": "846a5c392670522f084d5f5da5e0796f9fe4ad7324a1c58b4a59cf12a9522532"
+      "testHash": "a26101ae9b06330086d0bd2a7030f2e0bede9658bdaf5c4bff68c268ea9acd1f"
     },
     "doctor-counts-worker-checkouts": {
       "testFile": "tests/target-heal.test.mjs",
@@ -1016,7 +1016,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "f85b0436d69f418fcc546aadf8b0841023deba4cabca660a20f42908d058b621",
-      "testHash": "846a5c392670522f084d5f5da5e0796f9fe4ad7324a1c58b4a59cf12a9522532"
+      "testHash": "a26101ae9b06330086d0bd2a7030f2e0bede9658bdaf5c4bff68c268ea9acd1f"
     },
     "heal-prunes-skipped-before-policy": {
       "testFile": "tests/target-heal.test.mjs",
@@ -1279,7 +1279,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "43261f08e7d953188eff77f51ecfa8e5a8a4a9a4683aead4d9e92de9fbfd2741",
-      "testHash": "846a5c392670522f084d5f5da5e0796f9fe4ad7324a1c58b4a59cf12a9522532"
+      "testHash": "a26101ae9b06330086d0bd2a7030f2e0bede9658bdaf5c4bff68c268ea9acd1f"
     },
     "status-report-line-unconditional": {
       "testFile": "tests/extension.test.mjs",
@@ -1290,7 +1290,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "f2dfc705cacb4b1bc75e598ea19a5db94d5ff07031ebb461668e849fc60b36ff",
-      "testHash": "846a5c392670522f084d5f5da5e0796f9fe4ad7324a1c58b4a59cf12a9522532"
+      "testHash": "a26101ae9b06330086d0bd2a7030f2e0bede9658bdaf5c4bff68c268ea9acd1f"
     },
     "status-report-line-before-verdict": {
       "testFile": "tests/extension.test.mjs",
@@ -1301,7 +1301,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "f1ca5f8f24b75bf4fa7ffc5cef3c5f6a1ac3cd1c849ad99e7920849a13ce5e35",
-      "testHash": "846a5c392670522f084d5f5da5e0796f9fe4ad7324a1c58b4a59cf12a9522532"
+      "testHash": "a26101ae9b06330086d0bd2a7030f2e0bede9658bdaf5c4bff68c268ea9acd1f"
     },
     "run-tests-reports-dir-left-to-user": {
       "testFile": "tests/run-tests-wrapper.test.mjs",
@@ -2563,7 +2563,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "48c31b322c048746218b51448476511b406d7991e37cb69eb0cd8d6b9e03a7a0",
-      "testHash": "846a5c392670522f084d5f5da5e0796f9fe4ad7324a1c58b4a59cf12a9522532"
+      "testHash": "a26101ae9b06330086d0bd2a7030f2e0bede9658bdaf5c4bff68c268ea9acd1f"
     },
     "native-extension-skipped-status-ignored": {
       "testFile": "tests/extension.test.mjs",
@@ -2574,7 +2574,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "ac9e8e077eaf80c0acdfd31f29b9a8fd3784c42b20130333c4714ce2d5f2edf4",
-      "testHash": "846a5c392670522f084d5f5da5e0796f9fe4ad7324a1c58b4a59cf12a9522532"
+      "testHash": "a26101ae9b06330086d0bd2a7030f2e0bede9658bdaf5c4bff68c268ea9acd1f"
     },
     "native-extension-guard-ignores-commit": {
       "testFile": "tests/extension.test.mjs",
@@ -2585,7 +2585,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "e646ce7d938fef05440f6ce58087177db73dc34b91fd87d69c1cdc4826af5ad1",
-      "testHash": "846a5c392670522f084d5f5da5e0796f9fe4ad7324a1c58b4a59cf12a9522532"
+      "testHash": "a26101ae9b06330086d0bd2a7030f2e0bede9658bdaf5c4bff68c268ea9acd1f"
     },
     "native-launcher-bun-probe-ignored": {
       "testFile": "tests/native-launcher.test.mjs",
@@ -2769,7 +2769,7 @@
       ],
       "ancestors": [],
       "mutantHash": "7440241873cd275980e56468d4249de125a9bc02a3f8047b1c96c93173e96e94",
-      "testHash": "5b773f0a1e81f54a9d24429805cece91f151e5c6814492ef93520300f167b9e2"
+      "testHash": "e60683c0871e8336d912e964ffed923201af596ddffe2071cff400177dc76383"
     },
     "run-record-eperm-means-dead": {
       "testFile": "tests/review-run-store.test.mjs",
@@ -2778,7 +2778,7 @@
       ],
       "ancestors": [],
       "mutantHash": "ff1517993c1a3b29758f106c957a2195f2082f4ef987a164f17ed9cdcb41bc47",
-      "testHash": "5b773f0a1e81f54a9d24429805cece91f151e5c6814492ef93520300f167b9e2"
+      "testHash": "e60683c0871e8336d912e964ffed923201af596ddffe2071cff400177dc76383"
     },
     "run-record-failure-recorded-passed": {
       "testFile": "tests/review-telemetry.test.mjs",
@@ -2805,7 +2805,7 @@
       ],
       "ancestors": [],
       "mutantHash": "c4c89c8b2c64afbecdaa4329691d1a9ba955fd82b142d480f0d0fa0c780f5867",
-      "testHash": "5b773f0a1e81f54a9d24429805cece91f151e5c6814492ef93520300f167b9e2"
+      "testHash": "e60683c0871e8336d912e964ffed923201af596ddffe2071cff400177dc76383"
     },
     "maintainability-block-ignores-stated-cost": {
       "testFile": "tests/maintainability-verdict.test.mjs",

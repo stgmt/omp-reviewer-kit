@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.24.0] - 2026-11-01
 
 ### Added
 - **Run records and live stage progress.** Every review now writes one machine-readable record per run outside every repository (`<home>/.omp/review-kit-runs/<runId>.json`, `OMP_REVIEW_KIT_RUNS_DIR` overrides it): wall-clock duration, the snapshot/native-task/verdict/report phases, the settled verdict, and one entry per stage with its duration, tokens, requests, resolved model and the counts of what it reported. The numbers come from OMP's own task result (`durationMs`, `tokens`, `requests`, `contextTokens`, `AgentProgress`), so no subagent is instrumented and no model is chosen by the kit. The record never carries the report, a prompt, a file body or a finding's text.
@@ -19,20 +19,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - A reviewer yield was read only as a bare string or `{ report }`; the 12:18 run yielded `{ data: "<markdown>" }`, so a finished review blocked with `reviewer yield carries no Markdown report` while the report was in the payload. The payload is now read at one boundary (`src/domain/report-envelope.mjs`): the report string, or exactly one object wrapping it. Anything deeper, ambiguous or empty is refused, and the BLOCK reason names the keys that arrived (`payload: data.data`), so the next occurrence is diagnosable from the log alone.
 - The review had no size ceiling: a 54-path diff spent 27 minutes before it was blocked. `OMP_REVIEW_KIT_MAX_DIFF` now refuses such a diff before the reviewer runs (default 40 paths / 1.5 MB, `<paths>/<megabytes>` to change, `off` to disable). The host prints one line with the observed numbers and the budget, the run record says `state: refused` with the same numbers, and the exit code is 1 with no model spend. A malformed value is refused with the offending text instead of silently defaulting.
+- The maintainability stage no longer blocks a review for its own budget: the agent analyzes every candidate group the analyzer delivers instead of the first five, and a group is `not_proven` only when its evidence cannot be read. The analyzer group ceiling is 200 instead of 10 - enough that a diff inside the 40-path budget is delivered whole - and groups beyond it are counted in `droppedGroups` and make the coverage `partial` instead of disappearing. A measured 21-path diff produces 80 groups, so the former ceiling of 10 hid 70 of them. The unused `maxCandidates` and `maxToolCalls` settings are gone: they described a limit the stage no longer has.
+- `/reviewer-kit:runs` and `node scripts/review-runs.mjs --repo` compared repository paths as plain strings, so one checkout reached through a junction, a symlink or another letter case was not the same repository: the command answered `no review runs recorded for this repository yet` while that checkout's records sat in the store. Identity is now the real path, case-folded on Windows, resolved once per distinct spelling.
 
 ### Changed
 - `stageEvidence` now also carries `durationMs`, `tokens`, `requests` and `contextTokens`; `native-review` returns a `runSummary` with the phase timings.
 
 ### Verified
-- `npm test`: 604 tests, 594 pass, 0 fail, 10 skipped (the live model cases).
+- `npm test` on an export of the release index: 628 tests, 618 pass, 0 fail, 10 skipped (the live model cases).
 - `npm run check`: layout ok, 79 files.
-- `node scripts/run-mutation-tests.mjs --calibrate-stale` (8 workers): the two decode mutants were retargeted at `src/domain/report-envelope.mjs` and two stale anchors repaired; the gate killed 309/309, exit 0, 2342.9 s.
+- `node scripts/run-mutation-tests.mjs --calibrate-stale` (8 workers): the gate killed 327/327, exit 0, 193.1 s.
+- Repository identity: the new `tests/extension.test.mjs` case reaches one checkout through a directory junction and through an upper-case spelling and gets the same history (it fails on the previous implementation), and `node scripts/review-runs.mjs --repo` returns the identical record for `E:/repos/omp-reviewer-kit`, `E:\repos\omp-reviewer-kit` and `E:/REPOS/OMP-REVIEWER-KIT`.
 - Replayed the real yield of the 12:18 review through the new boundary: the payload `{ data: "<markdown>" }` now decodes to the 13 018-character report and the false `reviewer yield carries no Markdown report` reason is gone.
 - Offline budget smoke (a temporary repository with 41 staged paths, `OMP_REVIEW_KIT_MAX_DIFF=40`): the host refuses with one line, writes `state: refused` and exits 1 without starting a reviewer.
 - The maintainability ceiling: `tests/maintainability-status.test.mjs` covers a tree with two groups under a ceiling of one, which reports `droppedGroups: 1` and `coverage: partial`; the mutation gate kills the two mutants that would hide the dropped groups.
-
-### Fixed
-- The maintainability stage no longer blocks a review for its own budget: the agent analyzes every candidate group the analyzer delivers instead of the first five, and a group is `not_proven` only when its evidence cannot be read. The analyzer group ceiling is 200 instead of 10 - enough that a diff inside the 40-path budget is delivered whole - and groups beyond it are counted in `droppedGroups` and make the coverage `partial` instead of disappearing. A measured 21-path diff produces 80 groups, so the former ceiling of 10 hid 70 of them. The unused `maxCandidates` and `maxToolCalls` settings are gone: they described a limit the stage no longer has.
 
 ## [0.23.1] - 2026-10-29
 

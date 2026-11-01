@@ -3,6 +3,7 @@
 // Windows an antivirus or the indexer can hold the target for a few milliseconds), and every read
 // ignores a file it cannot understand instead of failing the caller.
 
+import { realpathSync } from 'node:fs';
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
@@ -44,14 +45,43 @@ export function runRecordFile(dir, runId) {
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-/** Two spellings of the same repository (`E:/repo` and `E:\\repo`) are one repository. */
-function sameRepo(left, right) {
-  if (typeof left !== 'string' || left.length === 0) return false;
+/**
+ * One repository is written down under many spellings: `E:/repo` and `E:\\repo`, a directory reached
+ * through a junction or symlink, and on Windows any letter case. Identity is the real path, folded
+ * for a case-insensitive file system, so `/reviewer-kit:runs` finds the history it wrote even when the
+ * caller arrives through another spelling. A path that no longer exists keeps its resolved form.
+ *
+ * @param {string} value
+ * @returns {string|null}
+ */
+function repoIdentity(value) {
+  if (typeof value !== 'string' || value.length === 0) return null;
+  let resolved;
   try {
-    return path.resolve(left) === path.resolve(right);
+    resolved = path.resolve(value);
   } catch {
-    return false;
+    return null;
   }
+  try {
+    resolved = realpathSync.native(resolved);
+  } catch {
+    // A deleted checkout still owns the records it wrote; keep the resolved path.
+  }
+  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+}
+
+/**
+ * @param {string} repoRoot
+ * @returns {(candidate: unknown) => boolean}
+ */
+function sameRepoPredicate(repoRoot) {
+  const expected = repoIdentity(repoRoot);
+  const seen = new Map();
+  return candidate => {
+    if (expected === null || typeof candidate !== 'string' || candidate.length === 0) return false;
+    if (!seen.has(candidate)) seen.set(candidate, repoIdentity(candidate));
+    return seen.get(candidate) === expected;
+  };
 }
 
 async function renameWithRetry(from, to, renameFile) {
@@ -126,11 +156,12 @@ export async function readRunRecords(options = {}) {
     return [];
   }
   const records = [];
+  const matchesRepo = options.repoRoot ? sameRepoPredicate(options.repoRoot) : null;
   for (const name of names) {
     if (!name.endsWith(RECORD_SUFFIX) || name.startsWith('.')) continue;
     const record = await readRunRecord(path.join(dir, name));
     if (!record) continue;
-    if (options.repoRoot && !sameRepo(record.repoRoot, options.repoRoot)) continue;
+    if (matchesRepo && !matchesRepo(record.repoRoot)) continue;
     records.push(record);
   }
   records.sort((left, right) => String(right.startedAt ?? '').localeCompare(String(left.startedAt ?? '')));
