@@ -30,6 +30,8 @@ export const REQUIRED_FILES = [
   'src/infra/filesystem-report-store-adapter.mjs',
   // Run records: one observation file per review, outside every repository.
   'src/infra/layout-required.mjs',
+  'src/domain/report-envelope.mjs',
+  'src/domain/diff-budget.mjs',
   'src/domain/review-run-summary.mjs',
   'src/infra/review-run-store.mjs',
   'src/native/review-telemetry.mjs',

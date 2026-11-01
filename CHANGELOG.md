@@ -16,14 +16,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The stage is `agents/review-maintainability.md` (`model: "@task"`, read-only tools) and appears in the orchestrator's `spawns`; the assignment names the candidate file and the policy. Blocking needs four machine fields at once - a confirmed decision, a non-empty `stated_cost`, priority `P2` and `forwarding_only: false` - and each of them alone keeps the commit. These items never enter `confirmed_findings` or `confirmed_coverage_gaps`.
 - `OMP_REVIEW_KIT_MAINTAINABILITY` selects `off`, `advisory` or `block` (default `block`). Analysis limits (`maxFileBytes` 512 KB, `maxScanFiles` 4 000, `maxScanMs` 5 000 ms) make incompleteness explicit: a file the kit cannot parse is `unparsed` with its reason, an exhausted scan reports `truncated`, `supportComplete: false` and `coverage: partial`, and neither blocks a commit by itself. `node scripts/measure-maintainability.mjs` reproduces the specification's measurement table.
 
+### Fixed
+- A reviewer yield was read only as a bare string or `{ report }`; the 12:18 run yielded `{ data: "<markdown>" }`, so a finished review blocked with `reviewer yield carries no Markdown report` while the report was in the payload. The payload is now read at one boundary (`src/domain/report-envelope.mjs`): the report string, or exactly one object wrapping it. Anything deeper, ambiguous or empty is refused, and the BLOCK reason names the keys that arrived (`payload: data.data`), so the next occurrence is diagnosable from the log alone.
+- The review had no size ceiling: a 54-path diff spent 27 minutes before it was blocked. `OMP_REVIEW_KIT_MAX_DIFF` now refuses such a diff before the reviewer runs (default 40 paths / 1.5 MB, `<paths>/<megabytes>` to change, `off` to disable). The host prints one line with the observed numbers and the budget, the run record says `state: refused` with the same numbers, and the exit code is 1 with no model spend. A malformed value is refused with the offending text instead of silently defaulting.
+
 ### Changed
 - `stageEvidence` now also carries `durationMs`, `tokens`, `requests` and `contextTokens`; `native-review` returns a `runSummary` with the phase timings.
 
 ### Verified
-- `npm test` on the combined tree: 582 tests, 572 pass, 0 fail, 10 skipped (the live model cases).
-- `npm run check`: layout ok, 77 files.
-- The mutation-gate run recorded below covered the run-record work alone (300/300 killed, exit 0, 1453.0 s); the catalog now also carries the maintainability mutants, and the combined catalog has not been re-run.
-- `node scripts/review-runs.mjs` against the 275 records of the removed schema: it lists nothing (no legacy fallback) and exits 1; a record written by the new recorder is listed, detailed and followed until it settles.
+- `npm test`: 604 tests, 594 pass, 0 fail, 10 skipped (the live model cases).
+- `npm run check`: layout ok, 79 files.
+- `node scripts/run-mutation-tests.mjs --calibrate-stale` (8 workers): the two decode mutants were retargeted at `src/domain/report-envelope.mjs` and two stale anchors repaired; the gate killed 309/309, exit 0, 2342.9 s.
+- Replayed the real yield of the 12:18 review through the new boundary: the payload `{ data: "<markdown>" }` now decodes to the 13 018-character report and the false `reviewer yield carries no Markdown report` reason is gone.
+- Offline budget smoke (a temporary repository with 41 staged paths, `OMP_REVIEW_KIT_MAX_DIFF=40`): the host refuses with one line, writes `state: refused` and exits 1 without starting a reviewer.
 
 ## [0.23.1] - 2026-10-29
 

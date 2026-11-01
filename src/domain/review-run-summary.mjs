@@ -3,8 +3,8 @@
 // of a review: nothing in this module can change a verdict or an exit code.
 
 export const RUN_SCHEMA = 'review-run-record@2';
-export const RUN_STATES = ['running', 'passed', 'blocked', 'failed', 'skipped'];
-export const TERMINAL_RUN_STATES = ['passed', 'blocked', 'failed', 'skipped'];
+export const RUN_STATES = ['running', 'passed', 'blocked', 'failed', 'skipped', 'refused'];
+export const TERMINAL_RUN_STATES = ['passed', 'blocked', 'failed', 'skipped', 'refused'];
 
 /** Most keys one stage may report, so a runaway structured payload cannot bloat a record. */
 const MAX_COUNT_KEYS = 16;
@@ -18,6 +18,8 @@ const MAX_COUNT_KEYS = 16;
  */
 export function runStateFor(verdict, result = {}) {
   if (result.staged === false) return 'skipped';
+  // A refused diff never reached a reviewer: it is neither a pass nor a finding.
+  if (result.refused) return 'refused';
   if (!verdict || typeof verdict.pass !== 'boolean') return 'failed';
   return verdict.pass ? 'passed' : 'blocked';
 }

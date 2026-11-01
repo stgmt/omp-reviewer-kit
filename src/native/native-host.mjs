@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { repoReportsDir } from '../infra/filesystem-report-store-adapter.mjs';
 import { formatDuration } from '../domain/review-run-summary.mjs';
 import { createRunRecorder, formatStageEvent } from './review-telemetry.mjs';
+import { formatDiffSize } from '../domain/diff-budget.mjs';
 import { runNativeReview } from './native-review.mjs';
 
 const KIT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -75,7 +76,19 @@ export async function main(argv, { env = process.env, stderr = process.stderr, s
       return 0;
     }
 
-    const { verdict, provenance, stages, fallback } = result;
+    if (result.refused) {
+      const refused = result.refused;
+      log(refused.reason === 'invalid-budget'
+        ? `review: ${refused.error ?? 'diff budget invalid'}; the diff was not reviewed`
+        : `review: diff too large (${refused.paths} paths, ${formatDiffSize(refused.bytes)}; budget ${refused.maxPaths} paths, ${formatDiffSize(refused.maxBytes)})`);
+      await observe(() => run.complete({ result }));
+      logRunRecord(log, run);
+      return 1;
+    }
+    const { verdict, provenance, stages, fallback, budget } = result;
+    log(budget && budget.maxPaths !== null
+      ? `review: diff ${budget.paths} paths, ${formatDiffSize(budget.bytes)} (budget ${budget.maxPaths} paths, ${formatDiffSize(budget.maxBytes)})`
+      : `review: diff ${budget?.paths ?? 'unknown'} paths, ${formatDiffSize(budget?.bytes)} (budget off)`);
     log(`review: reviewer role=${provenance.role ?? 'none'} model=${provenance.model ?? 'none'}`);
     log(`review: reviewer fallback=${fallback?.applied ? 'applied' : 'not-applied'} candidates=${fallback?.chainLength ?? 'unknown'}`);
     for (const stage of stages) {

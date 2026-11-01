@@ -351,3 +351,42 @@ test('Given the review passes, When the host runs, Then the report carries the r
     assert.match(body, /^\| review-context-scout \|/m);
   });
 });
+
+test('Given the diff is over budget, When the host runs, Then it refuses in one line, records the refusal and exits 1', async () => {
+  await withTempDirs(async ({ repo, reports, runs }) => {
+    const stderr = sink();
+    const code = await main([repo], {
+      env: { OMP_REVIEW_KIT_REPORTS_DIR: reports, OMP_REVIEW_KIT_RUNS_DIR: runs },
+      stderr,
+      stdout: sink(),
+      runReview: async () => ({
+        staged: true,
+        refused: { refused: true, reason: 'too-many-paths', paths: 54, bytes: 1_800_000, maxPaths: 40, maxBytes: 1_500_000 },
+      }),
+    });
+    assert.equal(code, 1);
+    assert.match(stderr.text(), /^review: diff too large \(54 paths, 1\.8 MB; budget 40 paths, 1\.5 MB\)$/m);
+    assert.doesNotMatch(stderr.text(), /^review: (PASS|BLOCK)/m);
+    const records = await readRunRecords({ dir: runs });
+    assert.equal(records[0].state, 'refused');
+    assert.equal(records[0].verdict, 'REFUSED');
+    assert.deepEqual(records[0].reasons, ['too-many-paths: 54 paths, 1.8 MB (max 40 paths, 1.5 MB)']);
+  });
+});
+
+test('Given the diff is within budget, When the host runs, Then one line names the size and the budget before the review', async () => {
+  await withTempDirs(async ({ repo, reports, runs }) => {
+    const stderr = sink();
+    const code = await main([repo], {
+      env: { OMP_REVIEW_KIT_REPORTS_DIR: reports, OMP_REVIEW_KIT_RUNS_DIR: runs },
+      stderr,
+      stdout: sink(),
+      runReview: async () => ({
+        ...reviewed({ pass: true, text: '## Review\n\nREVIEW_RESULT=PASS' }),
+        budget: { refused: false, reason: null, paths: 23, bytes: 210_000, maxPaths: 40, maxBytes: 1_500_000 },
+      }),
+    });
+    assert.equal(code, 0);
+    assert.match(stderr.text(), /^review: diff 23 paths, 210\.0 KB \(budget 40 paths, 1\.5 MB\)$/m);
+  });
+});

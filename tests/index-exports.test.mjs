@@ -26,6 +26,10 @@ const FUNCTIONS = [
   'runRecordFile',
   'runsRootDir',
   'writeRunRecord',
+  'readReportEnvelope',
+  'readDiffBudget',
+  'assessDiff',
+  'formatDiffSize',
 ];
 
 test('Given the package root, When it is imported, Then the run-record functions are exported and callable', () => {

@@ -32,6 +32,9 @@ export {
   writeRunRecord,
 } from './infra/review-run-store.mjs';
 
+export { ENVELOPE_REASONS, readReportEnvelope } from './domain/report-envelope.mjs';
+export { BUDGET_REASONS, DEFAULT_MAX_BYTES, DEFAULT_MAX_PATHS, assessDiff, formatDiffSize, readDiffBudget } from './domain/diff-budget.mjs';
+
 export { DiffIdentity } from './domain/diff-identity.mjs';
 export { classifyFilePath, classifyChangedPaths, reviewProfileFor, riskLanesFor } from './domain/file-class.mjs';
 export { sanitizePromptToken } from './domain/prompt-token.mjs';

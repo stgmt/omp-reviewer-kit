@@ -113,7 +113,10 @@ export function evaluateReview({ reviewer, stages, profile, lanes, fileClasses =
   const marker = reviewer?.text == null
     ? { verdict: null, reason: null }
     : readVerdictMarker(reviewer.text);
-  if (reviewer && reviewer.text == null) reasons.push('reviewer yield carries no Markdown report');
+  if (reviewer && reviewer.text == null) {
+    const payload = Array.isArray(reviewer.yieldPayload) && reviewer.yieldPayload.length > 0 ? ` (payload: ${reviewer.yieldPayload.join(', ')})` : '';
+    reasons.push(`reviewer yield carries no Markdown report${payload}`);
+  }
   if (marker.reason) reasons.push(marker.reason);
 
   const completed = agent => stages.filter(stage => stage.agent === agent && stageCompleted(stage));

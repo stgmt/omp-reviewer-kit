@@ -15,6 +15,7 @@ import {
   stageCounts,
 } from '../domain/review-run-summary.mjs';
 import { pruneRuns, runRecordFile, runsRootDir, writeRunRecord } from '../infra/review-run-store.mjs';
+import { formatDiffSize } from '../domain/diff-budget.mjs';
 
 /** Minimum gap between two live rewrites of the same record, so a chatty reviewer cannot spin the disk. */
 const LIVE_WRITE_INTERVAL_MS = 1000;
@@ -94,6 +95,12 @@ export function recordStages(stages) {
  *   durationMs: number,
  * }} input
  */
+/** The one line a refused run carries: the token, the observed numbers and the limits it broke. */
+function refusalReason(refused) {
+  if (refused.reason === 'invalid-budget') return refused.error ?? 'diff budget invalid';
+  return `${refused.reason}: ${refused.paths} paths, ${formatDiffSize(refused.bytes)} (max ${refused.maxPaths} paths, ${formatDiffSize(refused.maxBytes)})`;
+}
+
 export function buildRunRecord({ runId, record, result, reportPath = null, reportMs = null, finishedAt, durationMs }) {
   const state = runStateFor(result?.verdict, result);
   return normalizeRunRecord({
@@ -101,8 +108,8 @@ export function buildRunRecord({ runId, record, result, reportPath = null, repor
     schema: RUN_SCHEMA,
     runId,
     state,
-    verdict: result?.verdict?.verdict ?? null,
-    reasons: result?.verdict?.reasons ?? [],
+    verdict: result?.verdict?.verdict ?? (result?.refused ? 'REFUSED' : null),
+    reasons: result?.refused ? [refusalReason(result.refused)] : result?.verdict?.reasons ?? [],
     finishedAt,
     durationMs,
     profile: result?.profile ?? null,

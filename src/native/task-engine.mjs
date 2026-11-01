@@ -5,6 +5,8 @@
 
 import path from 'node:path';
 
+import { readReportEnvelope } from '../domain/report-envelope.mjs';
+
 /**
  * Structural overlay only: children must complete with a `yield`, otherwise OMP has no
  * completion evidence to read. It names no model, role or fallback.
@@ -129,14 +131,14 @@ export function reviewerFromRun(run) {
 export function reviewerYield(reviewer) {
   const yields = reviewer?.extractedToolData?.yield ?? [];
   const last = yields[yields.length - 1];
-  return last ? { status: last.status ?? null, text: decodeReport(last.data) } : undefined;
-}
-
-function decodeReport(data) {
-  if (typeof data === 'string') return data;
-  const keys = data && typeof data === 'object' && !Array.isArray(data) ? Object.keys(data) : [];
-  if (keys.length === 1 && keys[0] === 'report' && typeof data.report === 'string') return data.report;
-  return null;
+  if (!last) return undefined;
+  const envelope = readReportEnvelope(last.data);
+  return {
+    status: last.status ?? null,
+    text: envelope.markdown,
+    reason: envelope.reason,
+    observed: envelope.observed,
+  };
 }
 
 /**

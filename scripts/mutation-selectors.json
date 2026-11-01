@@ -2482,15 +2482,6 @@
       "mutantHash": "66f9b4ada25c354df0eb329720d77e0d86811e0f8e35da57b719051c920b5b2d",
       "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
     },
-    "native-yield-plain-string-rejected": {
-      "testFile": "tests/native-yield.test.mjs",
-      "tests": [
-        "Given two yields are recorded, When decoded, Then the last one is the reviewer final report"
-      ],
-      "ancestors": [],
-      "mutantHash": "c3a4af4d46bc5591f0d80e720af9a27f0cd719d9e33abc8e292b1bfca87e0a19",
-      "testHash": "087b971062c8d74650852fb3772fa9fa85593b0e719cfd545229a24e5949686f"
-    },
     "native-snapshot-reserved-collision-missed": {
       "testFile": "tests/native-snapshot.test.mjs",
       "tests": [
@@ -2652,42 +2643,6 @@
       "mutantHash": "0c9740270235004aaceb9d10b62ea5b7fd70756791fe4761bbdf721c7c011b1f",
       "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
     },
-    "native-yield-other-field-decoded": {
-      "testFile": "tests/native-yield.test.mjs",
-      "tests": [
-        "Given the yield data is one field named other than report, When decoded, Then no report is recovered even through the prototype"
-      ],
-      "ancestors": [],
-      "mutantHash": "747bfbd0c828294f232d95b0e81c6d2d1e1c6fc64e022f740b905da668f527f8",
-      "testHash": "087b971062c8d74650852fb3772fa9fa85593b0e719cfd545229a24e5949686f"
-    },
-    "native-yield-first-yield-used": {
-      "testFile": "tests/native-yield.test.mjs",
-      "tests": [
-        "Given two yields are recorded, When decoded, Then the last one is the reviewer final report"
-      ],
-      "ancestors": [],
-      "mutantHash": "7d0d750c9cb6ce29ebf78440c3e132f35e699d21ceaeb59d482071489275d0dd",
-      "testHash": "087b971062c8d74650852fb3772fa9fa85593b0e719cfd545229a24e5949686f"
-    },
-    "native-stage-aborted-erased": {
-      "testFile": "tests/native-yield.test.mjs",
-      "tests": [
-        "Given a nested stage that aborted, When its evidence is read, Then the aborted flag is kept"
-      ],
-      "ancestors": [],
-      "mutantHash": "eca43d059e93c145864558524cec0bbbc43f37597e28ea5bf875b33cb6206ac5",
-      "testHash": "087b971062c8d74650852fb3772fa9fa85593b0e719cfd545229a24e5949686f"
-    },
-    "native-stage-structure-erased": {
-      "testFile": "tests/native-yield.test.mjs",
-      "tests": [
-        "Given a nested stage with no structured result, When its evidence is read, Then the structured status is null"
-      ],
-      "ancestors": [],
-      "mutantHash": "1a6c159048f10f332e30f0b5177c4f78b4573ba14576f6ba5a64364ba1145be0",
-      "testHash": "087b971062c8d74650852fb3772fa9fa85593b0e719cfd545229a24e5949686f"
-    },
     "native-snapshot-hash-not-of-diff": {
       "testFile": "tests/native-snapshot.test.mjs",
       "tests": [
@@ -2705,15 +2660,6 @@
       "ancestors": [],
       "mutantHash": "1ecc9ac531020706752ceb88337902c10a91d4cf79980dfb8915db2509a5931b",
       "testHash": "10e0c45c1e3636d3242c98e7c8ef05962fe7569b51c33e09328cf474f6fccb06"
-    },
-    "native-host-host-error-passes": {
-      "testFile": "tests/e2e-native-hook.test.mjs",
-      "tests": [
-        "Given the directory is not a Git repository, When the native host runs, Then it blocks with exit 1 and names the host error"
-      ],
-      "ancestors": [],
-      "mutantHash": "f316cefd889db2b43134edd039ecfab05f3867c0c202ecb597546bd91120af19",
-      "testHash": "89efc4bf2ff408befd3ab151a7258bf500d0f226d75a04227597e20862dde3d8"
     },
     "native-verdict-lane-identity-ignored": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2789,15 +2735,6 @@
       "mutantHash": "7bcd26ba6b102cbbfffd3e587ea5485cdc1a162f2fbfee1925dd64c8f8366257",
       "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
     },
-    "native-snapshot-file-classes-dropped": {
-      "testFile": "tests/native-snapshot.test.mjs",
-      "tests": [
-        "Given a staged test file, When the snapshot is materialized, Then the manifest exposes its test class for the verdict"
-      ],
-      "ancestors": [],
-      "mutantHash": "0e9437f63fe418fb07835da236e7249457d6aff8e97c0caaf3f21dceeae35827",
-      "testHash": "c7d7f1d2a7e781791742235da10c55c9b67ea277714232309ce8aef43c04f7ea"
-    },
     "run-record-duration-seconds-dropped": {
       "testFile": "tests/review-run-summary.test.mjs",
       "tests": [
@@ -2859,7 +2796,7 @@
       ],
       "ancestors": [],
       "mutantHash": "ac5d7f589327d34127a38e934dffc79978a22553dc170edb7a6bffb31c9992aa",
-      "testHash": "157d795da4131a7a06864c75582538f17a01f03ff56bb827f7428a6735e2eedf"
+      "testHash": "0209dcef49fb216bf1722c92f698a10114639c807f8a2aab59f5b377643d63c5"
     },
     "run-record-newest-pruned": {
       "testFile": "tests/review-run-store.test.mjs",
@@ -2950,6 +2887,69 @@
       "ancestors": [],
       "mutantHash": "9141da4d80e2e71f583806b2430c429bd7330623c755c4800b0776eecef2e3bc",
       "testHash": "b59a7066930a690d837b4f3a987ce58a4504ad5285ba70658e227f15abbefe1f"
+    },
+    "native-yield-plain-string-rejected": {
+      "testFile": "tests/native-yield.test.mjs",
+      "tests": [
+        "Given two yields are recorded, When decoded, Then the last one is the reviewer final report"
+      ],
+      "ancestors": [],
+      "mutantHash": "f77d165cc43d3f3f43c9a8a10c9830328eba87c4fcae7c8220d942e8901c4519",
+      "testHash": "7602fc7ada16124dead389798e903b57509cf98c316ce328086f3ce9c89f0359"
+    },
+    "native-yield-other-field-decoded": {
+      "testFile": "tests/native-yield.test.mjs",
+      "tests": [
+        "Given the wrapper observed in the 12:18 run, When decoded, Then the report is recovered instead of dropped"
+      ],
+      "ancestors": [],
+      "mutantHash": "b40e8be5788b98275e532325796329f7a990580000446fe22f849a1f02b0e7ec",
+      "testHash": "7602fc7ada16124dead389798e903b57509cf98c316ce328086f3ce9c89f0359"
+    },
+    "native-yield-first-yield-used": {
+      "testFile": "tests/native-yield.test.mjs",
+      "tests": [
+        "Given two yields are recorded, When decoded, Then the last one is the reviewer final report"
+      ],
+      "ancestors": [],
+      "mutantHash": "7d0d750c9cb6ce29ebf78440c3e132f35e699d21ceaeb59d482071489275d0dd",
+      "testHash": "7602fc7ada16124dead389798e903b57509cf98c316ce328086f3ce9c89f0359"
+    },
+    "native-stage-aborted-erased": {
+      "testFile": "tests/native-yield.test.mjs",
+      "tests": [
+        "Given a nested stage that aborted, When its evidence is read, Then the aborted flag is kept"
+      ],
+      "ancestors": [],
+      "mutantHash": "eca43d059e93c145864558524cec0bbbc43f37597e28ea5bf875b33cb6206ac5",
+      "testHash": "7602fc7ada16124dead389798e903b57509cf98c316ce328086f3ce9c89f0359"
+    },
+    "native-stage-structure-erased": {
+      "testFile": "tests/native-yield.test.mjs",
+      "tests": [
+        "Given a nested stage with no structured result, When its evidence is read, Then the structured status is null"
+      ],
+      "ancestors": [],
+      "mutantHash": "1a6c159048f10f332e30f0b5177c4f78b4573ba14576f6ba5a64364ba1145be0",
+      "testHash": "7602fc7ada16124dead389798e903b57509cf98c316ce328086f3ce9c89f0359"
+    },
+    "native-snapshot-file-classes-dropped": {
+      "testFile": "tests/native-snapshot.test.mjs",
+      "tests": [
+        "Given a staged test file, When the snapshot is materialized, Then the manifest exposes its test class for the verdict"
+      ],
+      "ancestors": [],
+      "mutantHash": "c4284c4cad6402294f726a5a40e13c379794fc35b71ab263a96d890aed0f6c4a",
+      "testHash": "c7d7f1d2a7e781791742235da10c55c9b67ea277714232309ce8aef43c04f7ea"
+    },
+    "native-host-host-error-passes": {
+      "testFile": "tests/e2e-native-hook.test.mjs",
+      "tests": [
+        "Given the directory is not a Git repository, When the native host runs, Then it blocks with exit 1 and names the host error"
+      ],
+      "ancestors": [],
+      "mutantHash": "e240bf2b3f2d9c856c7df98d588fb2d582e1107a4a4e328d8dc8b9aa5b15bed9",
+      "testHash": "89efc4bf2ff408befd3ab151a7258bf500d0f226d75a04227597e20862dde3d8"
     }
   }
 }

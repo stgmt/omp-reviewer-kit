@@ -104,6 +104,7 @@ export async function readStagedChange(repo, env = process.env) {
  *   profile: 'full'|'spec-docs',
  *   lanes: string[],
  *   changedPaths: string[],
+ *   patchBytes: number,
  *   fileClasses: Array<{ path: string, fileClass: string }>,
  * }>} null when nothing is staged
  */
@@ -133,7 +134,15 @@ export async function materializeStagedSnapshot({ repo, parentDir, env = process
       `${JSON.stringify({ profile, files: entries.map(entry => ({ path: entry.path, fileClass: entry.fileClass })) }, null, 2)}\n`,
       'utf8',
     );
-    return { dir, diffHash, profile, lanes, changedPaths: paths, fileClasses: entries.map(entry => ({ path: entry.path, fileClass: entry.fileClass })) };
+    return {
+      dir,
+      diffHash,
+      profile,
+      lanes,
+      changedPaths: paths,
+      patchBytes: diff.length,
+      fileClasses: entries.map(entry => ({ path: entry.path, fileClass: entry.fileClass })),
+    };
   } catch (error) {
     await rm(dir, { recursive: true, force: true });
     throw error;

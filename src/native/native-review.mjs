@@ -6,6 +6,7 @@ import { removeSnapshot, materializeStagedSnapshot } from './snapshot.mjs';
 import { buildAssignment } from './assignment.mjs';
 import { fallbackOf, provenanceOf, reviewerTranscript, reviewerYield, runReviewerTask } from './task-engine.mjs';
 import { readFallbackEvidence } from './fallback-evidence.mjs';
+import { BUDGET_REASONS, assessDiff, readDiffBudget } from '../domain/diff-budget.mjs';
 import { runMaintainabilityAnalysis } from './maintainability/analyze.mjs';
 import { evaluateReview } from './verdict.mjs';
 
@@ -62,7 +63,21 @@ export async function runNativeReview({
     };
   }
   try {
-    const { dir, diffHash, profile, lanes, changedPaths, fileClasses } = snapshot;
+    const { dir, diffHash, profile, lanes, changedPaths, patchBytes, fileClasses } = snapshot;
+    // The budget is decided before any model runs: a stage that cannot finish is a cost, not a verdict.
+    const budgetConfig = readDiffBudget({ env });
+    const budget = budgetConfig.ok
+      ? assessDiff({ paths: changedPaths.length, bytes: patchBytes }, budgetConfig)
+      : {
+        refused: true,
+        reason: BUDGET_REASONS.invalid,
+        paths: changedPaths.length,
+        bytes: patchBytes,
+        maxPaths: null,
+        maxBytes: null,
+        error: budgetConfig.error,
+      };
+    if (budget.refused) return { staged: true, refused: budget };
     onProgress(`review: ${changedPaths.length} staged path(s), profile ${profile}, lanes ${lanes.join(', ')}`);
     const analysisStarted = now();
     const analysis = await runMaintainabilityAnalysis({
@@ -105,6 +120,8 @@ export async function runNativeReview({
       aborted: reviewer.aborted === true,
       yieldStatus: yielded?.status ?? null,
       text: yielded?.text ?? null,
+      yieldReason: yielded?.reason ?? null,
+      yieldPayload: yielded?.observed ?? null,
     };
     const verdictStarted = now();
     const verdict = evaluateReview({
@@ -128,6 +145,8 @@ export async function runNativeReview({
       profile,
       lanes,
       changedPaths,
+      patchBytes,
+      budget,
       fileClasses,
       provenance: reviewer ? provenanceOf(reviewer) : { role: null, model: null },
       fallback,

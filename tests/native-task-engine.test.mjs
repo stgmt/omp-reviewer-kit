@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { STRUCTURAL_OVERLAY, describeUpdate, fallbackOf, loadOmpEngine, progressEvents, provenanceOf, reviewerFromRun, reviewerTranscript, runReviewerTask, stageEvidence } from '../src/native/task-engine.mjs';
+import { STRUCTURAL_OVERLAY, describeUpdate, fallbackOf, loadOmpEngine, progressEvents, provenanceOf, reviewerFromRun, reviewerTranscript, reviewerYield, runReviewerTask, stageEvidence } from '../src/native/task-engine.mjs';
 
 test('Given the library cannot load one of its modules, When the engine is loaded, Then loading rejects and no partial engine is returned', async () => {
   const importer = specifier => (specifier.endsWith('/config/settings')
@@ -271,4 +271,26 @@ test('Given several progress entries from the native task, When the reviewer tas
   });
   assert.deepEqual(seen, ['review-context-scout:completed:1000', 'review-risk-hunter:completed:2000', 'review-finding-verifier:completed:3000']);
   assert.equal(result.reviewer, reviewer);
+});
+
+test('Given the yield payload wraps the report once, When the reviewer yield is read, Then the Markdown is returned and the wrapper key is named', () => {
+  const yielded = reviewerYield({ extractedToolData: { yield: [{ status: 'success', data: { data: '## Review\n\nREVIEW_RESULT=PASS' } }] } });
+  assert.equal(yielded.status, 'success');
+  assert.equal(yielded.text, '## Review\n\nREVIEW_RESULT=PASS');
+  assert.equal(yielded.reason, null);
+  assert.deepEqual(yielded.observed, ['data']);
+});
+
+test('Given a double-wrapped payload, When the reviewer yield is read, Then the text is null and the nested path is named', () => {
+  const yielded = reviewerYield({ extractedToolData: { yield: [{ status: 'success', data: { data: { data: 'x' } } }] } });
+  assert.equal(yielded.text, null);
+  assert.equal(yielded.reason, 'nested-payload');
+  assert.deepEqual(yielded.observed, ['data.data']);
+});
+
+test('Given an ambiguous payload, When the reviewer yield is read, Then both string keys are named instead of a choice', () => {
+  const yielded = reviewerYield({ extractedToolData: { yield: [{ status: 'success', data: { report: 'a', summary: 'b' } }] } });
+  assert.equal(yielded.text, null);
+  assert.equal(yielded.reason, 'ambiguous-payload');
+  assert.deepEqual(yielded.observed, ['report', 'summary']);
 });

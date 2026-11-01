@@ -234,3 +234,91 @@ test('Given nothing is staged, When the review runs, Then only the snapshot timi
     await rm(parent, { recursive: true, force: true });
   }
 });
+
+async function stagedRepoWith(files) {
+  const repo = await mkdtemp(path.join(tmpdir(), 'native-review-repo-'));
+  git(repo, ['init', '-q']);
+  git(repo, ['config', 'user.email', 'test@example.invalid']);
+  git(repo, ['config', 'user.name', 'native review test']);
+  git(repo, ['config', 'core.hooksPath', path.join(repo, 'no-hooks')]);
+  await writeFile(path.join(repo, 'base.mjs'), 'export const base = 1;\n');
+  git(repo, ['add', 'base.mjs']);
+  git(repo, ['commit', '-q', '-m', 'base']);
+  for (const file of files) {
+    await writeFile(path.join(repo, file), `export const value = '${file}';\n`);
+    git(repo, ['add', file]);
+  }
+  return repo;
+}
+
+test('Given more staged paths than the budget allows, When the review runs, Then it refuses before the reviewer and removes the snapshot', async () => {
+  const repo = await stagedRepoWith(['a.mjs', 'b.mjs']);
+  const parent = await mkdtemp(path.join(tmpdir(), 'native-review-parent-'));
+  let ran = 0;
+  try {
+    const result = await runNativeReview({
+      repo,
+      kitRoot: repo,
+      parentDir: parent,
+      env: { OMP_REVIEW_KIT_MAX_DIFF: '1' },
+      runTask: async () => {
+        ran += 1;
+        return { reviewer: reviewerWithYield(PASS_REPORT), stages: completeStages };
+      },
+    });
+    assert.equal(ran, 0);
+    assert.equal(result.staged, true);
+    assert.equal(result.refused.reason, 'too-many-paths');
+    assert.equal(result.refused.paths, 2);
+    assert.equal(result.refused.maxPaths, 1);
+    assert.ok(result.refused.bytes > 0);
+    assert.deepEqual(await snapshotsLeft(parent), []);
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test('Given a malformed budget, When the review runs, Then it refuses with the offending value instead of defaulting', async () => {
+  const repo = await stagedRepoWith(['a.mjs']);
+  const parent = await mkdtemp(path.join(tmpdir(), 'native-review-parent-'));
+  let ran = 0;
+  try {
+    const result = await runNativeReview({
+      repo,
+      kitRoot: repo,
+      parentDir: parent,
+      env: { OMP_REVIEW_KIT_MAX_DIFF: '40/x' },
+      runTask: async () => {
+        ran += 1;
+        return { reviewer: reviewerWithYield(PASS_REPORT), stages: completeStages };
+      },
+    });
+    assert.equal(ran, 0);
+    assert.equal(result.refused.reason, 'invalid-budget');
+    assert.equal(result.refused.error, 'diff budget invalid: 40/x');
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test('Given a diff within the budget, When the review runs, Then the budget is reported and the reviewer runs', async () => {
+  const repo = await stagedRepoWith(['a.mjs']);
+  const parent = await mkdtemp(path.join(tmpdir(), 'native-review-parent-'));
+  try {
+    const result = await runNativeReview({
+      repo,
+      kitRoot: repo,
+      parentDir: parent,
+      env: { OMP_REVIEW_KIT_MAX_DIFF: '5/2' },
+      runTask: async () => ({ reviewer: reviewerWithYield(PASS_REPORT), stages: completeStages }),
+    });
+    assert.equal(result.refused, undefined);
+    assert.deepEqual(result.budget, { refused: false, reason: null, paths: 1, bytes: result.budget.bytes, maxPaths: 5, maxBytes: 2_000_000 });
+    assert.equal(result.verdict.pass, true);
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+    await rm(parent, { recursive: true, force: true });
+  }
+});
