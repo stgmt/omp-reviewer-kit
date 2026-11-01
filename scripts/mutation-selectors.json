@@ -55,7 +55,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "3b8b9f13183f712947d9958a05016511c9185fc239e9f7c3af718470e0abef6b",
-      "testHash": "c6a6a05549a3a365baf2c0f2638ba6f2b3f96a2dea7993cd79d3f1768aec7dab"
+      "testHash": "bc655577631970b584c9b6b82cd5b4df97d4ec09f2e5716ea614306dc2d4535b"
     },
     "anti-parasitic-both-to-either": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -66,7 +66,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "b8607c1dd6f7ba93c3e0b7431e95eb44980c25c7b9974dd0fc887acbf309bb74",
-      "testHash": "c6a6a05549a3a365baf2c0f2638ba6f2b3f96a2dea7993cd79d3f1768aec7dab"
+      "testHash": "bc655577631970b584c9b6b82cd5b4df97d4ec09f2e5716ea614306dc2d4535b"
     },
     "anti-parasitic-port-protection-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -77,7 +77,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "7cb2ae5cc876247bae2a345f17644a022a04d18c3ed82d839556f279b8e7e2e7",
-      "testHash": "c6a6a05549a3a365baf2c0f2638ba6f2b3f96a2dea7993cd79d3f1768aec7dab"
+      "testHash": "bc655577631970b584c9b6b82cd5b4df97d4ec09f2e5716ea614306dc2d4535b"
     },
     "multi-stage-snapshot-boundary-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -88,7 +88,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "db7a8493b32121111624ef1add91a1b21b8c908d6e5da232df1a148e0af79373",
-      "testHash": "c6a6a05549a3a365baf2c0f2638ba6f2b3f96a2dea7993cd79d3f1768aec7dab"
+      "testHash": "bc655577631970b584c9b6b82cd5b4df97d4ec09f2e5716ea614306dc2d4535b"
     },
     "multi-stage-yagni-boundary-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -99,7 +99,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "465a5de25c5a83dda3e244302a6b7eab09c0169bb39c82b5688b001fb8d5560c",
-      "testHash": "c6a6a05549a3a365baf2c0f2638ba6f2b3f96a2dea7993cd79d3f1768aec7dab"
+      "testHash": "bc655577631970b584c9b6b82cd5b4df97d4ec09f2e5716ea614306dc2d4535b"
     },
     "sync-hook-newer-overwritten": {
       "testFile": "tests/sync-targets.test.mjs",
@@ -166,7 +166,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "ec31109e99d1fdb90e4b481cab9c38734f3857a530dd4a68f4327ef171a166d5",
-      "testHash": "c6a6a05549a3a365baf2c0f2638ba6f2b3f96a2dea7993cd79d3f1768aec7dab"
+      "testHash": "bc655577631970b584c9b6b82cd5b4df97d4ec09f2e5716ea614306dc2d4535b"
     },
     "hunter-red-proof-field-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -177,7 +177,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "61f3ac262a7e6643d183a03c1ffd0e7ebebf3d58d8cbaacaf70427b43ac14e8e",
-      "testHash": "c6a6a05549a3a365baf2c0f2638ba6f2b3f96a2dea7993cd79d3f1768aec7dab"
+      "testHash": "bc655577631970b584c9b6b82cd5b4df97d4ec09f2e5716ea614306dc2d4535b"
     },
     "verifier-triage-field-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -188,7 +188,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "e6356f58a6e2d47ec64b32c1f6f7664d120a06d1b1d697a3dac8517b2c7b5ea5",
-      "testHash": "c6a6a05549a3a365baf2c0f2638ba6f2b3f96a2dea7993cd79d3f1768aec7dab"
+      "testHash": "bc655577631970b584c9b6b82cd5b4df97d4ec09f2e5716ea614306dc2d4535b"
     },
     "modular-suspicion-assert-delta": {
       "testFile": "tests/suspicion-map.test.mjs",
@@ -3112,6 +3112,60 @@
       "ancestors": [],
       "mutantHash": "78aa74597214492a872bf04bcb059ac00c3fde5caadd76ce6f71f1f861521633",
       "testHash": "d95184a87ec0bb140c741a0cdfc6e828d8a42068ebee7f9bee0c729345ea721a"
+    },
+    "preflight-fingerprint-target-path-dropped": {
+      "testFile": "tests/release-preflight.test.mjs",
+      "tests": [
+        "Given overlapping mutants, When the fingerprint is taken, Then only the deduplicated path set and the mutant definitions matter"
+      ],
+      "ancestors": [],
+      "mutantHash": "97fddde30eed11c15c89120a375a113245753276dd374ee32325da03c4d73ce2",
+      "testHash": "d6eb029f9a096894258b9ab4659e39fb2d9e192cdcc3930cb8a7129e77579754"
+    },
+    "preflight-fingerprint-path-order-unstable": {
+      "testFile": "tests/release-preflight.test.mjs",
+      "tests": [
+        "Given overlapping mutants, When the fingerprint is taken, Then only the deduplicated path set and the mutant definitions matter"
+      ],
+      "ancestors": [],
+      "mutantHash": "f64630c812e3ee6c9974fc7912f0e5d40fa78cdb243b6a85084a88ddcb97fbdc",
+      "testHash": "d6eb029f9a096894258b9ab4659e39fb2d9e192cdcc3930cb8a7129e77579754"
+    },
+    "preflight-fingerprint-paths-not-deduplicated": {
+      "testFile": "tests/release-preflight.test.mjs",
+      "tests": [
+        "Given overlapping mutants, When the fingerprint is taken, Then only the deduplicated path set and the mutant definitions matter"
+      ],
+      "ancestors": [],
+      "mutantHash": "84f43a3fa1ced2d18456e09f40ebb3fd7e56a8bbdc4ab7aa19b8b905f97a93ac",
+      "testHash": "d6eb029f9a096894258b9ab4659e39fb2d9e192cdcc3930cb8a7129e77579754"
+    },
+    "preflight-fingerprint-ignores-mutant-definitions": {
+      "testFile": "tests/release-preflight.test.mjs",
+      "tests": [
+        "Given overlapping mutants, When the fingerprint is taken, Then only the deduplicated path set and the mutant definitions matter"
+      ],
+      "ancestors": [],
+      "mutantHash": "276e448324e935f456d0e47ab5fb87a229b06a70e758e8f0d2c4d4410d138d57",
+      "testHash": "d6eb029f9a096894258b9ab4659e39fb2d9e192cdcc3930cb8a7129e77579754"
+    },
+    "preflight-require-frozen-continues": {
+      "testFile": "tests/release-preflight.test.mjs",
+      "tests": [
+        "Given a diff that must not move, When a recalibration is requested while it is pending, Then the preflight stops before the gate"
+      ],
+      "ancestors": [],
+      "mutantHash": "c5d2a29ff01f458b5178b08119f4e28ad6ab94db510361028eb1005c8391d503",
+      "testHash": "d6eb029f9a096894258b9ab4659e39fb2d9e192cdcc3930cb8a7129e77579754"
+    },
+    "preflight-fingerprint-catalog-source-dropped": {
+      "testFile": "tests/release-preflight.test.mjs",
+      "tests": [
+        "Given overlapping mutants, When the fingerprint is taken, Then only the deduplicated path set and the mutant definitions matter"
+      ],
+      "ancestors": [],
+      "mutantHash": "cf1323465a2b0256115bf0e1c345fd3a7be7ea08923f6028388268caa8188dac",
+      "testHash": "d6eb029f9a096894258b9ab4659e39fb2d9e192cdcc3930cb8a7129e77579754"
     }
   }
 }
