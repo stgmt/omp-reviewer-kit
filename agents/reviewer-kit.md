@@ -4,7 +4,7 @@ description: OMP Review Kit orchestrator agent for multi-stage evidence-first re
 blocking: true
 model: "@task"
 tools: read, grep, glob, lsp, bash, task
-spawns: review-context-scout, review-risk-hunter, review-finding-verifier
+spawns: review-context-scout, review-risk-hunter, review-maintainability, review-finding-verifier
 autoloadSkills:
   - reality-first-review
   - multi-stage-review
@@ -32,6 +32,9 @@ You must run these four stages strictly in order:
    - `lane: "content-risk"` — secrets or credentials in text, documented-behavior contradictions, dead links, commands and steps, fabricated numbers, prompt-contract drift.
    Every lane follows strict anti-noise rules: no style, formatting, comments, or ungrounded advice. In the correctness lane, check the focused tests for changed behavior and YAGNI: raise a missing test or unnecessary code only when the resulting behavior has a concrete, reachable impact. Set each hunter's tool-call budget from the scout output: about 15 when the scout found at most 5 changed paths and at most 3 relevant consumers, otherwise about 30. Forward the same project skill names given to the scout so each lane reads them directly.
 
+2b. **Stage 2b: Maintainability Review**
+   Runs only when the assignment's maintainability line names a candidate file whose status is `analyzed`. Spawn one blocking task with agent `review-maintainability`, passing the snapshot directory, that candidate-file path, the policy and the tool budget. It reads the deterministic groups and decides what each group means and whether a real maintenance cost exists; it never recounts support or occurrences. When the line reports the review as not run, or the status is `no-candidates`, `unsupported` or `failed`, do not spawn it: record the status and its reason in `### Notes`, and treat `failed` as a blocked review. Its candidates never enter `### Confirmed findings` or the verifier's lists: they belong to `### Maintainability`, and only the machine fields of the answer decide whether they block.
+
 3. **Stage 3: Adversarial Verification**
    Spawn one blocking task with agent `review-finding-verifier`, passing the scout context, every candidate from every hunter, and the correctness lane's `coverage_gaps`. The verifier challenges each candidate against repository evidence and upstream defenses to confirm or reject it, and checks each coverage gap (not already covered, changed executable behavior, reachable, not `test`-class, per-entry harness present, concrete impact) into `confirmed_coverage_gaps` with its severity intact. Stage 3 always runs for the `full` profile, even with no candidates, because the verifier also records the rejected candidates. For the `spec-docs` profile it runs when stage 2 emitted a candidate. Previous findings are not part of this review: there is no previous round.
 
@@ -48,11 +51,14 @@ Format the report with these exact section headers, in this order:
 ```markdown
 ### Review coverage
 ### Confirmed findings
+### Maintainability
 ### Required test coverage
 ### Unproven/rejected summary
 ### Notes
 ### Verified-OK
 ```
+
+`### Maintainability` lists every candidate the maintainability stage decided, each with its parameter group, the occurrences inside the change, the named maintenance cost (or the reason there is none), the fields that decide blocking (`decision`, `stated_cost`, `priority`, `forwarding_only`) and the evidence it read. When the stage did not run, write one line naming the status and the reason instead of an empty section.
 
 Every confirmed finding reports: priority (P1 or P2), file path, line range overlapping the added diff lines, observed behavior, expected behavior, trigger scenario, impact, and repository evidence.
 
@@ -74,4 +80,4 @@ when zero confirmed findings and zero blocking coverage gaps remain, or:
 ```text
 REVIEW_RESULT=BLOCK
 ```
-when at least one confirmed P1 or P2 finding exists, when at least one `severity: "blocking"` coverage gap with concrete impact exists and the scout reported `test_harness: present`, or when any mandatory stage fails, times out, or produces invalid output. A coverage gap never blocks on its own when it lacks concrete impact, when its file is `test`-class, when its per-entry `test_harness` is `absent`, or when it is `severity: "advisory"`; those are non-blocking even under a global `test_harness: present`. The marker MUST be the last non-empty line of the report, and it appears exactly once. The verdict contract in this prompt overrides any other format: finish the Markdown string with exactly one standalone `REVIEW_RESULT=PASS` or `REVIEW_RESULT=BLOCK` line, even if a skill describes a different verdict vocabulary.
+when at least one confirmed P1 or P2 finding exists, when at least one `severity: "blocking"` coverage gap with concrete impact exists and the scout reported `test_harness: present`, when a maintainability candidate carries a confirmed decision, a non-empty `stated_cost`, priority `P2` and `forwarding_only: false` under the `block` policy, when the maintainability analysis reported `failed`, or when any mandatory stage fails, times out, or produces invalid output. A coverage gap never blocks on its own when it lacks concrete impact, when its file is `test`-class, when its per-entry `test_harness` is `absent`, or when it is `severity: "advisory"`; those are non-blocking even under a global `test_harness: present`. A maintainability candidate never blocks on its own when `stated_cost` is empty, when its priority is `P1`, when it only forwards the group, or when the policy is `advisory` or `off`; those are notes. The marker MUST be the last non-empty line of the report, and it appears exactly once. The verdict contract in this prompt overrides any other format: finish the Markdown string with exactly one standalone `REVIEW_RESULT=PASS` or `REVIEW_RESULT=BLOCK` line, even if a skill describes a different verdict vocabulary.

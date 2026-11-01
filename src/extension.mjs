@@ -1,6 +1,8 @@
 import { PluginInstallerService } from './application/installer-service.mjs';
 import { isGitCommitCommand } from './domain/git-commit-command.mjs';
+import { formatDuration, stageSummaryLine } from './domain/review-run-summary.mjs';
 import { SlopPrompt } from './domain/slop-prompt.mjs';
+import { readRunRecords } from './infra/review-run-store.mjs';
 
 const REVIEW_STATUS_KEY = 'reviewer-kit';
 
@@ -201,9 +203,38 @@ export default function initExtension(pi) {
           lines.push(`Report: ${info.latestReview.path}`);
         }
 
+        const lastRun = (await readRunRecords({ repoRoot: info.repoRoot, limit: 1 }))[0];
+        if (lastRun) {
+          const stages = stageSummaryLine(lastRun.stages);
+          lines.push(`Last run: ${lastRun.verdict ?? String(lastRun.state).toUpperCase()} ${formatDuration(lastRun.durationMs)}${stages ? ` · ${stages}` : ''}`);
+        }
+
         ctx.ui.notify(lines.join('\n'), notifyLevel);
       } catch (err) {
         ctx.ui.notify(`reviewer-kit status check failed: ${err instanceof Error ? err.message : String(err)}`, 'error');
+      }
+    },
+  });
+
+  pi.registerCommand('reviewer-kit:runs', {
+    description: 'List the recent review runs of this repository with their durations and stage timings',
+    handler: async (args, ctx) => {
+      try {
+        const all = String(Array.isArray(args) ? args.join(' ') : args ?? '').includes('--all');
+        const records = await readRunRecords({ repoRoot: ctx.cwd, limit: all ? undefined : 10 });
+        if (records.length === 0) {
+          ctx.ui.notify('reviewer-kit: no review runs recorded for this repository yet.', 'info');
+          return;
+        }
+        const lines = records.map((record) => {
+          const stages = stageSummaryLine(record.stages);
+          return `${record.startedAt ?? 'unknown'} ${record.verdict ?? String(record.state).toUpperCase()} ${formatDuration(record.durationMs)}${stages ? ` · ${stages}` : ''}`;
+        });
+        const newest = records[0];
+        if (newest.reportPath) lines.push(`Report: ${newest.reportPath}`);
+        ctx.ui.notify(lines.join('\n'), 'info');
+      } catch (err) {
+        ctx.ui.notify(`reviewer-kit runs failed: ${err instanceof Error ? err.message : String(err)}`, 'error');
       }
     },
   });

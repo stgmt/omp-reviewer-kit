@@ -24,7 +24,7 @@ export function gateConfigProblems({ gateSource, layoutSource }) {
     if (!under(file, roots)) problems.push(`mutant path ${file} is not under a copied root`);
   }
   const layoutPaths = [
-    ...listAfter(layoutSource, 'const required'),
+    ...listAfter(layoutSource, 'REQUIRED_FILES'),
     ...listAfter(layoutSource, 'const CLAUDE_PLUGIN_FILES').map((file) => `claude-plugin/${file}`),
   ];
   for (const file of layoutPaths) {
@@ -35,7 +35,7 @@ export function gateConfigProblems({ gateSource, layoutSource }) {
 
 test('Every copy-list entry of the mutation gate exists, and every replayed path is inside it', async () => {
   const gateSource = (await readFile('scripts/run-mutation-tests.mjs', 'utf8')) + '\n' + (await readFile('scripts/mutation-runner.mjs', 'utf8'));
-  const layoutSource = await readFile('scripts/check-layout.mjs', 'utf8');
+  const layoutSource = await readFile('src/infra/layout-required.mjs', 'utf8');
   const { directories, files, problems } = gateConfigProblems({ gateSource, layoutSource });
   assert.ok(directories.includes('claude-plugin') && directories.includes('.github'));
   for (const entry of [...directories, ...files]) await access(path.join(process.cwd(), entry));
@@ -49,7 +49,7 @@ test('The gate configuration check reports a mutant or fixture path outside the 
     "  { id: 'a', file: 'src/a.mjs', testFile: 'tests/a.test.mjs' },",
     "  { id: 'b', file: 'claude-plugin/scripts/bridge.mjs', testFile: \"tests/b.test.mjs\" },",
   ].join('\n');
-  const layoutSource = "const required = ['package.json', '.github/workflows/ci.yml'];\nconst CLAUDE_PLUGIN_FILES = [];";
+  const layoutSource = "export const REQUIRED_FILES = ['package.json', '.github/workflows/ci.yml'];\nexport const CLAUDE_PLUGIN_FILES = [];";
   const { problems } = gateConfigProblems({ gateSource, layoutSource });
   assert.deepEqual(problems, [
     'mutant path claude-plugin/scripts/bridge.mjs is not under a copied root',

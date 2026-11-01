@@ -5,8 +5,32 @@
 export { runNativeReview } from './native/native-review.mjs';
 export { materializeStagedSnapshot, readStagedChange, removeSnapshot } from './native/snapshot.mjs';
 export { buildAssignment } from './native/assignment.mjs';
-export { evaluateReview, readVerdictMarker, PASS_MARKER, BLOCK_MARKER } from './native/verdict.mjs';
-export { runReviewerTask, reviewerYield, stageEvidence } from './native/task-engine.mjs';
+export { evaluateReview, readVerdictMarker, PASS_MARKER, BLOCK_MARKER, MAINTAINABILITY_AGENT, maintainabilityBlocks } from './native/verdict.mjs';
+export { runMaintainabilityAnalysis, analyzeTree, ANALYSIS_RELATIVE_PATH } from './native/maintainability/analyze.mjs';
+export { resolvePolicy, resolveConfig, DEFAULT_CONFIG, POLICY_ENV } from './native/maintainability/config.mjs';
+export { extractSignatures, collectExecutableFiles } from './native/maintainability/extract.mjs';
+export { groupClumps, isGeneratedPath } from './native/maintainability/group.mjs';
+export { runReviewerTask, reviewerYield, stageEvidence, progressEvents } from './native/task-engine.mjs';
+export { buildRunRecord, createRunId, createRunRecorder, formatStageEvent } from './native/review-telemetry.mjs';
+export {
+  RUN_SCHEMA,
+  formatDuration,
+  isTerminalRun,
+  normalizeRunRecord,
+  runStateFor,
+  stageCounts,
+  stageSummaryLine,
+} from './domain/review-run-summary.mjs';
+export {
+  isRunAlive,
+  latestRunRecord,
+  pruneRuns,
+  readRunRecord,
+  readRunRecords,
+  runRecordFile,
+  runsRootDir,
+  writeRunRecord,
+} from './infra/review-run-store.mjs';
 
 export { DiffIdentity } from './domain/diff-identity.mjs';
 export { classifyFilePath, classifyChangedPaths, reviewProfileFor, riskLanesFor } from './domain/file-class.mjs';

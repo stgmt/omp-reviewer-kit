@@ -14,6 +14,15 @@ The review calls OMP's native `TaskTool` (agent `reviewer-kit`) directly through
 
 [Status and open checks](.specs/native-task-review/STATUS.md) list what is verified and what is not, including the AT-09 owner-state acceptance that remains open.
 
+## Maintainability review of repeated parameter groups
+
+The review now also asks a separate question: are the same values always passed together, spread across many nodes, so that changing one entity demands coordinated manual edits everywhere? The deterministic part (`src/native/maintainability/`) parses the staged snapshot, keeps maximal parameter groups above the support threshold, and writes its candidates before any model runs; one read-only subagent (`review-maintainability`) decides what each group means and whether a real cost exists. The stage blocks only on a confirmed decision with a named coordinated change, priority `P2` and no pure forwarding, and `OMP_REVIEW_KIT_MAINTAINABILITY` selects `off`, `advisory` or `block` (default `block`).
+
+- [Requirements](.specs/maintainability-review/REQUIREMENTS.md)
+- [Acceptance/test matrix](.specs/maintainability-review/ACCEPTANCE_CRITERIA.md)
+- [Design and decisions](.specs/maintainability-review/DESIGN.md)
+- [Implementation plan](.specs/maintainability-review/TASKS.md)
+
 ---
 
 ## Phase 1: Fail-Closed Staged Review Gate (Completed - v0.1.0)

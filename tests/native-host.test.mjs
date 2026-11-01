@@ -3,10 +3,11 @@
 // the real writer into a temporary folder, never into the user's Documents.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { main } from '../src/native/native-host.mjs';
+import { readRunRecords } from '../src/infra/review-run-store.mjs';
 
 const DIFF_HASH = 'ab'.repeat(32);
 
@@ -34,18 +35,19 @@ async function withTempDirs(run) {
   const base = await mkdtemp(path.join(tmpdir(), 'native-host-test-'));
   const repo = path.join(base, 'repo');
   const reports = path.join(base, 'reports');
+  const runs = path.join(base, 'runs');
   try {
-    await run({ repo, reports });
+    await run({ repo, reports, runs });
   } finally {
     await rm(base, { recursive: true, force: true });
   }
 }
 
 test('Given nothing is staged, When the host runs, Then it skips the review and exits 0', async () => {
-  await withTempDirs(async ({ repo, reports }) => {
+  await withTempDirs(async ({ repo, reports, runs }) => {
     const stderr = sink();
     const code = await main([repo], {
-      env: { OMP_REVIEW_KIT_REPORTS_DIR: reports },
+      env: { OMP_REVIEW_KIT_REPORTS_DIR: reports, OMP_REVIEW_KIT_RUNS_DIR: runs },
       stderr,
       stdout: sink(),
       runReview: async () => ({ staged: false }),
@@ -56,11 +58,11 @@ test('Given nothing is staged, When the host runs, Then it skips the review and 
 });
 
 test('Given the review passes, When the host runs, Then it prints the report, names the saved report and exits 0', async () => {
-  await withTempDirs(async ({ repo, reports }) => {
+  await withTempDirs(async ({ repo, reports, runs }) => {
     const stderr = sink();
     const stdout = sink();
     const code = await main([repo], {
-      env: { OMP_REVIEW_KIT_REPORTS_DIR: reports },
+      env: { OMP_REVIEW_KIT_REPORTS_DIR: reports, OMP_REVIEW_KIT_RUNS_DIR: runs },
       stderr,
       stdout,
       runReview: async () => reviewed({ pass: true, text: '## Review\n\nREVIEW_RESULT=PASS' }),
@@ -75,10 +77,10 @@ test('Given the review passes, When the host runs, Then it prints the report, na
 });
 
 test('Given the review blocks, When the host runs, Then it exits 1 and names every reason', async () => {
-  await withTempDirs(async ({ repo, reports }) => {
+  await withTempDirs(async ({ repo, reports, runs }) => {
     const stderr = sink();
     const code = await main([repo], {
-      env: { OMP_REVIEW_KIT_REPORTS_DIR: reports },
+      env: { OMP_REVIEW_KIT_REPORTS_DIR: reports, OMP_REVIEW_KIT_RUNS_DIR: runs },
       stderr,
       stdout: sink(),
       runReview: async () => reviewed({
@@ -93,10 +95,10 @@ test('Given the review blocks, When the host runs, Then it exits 1 and names eve
 });
 
 test('Given a passing review with no reasons, When the host saves the report, Then the report carries the diff hash, the reviewer text and "none" for the reasons, outside the repository', async () => {
-  await withTempDirs(async ({ repo, reports }) => {
+  await withTempDirs(async ({ repo, reports, runs }) => {
     const stderr = sink();
     await main([repo], {
-      env: { OMP_REVIEW_KIT_REPORTS_DIR: reports },
+      env: { OMP_REVIEW_KIT_REPORTS_DIR: reports, OMP_REVIEW_KIT_RUNS_DIR: runs },
       stderr,
       stdout: sink(),
       runReview: async () => reviewed({ pass: true, text: '## Review\n\nREVIEW_RESULT=PASS' }),
@@ -113,10 +115,10 @@ test('Given a passing review with no reasons, When the host saves the report, Th
 });
 
 test('Given the reviewer fell back to another model, When the host saves the report, Then it records the applied fallback, the candidate count and the requested selector', async () => {
-  await withTempDirs(async ({ repo, reports }) => {
+  await withTempDirs(async ({ repo, reports, runs }) => {
     const stderr = sink();
     await main([repo], {
-      env: { OMP_REVIEW_KIT_REPORTS_DIR: reports },
+      env: { OMP_REVIEW_KIT_REPORTS_DIR: reports, OMP_REVIEW_KIT_RUNS_DIR: runs },
       stderr,
       stdout: sink(),
       runReview: async () => reviewed({ pass: true, text: '## Review\n\nREVIEW_RESULT=PASS' }),
@@ -131,10 +133,10 @@ test('Given the reviewer fell back to another model, When the host saves the rep
 });
 
 test('Given the reviewer never left its requested model and the task ended on a provider error, When the host saves the report, Then it records the reason, the candidate count and the error', async () => {
-  await withTempDirs(async ({ repo, reports }) => {
+  await withTempDirs(async ({ repo, reports, runs }) => {
     const stderr = sink();
     const code = await main([repo], {
-      env: { OMP_REVIEW_KIT_REPORTS_DIR: reports },
+      env: { OMP_REVIEW_KIT_REPORTS_DIR: reports, OMP_REVIEW_KIT_RUNS_DIR: runs },
       stderr,
       stdout: sink(),
       runReview: async () => reviewed({
@@ -155,12 +157,12 @@ test('Given the reviewer never left its requested model and the task ended on a 
 });
 
 test('Given a review result with no fallback evidence, When the host saves the report, Then the report says unknown instead of claiming a fallback ran', async () => {
-  await withTempDirs(async ({ repo, reports }) => {
+  await withTempDirs(async ({ repo, reports, runs }) => {
     const stderr = sink();
     const result = reviewed({ pass: true, text: '## Review\n\nREVIEW_RESULT=PASS' });
     delete result.fallback;
     await main([repo], {
-      env: { OMP_REVIEW_KIT_REPORTS_DIR: reports },
+      env: { OMP_REVIEW_KIT_REPORTS_DIR: reports, OMP_REVIEW_KIT_RUNS_DIR: runs },
       stderr,
       stdout: sink(),
       runReview: async () => result,
@@ -169,5 +171,183 @@ test('Given a review result with no fallback evidence, When the host saves the r
     const body = await readFile(reportPath, 'utf8');
     assert.match(body, /^- Reviewer fallback: unknown$/m);
     assert.match(stderr.text(), /^review: reviewer fallback=not-applied candidates=unknown$/m);
+  });
+});
+
+function timed(result) {
+  return {
+    ...result,
+    runSummary: {
+      startedAt: '2026-11-01T09:12:33.120Z',
+      finishedAt: '2026-11-01T09:16:45.460Z',
+      durationMs: 252340,
+      reviewer: { durationMs: 251000, tokens: 410000, requests: 38, contextTokens: 90000, sessionFile: 'C:\\sessions\\Review.jsonl', fallbackApplied: true },
+      timings: { snapshotMs: 1200, nativeTaskMs: 251000, verdictMs: 40 },
+    },
+  };
+}
+
+test('Given a passing review, When the host finishes, Then one run record lies outside the repository with the verdict, the duration and the stage timings, and no reviewer text', async () => {
+  await withTempDirs(async ({ repo, reports, runs }) => {
+    const stderr = sink();
+    const result = timed(reviewed({ pass: true, text: '## Review\n\nSECRET-REPORT-BODY\n\nREVIEW_RESULT=PASS' }));
+    result.stages = [
+      { agent: 'review-context-scout', exitCode: 0, aborted: false, structuredStatus: 'valid', role: 'task', model: 'resolved-model', durationMs: 62000, tokens: 18000, requests: 12, counts: { behaviors: 5 } },
+      { agent: 'review-risk-hunter', exitCode: 0, aborted: false, structuredStatus: 'valid', role: 'task', model: 'resolved-model', durationMs: 130000, tokens: 61000, requests: 19, counts: { candidates: 1, coverage_gaps: 3 } },
+    ];
+    const code = await main([repo], {
+      env: { OMP_REVIEW_KIT_REPORTS_DIR: reports, OMP_REVIEW_KIT_RUNS_DIR: runs },
+      stderr,
+      stdout: sink(),
+      runReview: async () => result,
+    });
+    assert.equal(code, 0);
+    const files = (await readdir(runs)).filter(name => name.endsWith('.json'));
+    assert.equal(files.length, 1, 'exactly one record per run');
+    const raw = await readFile(path.join(runs, files[0]), 'utf8');
+    const record = JSON.parse(raw);
+    assert.equal(record.schema, 'review-run-record@2');
+    assert.equal(record.state, 'passed');
+    assert.equal(record.verdict, 'PASS');
+    assert.equal(typeof record.durationMs, 'number', 'the host measures the wall clock of its own run');
+    assert.equal(record.timings.nativeTaskMs, 251000);
+    assert.equal(record.repoRoot, path.resolve(repo));
+    assert.equal(record.stages.length, 2);
+    assert.equal(record.stages[1].durationMs, 130000);
+    assert.deepEqual(record.stages[1].counts, { candidates: 1, coverage_gaps: 3 });
+    assert.ok(record.reportPath.endsWith('.md'));
+    assert.ok(!raw.includes('SECRET-REPORT-BODY'), 'the reviewer report is never copied into the record');
+    assert.ok(path.relative(repo, path.join(runs, files[0])).startsWith('..'), 'the record is never written inside the repository');
+    assert.match(stderr.text(), /^review: run \S+ passed \S+$/m);
+  });
+});
+
+test('Given nothing is staged, When the host finishes, Then the record says skipped instead of claiming a review ran', async () => {
+  await withTempDirs(async ({ repo, reports, runs }) => {
+    const code = await main([repo], {
+      env: { OMP_REVIEW_KIT_REPORTS_DIR: reports, OMP_REVIEW_KIT_RUNS_DIR: runs },
+      stderr: sink(),
+      stdout: sink(),
+      runReview: async () => ({ staged: false, runSummary: { timings: { snapshotMs: 12 }, durationMs: 14 } }),
+    });
+    assert.equal(code, 0);
+    const files = (await readdir(runs)).filter(name => name.endsWith('.json'));
+    assert.equal(files.length, 1);
+    const record = JSON.parse(await readFile(path.join(runs, files[0]), 'utf8'));
+    assert.equal(record.state, 'skipped');
+    assert.equal(record.verdict, null);
+    assert.equal(record.timings.snapshotMs, 12);
+  });
+});
+
+test('Given the reviewer reports stage progress, When the host runs, Then each stage transition is logged once and PROGRESS=0 silences the stage lines but not the summary', async () => {
+  await withTempDirs(async ({ repo, reports, runs }) => {
+    const progress = onEvent => {
+      onEvent({ agent: 'review-context-scout', status: 'running', lane: null });
+      onEvent({ agent: 'review-context-scout', status: 'running', lane: null });
+      onEvent({ agent: 'review-context-scout', status: 'completed', lane: null, durationMs: 62_000, tokens: 18_000, requests: 12 });
+      onEvent({ agent: 'review-context-scout', status: 'completed', lane: null, durationMs: 62_000, tokens: 18_000, requests: 12 });
+    };
+    const loud = sink();
+    const loudCode = await main([repo], {
+      env: { OMP_REVIEW_KIT_REPORTS_DIR: reports, OMP_REVIEW_KIT_RUNS_DIR: runs },
+      stderr: loud,
+      stdout: sink(),
+      runReview: async ({ onEvent }) => {
+        progress(onEvent);
+        return timed(reviewed({ pass: true, text: '## Review\n\nREVIEW_RESULT=PASS' }));
+      },
+    });
+    assert.equal(loudCode, 0);
+    const loudLines = loud.text().split('\n');
+    assert.equal(loudLines.filter(line => line === 'review: stage review-context-scout running').length, 1);
+    assert.equal(loudLines.filter(line => line === 'review: stage review-context-scout completed (1m02s, 18k tok, 12 req)').length, 1);
+
+    const quiet = sink();
+    const quietCode = await main([repo], {
+      env: { OMP_REVIEW_KIT_REPORTS_DIR: reports, OMP_REVIEW_KIT_RUNS_DIR: runs, OMP_REVIEW_KIT_PROGRESS: '0' },
+      stderr: quiet,
+      stdout: sink(),
+      runReview: async ({ onEvent }) => {
+        progress(onEvent);
+        return timed(reviewed({ pass: true, text: '## Review\n\nREVIEW_RESULT=PASS' }));
+      },
+    });
+    assert.equal(quietCode, 0);
+    assert.doesNotMatch(quiet.text(), /^review: stage review-context-scout (running|completed \(1m02s)/m);
+    assert.match(quiet.text(), /^review: run \S+ passed \S+$/m);
+  });
+});
+
+test('Given the run recorder throws on every call, When the review passes, Then the verdict and the exit code are unchanged', async () => {
+  await withTempDirs(async ({ repo, reports }) => {
+    const stderr = sink();
+    const boom = () => {
+      throw new Error('record sink exploded');
+    };
+    const recorder = {
+      runId: 'broken-recorder',
+      get record() {
+        throw new Error('record read exploded');
+      },
+      get writeFailure() {
+        throw new Error('failure read exploded');
+      },
+      start: async () => boom(),
+      event: async () => boom(),
+      complete: async () => boom(),
+      fail: async () => boom(),
+    };
+    const code = await main([repo], {
+      env: { OMP_REVIEW_KIT_REPORTS_DIR: reports },
+      stderr,
+      stdout: sink(),
+      recorder,
+      runReview: async () => timed(reviewed({ pass: true, text: '## Review\n\nREVIEW_RESULT=PASS' })),
+    });
+    assert.equal(code, 0);
+    assert.match(stderr.text(), /^review: PASS$/m);
+    assert.match(stderr.text(), /^review: run record unavailable$/m);
+  });
+});
+
+test('Given the review throws, When the host runs, Then the run is recorded as failed, the error is named and the exit code is 1', async () => {
+  await withTempDirs(async ({ repo, reports, runs }) => {
+    const stderr = sink();
+    const code = await main([repo], {
+      env: { OMP_REVIEW_KIT_REPORTS_DIR: reports, OMP_REVIEW_KIT_RUNS_DIR: runs },
+      stderr,
+      stdout: sink(),
+      runReview: async () => {
+        throw new Error('snapshot exploded');
+      },
+    });
+    assert.equal(code, 1);
+    assert.match(stderr.text(), /^review: BLOCK \(host error: snapshot exploded\)$/m);
+    assert.match(stderr.text(), /^review: run \S+ failed \S+$/m);
+    const records = await readRunRecords({ dir: runs });
+    assert.equal(records.length, 1);
+    assert.equal(records[0].state, 'failed');
+    assert.equal(records[0].verdict, 'FAILED');
+    assert.deepEqual(records[0].reasons, ['snapshot exploded']);
+  });
+});
+
+test('Given the review passes, When the host runs, Then the report carries the run table with one row per stage', async () => {
+  await withTempDirs(async ({ repo, reports, runs }) => {
+    const stderr = sink();
+    const code = await main([repo], {
+      env: { OMP_REVIEW_KIT_REPORTS_DIR: reports, OMP_REVIEW_KIT_RUNS_DIR: runs },
+      stderr,
+      stdout: sink(),
+      runReview: async () => reviewed({ pass: true, text: '## Review\n\nREVIEW_RESULT=PASS' }),
+    });
+    assert.equal(code, 0);
+    const named = /^review: report (.+)$/m.exec(stderr.text());
+    assert.ok(named, 'the report path is named');
+    const body = await readFile(named[1], 'utf8');
+    assert.match(body, /^## Run$/m);
+    assert.match(body, /^\| Stage \| Duration \| Tokens \| Requests \| Result \|$/m);
+    assert.match(body, /^\| review-context-scout \|/m);
   });
 });

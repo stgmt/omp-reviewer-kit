@@ -1,90 +1,12 @@
-import { access, readdir, readFile, stat } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 import { isOwnedHook, parseHookMarker } from '../src/domain/hook-template.mjs';
 import { isRunnerNewer } from '../src/domain/runner-version.mjs';
+import { CLAUDE_PLUGIN_FILES, CLAUDE_PLUGIN_MAX_BYTES, REQUIRED_FILES, assertRequiredFiles } from '../src/infra/layout-required.mjs';
 
-// The Claude Code shell ships only these files; everything else (runner,
-// installer, agents, tests) is deliberately absent so the plugin cache stays small.
-const CLAUDE_PLUGIN_FILES = [
-  '.claude-plugin/plugin.json',
-  'commands/doctor.md',
-  'commands/install-omp.md',
-  'commands/review.md',
-  'commands/setup.md',
-  'hooks/hooks.json',
-  'scripts/bridge.mjs',
-];
-const CLAUDE_PLUGIN_MAX_BYTES = 100 * 1024;
 
-const required = [
-  'package.json',
-  '.omp-plugin/marketplace.json',
-  '.claude-plugin/marketplace.json',
-  ...CLAUDE_PLUGIN_FILES.map((file) => `claude-plugin/${file}`),
-  // The native review: one staged snapshot, one native task, a verdict over its evidence.
-  'src/native/native-host.mjs',
-  'src/native/native-review.mjs',
-  'src/native/snapshot.mjs',
-  'src/native/assignment.mjs',
-  'src/native/verdict.mjs',
-  'src/native/task-engine.mjs',
-  'src/native/fallback-evidence.mjs',
-  'src/domain/file-class.mjs',
-  'src/domain/diff-identity.mjs',
-  'src/domain/prompt-token.mjs',
-  'src/domain/suspicion-map.mjs',
-  'src/infra/filesystem-report-store-adapter.mjs',
-  // The hook: installer, guard, shim and target registry.
-  'src/domain/runner-version.mjs',
-  'src/infra/vendored-kit-files.mjs',
-  'src/domain/target-policy.mjs',
-  'src/domain/hook-template.mjs',
-  'src/domain/hook-shim.mjs',
-  'src/domain/git-commit-command.mjs',
-  'scripts/stamp-hook.mjs',
-  'src/infra/target-registry.mjs',
-  'scripts/sync-targets.mjs',
-  '.specs/native-task-review/REQUIREMENTS.md',
-  '.specs/native-task-review/ACCEPTANCE_CRITERIA.md',
-  'skills/reality-first-review/SKILL.md',
-  'skills/multi-stage-review/SKILL.md',
-  'agents/reviewer-kit.md',
-  'agents/review-context-scout.md',
-  'agents/review-risk-hunter.md',
-  'agents/review-finding-verifier.md',
-  'templates/githooks/pre-commit',
-  'templates/review-kit/run-review.mjs',
-  'scripts/run-review.mjs',
-  'scripts/run-mutation-tests.mjs',
-  'scripts/mutation-runner.mjs',
-  'scripts/mutation-test-reporter.mjs',
-  'scripts/mutation-selectors.json',
-  'scripts/setup-hook.mjs',
-  'scripts/install-hook.ps1',
-  'scripts/install-hook.sh',
-  'src/index.mjs',
-  'src/extension.mjs',
-  'src/application/installer-service.mjs',
-  'AGENTS.md',
-  'ROADMAP.md',
-  'CHANGELOG.md',
-  '.github/workflows/ci.yml',
-  '.github/workflows/release.yml',
-  'scripts/audit-range.mjs',
-  'skills/range-audit/SKILL.md',
-  'agents/review-range-auditor.md',
-  'skills/slop/SKILL.md',
-  'agents/slop.md',
-  'agents/slop-scout.md',
-  'agents/slop-verifier.md',
-  'src/domain/slop-prompt.mjs',
-  'src/domain/slop-report.mjs',
-];
-
-for (const file of required) {
-  await access(file);
-}
+await assertRequiredFiles(process.cwd(), REQUIRED_FILES);
 
 // The repository's runner is the thin stub the installer writes: byte-identical to its template, never a copy of the algorithm.
 const stubRunner = await readFile('templates/review-kit/run-review.mjs', 'utf8');
@@ -149,4 +71,4 @@ if (shellBytes > CLAUDE_PLUGIN_MAX_BYTES) {
   throw new Error(`claude-plugin/ is ${shellBytes} bytes; the limit is ${CLAUDE_PLUGIN_MAX_BYTES}.`);
 }
 
-console.log(`layout ok: ${required.length} files verified; vendored runner is the stub and the algorithm carries its version marker`);
+console.log(`layout ok: ${REQUIRED_FILES.length} files verified; vendored runner is the stub and the algorithm carries its version marker`);

@@ -45,11 +45,12 @@ export async function loadOmpEngine(importer = specifier => import(specifier)) {
  *   kitRoot: string,
  *   assignment: string,
  *   onProgress?: (line: string) => void,
+ *   onEvent?: (event: object) => void,
  *   loadEngine?: typeof loadOmpEngine,
  * }} input
  * @returns {Promise<{ reviewer: object|undefined, stages: object[], sessionFile: string }>}
  */
-export async function runReviewerTask({ cwd, kitRoot, assignment, onProgress = () => {}, loadEngine = loadOmpEngine }) {
+export async function runReviewerTask({ cwd, kitRoot, assignment, onProgress = () => {}, onEvent = () => {}, loadEngine = loadOmpEngine }) {
   const omp = await loadEngine();
   const base = await omp.Settings.init({ cwd });
   const authStorage = await omp.discoverAuthStorage(undefined, { settings: base });
@@ -92,7 +93,16 @@ export async function runReviewerTask({ cwd, kitRoot, assignment, onProgress = (
   const tool = await omp.TaskTool.create(session);
   const run = await tool.execute('reviewer-kit-review', { agent: 'reviewer-kit', name: 'Review', task: assignment }, undefined, update => {
     onProgress(describeUpdate(update));
+    for (const event of progressEvents(update)) emit(event);
   });
+
+  function emit(event) {
+    try {
+      onEvent(event);
+    } catch {
+      // The observer is fail-open: a broken sink never interrupts the review.
+    }
+  }
   const reviewer = reviewerFromRun(run);
   return { reviewer, stages: stageEvidence(reviewer), sessionFile };
 }
@@ -144,8 +154,38 @@ export function stageEvidence(reviewer) {
       data: result.structuredOutput?.data ?? null,
       role: result.modelRole ?? null,
       model: result.resolvedModel ?? null,
+      durationMs: result.durationMs ?? null,
+      tokens: result.tokens ?? null,
+      requests: result.requests ?? null,
+      contextTokens: result.contextTokens ?? null,
     })),
   );
+}
+
+/**
+ * Live stage events for the hook log and the run record, built from OMP's own `AgentProgress`
+ * entries. The numbers are whatever OMP reported for that stage; a stage with no entry yet is not
+ * invented here. Nothing but names, statuses and counters leaves this function.
+ *
+ * @param {{ details?: { progress?: object[] } }} [update]
+ * @returns {Array<{ agent: string|null, lane: string|null, status: string|null, durationMs: number|null, tokens: number|null, requests: number|null, contextTokens: number|null, role: string|null, model: string|null }>}
+ */
+export function progressEvents(update) {
+  const progress = update?.details?.progress;
+  if (!Array.isArray(progress)) return [];
+  return progress
+    .filter(entry => entry && typeof entry === 'object' && typeof entry.agent === 'string')
+    .map(entry => ({
+      agent: entry.agent,
+      lane: entry.lane ?? null,
+      status: typeof entry.status === 'string' ? entry.status : null,
+      durationMs: typeof entry.durationMs === 'number' ? entry.durationMs : null,
+      tokens: typeof entry.tokens === 'number' ? entry.tokens : null,
+      requests: typeof entry.requests === 'number' ? entry.requests : null,
+      contextTokens: typeof entry.contextTokens === 'number' ? entry.contextTokens : null,
+      role: entry.modelRole ?? null,
+      model: entry.resolvedModel ?? null,
+    }));
 }
 
 /**

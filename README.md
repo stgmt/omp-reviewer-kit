@@ -174,13 +174,29 @@ When the staged `.omp/review-kit/run-review.mjs` is byte-identical (line endings
 
 OMP owns model choice. Configure the `task` role, its fallbacks, and any `task.agentModelOverrides` in `~/.omp/agent/config.yml`. The kit does not read those settings to plan a route, does not pin a model, and does not copy `task` into another role. Its own review agents declare `model: "@task"`, so they use whatever the `task` role resolves to. Note that `agentModelOverrides` silently override an agent's `model:` frontmatter. Provider retry, cooldown and fallback are OMP's; the kit does not add a retry layer.
 
+## Run Records and Live Progress
+
+A review writes one machine-readable record per run outside every repository: `<home>/.omp/review-kit-runs/<runId>.json` (`OMP_REVIEW_KIT_RUNS_DIR` overrides the folder). The record carries the start and finish time, the wall-clock duration, the phases (snapshot, native task, verdict, report), the settled verdict and one entry per stage with its duration, tokens, requests, resolved model and the counts of what it reported. It never carries the reviewer's report, a prompt, a file body or a finding's text, and nothing in it can change a verdict or an exit code: a record that cannot be written is reported once and ignored.
+
+The hook prints the same observation as it happens. `review: run <id> started` comes first, a `review: stage <agent> … <status> (<duration>, <tokens> tok, <requests> req)` line follows every finished stage, and `review: run <id> <state> <duration>` closes the review. `OMP_REVIEW_KIT_PROGRESS=0` silences the live stage lines, so CI logs stay small; the start and summary lines remain.
+
+```sh
+node scripts/review-runs.mjs                 # the last 10 runs of this machine
+node scripts/review-runs.mjs --all --json
+node scripts/review-runs.mjs --repo . --last
+node scripts/review-runs.mjs --run <runId>   # one record in full
+node scripts/review-runs.mjs --follow <runId>  # watch a running review until it settles
+```
+
+The command is read-only: it never writes a record, never stops a review and exits 1 when nothing matches. Inside OMP, `/reviewer-kit:runs` lists the runs of the current repository, and `/reviewer-kit:status` adds the last run's verdict and duration. Records are pruned on the next run: the newest 200 and anything from the last 30 days stay, a run that is still alive is never deleted, and a record of another schema is ignored rather than migrated.
+
 ## Removed in 0.22.0
 
 The native rewrite removed the earlier pipeline and its settings. Do not expect these:
 
 - The model dispatcher, the model preflight, the `task`-to-`default` chain overlay and its reader, the model re-emit, and provider-driven whole-review reruns.
 - `OMP_REVIEW_KIT_MODEL`, `OMP_REVIEW_KIT_FALLBACK_MODELS`, `OMP_REVIEW_KIT_MAX_FALLBACKS`, `OMP_REVIEW_KIT_TASK_CHAIN`, `OMP_REVIEW_KIT_PREFLIGHT_TIMEOUT_MS`, `OMP_REVIEW_KIT_REEMIT`, `OMP_REVIEW_KIT_EFFORT`, `OMP_REVIEW_KIT_MAX_TIME` and the other model and chain settings (`audit-range --llm` is the one exception; see below).
-- The verdict cache, delta rounds, the context pack, hunter shards, scout baseline and the scout scope planner, the batch gate and its retries, the rejection envelope, the run telemetry and per-run records, the progress commands and the superseded-run stop, and pre-review check execution (`OMP_REVIEW_KIT_EXECUTE`, `OMP_REVIEW_KIT_RED_PROOF`).
+- The verdict cache, delta rounds, the context pack, hunter shards, scout baseline and the scout scope planner, the batch gate and its retries, the rejection envelope, the superseded-run stop, and pre-review check execution (`OMP_REVIEW_KIT_EXECUTE`, `OMP_REVIEW_KIT_RED_PROOF`). The old run telemetry and its progress commands went with the pipeline; the native review now keeps its own much smaller record (see Run Records and Live Progress).
 - `OMP_REVIEW_KIT_CACHE`, `OMP_REVIEW_KIT_ROUNDS`, `OMP_REVIEW_KIT_SHARD_BYTES`, `OMP_REVIEW_KIT_SCOUT_MAX_FILES`, `OMP_REVIEW_KIT_SCOUT_MAX_BYTES`, `OMP_REVIEW_KIT_TELEMETRY`, `OMP_REVIEW_KIT_SKILLS` and the others that configured them.
 
 Node 18 and 20 are no longer in CI, because the suite now loads the Bun library.
@@ -194,6 +210,8 @@ Node 18 and 20 are no longer in CI, because the suite now loads the Bun library.
 | `OMP_REVIEW_KIT_PLUGIN_DIR` | The installed plugin directory the vendored stub runs. |
 | `OMP_REVIEW_KIT_PLUGIN_SPEC` | The plugin specifier the Claude shell installs (default `github:stgmt/omp-reviewer-kit#v<version>`). |
 | `OMP_REVIEW_KIT_REPORTS_DIR` | The report root (default `~/Documents/omp-reviewer-kit`). |
+| `OMP_REVIEW_KIT_RUNS_DIR` | The run-record root (default `~/.omp/review-kit-runs`). |
+| `OMP_REVIEW_KIT_PROGRESS=0` | Silences the live stage lines of the hook; the start and summary lines stay. |
 | `OMP_REVIEW_KIT_LANES` | The risk-lane allowlist for stage 2 (see Review Profiles). |
 | `OMP_REVIEW_KIT_TARGETS` | The owner-edited target registry file. |
 | `OMP_REVIEW_KIT_AUTO_SYNC=0` | Turns off the automatic repair of registered repositories. |

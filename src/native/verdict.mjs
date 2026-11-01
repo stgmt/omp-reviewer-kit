@@ -7,6 +7,7 @@ export const BLOCK_MARKER = 'REVIEW_RESULT=BLOCK';
 export const SCOUT_AGENT = 'review-context-scout';
 export const HUNTER_AGENT = 'review-risk-hunter';
 export const VERIFIER_AGENT = 'review-finding-verifier';
+export const MAINTAINABILITY_AGENT = 'review-maintainability';
 
 /**
  * Reads the single verdict marker of a reviewer's Markdown. The marker must be the only line
@@ -72,16 +73,34 @@ function classIndex(fileClasses) {
 }
 
 /**
+ * Whether one maintainability candidate may stop the commit. Blocking needs all four machine
+ * fields at once: a confirmed decision, a stated maintenance cost, priority `P2`, and not being a
+ * pure forwarder. Text in the report never contributes.
+ *
+ * @param {object} candidate
+ * @returns {boolean}
+ */
+export function maintainabilityBlocks(candidate) {
+  if (!candidate || typeof candidate !== 'object') return false;
+  if (candidate.decision !== 'confirmed') return false;
+  if (candidate.forwarding_only === true) return false;
+  if (candidate.priority !== 'P2') return false;
+  return hasText(candidate.stated_cost);
+}
+
+/**
  * @param {{
  *   reviewer: { exitCode: number|null, aborted: boolean, yieldStatus: string|null, text: string } | undefined,
  *   stages: Array<{ agent: string|null, exitCode: number|null, aborted: boolean, structuredStatus: string|null, data: object|null }>,
  *   profile: 'full'|'spec-docs',
  *   lanes: string[],
  *   fileClasses?: Array<{ path: string, fileClass: string }>,
+ *   planned?: string[],
+ *   maintainability?: { policy: 'off'|'advisory'|'block', status: string|null, coverage: string|null, planned: boolean }|null,
  * }} input
  * @returns {{ pass: boolean, verdict: 'PASS'|'BLOCK', reasons: string[] }}
  */
-export function evaluateReview({ reviewer, stages, profile, lanes, fileClasses = [] }) {
+export function evaluateReview({ reviewer, stages, profile, lanes, fileClasses = [], planned = [], maintainability = null }) {
   const reasons = [];
   if (!reviewer) {
     reasons.push('reviewer task result missing');
@@ -111,6 +130,20 @@ export function evaluateReview({ reviewer, stages, profile, lanes, fileClasses =
   const verifiers = completed(VERIFIER_AGENT);
   if (profile === 'full' && verifiers.length < 1) reasons.push(`no completed stage evidence for ${VERIFIER_AGENT}`);
 
+  if (Array.isArray(planned) && planned.length > 0) {
+    const missing = planned.filter(name => completed(name).length === 0);
+    if (missing.length > 0) reasons.push(`no completed stage evidence for planned agent(s): ${missing.join(', ')}`);
+  }
+
+  const maintainabilitySummary = maintainability && typeof maintainability === 'object' ? maintainability : null;
+  const maintainabilityStages = completed(MAINTAINABILITY_AGENT);
+  if (maintainabilitySummary && maintainabilitySummary.policy !== 'off') {
+    if (maintainabilitySummary.status === 'failed') reasons.push('maintainability analysis failed');
+    if (maintainabilitySummary.planned === true && maintainabilityStages.length === 0) {
+      reasons.push(`no completed stage evidence for ${MAINTAINABILITY_AGENT}`);
+    }
+  }
+
   // A PASS may not stand against the stages' own confirmed results.
   if (marker.verdict === 'PASS') {
     const confirmedFindings = verifiers.reduce((count, stage) => count + listLength(stage.data?.confirmed_findings), 0);
@@ -124,6 +157,14 @@ export function evaluateReview({ reviewer, stages, profile, lanes, fileClasses =
     const blockingGaps = confirmedGaps.filter(gap => coverageGapBlocks(gap, { harnessAbsent, fileClasses: classes }));
     if (blockingGaps.length > 0) {
       reasons.push(`verifier confirmed ${blockingGaps.length} blocking coverage gap(s) with a test harness but the reviewer passed`);
+    }
+    if (maintainabilitySummary && maintainabilitySummary.policy === 'block') {
+      const blockingItems = maintainabilityStages
+        .flatMap(stage => (Array.isArray(stage.data?.candidates) ? stage.data.candidates : []))
+        .filter(maintainabilityBlocks);
+      if (blockingItems.length > 0) {
+        reasons.push(`${MAINTAINABILITY_AGENT} confirmed ${blockingItems.length} maintainability item(s) with a stated cost but the reviewer passed`);
+      }
     }
   }
 

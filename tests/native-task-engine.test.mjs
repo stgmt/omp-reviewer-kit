@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { STRUCTURAL_OVERLAY, describeUpdate, fallbackOf, loadOmpEngine, provenanceOf, reviewerFromRun, reviewerTranscript, runReviewerTask } from '../src/native/task-engine.mjs';
+import { STRUCTURAL_OVERLAY, describeUpdate, fallbackOf, loadOmpEngine, progressEvents, provenanceOf, reviewerFromRun, reviewerTranscript, runReviewerTask, stageEvidence } from '../src/native/task-engine.mjs';
 
 test('Given the library cannot load one of its modules, When the engine is loaded, Then loading rejects and no partial engine is returned', async () => {
   const importer = specifier => (specifier.endsWith('/config/settings')
@@ -32,6 +32,46 @@ test('Given a run with no results, When the reviewer is selected, Then there is 
 test('Given a task update with results that have not exited, When described, Then each unfinished result counts as running', () => {
   assert.equal(describeUpdate({}), 'review: native task update (0 result(s), 0 running)');
   assert.equal(describeUpdate({ details: { results: [{ exitCode: 0 }, {}, {}] } }), 'review: native task update (3 result(s), 2 running)');
+});
+
+test('Given OMP progress entries, When they are turned into live events, Then only names, statuses and counters leave the engine', () => {
+  const events = progressEvents({
+    details: {
+      progress: [
+        {
+          agent: 'review-context-scout',
+          status: 'completed',
+          durationMs: 62_000,
+          tokens: 18_000,
+          requests: 12,
+          modelRole: 'task',
+          resolvedModel: 'resolved-model',
+          currentTool: 'read',
+          prompt: 'text that must not travel',
+        },
+        { status: 'running' },
+      ],
+    },
+  });
+  assert.deepEqual(events, [
+    {
+      agent: 'review-context-scout',
+      lane: null,
+      status: 'completed',
+      durationMs: 62_000,
+      tokens: 18_000,
+      requests: 12,
+      contextTokens: null,
+      role: 'task',
+      model: 'resolved-model',
+    },
+  ]);
+});
+
+test('Given an update without progress, When live events are asked for, Then there are none', () => {
+  assert.deepEqual(progressEvents({}), []);
+  assert.deepEqual(progressEvents({ details: { results: [{ exitCode: 0 }] } }), []);
+  assert.deepEqual(progressEvents(undefined), []);
 });
 
 test('Given a reviewer with a role and no resolved model, When its provenance is read, Then the role is kept and the model is null', () => {
@@ -149,4 +189,86 @@ test('Given a stub engine, When the reviewer task runs, Then it calls the native
   assert.equal(result.reviewer, reviewer);
   assert.equal(result.sessionFile, 'session.jsonl');
   assert.deepEqual(progress, ['review: native task update (1 result(s), 1 running)']);
+});
+
+test('Given a nested result with every metric, When its evidence is read, Then the duration, tokens, requests and context are kept', () => {
+  const [stage] = stageEvidence({
+    extractedToolData: {
+      task: [
+        {
+          results: [
+            {
+              agent: 'review-context-scout',
+              modelRole: 'task',
+              resolvedModel: 'resolved-model',
+              exitCode: 0,
+              aborted: false,
+              durationMs: 62_000,
+              tokens: 18_000,
+              requests: 12,
+              contextTokens: 5_000,
+              structuredOutput: { status: 'valid', data: { test_harness: 'present' } },
+            },
+          ],
+        },
+      ],
+    },
+  });
+  assert.equal(stage.durationMs, 62_000);
+  assert.equal(stage.tokens, 18_000);
+  assert.equal(stage.requests, 12);
+  assert.equal(stage.contextTokens, 5_000);
+});
+
+test('Given a nested result without metrics, When its evidence is read, Then every metric stays null', () => {
+  const [stage] = stageEvidence({ extractedToolData: { task: [{ results: [{ agent: 'review-risk-hunter', exitCode: 0, aborted: false, structuredOutput: { status: 'valid', data: {} } }] }] } });
+  assert.equal(stage.durationMs, null);
+  assert.equal(stage.tokens, null);
+  assert.equal(stage.requests, null);
+  assert.equal(stage.contextTokens, null);
+});
+
+test('Given several progress entries from the native task, When the reviewer task runs, Then every converted event reaches the observer and a throwing observer does not stop the review', async () => {
+  const reviewer = { agent: 'reviewer-kit', exitCode: 0, aborted: false, extractedToolData: {} };
+  const stub = {
+    Settings: { init: async () => ({ overlay: overlayed => ({ overlayed }) }) },
+    discoverAuthStorage: async () => 'auth',
+    ModelRegistry: class {
+      async refresh() {}
+    },
+    SessionManager: {
+      create: () => ({
+        setSessionName: async () => {},
+        ensureOnDisk: async () => {},
+        getSessionFile: () => 'session.jsonl',
+        getSessionId: () => 'sid',
+        getArtifactsDir: () => 'artifacts',
+        getArtifactManager: () => 'artifact-manager',
+      }),
+    },
+    EventBus: class {},
+    MAIN_AGENT_ID: 'main',
+    TaskTool: {
+      create: async () => ({
+        execute: async (id, params, signal, onUpdate) => {
+          onUpdate({ details: { progress: [{ agent: 'review-context-scout', status: 'completed', durationMs: 1_000 }] } });
+          onUpdate({ details: { progress: [{ agent: 'review-risk-hunter', status: 'completed', durationMs: 2_000 }, { agent: 'review-finding-verifier', status: 'completed', durationMs: 3_000 }] } });
+          return { details: { results: [reviewer] } };
+        },
+      }),
+    },
+  };
+  const seen = [];
+  const result = await runReviewerTask({
+    cwd: 'repo',
+    kitRoot: path.resolve('kit-root-fixture'),
+    assignment: 'ASSIGNMENT',
+    onEvent: event => {
+      seen.push(`${event.agent}:${event.status}:${event.durationMs}`);
+      if (seen.length === 2) throw new Error('observer exploded');
+    },
+    loadEngine: async () => stub,
+  });
+  assert.deepEqual(seen, ['review-context-scout:completed:1000', 'review-risk-hunter:completed:2000', 'review-finding-verifier:completed:3000']);
+  assert.equal(result.reviewer, reviewer);
 });

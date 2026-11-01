@@ -11,10 +11,14 @@ import { sanitizePromptToken } from '../domain/prompt-token.mjs';
  *   profile: 'full'|'spec-docs',
  *   lanes: string[],
  *   changedPaths: string[],
+ *   maintainability?: {
+ *     path: string|null, policy: string, status: string, coverage: string|null,
+ *     candidates: number, reason?: string|null, truncated?: boolean,
+ *   }|null,
  * }} input
  * @returns {string}
  */
-export function buildAssignment({ snapshotDir, repoRoot, diffHash, profile, lanes, changedPaths }) {
+export function buildAssignment({ snapshotDir, repoRoot, diffHash, profile, lanes, changedPaths, maintainability = null }) {
   const review = `${snapshotDir}/.review`;
   return [
     'Review the staged Git change of the repository below as the reviewer-kit orchestrator.',
@@ -27,9 +31,25 @@ export function buildAssignment({ snapshotDir, repoRoot, diffHash, profile, lane
     `Diff hash (SHA-256 of the binary staged diff): ${diffHash}`,
     `Review profile for this diff: ${profile}`,
     `Risk lanes for this diff: ${JSON.stringify(lanes)}`,
+    maintainabilityLine(maintainability),
     'No suspicion map, previous-round block, execution evidence block or hunter shards are supplied for this assignment.',
     '',
     'Changed paths:',
     ...changedPaths.map(file => `- ${sanitizePromptToken(file)}`),
   ].join('\n');
+}
+
+/**
+ * The maintainability inputs the orchestrator hands to its stage: where the deterministic
+ * candidate file is, which policy governs blocking, and how much of the snapshot was read.
+ * A skipped analysis is stated with its reason, never left implicit.
+ */
+function maintainabilityLine(maintainability) {
+  if (!maintainability || !maintainability.path) {
+    const reason = maintainability?.reason ?? 'not-run';
+    return `Maintainability review: not run (${reason}); the maintainability stage is not planned for this diff.`;
+  }
+  const coverage = maintainability.coverage ?? 'unknown';
+  const truncated = maintainability.truncated === true ? ', scan truncated: support is a lower bound' : '';
+  return `Maintainability candidates (deterministic, written before this task): ${maintainability.path} — status ${maintainability.status}, ${maintainability.candidates} group(s), coverage ${coverage}, policy ${maintainability.policy}${truncated}.`;
 }

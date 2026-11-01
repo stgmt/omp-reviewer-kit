@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Run records and live stage progress.** Every review now writes one machine-readable record per run outside every repository (`<home>/.omp/review-kit-runs/<runId>.json`, `OMP_REVIEW_KIT_RUNS_DIR` overrides it): wall-clock duration, the snapshot/native-task/verdict/report phases, the settled verdict, and one entry per stage with its duration, tokens, requests, resolved model and the counts of what it reported. The numbers come from OMP's own task result (`durationMs`, `tokens`, `requests`, `contextTokens`, `AgentProgress`), so no subagent is instrumented and no model is chosen by the kit. The record never carries the report, a prompt, a file body or a finding's text.
+- The hook prints `review: run <id> started`, a live `review: stage <agent> … <status> (duration, tokens, requests)` line as each stage settles, and `review: run <id> <state> <duration>` at the end; `OMP_REVIEW_KIT_PROGRESS=0` silences the live stage lines. The report gains a `## Run` section with the duration, the phases and a stage table; older report lines keep their exact shape.
+- `node scripts/review-runs.mjs` reads records (`--last`, `--all`, `--repo`, `--run`, `--json`, `--follow <runId>`, `--timeout`) and never writes or stops a review. `/reviewer-kit:runs` lists the runs of the current repository and `/reviewer-kit:status` adds the last run's verdict, duration and stage timings.
+- Retention keeps the newest 200 records and everything from the last 30 days, never deletes the newest record or a run that is still alive, and ignores a record of another schema instead of migrating it.
+- **Maintainability review of repeated parameter groups.** The kit now finds groups of values that are always passed together and spread across many nodes, callers and forwarders, and asks one dedicated subagent whether the group describes one entity and carries a real maintenance cost. The search is deterministic: `src/native/maintainability/extract.mjs` parses JS/TS through `@babel/parser` (now a direct dependency, already present in the lock as `7.29.9`) and Python through stdlib `ast`, `group.mjs` keeps only maximal groups above the support threshold, and `analyze.mjs` writes `.review/maintainability.json` (`maintainability@1`) inside the staged snapshot before the native task starts. Candidates start in the changed paths while support counts the whole snapshot, so a group spread over sixteen sites stays visible when the change touches two of them.
+- The stage is `agents/review-maintainability.md` (`model: "@task"`, read-only tools) and appears in the orchestrator's `spawns`; the assignment names the candidate file and the policy. Blocking needs four machine fields at once - a confirmed decision, a non-empty `stated_cost`, priority `P2` and `forwarding_only: false` - and each of them alone keeps the commit. These items never enter `confirmed_findings` or `confirmed_coverage_gaps`.
+- `OMP_REVIEW_KIT_MAINTAINABILITY` selects `off`, `advisory` or `block` (default `block`). Analysis limits (`maxFileBytes` 512 KB, `maxScanFiles` 4 000, `maxScanMs` 5 000 ms) make incompleteness explicit: a file the kit cannot parse is `unparsed` with its reason, an exhausted scan reports `truncated`, `supportComplete: false` and `coverage: partial`, and neither blocks a commit by itself. `node scripts/measure-maintainability.mjs` reproduces the specification's measurement table.
+
+### Changed
+- `stageEvidence` now also carries `durationMs`, `tokens`, `requests` and `contextTokens`; `native-review` returns a `runSummary` with the phase timings.
+
+### Verified
+- `npm test` on the combined tree: 582 tests, 572 pass, 0 fail, 10 skipped (the live model cases).
+- `npm run check`: layout ok, 77 files.
+- The mutation-gate run recorded below covered the run-record work alone (300/300 killed, exit 0, 1453.0 s); the catalog now also carries the maintainability mutants, and the combined catalog has not been re-run.
+- `node scripts/review-runs.mjs` against the 275 records of the removed schema: it lists nothing (no legacy fallback) and exits 1; a record written by the new recorder is listed, detailed and followed until it settles.
+
 ## [0.23.1] - 2026-10-29
 
 ### Added

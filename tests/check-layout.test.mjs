@@ -6,12 +6,12 @@ import path from 'node:path';
 import test from 'node:test';
 
 async function layoutFixture() {
-  const source = await readFile('scripts/check-layout.mjs', 'utf8');
+  const source = await readFile('src/infra/layout-required.mjs', 'utf8');
   const listed = (start) => {
     const from = source.indexOf(start);
     return [...source.slice(from, source.indexOf('];', from)).matchAll(/'([^']+)'/g)].map((m) => m[1]);
   };
-  const required = [...listed('const required'), ...listed('const CLAUDE_PLUGIN_FILES').map((file) => `claude-plugin/${file}`)];
+  const required = [...listed('REQUIRED_FILES'), ...listed('const CLAUDE_PLUGIN_FILES').map((file) => `claude-plugin/${file}`)];
   const dir = await mkdtemp(path.join(tmpdir(), 'omp-layout-gate-'));
   for (const file of required) {
     await mkdir(path.dirname(path.join(dir, file)), { recursive: true });

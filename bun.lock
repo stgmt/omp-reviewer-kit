@@ -5,6 +5,7 @@
     "": {
       "name": "omp-reviewer-kit",
       "dependencies": {
+        "@babel/parser": "7.29.9",
         "@oh-my-pi/pi-coding-agent": "18.12.5",
       },
     },

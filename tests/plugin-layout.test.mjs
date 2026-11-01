@@ -87,9 +87,9 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.ok(!tools.includes('edit'));
     assert.ok(!tools.includes('write'));
 
-    // Spawns allowlist strictly limits children to the three specialist agents
+    // Spawns allowlist strictly limits children to the four specialist agents
     const spawns = fm.spawns.split(',').map(s => s.trim());
-    assert.deepEqual(spawns.sort(), ['review-context-scout', 'review-finding-verifier', 'review-risk-hunter'].sort());
+    assert.deepEqual(spawns.sort(), ['review-context-scout', 'review-finding-verifier', 'review-maintainability', 'review-risk-hunter'].sort());
 
     // Autoloads both review methodology and protocol skills
     assert.ok(Array.isArray(fm.autoloadSkills));

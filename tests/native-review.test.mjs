@@ -127,10 +127,11 @@ test('Given the reviewer passes with every stage completed, When the review runs
     assert.deepEqual(result.verdict.reasons, []);
     assert.deepEqual(result.provenance, { role: 'task', model: 'm' });
     assert.deepEqual(result.fallback, { applied: false, requested: null, chainLength: null, error: null });
+    const timing = { durationMs: null, tokens: null, requests: null, contextTokens: null };
     assert.deepEqual(result.stages, [
-      { agent: 'review-context-scout', exitCode: 0, aborted: false, structuredStatus: 'valid', role: 'task', model: 'm' },
-      { agent: 'review-risk-hunter', exitCode: 0, aborted: false, structuredStatus: 'valid', role: 'task', model: 'm' },
-      { agent: 'review-finding-verifier', exitCode: 0, aborted: false, structuredStatus: 'valid', role: 'task', model: 'm' },
+      { agent: 'review-context-scout', exitCode: 0, aborted: false, structuredStatus: 'valid', role: 'task', model: 'm', ...timing, counts: {} },
+      { agent: 'review-risk-hunter', exitCode: 0, aborted: false, structuredStatus: 'valid', role: 'task', model: 'm', ...timing, counts: {} },
+      { agent: 'review-finding-verifier', exitCode: 0, aborted: false, structuredStatus: 'valid', role: 'task', model: 'm', ...timing, counts: { confirmed_coverage_gaps: 0, confirmed_findings: 0 } },
     ]);
     assert.equal(result.text, PASS_REPORT);
     assert.deepEqual(result.fileClasses, [{ path: 'feature.mjs', fileClass: 'executable' }]);
@@ -183,6 +184,51 @@ test('Given the yield carries more than the report field, When the review runs, 
     assert.equal(result.verdict.pass, false);
     assert.match(result.verdict.reasons.join(' '), /reviewer yield carries no Markdown report/);
     assert.equal(result.text, '');
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test('Given the native task takes measurable time, When the review runs, Then the phase timings and the wall clock are reported', async () => {
+  const repo = await stagedRepo();
+  const parent = await mkdtemp(path.join(tmpdir(), 'native-review-parent-'));
+  try {
+    let clock = 0;
+    const result = await runNativeReview({
+      repo,
+      kitRoot: repo,
+      parentDir: parent,
+      env: {},
+      now: () => clock,
+      runTask: async () => {
+        clock = 5_000;
+        return { reviewer: reviewerWithYield(PASS_REPORT), stages: completeStages };
+      },
+    });
+    assert.equal(result.runSummary.timings.snapshotMs, 0);
+    assert.equal(result.runSummary.timings.nativeTaskMs, 5_000);
+    assert.equal(result.runSummary.timings.verdictMs, 0);
+    assert.equal(result.runSummary.durationMs, 5_000);
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test('Given nothing is staged, When the review runs, Then only the snapshot timing is reported', async () => {
+  const repo = await mkdtemp(path.join(tmpdir(), 'native-review-empty-'));
+  const parent = await mkdtemp(path.join(tmpdir(), 'native-review-parent-'));
+  try {
+    git(repo, ['init', '-q']);
+    git(repo, ['config', 'user.email', 'test@example.invalid']);
+    git(repo, ['config', 'user.name', 'native review test']);
+    await writeFile(path.join(repo, 'base.mjs'), 'export const base = 1;\n');
+    git(repo, ['add', 'base.mjs']);
+    git(repo, ['commit', '-q', '-m', 'base']);
+    const result = await runNativeReview({ repo, kitRoot: repo, parentDir: parent, env: {}, now: () => 7 });
+    assert.equal(result.staged, false);
+    assert.deepEqual(Object.keys(result.runSummary.timings), ['snapshotMs']);
   } finally {
     await rm(repo, { recursive: true, force: true });
     await rm(parent, { recursive: true, force: true });

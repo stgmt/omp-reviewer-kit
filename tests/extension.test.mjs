@@ -9,6 +9,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { PluginInstallerService } from '../src/application/installer-service.mjs';
 import initExtension from '../src/extension.mjs';
 import { repoReportsFolderName } from '../src/infra/filesystem-report-store-adapter.mjs';
+import { writeRunRecord } from '../src/infra/review-run-store.mjs';
 
 async function createTempRepo() {
   const baseDir = await mkdtemp(path.join(tmpdir(), 'omp-ext-test-'));
@@ -949,6 +950,92 @@ describe('Feature: Native OMP Extension & Installer Service', () => {
       assert.doesNotMatch(text, /Latest Review:/);
       assert.doesNotMatch(text, /^Report: /m);
     } finally {
+      if (savedReportsDir === undefined) delete process.env.OMP_REVIEW_KIT_REPORTS_DIR;
+      else process.env.OMP_REVIEW_KIT_REPORTS_DIR = savedReportsDir;
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  it('/reviewer-kit:status names the last run duration and its stage timings', async () => {
+    const { baseDir, repoDir } = await createTempRepo();
+    const runsDir = path.join(baseDir, 'runs');
+    const savedRunsDir = process.env.OMP_REVIEW_KIT_RUNS_DIR;
+    const savedReportsDir = process.env.OMP_REVIEW_KIT_REPORTS_DIR;
+    try {
+      const { repoRoot } = await new PluginInstallerService().status(repoDir);
+      process.env.OMP_REVIEW_KIT_RUNS_DIR = runsDir;
+      process.env.OMP_REVIEW_KIT_REPORTS_DIR = path.join(baseDir, 'reports');
+      await writeRunRecord({
+        schema: 'review-run-record@2',
+        runId: 'run-status',
+        state: 'blocked',
+        verdict: 'BLOCK',
+        startedAt: '2026-11-01T09:12:33.120Z',
+        durationMs: 252_340,
+        repoRoot,
+        stages: [{ agent: 'review-context-scout', status: 'completed', durationMs: 62_000 }],
+      }, { dir: runsDir });
+
+      const harness = createExtensionHarness();
+      const ctx = harness.makeCtx(repoDir);
+      await harness.commands.get('reviewer-kit:status').handler('', ctx);
+      const text = ctx.notifications.map((n) => n.msg).join('\n');
+      assert.match(text, /^Last run: BLOCK 4m12s · scout 1m02s$/m);
+    } finally {
+      if (savedRunsDir === undefined) delete process.env.OMP_REVIEW_KIT_RUNS_DIR;
+      else process.env.OMP_REVIEW_KIT_RUNS_DIR = savedRunsDir;
+      if (savedReportsDir === undefined) delete process.env.OMP_REVIEW_KIT_REPORTS_DIR;
+      else process.env.OMP_REVIEW_KIT_REPORTS_DIR = savedReportsDir;
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  it('/reviewer-kit:runs lists the runs of this repository and says so when there are none', async () => {
+    const { baseDir, repoDir } = await createTempRepo();
+    const runsDir = path.join(baseDir, 'runs');
+    const savedRunsDir = process.env.OMP_REVIEW_KIT_RUNS_DIR;
+    const savedReportsDir = process.env.OMP_REVIEW_KIT_REPORTS_DIR;
+    try {
+      const { repoRoot } = await new PluginInstallerService().status(repoDir);
+      process.env.OMP_REVIEW_KIT_RUNS_DIR = runsDir;
+      process.env.OMP_REVIEW_KIT_REPORTS_DIR = path.join(baseDir, 'reports');
+      const harness = createExtensionHarness();
+
+      const emptyCtx = harness.makeCtx(repoDir);
+      await harness.commands.get('reviewer-kit:runs').handler('', emptyCtx);
+      assert.match(emptyCtx.notifications.map((n) => n.msg).join('\n'), /no review runs recorded/);
+
+      await writeRunRecord({
+        schema: 'review-run-record@2',
+        runId: 'run-listed',
+        state: 'passed',
+        verdict: 'PASS',
+        startedAt: '2026-11-01T09:12:33.120Z',
+        durationMs: 252_340,
+        repoRoot,
+        reportPath: 'C:/reports/x.md',
+        stages: [{ agent: 'review-risk-hunter', status: 'completed', durationMs: 130_000 }],
+      }, { dir: runsDir });
+      const other = await writeRunRecord({
+        schema: 'review-run-record@2',
+        runId: 'run-foreign',
+        state: 'passed',
+        verdict: 'PASS',
+        startedAt: '2026-11-01T09:13:33.120Z',
+        durationMs: 1_000,
+        repoRoot: path.join(baseDir, 'somewhere-else'),
+      }, { dir: runsDir });
+      assert.ok(other.endsWith('.json'));
+
+      const ctx = harness.makeCtx(repoDir);
+      await harness.commands.get('reviewer-kit:runs').handler('', ctx);
+      const text = ctx.notifications.map((n) => n.msg).join('\n');
+      assert.match(text, /^2026-11-01T09:12:33.120Z PASS 4m12s · hunter 2m10s$/m);
+      assert.doesNotMatch(text, /run-foreign|somewhere-else/, 'another repository stays out of this list');
+      assert.match(text, /^Report: C:\/reports\/x\.md$/m);
+    } finally {
+      if (savedRunsDir === undefined) delete process.env.OMP_REVIEW_KIT_RUNS_DIR;
+      else process.env.OMP_REVIEW_KIT_RUNS_DIR = savedRunsDir;
       if (savedReportsDir === undefined) delete process.env.OMP_REVIEW_KIT_REPORTS_DIR;
       else process.env.OMP_REVIEW_KIT_REPORTS_DIR = savedReportsDir;
       await rm(baseDir, { recursive: true, force: true });

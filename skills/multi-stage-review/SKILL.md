@@ -27,6 +27,11 @@ Staged Diff (git diff --cached --binary --no-ext-diff --)
   - Produces candidate findings under strict anti-noise rules.
                     │
                     ▼
+[Stage 2b: Maintainability Review] (review-maintainability — only when the assignment names a candidate file with status analyzed)
+  - Reads the deterministic candidate file the host wrote before the task; never recounts support or occurrences.
+  - Decides meaning and maintenance cost per group; forwards the four machine fields the verdict reads.
+                    │
+                    ▼
 [Stage 3: Adversarial Verification] (review-finding-verifier)
   - Acts as defense attorney: tests upstream defenses, callers, reachability.
   - Produces confirmed findings, rejected candidates, and unproven candidates.
@@ -171,6 +176,7 @@ Specialist frontmatter owns its native `output` schema. Submit one complete `yie
 - **Report Structure**:
   - `### Review coverage`: Summary of inspected diff, changed files, active skills, and stages executed.
   - `### Confirmed findings`: Detailed list of confirmed findings (priority, path, range, trigger, impact, evidence).
+  - `### Maintainability`: every candidate the maintainability stage decided, with its parameter group, the occurrences inside the change, the named maintenance cost (or why none exists), the fields that decide blocking (`decision`, `stated_cost`, `priority`, `forwarding_only`) and the evidence read; one line naming the status and reason when the stage did not run. These items never enter `### Confirmed findings`.
   - `### Required test coverage`: Mandatory directive to the committer — every confirmed `severity: "blocking"` coverage gap with file path, line range, changed behavior, concrete impact, and the concrete tests that must be added (edge tests per new boundary/default/error path, mutation tests naming the killed mutant). "None required" when no blocking gap remains. Only blocking gaps appear here: advisory gaps, `test`-class gaps, and gaps whose per-entry `test_harness` is `absent` are mirrored into `### Notes`; when the scout reported `test_harness: absent`, every gap is non-blocking and goes to Notes.
   - `### Unproven/rejected summary`: Terse summary of rejected or unproven candidates with rationale.
   - `### Notes`: Non-blocking observations (stale records with intact code, check commands suppressing output, showcase stub tests, disclosed gaps with named owners, advisory coverage gaps, `test`-class waivers); never blocks PASS. Coverage items suppressed on the new grounds MUST be mirrored here with `file_path`, line range, and the ground applied — sourced from the three producer records: scout `non_coverable_items`, hunter `suppressed_coverage_items`, verifier `rejected_coverage_gaps` — and a suppression whose producer record is absent is not grounded and must be noted.
