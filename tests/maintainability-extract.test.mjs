@@ -60,14 +60,78 @@ test('Given a JavaScript file, When extracted, Then the definition, the forwarde
   }
 });
 
-test('Given a destructured parameter, When extracted, Then no signature is invented for that function', async () => {
+test('Given an object-pattern parameter, When extracted, Then its property keys are the named values', async () => {
   const root = await tree({
     'a.mjs': 'export function weird({ a, b }, c) {\n  return a + b + c;\n}\n',
   });
   try {
     const result = await extractSignatures({ rootDir: root, paths: ['a.mjs'], config });
-    assert.equal(result.signatures.some(entry => entry.name === 'weird'), false);
+    const weird = result.signatures.find(entry => entry.name === 'weird');
+    assert.ok(weird, 'a destructured parameter still names the signature');
+    assert.deepEqual(weird.params, ['a', 'b', 'c']);
+    assert.equal(weird.role, 'definition');
     assert.equal(result.status, 'ok');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('Given a call site passing an object literal with a member expression beside it, When extracted, Then the written keys and identifiers are counted', async () => {
+  const root = await tree({
+    'a.mjs': 'export function run(request) {\n  return charge({ userId: request.userId, tenantId: request.tenantId }, request.amount);\n}\n',
+  });
+  try {
+    const result = await extractSignatures({ rootDir: root, paths: ['a.mjs'], config });
+    const sites = result.signatures.filter(entry => entry.role === 'call-site');
+    assert.equal(sites.length, 1);
+    assert.deepEqual(sites[0].params, ['tenantId', 'userId']);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('Given a call site spreading its argument, When extracted, Then no signature is invented for it', async () => {
+  const root = await tree({
+    'a.mjs': 'export function run(request) {\n  return charge(...request.context);\n}\n',
+  });
+  try {
+    const result = await extractSignatures({ rootDir: root, paths: ['a.mjs'], config });
+    assert.equal(result.signatures.some(entry => entry.role === 'call-site'), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('Given the Python adapter exceeds the scan budget, When extracted, Then the scan is partial instead of failed', async () => {
+  const root = await tree({ 'a.py': 'def f(a, b):\n    return a + b\n' });
+  try {
+    const result = await extractSignatures({
+      rootDir: root,
+      paths: ['a.py'],
+      config,
+      spawnSync: () => ({ error: Object.assign(new Error('spawnSync python ETIMEDOUT'), { code: 'ETIMEDOUT' }) }),
+    });
+    assert.equal(result.status, 'ok');
+    assert.equal(result.truncated, true);
+    assert.deepEqual(result.failures, []);
+    assert.deepEqual(result.unparsedFiles, [{ path: '<python-adapter>', reason: 'analysis-budget-exhausted' }]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('Given the Python adapter is killed without a timeout, When extracted, Then the analysis fails instead of claiming a budget exhaustion', async () => {
+  const root = await tree({ 'a.py': 'def f(a, b):\n    return a + b\n' });
+  try {
+    const result = await extractSignatures({
+      rootDir: root,
+      paths: ['a.py'],
+      config,
+      spawnSync: () => ({ signal: 'SIGTERM', status: null }),
+    });
+    assert.equal(result.status, 'failed');
+    assert.equal(result.truncated, false);
+    assert.deepEqual(result.failures, [{ path: null, reason: 'failed', message: 'python adapter stopped by SIGTERM' }]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -176,4 +240,67 @@ test('Given a Python file, When extracted through the standard interpreter, Then
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+async function extractOne(name, source, paths = [name]) {
+  const root = await tree({ [name]: source });
+  try {
+    return await extractSignatures({ rootDir: root, paths, config });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+test('Given a defaulted object pattern and a rest parameter, When extracted, Then the wrapper is unwrapped instead of hiding the signature', async () => {
+  const defaulted = await extractOne('a.mjs', 'export function f({ userId, tenantId } = {}) {\n  return userId + tenantId;\n}\n');
+  const f = defaulted.signatures.find(entry => entry.name === 'f');
+  assert.ok(f, 'a defaulted object pattern still names the signature');
+  assert.deepEqual(f.params, ['tenantId', 'userId']);
+
+  const rest = await extractOne('b.mjs', 'export function g(userId, tenantId, ...extra) {\n  return userId + tenantId + extra.length;\n}\n');
+  const g = rest.signatures.find(entry => entry.name === 'g');
+  assert.ok(g, 'a rest parameter still names the signature');
+  assert.deepEqual(g.params, ['extra', 'tenantId', 'userId']);
+});
+
+test('Given a TypeScript parameter property, When extracted, Then its name is part of the signature', async () => {
+  const result = await extractOne('a.ts', 'export class A {\n  constructor(public userId: string, public tenantId: string) {}\n}\n');
+  const constructor = result.signatures.find(entry => entry.role === 'definition');
+  assert.ok(constructor, 'a parameter property still names the signature');
+  assert.deepEqual(constructor.params, ['tenantId', 'userId']);
+});
+
+test('Given a string-literal object-pattern key, When extracted, Then the written key is the name', async () => {
+  const result = await extractOne('a.mjs', "export function f({ 'user-id': value, tenantId }) {\n  return value + tenantId;\n}\n");
+  const f = result.signatures.find(entry => entry.name === 'f');
+  assert.ok(f, 'a string-literal key still names the signature');
+  assert.deepEqual(f.params, ['tenantId', 'user-id']);
+});
+
+test('Given an object pattern with a rest property, When extracted, Then the ordinary keys remain', async () => {
+  const result = await extractOne('a.mjs', 'export function f({ userId, tenantId, ...extra }) {\n  return userId + tenantId + Object.keys(extra).length;\n}\n');
+  const f = result.signatures.find(entry => entry.name === 'f');
+  assert.ok(f, 'an object-rest property does not invalidate the signature');
+  assert.deepEqual(f.params, ['tenantId', 'userId']);
+});
+
+test('Given a computed or numeric object-pattern key, When extracted, Then no signature is invented', async () => {
+  const computed = await extractOne('a.mjs', 'export function f({ [field]: value, tenantId }) {\n  return value + tenantId;\n}\n');
+  assert.equal(computed.signatures.some(entry => entry.name === 'f'), false);
+  const numeric = await extractOne('b.mjs', 'export function g({ 1: value, tenantId }) {\n  return value + tenantId;\n}\n');
+  assert.equal(numeric.signatures.some(entry => entry.name === 'g'), false);
+});
+
+test('Given a computed or method object-literal property, When extracted, Then no call-site signature is invented', async () => {
+  const computed = await extractOne('a.mjs', 'export function run(field, value, tenantId, userId) {\n  return send({ [field]: value, tenantId: value }, userId);\n}\n');
+  assert.equal(computed.signatures.some(entry => entry.role === 'call-site'), false);
+  const method = await extractOne('b.mjs', 'export function run(value, tenantId, requestId) {\n  return send({ userId() {}, tenantId: value }, requestId);\n}\n');
+  assert.equal(method.signatures.some(entry => entry.role === 'call-site'), false);
+});
+
+test('Given a call site repeating the same name, When extracted, Then the name appears once', async () => {
+  const result = await extractOne('a.mjs', 'export function run(userId) {\n  return charge(userId, userId);\n}\n');
+  const sites = result.signatures.filter(entry => entry.role === 'call-site');
+  assert.equal(sites.length, 1);
+  assert.deepEqual(sites[0].params, ['userId']);
 });

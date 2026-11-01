@@ -2742,7 +2742,7 @@
       ],
       "ancestors": [],
       "mutantHash": "9978c912b3a77fb8e46ec008b5ed0dd567d520ecabf126cd3d6f14fff216b0d7",
-      "testHash": "ca08ab70e164d4f2d5ea27aaff091c0de221de804221909124b8304f1443b097"
+      "testHash": "682bcfdfcdded60ad8afd696877928bf3f032080e5d2193828e5a4416d4f9976"
     },
     "run-record-block-recorded-passed": {
       "testFile": "tests/review-run-summary.test.mjs",
@@ -2751,7 +2751,7 @@
       ],
       "ancestors": [],
       "mutantHash": "84e7e361af85fb84d67e7b7be5ef96477784b56c366b7b56b3fb05d4aefa5341",
-      "testHash": "ca08ab70e164d4f2d5ea27aaff091c0de221de804221909124b8304f1443b097"
+      "testHash": "682bcfdfcdded60ad8afd696877928bf3f032080e5d2193828e5a4416d4f9976"
     },
     "run-record-array-counts-lost": {
       "testFile": "tests/review-run-summary.test.mjs",
@@ -2760,7 +2760,7 @@
       ],
       "ancestors": [],
       "mutantHash": "8504fce87aaee86af7676f0b7e4ff0cc98b75cc7fdcc060bd722ac4ba797c77d",
-      "testHash": "ca08ab70e164d4f2d5ea27aaff091c0de221de804221909124b8304f1443b097"
+      "testHash": "682bcfdfcdded60ad8afd696877928bf3f032080e5d2193828e5a4416d4f9976"
     },
     "run-record-legacy-schema-accepted": {
       "testFile": "tests/review-run-store.test.mjs",
@@ -2886,7 +2886,7 @@
       ],
       "ancestors": [],
       "mutantHash": "9141da4d80e2e71f583806b2430c429bd7330623c755c4800b0776eecef2e3bc",
-      "testHash": "634197998dd753ffb3e05d39844a11fe16a04de73c02379803d3f9a6d9456c18"
+      "testHash": "d95184a87ec0bb140c741a0cdfc6e828d8a42068ebee7f9bee0c729345ea721a"
     },
     "native-yield-plain-string-rejected": {
       "testFile": "tests/native-yield.test.mjs",
@@ -2958,7 +2958,7 @@
       ],
       "ancestors": [],
       "mutantHash": "be439cd43a732216dd79885a640d1db16a83b389cf2b3b015283bc24097c1df3",
-      "testHash": "634197998dd753ffb3e05d39844a11fe16a04de73c02379803d3f9a6d9456c18"
+      "testHash": "d95184a87ec0bb140c741a0cdfc6e828d8a42068ebee7f9bee0c729345ea721a"
     },
     "maintainability-object-pattern-dropped": {
       "testFile": "tests/maintainability-extract.test.mjs",
@@ -2967,7 +2967,7 @@
       ],
       "ancestors": [],
       "mutantHash": "a3dc8c774ee9a2ede624da36614fd3d999b4c16b96e0b93efa95847744a0032c",
-      "testHash": "634197998dd753ffb3e05d39844a11fe16a04de73c02379803d3f9a6d9456c18"
+      "testHash": "d95184a87ec0bb140c741a0cdfc6e828d8a42068ebee7f9bee0c729345ea721a"
     },
     "maintainability-dropped-groups-stay-full": {
       "testFile": "tests/maintainability-status.test.mjs",
@@ -2994,7 +2994,7 @@
       ],
       "ancestors": [],
       "mutantHash": "42e2d40c6677d5461abb61c04d0a7f048931d11ab0d074573c9aa749a18c84fb",
-      "testHash": "634197998dd753ffb3e05d39844a11fe16a04de73c02379803d3f9a6d9456c18"
+      "testHash": "d95184a87ec0bb140c741a0cdfc6e828d8a42068ebee7f9bee0c729345ea721a"
     },
     "maintainability-rest-element-not-unwrapped": {
       "testFile": "tests/maintainability-extract.test.mjs",
@@ -3003,7 +3003,7 @@
       ],
       "ancestors": [],
       "mutantHash": "6110c924798259caeeafcd48ae1cddcf5746bcf41c76bd11ec23c4b009bba9ef",
-      "testHash": "634197998dd753ffb3e05d39844a11fe16a04de73c02379803d3f9a6d9456c18"
+      "testHash": "d95184a87ec0bb140c741a0cdfc6e828d8a42068ebee7f9bee0c729345ea721a"
     },
     "maintainability-parameter-property-not-unwrapped": {
       "testFile": "tests/maintainability-extract.test.mjs",
@@ -3012,7 +3012,7 @@
       ],
       "ancestors": [],
       "mutantHash": "fe0736c5c4f5721549c5d55a4dc581bc4609503ea642012c54378071eaa5d563",
-      "testHash": "634197998dd753ffb3e05d39844a11fe16a04de73c02379803d3f9a6d9456c18"
+      "testHash": "d95184a87ec0bb140c741a0cdfc6e828d8a42068ebee7f9bee0c729345ea721a"
     },
     "maintainability-string-pattern-key-rejected": {
       "testFile": "tests/maintainability-extract.test.mjs",
@@ -3021,7 +3021,7 @@
       ],
       "ancestors": [],
       "mutantHash": "063ff83136e17ed2005a443f5e8e6049b8e45b94af31317b701b9a5dcd15acf4",
-      "testHash": "634197998dd753ffb3e05d39844a11fe16a04de73c02379803d3f9a6d9456c18"
+      "testHash": "d95184a87ec0bb140c741a0cdfc6e828d8a42068ebee7f9bee0c729345ea721a"
     },
     "maintainability-object-rest-invalidates-pattern": {
       "testFile": "tests/maintainability-extract.test.mjs",
@@ -3030,7 +3030,7 @@
       ],
       "ancestors": [],
       "mutantHash": "d2cff6b5fdcdacf482a3e47391d986430fcdee82ebdd31bf456fca227b951436",
-      "testHash": "634197998dd753ffb3e05d39844a11fe16a04de73c02379803d3f9a6d9456c18"
+      "testHash": "d95184a87ec0bb140c741a0cdfc6e828d8a42068ebee7f9bee0c729345ea721a"
     },
     "maintainability-computed-pattern-key-accepted": {
       "testFile": "tests/maintainability-extract.test.mjs",
@@ -3039,7 +3039,7 @@
       ],
       "ancestors": [],
       "mutantHash": "5e7b9d6cb9560929389ce7a4adde8296dbd39bf92349ba01d6b3f185d424c921",
-      "testHash": "634197998dd753ffb3e05d39844a11fe16a04de73c02379803d3f9a6d9456c18"
+      "testHash": "d95184a87ec0bb140c741a0cdfc6e828d8a42068ebee7f9bee0c729345ea721a"
     },
     "maintainability-unnameable-pattern-key-admitted": {
       "testFile": "tests/maintainability-extract.test.mjs",
@@ -3048,7 +3048,7 @@
       ],
       "ancestors": [],
       "mutantHash": "180eae0293ea5cc51dc4db2b3b18735da7e99605480291735c3367418d91ec5e",
-      "testHash": "634197998dd753ffb3e05d39844a11fe16a04de73c02379803d3f9a6d9456c18"
+      "testHash": "d95184a87ec0bb140c741a0cdfc6e828d8a42068ebee7f9bee0c729345ea721a"
     },
     "maintainability-computed-literal-property-accepted": {
       "testFile": "tests/maintainability-extract.test.mjs",
@@ -3057,7 +3057,7 @@
       ],
       "ancestors": [],
       "mutantHash": "b064a1336860b3a43879db6091db82beb500cb24bbf44460efa73865b8e9018a",
-      "testHash": "634197998dd753ffb3e05d39844a11fe16a04de73c02379803d3f9a6d9456c18"
+      "testHash": "d95184a87ec0bb140c741a0cdfc6e828d8a42068ebee7f9bee0c729345ea721a"
     },
     "maintainability-literal-method-accepted": {
       "testFile": "tests/maintainability-extract.test.mjs",
@@ -3066,7 +3066,7 @@
       ],
       "ancestors": [],
       "mutantHash": "75c768e95e595e8cd40aaab6d74da69e730413a3724158d4f2e452c4446dcc11",
-      "testHash": "634197998dd753ffb3e05d39844a11fe16a04de73c02379803d3f9a6d9456c18"
+      "testHash": "d95184a87ec0bb140c741a0cdfc6e828d8a42068ebee7f9bee0c729345ea721a"
     },
     "maintainability-duplicate-call-site-names": {
       "testFile": "tests/maintainability-extract.test.mjs",
@@ -3075,7 +3075,43 @@
       ],
       "ancestors": [],
       "mutantHash": "ed1bf9d51c8f428f798fcd2d0516bad5c56c3aabaa0642d6dc422548a9a56774",
-      "testHash": "634197998dd753ffb3e05d39844a11fe16a04de73c02379803d3f9a6d9456c18"
+      "testHash": "d95184a87ec0bb140c741a0cdfc6e828d8a42068ebee7f9bee0c729345ea721a"
+    },
+    "review-run-refused-not-terminal": {
+      "testFile": "tests/review-run-summary.test.mjs",
+      "tests": [
+        "Given a refused run, When its terminality is read, Then it is terminal so a follow loop settles instead of calling it interrupted"
+      ],
+      "ancestors": [],
+      "mutantHash": "fa5ed029bb41564090db44f040de7de170164e8f0d4a33a627f726a7d5c70d48",
+      "testHash": "682bcfdfcdded60ad8afd696877928bf3f032080e5d2193828e5a4416d4f9976"
+    },
+    "layout-required-report-envelope-missing": {
+      "testFile": "tests/layout-required.test.mjs",
+      "tests": [
+        "Given the repository, When every required file is checked, Then the list names every run-record path and nothing is missing"
+      ],
+      "ancestors": [],
+      "mutantHash": "4590875a49cdd6e36a536b788392f1cfbc4d72a433264a9966ab84e42b05959d",
+      "testHash": "cebe4d47bd00b3d32cf8d2fea6e7caea662f0fcebc91ab9087e5cbad9115abe2"
+    },
+    "layout-required-diff-budget-missing": {
+      "testFile": "tests/layout-required.test.mjs",
+      "tests": [
+        "Given the repository, When every required file is checked, Then the list names every run-record path and nothing is missing"
+      ],
+      "ancestors": [],
+      "mutantHash": "5e5e868d9845a794b57762550c1e862638c5334c178ba1196f780c2a6fe92501",
+      "testHash": "cebe4d47bd00b3d32cf8d2fea6e7caea662f0fcebc91ab9087e5cbad9115abe2"
+    },
+    "maintainability-signal-kill-treated-as-timeout": {
+      "testFile": "tests/maintainability-extract.test.mjs",
+      "tests": [
+        "Given the Python adapter is killed without a timeout, When extracted, Then the analysis fails instead of claiming a budget exhaustion"
+      ],
+      "ancestors": [],
+      "mutantHash": "78aa74597214492a872bf04bcb059ac00c3fde5caadd76ce6f71f1f861521633",
+      "testHash": "d95184a87ec0bb140c741a0cdfc6e828d8a42068ebee7f9bee0c729345ea721a"
     }
   }
 }
