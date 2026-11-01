@@ -2867,8 +2867,8 @@
         "Given a change that touches only a language without an adapter, When analysed, Then the status is unsupported and the file is named"
       ],
       "ancestors": [],
-      "mutantHash": "cdadc3903b55a005ba4abab6fbc93921f5c13be4262bf1b421c4d590a87d0e98",
-      "testHash": "9e5efc061a6e5acd8d772b577ddc15565ea35c8a13495fe110b3fc8e0183614d"
+      "mutantHash": "0996b695fe684e9dc6a26c61b1ca357e3382d48387ebc999e2a41b88c4996a64",
+      "testHash": "dbe8c3a82e7a2d48de3538997d54aee46a77d6116fc20b284e6839701b8b67fa"
     },
     "maintainability-skip-never": {
       "testFile": "tests/maintainability-stage.test.mjs",
@@ -2877,7 +2877,7 @@
       ],
       "ancestors": [],
       "mutantHash": "49df5bd9cad0fe777bacc97ecbb68c8baf5407ad3d6149cc656836466e20a070",
-      "testHash": "4078b4ecf1b08e0d4545aba29f2b51c90c87bdd88f8b813b8e85a1691071a82f"
+      "testHash": "1fed55102e3e0706d0659d7e629d8401e7e9b7d267b7cd39031cb0b3e78a4acb"
     },
     "maintainability-file-size-cap-removed": {
       "testFile": "tests/maintainability-extract.test.mjs",
@@ -2886,7 +2886,7 @@
       ],
       "ancestors": [],
       "mutantHash": "9141da4d80e2e71f583806b2430c429bd7330623c755c4800b0776eecef2e3bc",
-      "testHash": "b59a7066930a690d837b4f3a987ce58a4504ad5285ba70658e227f15abbefe1f"
+      "testHash": "634197998dd753ffb3e05d39844a11fe16a04de73c02379803d3f9a6d9456c18"
     },
     "native-yield-plain-string-rejected": {
       "testFile": "tests/native-yield.test.mjs",
@@ -2950,6 +2950,132 @@
       "ancestors": [],
       "mutantHash": "e240bf2b3f2d9c856c7df98d588fb2d582e1107a4a4e328d8dc8b9aa5b15bed9",
       "testHash": "89efc4bf2ff408befd3ab151a7258bf500d0f226d75a04227597e20862dde3d8"
+    },
+    "maintainability-call-site-object-literal-ignored": {
+      "testFile": "tests/maintainability-extract.test.mjs",
+      "tests": [
+        "Given a call site passing an object literal with a member expression beside it, When extracted, Then the written keys and identifiers are counted"
+      ],
+      "ancestors": [],
+      "mutantHash": "be439cd43a732216dd79885a640d1db16a83b389cf2b3b015283bc24097c1df3",
+      "testHash": "634197998dd753ffb3e05d39844a11fe16a04de73c02379803d3f9a6d9456c18"
+    },
+    "maintainability-object-pattern-dropped": {
+      "testFile": "tests/maintainability-extract.test.mjs",
+      "tests": [
+        "Given an object-pattern parameter, When extracted, Then its property keys are the named values"
+      ],
+      "ancestors": [],
+      "mutantHash": "a3dc8c774ee9a2ede624da36614fd3d999b4c16b96e0b93efa95847744a0032c",
+      "testHash": "634197998dd753ffb3e05d39844a11fe16a04de73c02379803d3f9a6d9456c18"
+    },
+    "maintainability-dropped-groups-stay-full": {
+      "testFile": "tests/maintainability-status.test.mjs",
+      "tests": [
+        "Given more groups than the ceiling, When analysed, Then the dropped groups are counted and the coverage is partial"
+      ],
+      "ancestors": [],
+      "mutantHash": "cb85d6b577a92a185e88d3fc181eb56c1acaa510e028b0bce3357fd930e74246",
+      "testHash": "dbe8c3a82e7a2d48de3538997d54aee46a77d6116fc20b284e6839701b8b67fa"
+    },
+    "maintainability-dropped-groups-not-counted": {
+      "testFile": "tests/maintainability-status.test.mjs",
+      "tests": [
+        "Given more groups than the ceiling, When analysed, Then the dropped groups are counted and the coverage is partial"
+      ],
+      "ancestors": [],
+      "mutantHash": "0dc5317a1af7821cbec2ed7752842ca5d82d73607fd770c1872cf657a6cd048c",
+      "testHash": "dbe8c3a82e7a2d48de3538997d54aee46a77d6116fc20b284e6839701b8b67fa"
+    },
+    "maintainability-assignment-default-not-unwrapped": {
+      "testFile": "tests/maintainability-extract.test.mjs",
+      "tests": [
+        "Given a defaulted object pattern and a rest parameter, When extracted, Then the wrapper is unwrapped instead of hiding the signature"
+      ],
+      "ancestors": [],
+      "mutantHash": "42e2d40c6677d5461abb61c04d0a7f048931d11ab0d074573c9aa749a18c84fb",
+      "testHash": "634197998dd753ffb3e05d39844a11fe16a04de73c02379803d3f9a6d9456c18"
+    },
+    "maintainability-rest-element-not-unwrapped": {
+      "testFile": "tests/maintainability-extract.test.mjs",
+      "tests": [
+        "Given a defaulted object pattern and a rest parameter, When extracted, Then the wrapper is unwrapped instead of hiding the signature"
+      ],
+      "ancestors": [],
+      "mutantHash": "6110c924798259caeeafcd48ae1cddcf5746bcf41c76bd11ec23c4b009bba9ef",
+      "testHash": "634197998dd753ffb3e05d39844a11fe16a04de73c02379803d3f9a6d9456c18"
+    },
+    "maintainability-parameter-property-not-unwrapped": {
+      "testFile": "tests/maintainability-extract.test.mjs",
+      "tests": [
+        "Given a TypeScript parameter property, When extracted, Then its name is part of the signature"
+      ],
+      "ancestors": [],
+      "mutantHash": "fe0736c5c4f5721549c5d55a4dc581bc4609503ea642012c54378071eaa5d563",
+      "testHash": "634197998dd753ffb3e05d39844a11fe16a04de73c02379803d3f9a6d9456c18"
+    },
+    "maintainability-string-pattern-key-rejected": {
+      "testFile": "tests/maintainability-extract.test.mjs",
+      "tests": [
+        "Given a string-literal object-pattern key, When extracted, Then the written key is the name"
+      ],
+      "ancestors": [],
+      "mutantHash": "063ff83136e17ed2005a443f5e8e6049b8e45b94af31317b701b9a5dcd15acf4",
+      "testHash": "634197998dd753ffb3e05d39844a11fe16a04de73c02379803d3f9a6d9456c18"
+    },
+    "maintainability-object-rest-invalidates-pattern": {
+      "testFile": "tests/maintainability-extract.test.mjs",
+      "tests": [
+        "Given an object pattern with a rest property, When extracted, Then the ordinary keys remain"
+      ],
+      "ancestors": [],
+      "mutantHash": "d2cff6b5fdcdacf482a3e47391d986430fcdee82ebdd31bf456fca227b951436",
+      "testHash": "634197998dd753ffb3e05d39844a11fe16a04de73c02379803d3f9a6d9456c18"
+    },
+    "maintainability-computed-pattern-key-accepted": {
+      "testFile": "tests/maintainability-extract.test.mjs",
+      "tests": [
+        "Given a computed or numeric object-pattern key, When extracted, Then no signature is invented"
+      ],
+      "ancestors": [],
+      "mutantHash": "5e7b9d6cb9560929389ce7a4adde8296dbd39bf92349ba01d6b3f185d424c921",
+      "testHash": "634197998dd753ffb3e05d39844a11fe16a04de73c02379803d3f9a6d9456c18"
+    },
+    "maintainability-unnameable-pattern-key-admitted": {
+      "testFile": "tests/maintainability-extract.test.mjs",
+      "tests": [
+        "Given a computed or numeric object-pattern key, When extracted, Then no signature is invented"
+      ],
+      "ancestors": [],
+      "mutantHash": "180eae0293ea5cc51dc4db2b3b18735da7e99605480291735c3367418d91ec5e",
+      "testHash": "634197998dd753ffb3e05d39844a11fe16a04de73c02379803d3f9a6d9456c18"
+    },
+    "maintainability-computed-literal-property-accepted": {
+      "testFile": "tests/maintainability-extract.test.mjs",
+      "tests": [
+        "Given a computed or method object-literal property, When extracted, Then no call-site signature is invented"
+      ],
+      "ancestors": [],
+      "mutantHash": "b064a1336860b3a43879db6091db82beb500cb24bbf44460efa73865b8e9018a",
+      "testHash": "634197998dd753ffb3e05d39844a11fe16a04de73c02379803d3f9a6d9456c18"
+    },
+    "maintainability-literal-method-accepted": {
+      "testFile": "tests/maintainability-extract.test.mjs",
+      "tests": [
+        "Given a computed or method object-literal property, When extracted, Then no call-site signature is invented"
+      ],
+      "ancestors": [],
+      "mutantHash": "75c768e95e595e8cd40aaab6d74da69e730413a3724158d4f2e452c4446dcc11",
+      "testHash": "634197998dd753ffb3e05d39844a11fe16a04de73c02379803d3f9a6d9456c18"
+    },
+    "maintainability-duplicate-call-site-names": {
+      "testFile": "tests/maintainability-extract.test.mjs",
+      "tests": [
+        "Given a call site repeating the same name, When extracted, Then the name appears once"
+      ],
+      "ancestors": [],
+      "mutantHash": "ed1bf9d51c8f428f798fcd2d0516bad5c56c3aabaa0642d6dc422548a9a56774",
+      "testHash": "634197998dd753ffb3e05d39844a11fe16a04de73c02379803d3f9a6d9456c18"
     }
   }
 }

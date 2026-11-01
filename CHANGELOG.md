@@ -29,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `node scripts/run-mutation-tests.mjs --calibrate-stale` (8 workers): the two decode mutants were retargeted at `src/domain/report-envelope.mjs` and two stale anchors repaired; the gate killed 309/309, exit 0, 2342.9 s.
 - Replayed the real yield of the 12:18 review through the new boundary: the payload `{ data: "<markdown>" }` now decodes to the 13 018-character report and the false `reviewer yield carries no Markdown report` reason is gone.
 - Offline budget smoke (a temporary repository with 41 staged paths, `OMP_REVIEW_KIT_MAX_DIFF=40`): the host refuses with one line, writes `state: refused` and exits 1 without starting a reviewer.
+- The maintainability ceiling: `tests/maintainability-status.test.mjs` covers a tree with two groups under a ceiling of one, which reports `droppedGroups: 1` and `coverage: partial`; the mutation gate kills the two mutants that would hide the dropped groups.
+
+### Fixed
+- The maintainability stage no longer blocks a review for its own budget: the agent analyzes every candidate group the analyzer delivers instead of the first five, and a group is `not_proven` only when its evidence cannot be read. The analyzer group ceiling is 200 instead of 10 - enough that a diff inside the 40-path budget is delivered whole - and groups beyond it are counted in `droppedGroups` and make the coverage `partial` instead of disappearing. A measured 21-path diff produces 80 groups, so the former ceiling of 10 hid 70 of them. The unused `maxCandidates` and `maxToolCalls` settings are gone: they described a limit the stage no longer has.
 
 ## [0.23.1] - 2026-10-29
 

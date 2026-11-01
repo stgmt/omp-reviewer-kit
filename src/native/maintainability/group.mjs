@@ -105,9 +105,13 @@ export function groupClumps({ signatures, classOf, changedPaths, config, support
     return left < right ? -1 : left > right ? 1 : 0;
   });
 
+  const delivered = candidates.slice(0, config.maxGroups);
+
   return {
-    groups: candidates.slice(0, config.maxGroups).map((entry, position) => ({ groupId: `g${position + 1}`, ...entry })),
+    groups: delivered.map((entry, position) => ({ groupId: `g${position + 1}`, ...entry })),
     excluded,
+    // Groups beyond the ceiling are reported, never dropped silently: the analysis is partial then.
+    dropped: candidates.length - delivered.length,
   };
 }
 

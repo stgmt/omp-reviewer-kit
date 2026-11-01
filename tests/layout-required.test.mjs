@@ -10,13 +10,15 @@ import path from 'node:path';
 import { REQUIRED_FILES, assertRequiredFiles } from '../src/infra/layout-required.mjs';
 
 const RUN_RECORD_PATHS = [
+  'src/domain/report-envelope.mjs',
+  'src/domain/diff-budget.mjs',
   'src/domain/review-run-summary.mjs',
   'src/infra/review-run-store.mjs',
   'src/native/review-telemetry.mjs',
   'scripts/review-runs.mjs',
 ];
 
-test('Given the repository, When every required file is checked, Then the list names the four run-record paths and nothing is missing', async () => {
+test('Given the repository, When every required file is checked, Then the list names every run-record path and nothing is missing', async () => {
   for (const file of RUN_RECORD_PATHS) assert.ok(REQUIRED_FILES.includes(file), `${file} is required`);
   await assertRequiredFiles(process.cwd(), REQUIRED_FILES);
 });

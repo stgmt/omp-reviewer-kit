@@ -25,6 +25,13 @@ const fourSharing = (name, prefix = '') => [
   '',
 ].join('\n');
 
+const otherSet = (name) => [
+  `export function ${name}(frameWidth, frameHeight, frameSeed) {`,
+  '  return frameWidth + frameHeight + frameSeed;',
+  '}',
+  '',
+].join('\n');
+
 const analysisOf = (root, changedPaths, extra = {}) => analyzeTree({
   rootDir: root,
   changedPaths,
@@ -134,6 +141,35 @@ test('Given a changed path the snapshot does not contain, When analysed, Then it
     assert.equal(analysis.status, 'no-candidates');
     assert.equal(analysis.coverage, 'full');
     assert.deepEqual(analysis.unparsedFiles, []);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('Given more groups than the ceiling, When analysed, Then the dropped groups are counted and the coverage is partial', async () => {
+  const root = await tree({
+    'src/a.mjs': [fourSharing('one', 'a'), fourSharing('two', 'b'), otherSet('three'), otherSet('four')].join('\n'),
+    'src/b.mjs': [fourSharing('five', 'c'), fourSharing('six', 'd'), otherSet('seven'), otherSet('eight')].join('\n'),
+  });
+  try {
+    const { analysis } = await analysisOf(root, ['src/a.mjs'], { config: resolveConfig({ maxGroups: 1 }) });
+    assert.equal(analysis.groups.length, 1);
+    assert.equal(analysis.droppedGroups, 1);
+    assert.equal(analysis.coverage, 'partial');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('Given candidates inside the ceiling, When analysed, Then nothing is reported as dropped', async () => {
+  const root = await tree({
+    'src/a.mjs': [fourSharing('one', 'a'), fourSharing('two', 'b')].join('\n'),
+    'src/b.mjs': [fourSharing('three', 'c'), fourSharing('four', 'd')].join('\n'),
+  });
+  try {
+    const { analysis } = await analysisOf(root, ['src/a.mjs']);
+    assert.equal(analysis.droppedGroups, 0);
+    assert.equal(analysis.coverage, 'full');
   } finally {
     await rm(root, { recursive: true, force: true });
   }

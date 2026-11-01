@@ -41,8 +41,10 @@ test('Given the maintainability agent, When its instructions are read, Then it i
   assert.match(agentText, /Never run the project's test, build, lint, or mutation suites/);
   assert.match(agentText, /`npm test`/);
   assert.match(agentText, /You must never edit files, stage, reset, commit, delete, or run mutating commands/);
-  assert.match(agentText, /20 tool calls/);
-  assert.match(agentText, /at most 5 analyzed candidates/);
+  // The stage must cover every delivered group: a candidate ceiling of its own would leave the
+  // mandatory stage incomplete and block a commit with no finding.
+  assert.match(agentText, /Analyze \*\*every\*\* group in the candidate file/);
+  assert.match(agentText, /never leave a group unassessed/);
   assert.match(agentText, /never recount them/);
 });
 
