@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.24.0] - 2026-11-01
 
 ### Added
 - **Run records and live stage progress.** Every review now writes one machine-readable record per run outside every repository (`<home>/.omp/review-kit-runs/<runId>.json`, `OMP_REVIEW_KIT_RUNS_DIR` overrides it): wall-clock duration, the snapshot/native-task/verdict/report phases, the settled verdict, and one entry per stage with its duration, tokens, requests, resolved model and the counts of what it reported. The numbers come from OMP's own task result (`durationMs`, `tokens`, `requests`, `contextTokens`, `AgentProgress`), so no subagent is instrumented and no model is chosen by the kit. The record never carries the report, a prompt, a file body or a finding's text.
@@ -24,15 +24,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `stageEvidence` now also carries `durationMs`, `tokens`, `requests` and `contextTokens`; `native-review` returns a `runSummary` with the phase timings.
 
 ### Verified
-- `npm test`: 604 tests, 594 pass, 0 fail, 10 skipped (the live model cases).
+- `npm test` on this tree: 627 tests, 617 pass, 0 fail, 10 skipped (the live model cases).
 - `npm run check`: layout ok, 79 files.
-- `node scripts/run-mutation-tests.mjs --calibrate-stale` (8 workers): the two decode mutants were retargeted at `src/domain/report-envelope.mjs` and two stale anchors repaired; the gate killed 309/309, exit 0, 2342.9 s.
-- Replayed the real yield of the 12:18 review through the new boundary: the payload `{ data: "<markdown>" }` now decodes to the 13 018-character report and the false `reviewer yield carries no Markdown report` reason is gone.
-- Offline budget smoke (a temporary repository with 41 staged paths, `OMP_REVIEW_KIT_MAX_DIFF=40`): the host refuses with one line, writes `state: refused` and exits 1 without starting a reviewer.
-- The maintainability ceiling: `tests/maintainability-status.test.mjs` covers a tree with two groups under a ceiling of one, which reports `droppedGroups: 1` and `coverage: partial`; the mutation gate kills the two mutants that would hide the dropped groups.
-
-### Fixed
-- The maintainability stage no longer blocks a review for its own budget: the agent analyzes every candidate group the analyzer delivers instead of the first five, and a group is `not_proven` only when its evidence cannot be read. The analyzer group ceiling is 200 instead of 10 - enough that a diff inside the 40-path budget is delivered whole - and groups beyond it are counted in `droppedGroups` and make the coverage `partial` instead of disappearing. A measured 21-path diff produces 80 groups, so the former ceiling of 10 hid 70 of them. The unused `maxCandidates` and `maxToolCalls` settings are gone: they described a limit the stage no longer has.
+- Mutation gate `--calibrate-stale` (8 workers): version pins and the `doctorCheck` change made 8 + 33 + 2 selectors stale across three runs; each set was re-proved focused, two mutants whose anchors the refactor displaced were retargeted, and the final run certified 327/327 killed, exit 0, 268.5 s.
+- Replayed the blocked 21-path diff end to end: `candidates 80, planned_checks 80, unproven_items 0`, coverage full, stage 6m54s - every group decided instead of five; a confirmed group still blocked the commit.
+- A refused run is terminal, so `--follow` settles instead of calling a finished refusal interrupted; the layout check rejects the omission of `report-envelope.mjs` and `diff-budget.mjs`.
+- Windows identity: a record written under one spelling of a repository path is listed under its letter-case and separator variants, and a different repository stays out; the registry keeps one entry for the same aliases; a healing session that excludes one spelling leaves that repository untouched and repairs the other.
+- The `doctor()` check item has one documented shape (`doctorCheck`), so a new required field is one edit instead of a coordinated change at every producer; every check in the doctor report still reports the same fields.
+- Offline budget smoke (a temporary repository, `OMP_REVIEW_KIT_MAX_DIFF=1` with two paths): the host refuses with one line, writes `state: refused` and exits 1 without starting a reviewer.
 
 ## [0.23.1] - 2026-10-29
 

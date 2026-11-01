@@ -182,3 +182,24 @@ test('Given repositories registered by sessions, Then sync-targets reads them wi
     await ws.cleanup();
   }
 });
+
+test('Given a registered repository, When it is registered again in another spelling, Then the registry keeps one entry where the platform treats both spellings as one path', async () => {
+  const ws = await workspace();
+  try {
+    const repo = await ws.makeRepo('alias', { hook: false });
+    assert.equal(await ws.registry.add(repo), true);
+    const windows = process.platform === 'win32';
+    const aliases = windows ? [repo.toLowerCase(), repo.replaceAll('/', '\\')] : [];
+    for (const alias of aliases) {
+      assert.equal(await ws.registry.add(alias), false, `${alias} names the registered repository`);
+    }
+    assert.deepEqual(await ws.registry.list(), [path.resolve(repo)]);
+    if (windows) {
+      // The owner file and the session registry can name one repository in two spellings.
+      await writeFile(ws.registryFile, JSON.stringify([repo.toLowerCase()]), 'utf8');
+      assert.deepEqual(await ws.registry.list(), [repo.toLowerCase()], 'the two spellings are one repository');
+    }
+  } finally {
+    await ws.cleanup();
+  }
+});

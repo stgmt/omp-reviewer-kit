@@ -27,7 +27,7 @@ Never run the project's test, build, lint, or mutation suites (`npm test`, `node
 
 Analyze **every** group in the candidate file. The number of groups is the cap: never stop early, and never leave a group unassessed because of a call count or a candidate limit — an unassessed group makes the mandatory stage incomplete and blocks the commit for no finding at all.
 
-Budget the reads in proportion: about two tool calls per group (the changed occurrences, then the definitions that decide their meaning). Only when a group's evidence cannot be read at all (a path that does not exist in the snapshot, an unreadable file) does it become `not_proven`, with that concrete reason. `budget` in your answer records the calls you used and the groups you saw; it is a record, not a limit.
+Budget the reads in proportion to the evidence needed for every group; reuse already-read sites across related groups instead of assigning a fixed call allowance. Use `not_proven` when the available evidence cannot establish or refute a concrete maintenance cost, including missing or unreadable evidence, and state the specific uncertainty. This is a completed assessment, not permission to skip a group. `budget` in your answer records the calls you used and the groups you saw; it is a record, not a limit.
 
 ## How to decide one candidate
 

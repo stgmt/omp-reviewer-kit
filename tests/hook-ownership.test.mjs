@@ -158,3 +158,26 @@ test('Given a template with a wrong-version marker, When stamp-hook runs, Then t
 function writeHook(repo, text) {
   return writeFile(hookOf(repo), text, 'utf8');
 }
+
+test('Given a healing session that excludes one repository in another spelling, When targets are healed, Then the excluded repository keeps its stale files', async () => {
+  const ws = await workspace();
+  try {
+    const kept = await ws.makeRepo('excluded');
+    const repaired = await ws.makeRepo('repaired');
+    await ws.registry.add(kept);
+    await ws.registry.add(repaired);
+    await ws.makeStale(kept);
+    await ws.makeStale(repaired);
+    const windows = process.platform === 'win32';
+    const spelling = windows ? kept.toLowerCase() : kept;
+
+    const summary = await ws.installer.healTargets({ exceptRoot: spelling });
+
+    assert.ok(!summary.healed.some(entry => entry === kept || path.resolve(entry) === path.resolve(kept)), 'the excluded repository is never healed');
+    assert.equal(await readFile(ws.runnerOf(kept), 'utf8'), STALE_RUNNER, 'its stale runner stays exactly as it is');
+    assert.ok(summary.healed.some(entry => path.resolve(entry) === path.resolve(repaired)), 'the other repository is healed');
+    assert.notEqual(await readFile(ws.runnerOf(repaired), 'utf8'), STALE_RUNNER, 'and its runner was updated');
+  } finally {
+    await ws.cleanup();
+  }
+});

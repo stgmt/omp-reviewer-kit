@@ -44,11 +44,11 @@ export function runRecordFile(dir, runId) {
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-/** Two spellings of the same repository (`E:/repo` and `E:\\repo`) are one repository. */
+/** Repository spelling follows the platform: separators and Windows letter case are insignificant. */
 function sameRepo(left, right) {
   if (typeof left !== 'string' || left.length === 0) return false;
   try {
-    return path.resolve(left) === path.resolve(right);
+    return path.relative(path.resolve(left), path.resolve(right)) === '';
   } catch {
     return false;
   }

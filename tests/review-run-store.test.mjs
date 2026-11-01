@@ -201,3 +201,14 @@ test('Given two writes of one record at once, When both run, Then both land and 
     assert.equal((await readRunRecord(path.join(dir, 'twice.json'))).runId, 'twice');
   });
 });
+
+test('Given one repository recorded in another spelling, When its runs are listed, Then the same record is found and another repository stays out', async () => {
+  await withRuns(async dir => {
+    await writeRunRecord({ runId: 'spelling', schema: RUN_SCHEMA, state: 'passed', startedAt: '2026-11-01T00:00:00.000Z', repoRoot: 'E:/repos/spelling-case' }, { dir });
+    const windows = process.platform === 'win32';
+    assert.equal((await readRunRecords({ dir, repoRoot: 'E:/repos/spelling-case' })).length, 1, 'the recorded spelling lists the record');
+    assert.equal((await readRunRecords({ dir, repoRoot: 'E:/repos/SPELLING-CASE' })).length, windows ? 1 : 0, 'letter case is identity only where the platform says so');
+    assert.equal((await readRunRecords({ dir, repoRoot: 'E:\\repos\\spelling-case' })).length, windows ? 1 : 0, 'separators are identity only where the platform says so');
+    assert.equal((await readRunRecords({ dir, repoRoot: 'E:/repos/other-case' })).length, 0, 'another repository never lists this record');
+  });
+});

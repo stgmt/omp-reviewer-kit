@@ -14,7 +14,8 @@ export function defaultTargetRegistryPath(env = process.env) {
   return env.OMP_REVIEW_KIT_TARGETS || path.join(os.homedir(), '.omp', 'review-kit-targets.json');
 }
 
-const samePath = (a, b) => (process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b);
+// One repository has one registration: separators and Windows letter case are not identity.
+const samePath = (a, b) => path.relative(path.resolve(a), path.resolve(b)) === '';
 
 function realOf(target) {
   try {
