@@ -249,7 +249,10 @@ export async function extractSignatures({
 
   if (pythonFiles.length > 0) {
     const python = await runPythonAdapter({ files: pythonFiles, pythonBin, timeoutMs: Math.max(1000, deadline - now()), spawnSync });
-    if (python.status === 'failed') {
+    if (python.status === 'timeout') {
+      truncated = true;
+      unparsedFiles.push({ path: '<python-adapter>', reason: 'analysis-budget-exhausted' });
+    } else if (python.status === 'failed') {
       failures.push({ path: null, reason: python.reason, message: python.message });
       counts.python.filesFailed += pythonFiles.length;
       for (const file of pythonFiles) unparsedFiles.push({ path: file.path, reason: python.reason });
@@ -351,10 +354,13 @@ function collectJavaScript(relative, ast) {
     }
     if (node.type === 'CallExpression') {
       if (forwarderCalls.has(node)) return;
-      const names = node.arguments
-        .filter(argument => argument?.type === 'Identifier')
-        .map(argument => argument.name);
-      if (names.length < 2 || names.length !== node.arguments.length) return;
+      const names = [];
+      for (const argument of node.arguments) {
+        const fromArgument = argumentNames(argument);
+        if (!fromArgument) return;
+        names.push(...fromArgument);
+      }
+      if (names.length < 2) return;
       firstPass.push({
         path: relative,
         language: 'javascript',
@@ -385,24 +391,64 @@ function isFunctionNode(node) {
 }
 
 /**
- * Parameter names, or `null` when a parameter cannot be represented as a name (destructuring).
- * A signature that cannot be named is skipped: guessing would invent a group.
+ * Parameter names, or `null` when a parameter cannot be represented as a name. An object pattern
+ * contributes its property keys: `charge({ userId, tenantId })` takes two named values, and
+ * dropping them would hide the most common shape of a repeated group.
  */
 function parameterNames(params) {
   const names = [];
   for (const parameter of params ?? []) {
-    if (parameter?.type === 'Identifier') {
-      names.push(parameter.name);
-      continue;
-    }
-    if (parameter?.type === 'AssignmentPattern' && parameter.left?.type === 'Identifier') {
-      names.push(parameter.left.name);
-      continue;
-    }
-    if (parameter?.type === 'RestElement' && parameter.argument?.type === 'Identifier') continue;
-    return null;
+    if (!collectParameterNames(parameter, names)) return null;
   }
   return [...new Set(names)].sort();
+}
+
+function collectParameterNames(parameter, names) {
+  if (!parameter || typeof parameter !== 'object') return false;
+  switch (parameter.type) {
+    case 'Identifier':
+      names.push(parameter.name);
+      return true;
+    case 'AssignmentPattern':
+      return collectParameterNames(parameter.left, names);
+    case 'RestElement':
+      return parameter.argument ? collectParameterNames(parameter.argument, names) : false;
+    case 'TSParameterProperty':
+      // Babel stores the wrapped parameter in `parameter`, not `argument`.
+      return collectParameterNames(parameter.parameter ?? parameter.argument, names);
+    case 'ObjectPattern':
+      for (const property of parameter.properties ?? []) {
+        if (property.type === 'RestElement') continue;
+        if (property.computed) return false;
+        const key = property.key;
+        const name = key?.type === 'Identifier' ? key.name : typeof key?.value === 'string' ? key.value : null;
+        if (!name) return false;
+        names.push(name);
+      }
+      return true;
+    default:
+      return false;
+  }
+}
+
+/**
+ * Names one call argument spells: a bare identifier or object-literal keys. Other shapes
+ * (`request.amount`, a literal, a nested call) name nothing and contribute nothing, but they do not
+ * invalidate the site. Spread and computed keys do: the names they carry are not written down.
+ */
+function argumentNames(argument) {
+  if (argument?.type === 'Identifier') return [argument.name];
+  if (argument?.type === 'SpreadElement') return null;
+  if (argument?.type !== 'ObjectExpression') return [];
+  const names = [];
+  for (const property of argument.properties ?? []) {
+    if (property.type !== 'ObjectProperty' || property.computed) return null;
+    const key = property.key;
+    const name = key?.type === 'Identifier' ? key.name : typeof key?.value === 'string' ? key.value : null;
+    if (!name) return null;
+    names.push(name);
+  }
+  return names;
 }
 
 function functionName(node, parent = null) {
@@ -469,6 +515,7 @@ async function runPythonAdapter({ files, pythonBin, timeoutMs, spawnSync }) {
     windowsHide: true,
   });
   if (result?.error?.code === 'ENOENT') return { status: 'failed', reason: 'no-interpreter', message: 'python interpreter not found' };
+  if (result?.error?.code === 'ETIMEDOUT') return { status: 'timeout', reason: 'analysis-budget-exhausted', message: 'python adapter exceeded the scan budget' };
   if (result?.error) return { status: 'failed', reason: 'failed', message: String(result.error.message ?? result.error) };
   if (result?.signal) return { status: 'failed', reason: 'failed', message: `python adapter stopped by ${result.signal}` };
   if (result?.status !== 0) return { status: 'failed', reason: 'failed', message: String(result?.stderr ?? '').slice(0, 500) || `python adapter exit ${result?.status}` };

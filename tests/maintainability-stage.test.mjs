@@ -77,6 +77,45 @@ test('Given a staged group of repeated parameters, When the review runs, Then th
   }
 });
 
+test('Given a staged change whose repeated values arrive as object patterns and object-literal arguments, When the review runs, Then the group is counted from them', async () => {
+  const repo = await mkdtemp(path.join(tmpdir(), 'maintainability-stage-repo-'));
+  const parent = await mkdtemp(path.join(tmpdir(), 'maintainability-stage-parent-'));
+  const shape = name => `export function ${name}({ userId, tenantId, requestId, traceId }, value) {\n  return append('${name}', { userId, tenantId, requestId, traceId }, value);\n}\n`;
+  try {
+    git(repo, ['init', '-q']);
+    git(repo, ['config', 'user.email', 'test@example.invalid']);
+    git(repo, ['config', 'user.name', 'maintainability stage test']);
+    git(repo, ['config', 'core.hooksPath', path.join(repo, 'no-hooks')]);
+    await writeFile(path.join(repo, 'base.mjs'), 'export const base = 1;\n');
+    git(repo, ['add', 'base.mjs']);
+    git(repo, ['commit', '-q', '-m', 'base']);
+    await writeFile(path.join(repo, 'ledger.mjs'), ['charge', 'refund', 'settle', 'notify', 'audit'].map(shape).join('\n'));
+    git(repo, ['add', 'ledger.mjs']);
+    const result = await runNativeReview({
+      repo,
+      kitRoot: repo,
+      parentDir: parent,
+      env: {},
+      runTask: async ({ assignment }) => {
+        const candidatePath = assignment.match(/Maintainability candidates .*: (.+?) — /)?.[1] ?? null;
+        const written = candidatePath ? JSON.parse(await readFile(candidatePath, 'utf8')) : null;
+        assert.ok(written, 'the candidate file path is in the assignment');
+        assert.equal(written.status, 'analyzed');
+        const group = written.groups.find(entry => entry.params.join(',') === 'requestId,tenantId,traceId,userId');
+        assert.ok(group, JSON.stringify(written.groups.map(entry => entry.params)));
+        assert.equal(group.support, 10, 'five definitions and five object-literal call sites');
+        return { reviewer: reviewerWithYield(PASS_REPORT), stages: baseStages() };
+      },
+    });
+    assert.equal(result.maintainability.status, 'analyzed');
+    assert.equal(result.maintainability.planned, true);
+    assert.match(result.verdict.reasons.join(' '), /no completed stage evidence for review-maintainability/);
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
 test('Given the stage answers with a candidate that has no stated cost, When the review runs, Then the verdict passes', async () => {
   const repo = await stagedRepoWithGroup();
   const parent = await mkdtemp(path.join(tmpdir(), 'maintainability-stage-parent-'));

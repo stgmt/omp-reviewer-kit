@@ -100,6 +100,20 @@ test('Given several records, When they are listed, Then they come newest first, 
   });
 });
 
+test('Given records that name no repository, When one repository is selected, Then they stay out and nothing throws', async () => {
+  await withRuns(async dir => {
+    await writeRunRecord(record({ runId: 'run-named' }), { dir });
+    // A record without a repository cannot be attributed to one: it must never satisfy a filter and
+    // must never make the reader throw, and a filter that is not a path matches nothing at all.
+    await writeRunRecord(record({ runId: 'run-anonymous', repoRoot: undefined, startedAt: '2026-10-20T00:00:00.000Z' }), { dir });
+    await writeRunRecord(record({ runId: 'run-blank', repoRoot: '   ', startedAt: '2026-10-21T00:00:00.000Z' }), { dir });
+
+    assert.deepEqual((await readRunRecords({ dir, repoRoot: 'E:/repos/x' })).map(entry => entry.runId), ['run-named']);
+    assert.deepEqual(await readRunRecords({ dir, repoRoot: 42 }), [], 'a filter that is not a path matches nothing');
+    assert.equal((await readRunRecords({ dir, repoRoot: null })).length, 3, 'no filter still lists every record');
+  });
+});
+
 test('Given no runs folder at all, When it is listed, Then the answer is empty rather than an error', async () => {
   const dir = path.join(tmpdir(), `absent-runs-${Date.now()}`);
   assert.deepEqual(await readRunRecords({ dir }), []);

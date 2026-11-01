@@ -5,14 +5,12 @@ export const SCHEMA = 'maintainability@1';
 export const POLICIES = Object.freeze(['off', 'advisory', 'block']);
 export const POLICY_ENV = 'OMP_REVIEW_KIT_MAINTAINABILITY';
 
-/** The analysis limits of MR-13 and the review budget of MR-07. */
+/** The analysis limits of MR-13. */
 export const DEFAULT_CONFIG = Object.freeze({
   minSupport: 4,
   minSize: 2,
   maxGroupSize: 4,
-  maxGroups: 10,
-  maxCandidates: 5,
-  maxToolCalls: 20,
+  maxGroups: 200,
   maxFileBytes: 524288,
   maxScanFiles: 4000,
   maxScanMs: 5000,

@@ -53,7 +53,7 @@ export async function analyzeTree({
 
   const supportComplete = extracted.truncated !== true;
   const grouped = extracted.status === 'failed'
-    ? { groups: [], excluded: [] }
+    ? { groups: [], excluded: [], dropped: 0 }
     : groupClumps({
       signatures: extracted.signatures,
       classOf: classifyFilePath,
@@ -79,7 +79,7 @@ export async function analyzeTree({
     schema: SCHEMA,
     diffHash,
     status,
-    coverage: unanalysed.length > 0 || extracted.truncated ? 'partial' : 'full',
+    coverage: unanalysed.length > 0 || extracted.truncated || grouped.dropped > 0 ? 'partial' : 'full',
     scan: {
       filesRead: extracted.filesRead,
       filesSkipped: extracted.filesSkipped + collected.skipped.length,
@@ -90,7 +90,6 @@ export async function analyzeTree({
       minSupport: config.minSupport,
       minSize: config.minSize,
       maxGroups: config.maxGroups,
-      maxCandidates: config.maxCandidates,
       maxFileBytes: config.maxFileBytes,
       maxScanFiles: config.maxScanFiles,
       maxScanMs: config.maxScanMs,
@@ -100,6 +99,7 @@ export async function analyzeTree({
     unparsedFiles: extracted.unparsedFiles,
     failures: extracted.failures,
     excluded: dedupeExcluded(grouped.excluded),
+    droppedGroups: grouped.dropped,
     groups: grouped.groups,
   };
 
@@ -179,7 +179,6 @@ function failureAnalysis({ diffHash, config, policy, error }) {
       minSupport: config.minSupport,
       minSize: config.minSize,
       maxGroups: config.maxGroups,
-      maxCandidates: config.maxCandidates,
       maxFileBytes: config.maxFileBytes,
       maxScanFiles: config.maxScanFiles,
       maxScanMs: config.maxScanMs,
@@ -189,6 +188,7 @@ function failureAnalysis({ diffHash, config, policy, error }) {
     unparsedFiles: [],
     failures: [{ path: null, reason: 'analysis-failed', message: String(error?.message ?? error) }],
     excluded: [],
+    droppedGroups: 0,
     groups: [],
   };
 }

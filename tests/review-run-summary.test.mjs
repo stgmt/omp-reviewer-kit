@@ -102,3 +102,12 @@ test('Given stage durations, When they are summarized, Then each stage is named 
     'scout 1m02s · verifier 58s',
   );
 });
+
+test('Given a refused run, When its terminality is read, Then it is terminal so a follow loop settles instead of calling it interrupted', () => {
+  assert.equal(isTerminalRun({ state: 'refused' }), true);
+  for (const state of ['passed', 'blocked', 'failed', 'skipped', 'refused']) {
+    assert.equal(isTerminalRun({ state }), true, state + ' is terminal');
+  }
+  assert.equal(isTerminalRun({ state: 'running' }), false);
+  assert.equal(isTerminalRun(undefined), false);
+});

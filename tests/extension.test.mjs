@@ -1042,6 +1042,45 @@ describe('Feature: Native OMP Extension & Installer Service', () => {
     }
   });
 
+  it('/reviewer-kit:runs finds this repository through another spelling of its path', async () => {
+    const { baseDir, repoDir } = await createTempRepo();
+    const runsDir = path.join(baseDir, 'runs');
+    const aliasDir = path.join(baseDir, 'alias-repo');
+    const savedRunsDir = process.env.OMP_REVIEW_KIT_RUNS_DIR;
+    try {
+      // One repository can be reached through a junction, a symlink, or (on Windows) a different
+      // letter case. All of them are the same checkout, so all of them show the same history.
+      await symlink(repoDir, aliasDir, process.platform === 'win32' ? 'junction' : 'dir');
+      process.env.OMP_REVIEW_KIT_RUNS_DIR = runsDir;
+      const harness = createExtensionHarness();
+      await writeRunRecord({
+        schema: 'review-run-record@2',
+        runId: 'run-aliased',
+        state: 'passed',
+        verdict: 'PASS',
+        startedAt: '2026-11-01T09:12:33.120Z',
+        durationMs: 1_000,
+        repoRoot: repoDir,
+        reportPath: 'C:/reports/aliased.md',
+      }, { dir: runsDir });
+
+      const spellings = [aliasDir, ...(process.platform === 'win32' ? [repoDir.toUpperCase()] : [])];
+      for (const cwd of spellings) {
+        const ctx = harness.makeCtx(cwd);
+        await harness.commands.get('reviewer-kit:runs').handler('', ctx);
+        assert.match(
+          ctx.notifications.map((n) => n.msg).join('\n'),
+          /^Report: C:\/reports\/aliased\.md$/m,
+          `${cwd} is the same repository as ${repoDir}`,
+        );
+      }
+    } finally {
+      if (savedRunsDir === undefined) delete process.env.OMP_REVIEW_KIT_RUNS_DIR;
+      else process.env.OMP_REVIEW_KIT_RUNS_DIR = savedRunsDir;
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
   it('PluginInstallerService doctor reports diagnostic health checks', async () => {
     const { baseDir, repoDir } = await createTempRepo();
     try {

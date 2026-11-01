@@ -55,7 +55,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "3b8b9f13183f712947d9958a05016511c9185fc239e9f7c3af718470e0abef6b",
-      "testHash": "9fdddd4f49e14f639469291e9be43debf3d6aea7c01959b468033f905b48d690"
+      "testHash": "c6a6a05549a3a365baf2c0f2638ba6f2b3f96a2dea7993cd79d3f1768aec7dab"
     },
     "anti-parasitic-both-to-either": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -66,7 +66,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "b8607c1dd6f7ba93c3e0b7431e95eb44980c25c7b9974dd0fc887acbf309bb74",
-      "testHash": "9fdddd4f49e14f639469291e9be43debf3d6aea7c01959b468033f905b48d690"
+      "testHash": "c6a6a05549a3a365baf2c0f2638ba6f2b3f96a2dea7993cd79d3f1768aec7dab"
     },
     "anti-parasitic-port-protection-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -77,7 +77,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "7cb2ae5cc876247bae2a345f17644a022a04d18c3ed82d839556f279b8e7e2e7",
-      "testHash": "9fdddd4f49e14f639469291e9be43debf3d6aea7c01959b468033f905b48d690"
+      "testHash": "c6a6a05549a3a365baf2c0f2638ba6f2b3f96a2dea7993cd79d3f1768aec7dab"
     },
     "multi-stage-snapshot-boundary-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -88,7 +88,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "db7a8493b32121111624ef1add91a1b21b8c908d6e5da232df1a148e0af79373",
-      "testHash": "9fdddd4f49e14f639469291e9be43debf3d6aea7c01959b468033f905b48d690"
+      "testHash": "c6a6a05549a3a365baf2c0f2638ba6f2b3f96a2dea7993cd79d3f1768aec7dab"
     },
     "multi-stage-yagni-boundary-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -99,7 +99,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "465a5de25c5a83dda3e244302a6b7eab09c0169bb39c82b5688b001fb8d5560c",
-      "testHash": "9fdddd4f49e14f639469291e9be43debf3d6aea7c01959b468033f905b48d690"
+      "testHash": "c6a6a05549a3a365baf2c0f2638ba6f2b3f96a2dea7993cd79d3f1768aec7dab"
     },
     "sync-hook-newer-overwritten": {
       "testFile": "tests/sync-targets.test.mjs",
@@ -166,7 +166,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "ec31109e99d1fdb90e4b481cab9c38734f3857a530dd4a68f4327ef171a166d5",
-      "testHash": "9fdddd4f49e14f639469291e9be43debf3d6aea7c01959b468033f905b48d690"
+      "testHash": "c6a6a05549a3a365baf2c0f2638ba6f2b3f96a2dea7993cd79d3f1768aec7dab"
     },
     "hunter-red-proof-field-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -177,7 +177,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "61f3ac262a7e6643d183a03c1ffd0e7ebebf3d58d8cbaacaf70427b43ac14e8e",
-      "testHash": "9fdddd4f49e14f639469291e9be43debf3d6aea7c01959b468033f905b48d690"
+      "testHash": "c6a6a05549a3a365baf2c0f2638ba6f2b3f96a2dea7993cd79d3f1768aec7dab"
     },
     "verifier-triage-field-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -188,7 +188,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "e6356f58a6e2d47ec64b32c1f6f7664d120a06d1b1d697a3dac8517b2c7b5ea5",
-      "testHash": "9fdddd4f49e14f639469291e9be43debf3d6aea7c01959b468033f905b48d690"
+      "testHash": "c6a6a05549a3a365baf2c0f2638ba6f2b3f96a2dea7993cd79d3f1768aec7dab"
     },
     "modular-suspicion-assert-delta": {
       "testFile": "tests/suspicion-map.test.mjs",
@@ -985,7 +985,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "b47344754a1a0a7c74ac2b46bda84a0b9771e016d1166b29ffa4afedb2a0a194",
-      "testHash": "846a5c392670522f084d5f5da5e0796f9fe4ad7324a1c58b4a59cf12a9522532"
+      "testHash": "a26101ae9b06330086d0bd2a7030f2e0bede9658bdaf5c4bff68c268ea9acd1f"
     },
     "setup-refusal-silent": {
       "testFile": "tests/extension.test.mjs",
@@ -996,7 +996,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "a03c75fc2613e2c6aa1b13a81c9c1f4ea878624b7bd84c7e77668dc9b1dbe6d0",
-      "testHash": "846a5c392670522f084d5f5da5e0796f9fe4ad7324a1c58b4a59cf12a9522532"
+      "testHash": "a26101ae9b06330086d0bd2a7030f2e0bede9658bdaf5c4bff68c268ea9acd1f"
     },
     "doctor-counts-worker-checkouts": {
       "testFile": "tests/target-heal.test.mjs",
@@ -1016,7 +1016,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "f85b0436d69f418fcc546aadf8b0841023deba4cabca660a20f42908d058b621",
-      "testHash": "846a5c392670522f084d5f5da5e0796f9fe4ad7324a1c58b4a59cf12a9522532"
+      "testHash": "a26101ae9b06330086d0bd2a7030f2e0bede9658bdaf5c4bff68c268ea9acd1f"
     },
     "heal-prunes-skipped-before-policy": {
       "testFile": "tests/target-heal.test.mjs",
@@ -1279,7 +1279,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "43261f08e7d953188eff77f51ecfa8e5a8a4a9a4683aead4d9e92de9fbfd2741",
-      "testHash": "846a5c392670522f084d5f5da5e0796f9fe4ad7324a1c58b4a59cf12a9522532"
+      "testHash": "a26101ae9b06330086d0bd2a7030f2e0bede9658bdaf5c4bff68c268ea9acd1f"
     },
     "status-report-line-unconditional": {
       "testFile": "tests/extension.test.mjs",
@@ -1290,7 +1290,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "f2dfc705cacb4b1bc75e598ea19a5db94d5ff07031ebb461668e849fc60b36ff",
-      "testHash": "846a5c392670522f084d5f5da5e0796f9fe4ad7324a1c58b4a59cf12a9522532"
+      "testHash": "a26101ae9b06330086d0bd2a7030f2e0bede9658bdaf5c4bff68c268ea9acd1f"
     },
     "status-report-line-before-verdict": {
       "testFile": "tests/extension.test.mjs",
@@ -1301,7 +1301,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "f1ca5f8f24b75bf4fa7ffc5cef3c5f6a1ac3cd1c849ad99e7920849a13ce5e35",
-      "testHash": "846a5c392670522f084d5f5da5e0796f9fe4ad7324a1c58b4a59cf12a9522532"
+      "testHash": "a26101ae9b06330086d0bd2a7030f2e0bede9658bdaf5c4bff68c268ea9acd1f"
     },
     "run-tests-reports-dir-left-to-user": {
       "testFile": "tests/run-tests-wrapper.test.mjs",
@@ -2563,7 +2563,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "48c31b322c048746218b51448476511b406d7991e37cb69eb0cd8d6b9e03a7a0",
-      "testHash": "846a5c392670522f084d5f5da5e0796f9fe4ad7324a1c58b4a59cf12a9522532"
+      "testHash": "a26101ae9b06330086d0bd2a7030f2e0bede9658bdaf5c4bff68c268ea9acd1f"
     },
     "native-extension-skipped-status-ignored": {
       "testFile": "tests/extension.test.mjs",
@@ -2574,7 +2574,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "ac9e8e077eaf80c0acdfd31f29b9a8fd3784c42b20130333c4714ce2d5f2edf4",
-      "testHash": "846a5c392670522f084d5f5da5e0796f9fe4ad7324a1c58b4a59cf12a9522532"
+      "testHash": "a26101ae9b06330086d0bd2a7030f2e0bede9658bdaf5c4bff68c268ea9acd1f"
     },
     "native-extension-guard-ignores-commit": {
       "testFile": "tests/extension.test.mjs",
@@ -2585,7 +2585,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "e646ce7d938fef05440f6ce58087177db73dc34b91fd87d69c1cdc4826af5ad1",
-      "testHash": "846a5c392670522f084d5f5da5e0796f9fe4ad7324a1c58b4a59cf12a9522532"
+      "testHash": "a26101ae9b06330086d0bd2a7030f2e0bede9658bdaf5c4bff68c268ea9acd1f"
     },
     "native-launcher-bun-probe-ignored": {
       "testFile": "tests/native-launcher.test.mjs",
@@ -2742,7 +2742,7 @@
       ],
       "ancestors": [],
       "mutantHash": "9978c912b3a77fb8e46ec008b5ed0dd567d520ecabf126cd3d6f14fff216b0d7",
-      "testHash": "ca08ab70e164d4f2d5ea27aaff091c0de221de804221909124b8304f1443b097"
+      "testHash": "682bcfdfcdded60ad8afd696877928bf3f032080e5d2193828e5a4416d4f9976"
     },
     "run-record-block-recorded-passed": {
       "testFile": "tests/review-run-summary.test.mjs",
@@ -2751,7 +2751,7 @@
       ],
       "ancestors": [],
       "mutantHash": "84e7e361af85fb84d67e7b7be5ef96477784b56c366b7b56b3fb05d4aefa5341",
-      "testHash": "ca08ab70e164d4f2d5ea27aaff091c0de221de804221909124b8304f1443b097"
+      "testHash": "682bcfdfcdded60ad8afd696877928bf3f032080e5d2193828e5a4416d4f9976"
     },
     "run-record-array-counts-lost": {
       "testFile": "tests/review-run-summary.test.mjs",
@@ -2760,7 +2760,7 @@
       ],
       "ancestors": [],
       "mutantHash": "8504fce87aaee86af7676f0b7e4ff0cc98b75cc7fdcc060bd722ac4ba797c77d",
-      "testHash": "ca08ab70e164d4f2d5ea27aaff091c0de221de804221909124b8304f1443b097"
+      "testHash": "682bcfdfcdded60ad8afd696877928bf3f032080e5d2193828e5a4416d4f9976"
     },
     "run-record-legacy-schema-accepted": {
       "testFile": "tests/review-run-store.test.mjs",
@@ -2769,7 +2769,7 @@
       ],
       "ancestors": [],
       "mutantHash": "7440241873cd275980e56468d4249de125a9bc02a3f8047b1c96c93173e96e94",
-      "testHash": "5b773f0a1e81f54a9d24429805cece91f151e5c6814492ef93520300f167b9e2"
+      "testHash": "e60683c0871e8336d912e964ffed923201af596ddffe2071cff400177dc76383"
     },
     "run-record-eperm-means-dead": {
       "testFile": "tests/review-run-store.test.mjs",
@@ -2778,7 +2778,7 @@
       ],
       "ancestors": [],
       "mutantHash": "ff1517993c1a3b29758f106c957a2195f2082f4ef987a164f17ed9cdcb41bc47",
-      "testHash": "5b773f0a1e81f54a9d24429805cece91f151e5c6814492ef93520300f167b9e2"
+      "testHash": "e60683c0871e8336d912e964ffed923201af596ddffe2071cff400177dc76383"
     },
     "run-record-failure-recorded-passed": {
       "testFile": "tests/review-telemetry.test.mjs",
@@ -2805,7 +2805,7 @@
       ],
       "ancestors": [],
       "mutantHash": "c4c89c8b2c64afbecdaa4329691d1a9ba955fd82b142d480f0d0fa0c780f5867",
-      "testHash": "5b773f0a1e81f54a9d24429805cece91f151e5c6814492ef93520300f167b9e2"
+      "testHash": "e60683c0871e8336d912e964ffed923201af596ddffe2071cff400177dc76383"
     },
     "maintainability-block-ignores-stated-cost": {
       "testFile": "tests/maintainability-verdict.test.mjs",
@@ -2867,8 +2867,8 @@
         "Given a change that touches only a language without an adapter, When analysed, Then the status is unsupported and the file is named"
       ],
       "ancestors": [],
-      "mutantHash": "cdadc3903b55a005ba4abab6fbc93921f5c13be4262bf1b421c4d590a87d0e98",
-      "testHash": "9e5efc061a6e5acd8d772b577ddc15565ea35c8a13495fe110b3fc8e0183614d"
+      "mutantHash": "0996b695fe684e9dc6a26c61b1ca357e3382d48387ebc999e2a41b88c4996a64",
+      "testHash": "dbe8c3a82e7a2d48de3538997d54aee46a77d6116fc20b284e6839701b8b67fa"
     },
     "maintainability-skip-never": {
       "testFile": "tests/maintainability-stage.test.mjs",
@@ -2877,7 +2877,7 @@
       ],
       "ancestors": [],
       "mutantHash": "49df5bd9cad0fe777bacc97ecbb68c8baf5407ad3d6149cc656836466e20a070",
-      "testHash": "4078b4ecf1b08e0d4545aba29f2b51c90c87bdd88f8b813b8e85a1691071a82f"
+      "testHash": "1fed55102e3e0706d0659d7e629d8401e7e9b7d267b7cd39031cb0b3e78a4acb"
     },
     "maintainability-file-size-cap-removed": {
       "testFile": "tests/maintainability-extract.test.mjs",
@@ -2886,7 +2886,7 @@
       ],
       "ancestors": [],
       "mutantHash": "9141da4d80e2e71f583806b2430c429bd7330623c755c4800b0776eecef2e3bc",
-      "testHash": "b59a7066930a690d837b4f3a987ce58a4504ad5285ba70658e227f15abbefe1f"
+      "testHash": "d95184a87ec0bb140c741a0cdfc6e828d8a42068ebee7f9bee0c729345ea721a"
     },
     "native-yield-plain-string-rejected": {
       "testFile": "tests/native-yield.test.mjs",
@@ -2950,6 +2950,168 @@
       "ancestors": [],
       "mutantHash": "e240bf2b3f2d9c856c7df98d588fb2d582e1107a4a4e328d8dc8b9aa5b15bed9",
       "testHash": "89efc4bf2ff408befd3ab151a7258bf500d0f226d75a04227597e20862dde3d8"
+    },
+    "maintainability-call-site-object-literal-ignored": {
+      "testFile": "tests/maintainability-extract.test.mjs",
+      "tests": [
+        "Given a call site passing an object literal with a member expression beside it, When extracted, Then the written keys and identifiers are counted"
+      ],
+      "ancestors": [],
+      "mutantHash": "be439cd43a732216dd79885a640d1db16a83b389cf2b3b015283bc24097c1df3",
+      "testHash": "d95184a87ec0bb140c741a0cdfc6e828d8a42068ebee7f9bee0c729345ea721a"
+    },
+    "maintainability-object-pattern-dropped": {
+      "testFile": "tests/maintainability-extract.test.mjs",
+      "tests": [
+        "Given an object-pattern parameter, When extracted, Then its property keys are the named values"
+      ],
+      "ancestors": [],
+      "mutantHash": "a3dc8c774ee9a2ede624da36614fd3d999b4c16b96e0b93efa95847744a0032c",
+      "testHash": "d95184a87ec0bb140c741a0cdfc6e828d8a42068ebee7f9bee0c729345ea721a"
+    },
+    "maintainability-dropped-groups-stay-full": {
+      "testFile": "tests/maintainability-status.test.mjs",
+      "tests": [
+        "Given more groups than the ceiling, When analysed, Then the dropped groups are counted and the coverage is partial"
+      ],
+      "ancestors": [],
+      "mutantHash": "cb85d6b577a92a185e88d3fc181eb56c1acaa510e028b0bce3357fd930e74246",
+      "testHash": "dbe8c3a82e7a2d48de3538997d54aee46a77d6116fc20b284e6839701b8b67fa"
+    },
+    "maintainability-dropped-groups-not-counted": {
+      "testFile": "tests/maintainability-status.test.mjs",
+      "tests": [
+        "Given more groups than the ceiling, When analysed, Then the dropped groups are counted and the coverage is partial"
+      ],
+      "ancestors": [],
+      "mutantHash": "0dc5317a1af7821cbec2ed7752842ca5d82d73607fd770c1872cf657a6cd048c",
+      "testHash": "dbe8c3a82e7a2d48de3538997d54aee46a77d6116fc20b284e6839701b8b67fa"
+    },
+    "maintainability-assignment-default-not-unwrapped": {
+      "testFile": "tests/maintainability-extract.test.mjs",
+      "tests": [
+        "Given a defaulted object pattern and a rest parameter, When extracted, Then the wrapper is unwrapped instead of hiding the signature"
+      ],
+      "ancestors": [],
+      "mutantHash": "42e2d40c6677d5461abb61c04d0a7f048931d11ab0d074573c9aa749a18c84fb",
+      "testHash": "d95184a87ec0bb140c741a0cdfc6e828d8a42068ebee7f9bee0c729345ea721a"
+    },
+    "maintainability-rest-element-not-unwrapped": {
+      "testFile": "tests/maintainability-extract.test.mjs",
+      "tests": [
+        "Given a defaulted object pattern and a rest parameter, When extracted, Then the wrapper is unwrapped instead of hiding the signature"
+      ],
+      "ancestors": [],
+      "mutantHash": "6110c924798259caeeafcd48ae1cddcf5746bcf41c76bd11ec23c4b009bba9ef",
+      "testHash": "d95184a87ec0bb140c741a0cdfc6e828d8a42068ebee7f9bee0c729345ea721a"
+    },
+    "maintainability-parameter-property-not-unwrapped": {
+      "testFile": "tests/maintainability-extract.test.mjs",
+      "tests": [
+        "Given a TypeScript parameter property, When extracted, Then its name is part of the signature"
+      ],
+      "ancestors": [],
+      "mutantHash": "fe0736c5c4f5721549c5d55a4dc581bc4609503ea642012c54378071eaa5d563",
+      "testHash": "d95184a87ec0bb140c741a0cdfc6e828d8a42068ebee7f9bee0c729345ea721a"
+    },
+    "maintainability-string-pattern-key-rejected": {
+      "testFile": "tests/maintainability-extract.test.mjs",
+      "tests": [
+        "Given a string-literal object-pattern key, When extracted, Then the written key is the name"
+      ],
+      "ancestors": [],
+      "mutantHash": "063ff83136e17ed2005a443f5e8e6049b8e45b94af31317b701b9a5dcd15acf4",
+      "testHash": "d95184a87ec0bb140c741a0cdfc6e828d8a42068ebee7f9bee0c729345ea721a"
+    },
+    "maintainability-object-rest-invalidates-pattern": {
+      "testFile": "tests/maintainability-extract.test.mjs",
+      "tests": [
+        "Given an object pattern with a rest property, When extracted, Then the ordinary keys remain"
+      ],
+      "ancestors": [],
+      "mutantHash": "d2cff6b5fdcdacf482a3e47391d986430fcdee82ebdd31bf456fca227b951436",
+      "testHash": "d95184a87ec0bb140c741a0cdfc6e828d8a42068ebee7f9bee0c729345ea721a"
+    },
+    "maintainability-computed-pattern-key-accepted": {
+      "testFile": "tests/maintainability-extract.test.mjs",
+      "tests": [
+        "Given a computed or numeric object-pattern key, When extracted, Then no signature is invented"
+      ],
+      "ancestors": [],
+      "mutantHash": "5e7b9d6cb9560929389ce7a4adde8296dbd39bf92349ba01d6b3f185d424c921",
+      "testHash": "d95184a87ec0bb140c741a0cdfc6e828d8a42068ebee7f9bee0c729345ea721a"
+    },
+    "maintainability-unnameable-pattern-key-admitted": {
+      "testFile": "tests/maintainability-extract.test.mjs",
+      "tests": [
+        "Given a computed or numeric object-pattern key, When extracted, Then no signature is invented"
+      ],
+      "ancestors": [],
+      "mutantHash": "180eae0293ea5cc51dc4db2b3b18735da7e99605480291735c3367418d91ec5e",
+      "testHash": "d95184a87ec0bb140c741a0cdfc6e828d8a42068ebee7f9bee0c729345ea721a"
+    },
+    "maintainability-computed-literal-property-accepted": {
+      "testFile": "tests/maintainability-extract.test.mjs",
+      "tests": [
+        "Given a computed or method object-literal property, When extracted, Then no call-site signature is invented"
+      ],
+      "ancestors": [],
+      "mutantHash": "b064a1336860b3a43879db6091db82beb500cb24bbf44460efa73865b8e9018a",
+      "testHash": "d95184a87ec0bb140c741a0cdfc6e828d8a42068ebee7f9bee0c729345ea721a"
+    },
+    "maintainability-literal-method-accepted": {
+      "testFile": "tests/maintainability-extract.test.mjs",
+      "tests": [
+        "Given a computed or method object-literal property, When extracted, Then no call-site signature is invented"
+      ],
+      "ancestors": [],
+      "mutantHash": "75c768e95e595e8cd40aaab6d74da69e730413a3724158d4f2e452c4446dcc11",
+      "testHash": "d95184a87ec0bb140c741a0cdfc6e828d8a42068ebee7f9bee0c729345ea721a"
+    },
+    "maintainability-duplicate-call-site-names": {
+      "testFile": "tests/maintainability-extract.test.mjs",
+      "tests": [
+        "Given a call site repeating the same name, When extracted, Then the name appears once"
+      ],
+      "ancestors": [],
+      "mutantHash": "ed1bf9d51c8f428f798fcd2d0516bad5c56c3aabaa0642d6dc422548a9a56774",
+      "testHash": "d95184a87ec0bb140c741a0cdfc6e828d8a42068ebee7f9bee0c729345ea721a"
+    },
+    "review-run-refused-not-terminal": {
+      "testFile": "tests/review-run-summary.test.mjs",
+      "tests": [
+        "Given a refused run, When its terminality is read, Then it is terminal so a follow loop settles instead of calling it interrupted"
+      ],
+      "ancestors": [],
+      "mutantHash": "fa5ed029bb41564090db44f040de7de170164e8f0d4a33a627f726a7d5c70d48",
+      "testHash": "682bcfdfcdded60ad8afd696877928bf3f032080e5d2193828e5a4416d4f9976"
+    },
+    "layout-required-report-envelope-missing": {
+      "testFile": "tests/layout-required.test.mjs",
+      "tests": [
+        "Given the repository, When every required file is checked, Then the list names every run-record path and nothing is missing"
+      ],
+      "ancestors": [],
+      "mutantHash": "4590875a49cdd6e36a536b788392f1cfbc4d72a433264a9966ab84e42b05959d",
+      "testHash": "cebe4d47bd00b3d32cf8d2fea6e7caea662f0fcebc91ab9087e5cbad9115abe2"
+    },
+    "layout-required-diff-budget-missing": {
+      "testFile": "tests/layout-required.test.mjs",
+      "tests": [
+        "Given the repository, When every required file is checked, Then the list names every run-record path and nothing is missing"
+      ],
+      "ancestors": [],
+      "mutantHash": "5e5e868d9845a794b57762550c1e862638c5334c178ba1196f780c2a6fe92501",
+      "testHash": "cebe4d47bd00b3d32cf8d2fea6e7caea662f0fcebc91ab9087e5cbad9115abe2"
+    },
+    "maintainability-signal-kill-treated-as-timeout": {
+      "testFile": "tests/maintainability-extract.test.mjs",
+      "tests": [
+        "Given the Python adapter is killed without a timeout, When extracted, Then the analysis fails instead of claiming a budget exhaustion"
+      ],
+      "ancestors": [],
+      "mutantHash": "78aa74597214492a872bf04bcb059ac00c3fde5caadd76ce6f71f1f861521633",
+      "testHash": "d95184a87ec0bb140c741a0cdfc6e828d8a42068ebee7f9bee0c729345ea721a"
     }
   }
 }

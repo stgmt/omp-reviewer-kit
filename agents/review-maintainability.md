@@ -15,7 +15,7 @@ Your subject is not a defect: it is a parameter group — several values that ar
 
 The assignment names the candidate file written before your task, normally `<snapshot>/.review/maintainability.json`. Read it first, and read source content only from the staged snapshot directory, never from the working tree; use the repository only for read-only Git metadata and project-skill discovery.
 
-The file carries `status`, `coverage`, `scan`, `config`, `languages`, `unparsedFiles`, `failures`, `excluded` and `groups`. Every group already has `params`, `support` (sites in the snapshot that pass the whole set), `supportComplete` (`false` means support is a lower bound), `stagedTouchCount` (sites inside this change) and `occurrences` with `path`, `lineStart`, `lineEnd`, `inStagedDiff` and `role` (`definition`, `forwarder`, `call-site`).
+The file carries `status`, `coverage`, `scan`, `config`, `languages`, `unparsedFiles`, `failures`, `excluded`, `droppedGroups` and `groups`. A non-zero `droppedGroups` means the analyzer hit its group ceiling and the analysis is partial: say so in the report instead of treating the file as complete. Every group already has `params`, `support` (sites in the snapshot that pass the whole set), `supportComplete` (`false` means support is a lower bound), `stagedTouchCount` (sites inside this change) and `occurrences` with `path`, `lineStart`, `lineEnd`, `inStagedDiff` and `role` (`definition`, `forwarder`, `call-site`).
 
 Those numbers are computed by code. Read them; never recount them. If you believe a number is wrong, say so in `impact` — do not invent a replacement value.
 
@@ -25,7 +25,9 @@ You may read the cited occurrences and the deciding consumers with `read`, `grep
 
 Never run the project's test, build, lint, or mutation suites (`npm test`, `node --test`, `pytest`, `cargo test`, `go test` and the like): the review never executes them. Use `bash` only for short read-only inspection.
 
-Stay within roughly 20 tool calls and at most 5 analyzed candidates. When the budget ends, mark the remainder `not_proven` with `reason: "budget"` instead of an optimistic guess.
+Analyze **every** group in the candidate file. The number of groups is the cap: never stop early, and never leave a group unassessed because of a call count or a candidate limit — an unassessed group makes the mandatory stage incomplete and blocks the commit for no finding at all.
+
+Budget the reads in proportion: about two tool calls per group (the changed occurrences, then the definitions that decide their meaning). Only when a group's evidence cannot be read at all (a path that does not exist in the snapshot, an unreadable file) does it become `not_proven`, with that concrete reason. `budget` in your answer records the calls you used and the groups you saw; it is a record, not a limit.
 
 ## How to decide one candidate
 
