@@ -36,6 +36,8 @@ export const REQUIRED_FILES = [
   'src/infra/review-run-store.mjs',
   'src/native/review-telemetry.mjs',
   'scripts/review-runs.mjs',
+  // Release preflight: the facts of a release that are knowable before the review runs.
+  'scripts/release-preflight.mjs',
   // Maintainability review: deterministic candidate file, one subagent stage, one measure script.
   'src/native/maintainability/config.mjs',
   'src/native/maintainability/extract.mjs',
