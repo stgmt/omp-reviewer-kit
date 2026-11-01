@@ -18,12 +18,22 @@ Before a release, these show the same version X.Y.Z:
 
 `npm run check` fails on a hook marker that does not match its body. `release.yml` fails on any version mismatch.
 
+## 0.5 Preflight before any review runs
+
+Run `node scripts/release-preflight.mjs --require-frozen` (add `--recalibrate` when it reports stale selectors, `--skip-tests` for a quick look). It checks, in milliseconds and without a review:
+- the version sources (`package.json` version and `omp.version`, both marketplace catalogs, the Claude manifest) and the dated changelog heading;
+- every curated mutant anchor matches its target file exactly once (a moved anchor costs a full gate run when it is found later);
+- the selector catalog against the current test bytes: staleness is a hash comparison, not a test run;
+- the layout check and the full suite.
+
+Order of a release, and why: **the review comes first, the mutation gate last**. Every edit made after a review starts invalidates that review, and every edit to a deciding test invalidates its selectors. The preflight refuses `--recalibrate` while the diff is not frozen, so a gate run never happens while review findings are still open. Recalibrate and run the gate once, on the frozen diff, immediately before the commit.
+
 ## 1. Tests before the commit
 
 Run them in a clean export of the index, not in the working tree (test runs write audit files there):
 
 - Export: `git -c core.autocrlf=false checkout-index -a --prefix=<empty-dir>/`, then `git -C <empty-dir> init`.
-- In the export: `npm test`, `npm run check`, and `npm run test:mutation` (Node 22+ for the mutation gate; it must prove every curated mutant killed by a deciding assertion).
+- In the export: `npm test`, `npm run check`, and `npm run test:mutation` (Node 22+ for the mutation gate; it must prove every curated mutant killed by a deciding assertion). Run the gate only after the preflight says the diff is frozen: a gate run that a later edit invalidates is the most expensive mistake of a release.
 - Follow `mutation-fast-default`: four asynchronous workers, pristine reusable worker copies and calibrated precise selectors. Do not rerun full-suite calibration for every release; maintain the selector catalog when mutants/deciding tests change. Missing or stale selectors, timeout, crash, zero selected tests and infrastructure errors block rather than count as kills. Record measured time, not a fixed duration estimate.
 
 ## 2. Commit through the review hook
