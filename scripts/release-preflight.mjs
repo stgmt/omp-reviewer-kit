@@ -10,11 +10,15 @@ import { readFile as readFileFs } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 
 import { MUTANTS } from './run-mutation-tests.mjs';
 import { findStaleMutants } from './mutation-runner.mjs';
 
 /** Version sources that must agree before a release. `field` walks into the parsed document. */
+/** The file the gate process loads its curated mutants from. */
+export const MUTANT_CATALOG_FILE = 'scripts/run-mutation-tests.mjs';
+
 export const VERSION_SOURCES = Object.freeze([
   { file: 'package.json', field: ['version'] },
   { file: 'package.json', field: ['omp', 'version'] },
@@ -100,6 +104,38 @@ export async function checkSelectors({ mutants = MUTANTS, selectors, root = proc
   return { stale: stale.map(mutant => mutant.id), ok: stale.length === 0 };
 }
 
+/**
+ * The bytes a gate run certifies: every mutant target and every deciding test. The selector catalog
+ * is the gate's own output and is deliberately not part of it. If a review finding edits one of
+ * these files while the gate runs, the verdict certifies bytes that no longer exist.
+ *
+ * @param {{ mutants: Array<{ file: string, testFile: string }>, readFile: (file: string) => Promise<string> }} options
+ * @returns {Promise<string>}
+ */
+export async function gateFingerprint({ mutants, readFile }) {
+  const files = [...new Set(mutants.flatMap(mutant => [mutant.file, mutant.testFile]))].sort();
+  const hash = createHash('sha256');
+  // What the gate executes, not only what it reads: a mutant added or edited mid-run changes the set.
+  const definitions = [...new Set(mutants
+    .map(mutant => [mutant.id, mutant.file, mutant.testFile, mutant.original, mutant.replacement].join('\u0000')))].sort();
+  hash.update(JSON.stringify(definitions));
+  // The child gate loads the catalog from disk, not from this process's import: certify those bytes too.
+  try {
+    hash.update((await readFile(MUTANT_CATALOG_FILE)).replace(/\r\n/g, '\n'));
+  } catch {
+    hash.update(':catalog-missing');
+  }
+  for (const file of files) {
+    hash.update(file);
+    try {
+      hash.update((await readFile(file)).replace(/\r\n/g, '\n'));
+    } catch {
+      hash.update(':missing');
+    }
+  }
+  return hash.digest('hex');
+}
+
 /** A frozen diff: nothing unstaged outside the reports folder, so a review result stays valid. */
 export function checkFrozen({ status }) {
   const pending = String(status)
@@ -164,20 +200,18 @@ export async function runPreflight({
     ? `${mutants.length} anchors match exactly once`
     : anchors.broken.map(entry => `${entry.id} matches ${entry.matches}x in ${entry.file}`).join('; ')));
 
-  // A review that still has open findings means the diff will change, and every change invalidates
-  // the selectors and the calibration this run would prove. Refuse before spending a gate run.
   const frozen = checkFrozen({ status: await status() });
-  if (requireFrozen || recalibrate) {
+  if (requireFrozen) {
     ok &&= frozen.ok;
     note(report('diff frozen', frozen.ok, frozen.ok
       ? 'no pending change outside the reports folder'
-      : `not frozen, recalibration refused: ${frozen.pending.join(' | ')}`));
-    if (!frozen.ok) {
-      note('release preflight: close the review findings first, then recalibrate and commit the frozen diff');
+      : `pending: ${frozen.pending.join(' | ')}`));
+    if (requireFrozen && !frozen.ok) {
+      note('release preflight: the diff is not frozen, so nothing was calibrated or committed');
       return 1;
     }
   } else if (!frozen.ok) {
-    note(report('diff frozen', true, `warning: ${frozen.pending.length} pending change(s); recalculate after the review's last finding`));
+    note(report('diff frozen', true, `warning: ${frozen.pending.length} pending change(s) - run the gate only after the review's last finding`));
   }
 
   let catalog;
@@ -191,7 +225,17 @@ export async function runPreflight({
     const selectors = await checkSelectors({ mutants, selectors: catalog.mappings, root: cwd, findStale });
     note(report('selector staleness', selectors.ok, selectors.ok ? 'every selector fits its test bytes' : `${selectors.stale.length} stale: ${selectors.stale.slice(0, 8).join(', ')}${selectors.stale.length > 8 ? ', ...' : ''}`));
     if (!selectors.ok && recalibrate) {
+      // A gate run certifies the bytes it started from. If a review finding is still being applied,
+      // the bytes move under the run and its verdict would certify nothing: report that instead.
+      const before = await gateFingerprint({ mutants, readFile });
       const code = await runCommand(process.execPath, ['scripts/run-mutation-tests.mjs', '--calibrate-stale'], { cwd });
+      const moved = await gateFingerprint({ mutants, readFile });
+      if (before !== moved) {
+        ok = false;
+        note(report('gate snapshot', false, 'the gate run changed the certified bytes; its verdict does not certify the current tree - rerun once the review findings are closed'));
+        return 1;
+      }
+      note(report('gate snapshot', true, 'the bytes did not move during the gate run'));
       const after = code === 0 ? JSON.parse(await readFile('scripts/mutation-selectors.json')) : null;
       const again = after?.mappings ? await checkSelectors({ mutants, selectors: after.mappings, root: cwd, findStale }) : { ok: false, stale: ['calibration failed'] };
       ok &&= code === 0 && again.ok;

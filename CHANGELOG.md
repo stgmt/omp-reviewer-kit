@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.1] - 2026-11-01
+
+### Added
+- **Release preflight.** `node scripts/release-preflight.mjs` answers, in milliseconds and before any review runs, what a release used to discover after a twenty-minute review: whether the version sources agree (`package.json` version and `omp.version`, both marketplace catalogs, the Claude manifest) and the changelog has a dated heading for that version; whether every curated mutant anchor still matches its target file exactly once; whether any selector no longer fits its deciding test (a hash comparison, not a gate run); then the layout check and the suite. `--recalibrate` re-proves the stale selectors with one gate run, and `--require-frozen` refuses to start while the diff is still moving.
+
+### Changed
+- The release order is enforced rather than documented only: the preflight refuses a recalibration while the diff is not frozen, because a review that is still changing the diff invalidates every selector it would prove. The release skill states the order - review first, one gate run on the frozen diff, then the commit.
+
+### Fixed
+- `--require-frozen` stopped reporting a pending diff and still ran the gate, and the gate fingerprint covered the mutant targets and deciding tests but neither the curated definitions nor the catalog source the gate process loads. The strict mode now stops before anything is calibrated, and the fingerprint covers the target and test paths (deduplicated and sorted), their normalized bytes, the sorted unique definitions and `scripts/run-mutation-tests.mjs`, so a verdict that a later edit invalidated is reported instead of certified. Five mutants and edge tests hold each rule in place.
+
+### Verified
+- `npm test` on the merged tree: 638 tests, 628 pass, 0 fail, 10 skipped.
+- `npm run check`: layout ok, 80 files.
+- The very first review of the preflight change passed on the first attempt (`REVIEW_RESULT=PASS`), where the same class of change previously needed three attempts.
+
 ## [0.24.0] - 2026-11-01
 
 ### Added
