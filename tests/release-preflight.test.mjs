@@ -15,7 +15,7 @@ import {
   gateFingerprint,
 } from '../scripts/release-preflight.mjs';
 import { mutantIdentity, testFileHash } from '../scripts/mutation-runner.mjs';
-import { createCertificate } from '../src/domain/mutation-certificate.mjs';
+import { createCertificate, gateRun } from '../src/domain/mutation-certificate.mjs';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 
@@ -27,7 +27,7 @@ import { treeFingerprint } from '../scripts/release-preflight.mjs';
 /** An in-memory certificate store: no preflight test reads or writes the owner's home folder. */
 const memoryStore = (initial = new Map()) => ({
   readCert: async digest => initial.get(digest) ?? null,
-  writeCert: async certificate => { initial.set(certificate.digest, certificate); return `memory:${certificate.digest}`; },
+  writeCert: async certificate => { initial.set(certificate.run.digest, certificate); return `memory:${certificate.run.digest}`; },
   entries: () => [...initial.entries()],
 });
 
@@ -239,9 +239,9 @@ test('Given a diff that must not move, When a recalibration is requested while i
 test('Given a certificate from the previous run of the same bytes, When a recalibration is requested, Then the gate does not run again', async () => {
   const mutant = { id: 'one', file: 'src/a.mjs', testFile: 'tests/a.test.mjs', original: 'a', replacement: 'b' };
   const catalog = JSON.stringify({ schema: 'mutation-selectors@1', mappings: { one: { tests: ['x'] } } });
-  const read = async file => (file === mutant.file ? 'a' : file === mutant.testFile ? 'test("x", () => {});' : file === 'scripts/mutation-selectors.json' ? catalog : documents('0.25.2')(file));
+  const read = async file => (file === mutant.file ? 'a' : file === mutant.testFile ? 'test("x", () => {});' : file === 'scripts/mutation-selectors.json' ? catalog : documents('0.25.3')(file));
   const digest = await treeFingerprint({ mutants: [mutant], readFile: read, treeHash: 'frozen-tree' });
-  const store = memoryStore(new Map([[digest, createCertificate({ digest, mutants: 1, killed: 1, durationMs: 210_000, createdAt: '2026-11-02T00:00:00.000Z' })]]));
+  const store = memoryStore(new Map([[digest, createCertificate(gateRun({ digest, mutants: 1, durationMs: 210_000 }), { createdAt: '2026-11-02T00:00:00.000Z' })]]));
   const spawned = [];
   const lines = [];
   const code = await runPreflight({
@@ -265,9 +265,9 @@ test('Given a certificate from the previous run of the same bytes, When a recali
 test('Given a certificate stored for other bytes, When a recalibration is requested, Then the gate runs and the new proof is stored', async () => {
   const mutant = { id: 'one', file: 'src/a.mjs', testFile: 'tests/a.test.mjs', original: 'a', replacement: 'b' };
   const catalog = JSON.stringify({ schema: 'mutation-selectors@1', mappings: { one: { tests: ['x'] } } });
-  const read = async file => (file === mutant.file ? 'a' : file === mutant.testFile ? 'test("x", () => {});' : file === 'scripts/mutation-selectors.json' ? catalog : documents('0.25.2')(file));
+  const read = async file => (file === mutant.file ? 'a' : file === mutant.testFile ? 'test("x", () => {});' : file === 'scripts/mutation-selectors.json' ? catalog : documents('0.25.3')(file));
   const otherDigest = await treeFingerprint({ mutants: [mutant], readFile: read, treeHash: 'other-tree' });
-  const store = memoryStore(new Map([[otherDigest, createCertificate({ digest: otherDigest, mutants: 1, killed: 1, durationMs: 1000 })]]));
+  const store = memoryStore(new Map([[otherDigest, createCertificate(gateRun({ digest: otherDigest, mutants: 1, durationMs: 1000 }))]]));
   const spawned = [];
   const lines = [];
   const code = await runPreflight({
@@ -285,7 +285,7 @@ test('Given a certificate stored for other bytes, When a recalibration is reques
   assert.equal(code, 0);
   assert.equal(spawned.filter(line => line.includes('run-mutation-tests.mjs')).length, 1, 'one gate run proves the new bytes');
   const digest = await treeFingerprint({ mutants: [mutant], readFile: read, treeHash: 'frozen-tree' });
-  assert.equal((await store.readCert(digest))?.killed, 1, 'the run stored its proof for these bytes');
+  assert.equal((await store.readCert(digest))?.run.mutants, 1, 'the run stored its proof for these bytes');
   assert.match(lines.join('\n'), /stored for these bytes/);
 });
 
@@ -299,7 +299,7 @@ test('Given a gate run that passed, When the certificate cannot be written, Then
     mutants: [mutant],
     readCert: async () => null,
     writeCert: async () => { throw new Error('disk full'); },
-    readFile: async file => (file === mutant.file ? 'a' : file === mutant.testFile ? 'test("x", () => {});' : file === 'scripts/mutation-selectors.json' ? catalog : documents('0.25.2')(file)),
+    readFile: async file => (file === mutant.file ? 'a' : file === mutant.testFile ? 'test("x", () => {});' : file === 'scripts/mutation-selectors.json' ? catalog : documents('0.25.3')(file)),
     status: () => Promise.resolve(''),
     treeHash: async () => 'frozen-tree',
     findStale: async () => [],
@@ -319,7 +319,7 @@ test('Given any recalibration, When the preflight finishes, Then the review-roun
     pruneCert: async () => 0,
     log: line => lines.push(line),
     mutants: [mutant],
-    readFile: async file => (file === mutant.file ? 'a' : file === mutant.testFile ? 'test("x", () => {});' : file === 'scripts/mutation-selectors.json' ? catalog : documents('0.25.2')(file)),
+    readFile: async file => (file === mutant.file ? 'a' : file === mutant.testFile ? 'test("x", () => {});' : file === 'scripts/mutation-selectors.json' ? catalog : documents('0.25.3')(file)),
     status: () => Promise.resolve(''),
     treeHash: async () => 'frozen-tree',
     findStale: async () => [],
@@ -348,7 +348,7 @@ test('Given a gate that recalibrates and rewrites its own catalog, When the byte
     pruneCert: async () => 0,
     log: line => lines.push(line),
     mutants: [mutant],
-    readFile: async file => (file === mutant.file ? 'a' : file === mutant.testFile ? 'test("x", () => {});' : file === 'scripts/mutation-selectors.json' ? catalog : documents('0.25.2')(file)),
+    readFile: async file => (file === mutant.file ? 'a' : file === mutant.testFile ? 'test("x", () => {});' : file === 'scripts/mutation-selectors.json' ? catalog : documents('0.25.3')(file)),
     status: () => Promise.resolve(''),
     treeHash: async () => 'frozen-tree',
     findStale: async () => [],
@@ -362,7 +362,7 @@ test('Given a gate that recalibrates and rewrites its own catalog, When the byte
   assert.match(lines.join('\n'), /gate snapshot - the bytes did not move during the gate run/);
   const stored = store.entries();
   assert.equal(stored.length, 1, 'one certificate was stored');
-  assert.equal(stored[0][1].killed, 1);
+  assert.equal(stored[0][1].run.mutants, 1);
   const withOldCatalog = await treeFingerprint({ mutants: [mutant], readFile: async file => (file === 'scripts/mutation-selectors.json' ? '{"one":["x"]}' : file === mutant.testFile ? 'test("x", () => {});' : 'a'), treeHash: 'frozen-tree' });
   assert.notEqual(stored[0][0], withOldCatalog, 'the stored proof uses the catalog the run ended with');
   assert.deepEqual(emitted, []);
@@ -388,7 +388,7 @@ test('Given the tree cannot be hashed before the run, When a recalibration is re
     pruneCert: async () => 0,
     log: line => lines.push(line),
     mutants: [mutant],
-    readFile: async file => (file === mutant.file ? 'a' : file === mutant.testFile ? 'test("x", () => {});' : file === 'scripts/mutation-selectors.json' ? catalog : documents('0.25.2')(file)),
+    readFile: async file => (file === mutant.file ? 'a' : file === mutant.testFile ? 'test("x", () => {});' : file === 'scripts/mutation-selectors.json' ? catalog : documents('0.25.3')(file)),
     status: () => Promise.resolve(''),
     treeHash: async () => null,
     findStale: async () => [],
@@ -412,7 +412,7 @@ test('Given the tree cannot be hashed after the run, When the gate passed, Then 
     pruneCert: async () => 0,
     log: line => lines.push(line),
     mutants: [mutant],
-    readFile: async file => (file === mutant.file ? 'a' : file === mutant.testFile ? 'test("x", () => {});' : file === 'scripts/mutation-selectors.json' ? catalog : documents('0.25.2')(file)),
+    readFile: async file => (file === mutant.file ? 'a' : file === mutant.testFile ? 'test("x", () => {});' : file === 'scripts/mutation-selectors.json' ? catalog : documents('0.25.3')(file)),
     status: () => Promise.resolve(''),
     treeHash: async () => trees[Math.min(calls++, trees.length - 1)],
     findStale: async () => [],
@@ -437,7 +437,7 @@ test('Given a gate run that passed, When the preflight is asked to recalibrate, 
     pruneCert: async () => { prunes += 1; order.push('prune'); throw new Error('locked folder'); },
     log: line => lines.push(line),
     mutants: [mutant],
-    readFile: async file => (file === mutant.file ? 'a' : file === mutant.testFile ? 'test("x", () => {});' : file === 'scripts/mutation-selectors.json' ? catalog : documents('0.25.2')(file)),
+    readFile: async file => (file === mutant.file ? 'a' : file === mutant.testFile ? 'test("x", () => {});' : file === 'scripts/mutation-selectors.json' ? catalog : documents('0.25.3')(file)),
     status: () => Promise.resolve(''),
     treeHash: async () => 'frozen-tree',
     findStale: async () => [],

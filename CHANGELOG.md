@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.25.3] - 2026-11-02
+
+### Changed
+- **One gate run is one value.** The certificate used to carry `digest`, `mutants`, `killed` and `durationMs` as four loose fields that every caller had to keep in step — the domain constructor, the validator, the preflight and a dozen fixtures — which is exactly the coordination cost the maintainability stage charges for. `gateRun({ digest, mutants, durationMs })` is now the only shape a run has, and `createCertificate(run, { createdAt, nodeVersion, platform })` builds the record from it.
+- **`killed` is gone, not renamed.** A certificate is written only after a gate run that killed every curated mutant, so the field could only ever repeat `mutants`; a run that killed part of the catalog is not recorded at all. The impossible state "333 of 351" can no longer be stored, and the validation branch that had to reject it — with its curated mutant — is removed instead of kept in step. The document schema moves to `mutation-certificate@2`: a certificate of the previous shape is ignored once, and the next preflight runs the gate once and writes the new one.
+
 ## [0.25.2] - 2026-11-02
 
 ### Fixed

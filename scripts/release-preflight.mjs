@@ -15,7 +15,7 @@ import { createHash } from 'node:crypto';
 
 import { MUTANTS } from './run-mutation-tests.mjs';
 import { findStaleMutants } from './mutation-runner.mjs';
-import { createCertificate, describeCertificate, isUsableCertificate } from '../src/domain/mutation-certificate.mjs';
+import { createCertificate, describeCertificate, gateRun, isUsableCertificate } from '../src/domain/mutation-certificate.mjs';
 import { pruneCertificates, readCertificate, writeCertificate } from '../src/infra/mutation-certificate-store.mjs';
 
 /** Version sources that must agree before a release. `field` walks into the parsed document. */
@@ -360,7 +360,7 @@ export async function runPreflight({
         ok &&= code === 0 && again.ok;
         note(report('recalibration', code === 0 && again.ok, code === 0 && again.ok ? 'selectors re-proved and the full catalog certified' : 'the gate did not certify the catalog'));
         if (code === 0 && again.ok) {
-          const stored = createCertificate({ digest: after, mutants: mutants.length, killed: mutants.length, durationMs, createdAt: new Date(now()).toISOString() });
+          const stored = createCertificate(gateRun({ digest: after, mutants: mutants.length, durationMs }), { createdAt: new Date(now()).toISOString() });
           try {
             await writeCert(stored);
             await pruneCert().catch(() => 0);

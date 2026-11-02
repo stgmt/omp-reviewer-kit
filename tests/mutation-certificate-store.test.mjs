@@ -11,6 +11,7 @@ import { promisify } from 'node:util';
 import {
   CERTIFICATE_SCHEMA,
   createCertificate,
+  gateRun,
   describeCertificate,
   isUsableCertificate,
 } from '../src/domain/mutation-certificate.mjs';
@@ -34,7 +35,7 @@ const temporaryDir = () => mkdtemp(path.join(tmpdir(), 'review-kit-cert-'));
 test('Given a certificate for these bytes, When it is read back, Then the whole proof is restored', async () => {
   const dir = await temporaryDir();
   try {
-    const certificate = createCertificate({ digest: DIGEST, mutants: 333, killed: 333, durationMs: 213_940, createdAt: '2026-11-02T00:00:00.000Z' });
+    const certificate = createCertificate(gateRun({ digest: DIGEST, mutants: 333, durationMs: 213_940 }), { createdAt: '2026-11-02T00:00:00.000Z' });
     await writeCertificate(certificate, { dir });
     const read = await readCertificate(DIGEST, { dir });
     assert.deepEqual(read, certificate);
@@ -50,7 +51,7 @@ test('Given a certificate file of another schema or of another digest, When it i
     await writeFile(path.join(dir, `${DIGEST}.json`), JSON.stringify({ schema: 'mutation-certificate@0', digest: DIGEST }));
     assert.equal(await readCertificate(DIGEST, { dir }), null, 'another schema is not migrated');
 
-    await writeFile(path.join(dir, `${OTHER}.json`), JSON.stringify(createCertificate({ digest: DIGEST, mutants: 1, killed: 1, durationMs: 1 })));
+    await writeFile(path.join(dir, `${OTHER}.json`), JSON.stringify(createCertificate(gateRun({ digest: DIGEST, mutants: 1, durationMs: 1 }))));
     assert.equal(await readCertificate(OTHER, { dir }), null, 'a file named for other bytes proves nothing');
 
     assert.equal(await readCertificate('not-a-digest', { dir }), null, 'a malformed digest reads nothing');
@@ -60,19 +61,23 @@ test('Given a certificate file of another schema or of another digest, When it i
   }
 });
 
+test('Given a run with no mutants, When it is recorded, Then it is refused instead of certifying an empty catalog', () => {
+  assert.throws(() => gateRun({ digest: DIGEST, mutants: 0, durationMs: 1 }), /invalid gate run mutant count/);
+  assert.throws(() => gateRun({ digest: 'not-a-digest', mutants: 1, durationMs: 1 }), /invalid gate run digest/);
+});
+
 test('Given a kill of the whole catalog, When the certificate is judged, Then only the same digest and the same catalog size are enough', () => {
-  const certificate = createCertificate({ digest: DIGEST, mutants: 333, killed: 333, durationMs: 1000 });
+  const certificate = createCertificate(gateRun({ digest: DIGEST, mutants: 333, durationMs: 1000 }));
   assert.equal(isUsableCertificate(certificate, { digest: DIGEST, mutants: 333 }), true);
   assert.equal(isUsableCertificate(certificate, { digest: OTHER, mutants: 333 }), false, 'other bytes');
   assert.equal(isUsableCertificate(certificate, { digest: DIGEST, mutants: 334 }), false, 'a grown catalog');
-  assert.equal(isUsableCertificate({ ...certificate, killed: 332 }, { digest: DIGEST, mutants: 333 }), false, 'a partial kill proves nothing');
-  assert.equal(isUsableCertificate({ ...certificate, digest: 'xyz' }, { digest: 'xyz', mutants: 333 }), false, 'a malformed digest');
+  assert.equal(isUsableCertificate({ ...certificate, run: { ...certificate.run, digest: 'xyz' } }, { digest: 'xyz', mutants: 333 }), false, 'a malformed digest');
   assert.equal(isUsableCertificate({ ...certificate, schema: 'something@2' }, { digest: DIGEST, mutants: 333 }), false, 'another schema');
   assert.equal(isUsableCertificate(null, { digest: DIGEST, mutants: 333 }), false);
 });
 
 test('Given a proof from five minutes ago, When it is described, Then the line names what was proved and how old it is', () => {
-  const certificate = createCertificate({ digest: DIGEST, mutants: 333, killed: 333, durationMs: 213_940, createdAt: '2026-11-02T00:00:00.000Z' });
+  const certificate = createCertificate(gateRun({ digest: DIGEST, mutants: 333, durationMs: 213_940 }), { createdAt: '2026-11-02T00:00:00.000Z' });
   assert.equal(describeCertificate(certificate, Date.parse('2026-11-02T00:05:00.000Z')), '333/333 mutants proved in 214s, 5 min old');
   assert.equal(describeCertificate(certificate, Date.parse('2026-11-02T00:00:30.000Z')), '333/333 mutants proved in 214s, 30s old');
   assert.equal(describeCertificate({ ...certificate, createdAt: 'not a date' }), '333/333 mutants proved in 214s, age unknown');
@@ -83,7 +88,7 @@ test('Given certificates of several ages, When the folder is pruned, Then the ne
   try {
     const digests = [0, 1, 2, 3].map(index => String(index).repeat(64));
     for (const [index, digest] of digests.entries()) {
-      await writeCertificate(createCertificate({ digest, mutants: 1, killed: 1, durationMs: 1, createdAt: '2026-11-02T00:00:00.000Z' }), { dir });
+      await writeCertificate(createCertificate(gateRun({ digest, mutants: 1, durationMs: 1 }), { createdAt: '2026-11-02T00:00:00.000Z' }), { dir });
       const stamp = new Date(Date.now() - index * 86_400_000);
       await utimes(path.join(dir, `${digest}.json`), stamp, stamp);
     }
@@ -110,7 +115,7 @@ test('Given two writers of one certificate, When the second rename is held and r
       const { rename } = await import('node:fs/promises');
       await rename(from, to);
     };
-    await writeCertificate(createCertificate({ digest: DIGEST, mutants: 1, killed: 1, durationMs: 1 }), { dir, renameFile });
+    await writeCertificate(createCertificate(gateRun({ digest: DIGEST, mutants: 1, durationMs: 1 })), { dir, renameFile });
     assert.equal(attempts, 2, 'the retried rename is the one that landed');
     assert.deepEqual((await readdir(dir)).filter(name => name.includes('.tmp')), []);
     assert.ok(await readCertificate(DIGEST, { dir }));
@@ -124,7 +129,7 @@ test('Given a folder that cannot be written, When a certificate is stored, Then 
   try {
     const blocked = path.join(dir, 'a-file');
     await writeFile(blocked, 'not a directory');
-    await assert.rejects(() => writeCertificate(createCertificate({ digest: DIGEST, mutants: 1, killed: 1, durationMs: 1 }), { dir: blocked }));
+    await assert.rejects(() => writeCertificate(createCertificate(gateRun({ digest: DIGEST, mutants: 1, durationMs: 1 })), { dir: blocked }));
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -182,7 +187,7 @@ test('Given the gate writes its catalog and a report during the run, When the tr
 });
 
 test('Given a proof from another runtime or platform, When it is judged, Then it certifies nothing here', () => {
-  const certificate = createCertificate({ digest: DIGEST, mutants: 2, killed: 2, durationMs: 1000, nodeVersion: 'v22.0.0', platform: 'linux' });
+  const certificate = createCertificate(gateRun({ digest: DIGEST, mutants: 2, durationMs: 1000 }), { nodeVersion: 'v22.0.0', platform: 'linux' });
   assert.equal(isUsableCertificate(certificate, { digest: DIGEST, mutants: 2, nodeVersion: 'v22.0.0', platform: 'linux' }), true);
   assert.equal(isUsableCertificate(certificate, { digest: DIGEST, mutants: 2, nodeVersion: 'v24.0.0', platform: 'linux' }), false, 'another node');
   assert.equal(isUsableCertificate(certificate, { digest: DIGEST, mutants: 2, nodeVersion: 'v22.0.0', platform: 'win32' }), false, 'another platform');
@@ -194,7 +199,7 @@ test('Given certificates of mixed ages, When the folder is pruned, Then the age 
     const digests = [0, 1, 2].map(index => String(index + 5).repeat(64));
     const stamps = [0, 30, 400]; // days old
     for (const [index, digest] of digests.entries()) {
-      await writeCertificate(createCertificate({ digest, mutants: 1, killed: 1, durationMs: 1 }), { dir });
+      await writeCertificate(createCertificate(gateRun({ digest, mutants: 1, durationMs: 1 })), { dir });
       const stamp = new Date(Date.now() - stamps[index] * 86_400_000);
       await utimes(path.join(dir, `${digest}.json`), stamp, stamp);
     }
@@ -211,7 +216,7 @@ test('Given certificates of mixed ages, When the folder is pruned, Then the age 
 test('Given a file nobody can read as a certificate, When the folder is pruned, Then it is left in place instead of deleted by guesswork', async () => {
   const dir = await temporaryDir();
   try {
-    const keep = createCertificate({ digest: DIGEST, mutants: 1, killed: 1, durationMs: 1 });
+    const keep = createCertificate(gateRun({ digest: DIGEST, mutants: 1, durationMs: 1 }));
     await writeCertificate(keep, { dir });
     await writeFile(path.join(dir, `${OTHER}.json`), 'not json at all');
     const stamp = new Date(Date.now() - 400 * 86_400_000);
@@ -236,7 +241,7 @@ test('Given a run id that would escape the folder, When a record is written, The
 test('Given a certificate whose digest is not a digest, When it is written, Then the write is refused', async () => {
   const dir = await temporaryDir();
   try {
-    await assert.rejects(() => writeCertificate({ schema: CERTIFICATE_SCHEMA, digest: '../../escape', mutants: 1, killed: 1 }, { dir }), /invalid certificate digest/);
+    await assert.rejects(() => writeCertificate({ schema: CERTIFICATE_SCHEMA, run: { digest: '../../escape', mutants: 1, durationMs: 1 } }, { dir }), /invalid certificate digest/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -247,7 +252,7 @@ test('Given a folder with no room at all, When it is pruned, Then the newest fil
   try {
     const digests = [0, 1].map(index => String(index + 7).repeat(64));
     for (const digest of digests) {
-      await writeCertificate(createCertificate({ digest, mutants: 1, killed: 1, durationMs: 1 }), { dir });
+      await writeCertificate(createCertificate(gateRun({ digest, mutants: 1, durationMs: 1 })), { dir });
     }
     const removed = await pruneFolder({ dir, suffix: '.json', keep: 0, keepDays: 3650 });
     assert.equal(removed, 1, 'the count rule removes the second file');
