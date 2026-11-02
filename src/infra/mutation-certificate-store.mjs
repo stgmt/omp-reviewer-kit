@@ -49,12 +49,12 @@ export function certificateFile(dir, digest) {
 export async function writeCertificate(certificate, options = {}) {
   const dir = options.dir ?? certificatesRootDir(options);
   // `certificateFile` validates the digest, so a certificate can never be written outside its folder.
-  return writeJsonAtomic(dir, path.basename(certificateFile(dir, certificate.digest)), certificate, options);
+  return writeJsonAtomic(dir, path.basename(certificateFile(dir, certificate.run?.digest)), certificate, options);
 }
 
 /**
  * The certificate for these exact bytes, or null when it is missing, unreadable, of another schema
- * or about another digest.
+ * or about another digest. The digest lives inside the run the certificate describes.
  *
  * @param {string} digest
  * @param {{ dir?: string, env?: NodeJS.ProcessEnv, home?: string }} [options]
@@ -66,7 +66,7 @@ export async function readCertificate(digest, options = {}) {
   try {
     const parsed = JSON.parse(await readFile(certificateFile(dir, digest), 'utf8'));
     if (!parsed || typeof parsed !== 'object' || parsed.schema !== CERTIFICATE_SCHEMA) return null;
-    if (parsed.digest !== digest) return null;
+    if (parsed.run?.digest !== digest) return null;
     return parsed;
   } catch {
     return null;
