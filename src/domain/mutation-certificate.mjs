@@ -12,10 +12,21 @@ const count = value => Number.isInteger(value) && value >= 0;
 /**
  * The record a successful gate run leaves behind.
  *
- * @param {{ digest: string, mutants: number, killed: number, durationMs: number, createdAt?: string, nodeVersion?: string }} input
+ * A kill proof is runtime-scoped: the gate itself hashes `process.version` and `process.platform` into
+ * its own fingerprint, so a proof obtained under one runtime says nothing about another.
+ *
+ * @param {{ digest: string, mutants: number, killed: number, durationMs: number, createdAt?: string, nodeVersion?: string, platform?: string }} input
  * @returns {object}
  */
-export function createCertificate({ digest, mutants, killed, durationMs, createdAt = new Date().toISOString(), nodeVersion = process.version }) {
+export function createCertificate({
+  digest,
+  mutants,
+  killed,
+  durationMs,
+  createdAt = new Date().toISOString(),
+  nodeVersion = process.version,
+  platform = process.platform,
+}) {
   return {
     schema: CERTIFICATE_SCHEMA,
     digest,
@@ -24,24 +35,29 @@ export function createCertificate({ digest, mutants, killed, durationMs, created
     durationMs: Math.max(0, Math.round(durationMs)),
     createdAt,
     nodeVersion,
+    platform,
   };
 }
 
 /**
- * Whether this document certifies the given bytes for the whole curated catalog. A partial kill, a
- * different catalog size, a missing digest or another schema is not a certificate.
+ * Whether this document certifies the given bytes for the whole curated catalog on this runtime. A
+ * partial kill, a different catalog size, another runtime or platform, a missing digest or another
+ * schema is not a certificate.
  *
  * @param {unknown} value
- * @param {{ digest: string, mutants: number }} expected
+ * @param {{ digest: string, mutants: number, nodeVersion?: string, platform?: string }} expected
  * @returns {boolean}
  */
-export function isUsableCertificate(value, { digest, mutants }) {
+export function isUsableCertificate(value, { digest, mutants, nodeVersion = process.version, platform = process.platform }) {
   if (!value || typeof value !== 'object') return false;
   if (value.schema !== CERTIFICATE_SCHEMA) return false;
   if (typeof value.digest !== 'string' || !DIGEST.test(value.digest)) return false;
   if (value.digest !== digest) return false;
   if (!count(value.mutants) || value.mutants !== mutants) return false;
   if (!count(value.killed) || value.killed !== value.mutants) return false;
+  // The kill was observed on one runtime; another one is another experiment.
+  if (value.nodeVersion !== nodeVersion) return false;
+  if (value.platform !== platform) return false;
   return true;
 }
 

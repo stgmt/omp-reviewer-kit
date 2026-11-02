@@ -13,10 +13,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Record shapes that were written out at every producer now come from one place each: `doctorCheck(name, status, message)` for the `doctor()` checks, `src/infra/registration-record.mjs` for a persisted session registration, and `writeTarget(repoRoot, targetPath)` for the pair the symlink guard defends.
 
+## [0.25.1] - 2026-11-02
+
+### Fixed
+- **A proof certifies one runtime.** The certificate recorded `nodeVersion` and never compared it, and no platform at all, while the gate itself hashes `process.version` and `process.platform` into its fingerprint: a proof taken under Node 22 certified the catalog under Node 24, and one taken on Linux certified it on Windows. Both are compared now, and a mismatch simply means "no certificate".
+- **The after-run digest reads fresh bytes.** The preflight caches its reads for the before-run snapshot; that cache is no longer reused for the digest that is stored, so a stored proof is always keyed to the catalog the run ended with.
+- **The preflight never touches the real certificate folder in tests.** `pruneCert` is injectable like `readCert` and `writeCert`, so a test run cannot delete the owner's proofs for other repositories.
+- **`writeRunRecord` and `writeCertificate` validate their file names again.** Both go through the helper that enforces the id/digest shape, so a malformed id can no longer write outside its folder through the write path while the read path rejects it.
+- **Generated run artifacts are untracked.** `audit-reports/mutation-result*` and captured suite/gate logs are evidence of a run, not of the release: they are ignored now, and the logs a previous release committed are removed.
+
+### Changed
+- **`--recalibrate` refuses a moving tree on its own.** The frozen check no longer needs `--require-frozen`: a run on bytes that a half-saved finding can still change proves nothing, so recalibration refuses while an unstaged change or an untracked file exists.
+- **One retention rule.** `src/infra/retained-folder.mjs` prunes both folders; the run records and the certificates no longer keep two copies of the same loop with two sets of defaults, and a file nobody can parse is left alone instead of deleted.
+
 ## [0.25.0] - 2026-11-02
 
 ### Added
-- **A gate run is now a certificate, not a habit.** `scripts/release-preflight.mjs --recalibrate` stores its result in `<home>/.omp/review-kit-mutation/<digest>.json` (`OMP_REVIEW_KIT_MUTATION_CERT_DIR` overrides), keyed by a content hash of the whole working tree (`git write-tree` through a throwaway index, so the digest survives the release commit) plus the gate fingerprint. A second preflight on the same bytes prints `mutation certificate - 333/333 mutants proved in 213s, 5 min old` and runs nothing; any edit anywhere changes the digest and the gate runs again. The rules live in `src/domain/mutation-certificate.mjs`, the store in `src/infra/mutation-certificate-store.mjs`.
+- **A gate run is now a certificate, not a habit.** `scripts/release-preflight.mjs --recalibrate` stores its result in `<home>/.omp/review-kit-mutation/<digest>.json` (`OMP_REVIEW_KIT_MUTATION_CERT_DIR` overrides), keyed by a content hash of the whole working tree (`git write-tree` through a throwaway index, so the digest survives the release commit) plus the gate fingerprint. A second preflight on the same bytes prints `mutation certificate - N/N mutants proved in …` and runs nothing; any edit anywhere changes the digest and the gate runs again. The rules live in `src/domain/mutation-certificate.mjs`, the store in `src/infra/mutation-certificate-store.mjs`.
 - **The policy is written down, in the output.** A recalibration now prints, in the transcript an agent reads, that the gate runs once on the frozen diff and that a review round in progress is not a reason to recalibrate. The commit hook repeats it after every verdict (`review: mutation gate - not part of this hook; run it once after PASS on the frozen diff, never per review round`), and `.claude/skills/mutation-fast-default/SKILL.md` carries the rule as a section.
 - `src/infra/atomic-json-file.mjs` holds the atomic write shared by the run records and the certificates.
 

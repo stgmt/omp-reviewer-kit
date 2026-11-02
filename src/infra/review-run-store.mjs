@@ -3,12 +3,13 @@
 // Windows an antivirus or the indexer can hold the target for a few milliseconds), and every read
 // ignores a file it cannot understand instead of failing the caller.
 
-import { readdir, readFile, rm, stat } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
 import { RUN_SCHEMA, normalizeRunRecord, isTerminalRun } from '../domain/review-run-summary.mjs';
 import { writeJsonAtomic } from './atomic-json-file.mjs';
+import { pruneFolder } from './retained-folder.mjs';
 import { sameRepositoryPredicate } from './repo-identity.mjs';
 
 const RUN_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,180}$/;
@@ -57,7 +58,9 @@ export function runRecordFile(dir, runId) {
 export async function writeRunRecord(record, options = {}) {
   const dir = options.dir ?? runsRootDir(options);
   const normalized = normalizeRunRecord(record);
-  return writeJsonAtomic(dir, `${normalized.runId}${RECORD_SUFFIX}`, normalized, options);
+  // The guard lives in `runRecordFile`: one rule for the reader and the writer, so a run id can never
+  // escape the runs folder through the write path.
+  return writeJsonAtomic(dir, path.basename(runRecordFile(dir, normalized.runId)), normalized, options);
 }
 
 /**
@@ -147,47 +150,18 @@ export function isRunAlive(record, { kill = pid => process.kill(pid, 0) } = {}) 
  * @returns {Promise<number>} how many files were removed
  */
 export async function pruneRuns(options = {}) {
-  const dir = options.dir ?? runsRootDir(options);
-  const keep = Number.isInteger(options.keep) ? options.keep : 200;
-  const keepDays = typeof options.keepDays === 'number' ? options.keepDays : 30;
-  const now = typeof options.now === 'number' ? options.now : Date.now();
-  let names;
-  try {
-    names = await readdir(dir);
-  } catch {
-    return 0;
-  }
-  const entries = [];
-  for (const name of names) {
-    if (!name.endsWith(RECORD_SUFFIX) || name.startsWith('.')) continue;
-    const file = path.join(dir, name);
-    const record = await readRunRecord(file);
-    if (!record) continue;
-    let modified = 0;
-    try {
-      modified = (await stat(file)).mtimeMs;
-    } catch {
-      continue;
-    }
-    const started = Date.parse(record.startedAt ?? '');
-    entries.push({ file, record, modified, age: Number.isFinite(started) ? started : modified });
-  }
-  entries.sort((left, right) => String(right.record.startedAt ?? '').localeCompare(String(left.record.startedAt ?? '')));
-  const cutoff = now - keepDays * 24 * 60 * 60 * 1000;
-  let removed = 0;
-  for (let index = 0; index < entries.length; index += 1) {
-    const entry = entries[index];
-    if (index === 0) continue;
-    if (isRunAlive(entry.record)) continue;
-    const tooMany = index >= keep;
-    const tooOld = entry.age < cutoff;
-    if (!tooMany && !tooOld) continue;
-    try {
-      await rm(entry.file, { force: true });
-      removed += 1;
-    } catch {
-      // Best effort: a locked record is retried on the next run.
-    }
-  }
-  return removed;
+  return pruneFolder({
+    dir: options.dir ?? runsRootDir(options),
+    suffix: RECORD_SUFFIX,
+    keep: Number.isInteger(options.keep) ? options.keep : 200,
+    keepDays: typeof options.keepDays === 'number' ? options.keepDays : 30,
+    ...(typeof options.now === 'number' ? { now: options.now } : {}),
+    describe: file => readRunRecord(file),
+    // A killed review is over; a live one is never pruned from under the process that writes it.
+    isRetained: record => isRunAlive(record),
+    at: (record, modified) => {
+      const started = Date.parse(record.startedAt ?? '');
+      return Number.isFinite(started) ? started : modified;
+    },
+  });
 }

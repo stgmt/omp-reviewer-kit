@@ -22,6 +22,8 @@ import {
   writeCertificate,
 } from '../src/infra/mutation-certificate-store.mjs';
 import { workingTreeHash } from '../scripts/release-preflight.mjs';
+import { writeRunRecord, readRunRecord } from '../src/infra/review-run-store.mjs';
+import { pruneFolder } from '../src/infra/retained-folder.mjs';
 
 const run = promisify(execFile);
 const DIGEST = 'a'.repeat(64);
@@ -153,5 +155,104 @@ test('Given the same file content, When the working tree is hashed, Then the dig
     assert.notEqual(edited, before, 'an edit outside the mutant files still changes the certified bytes');
   } finally {
     await rm(repo, { recursive: true, force: true });
+  }
+});
+
+test('Given the gate writes its catalog and a report during the run, When the tree is hashed, Then the certified bytes do not move', async () => {
+  const repo = await temporaryDir();
+  try {
+    await run('git', ['init', '--quiet'], { cwd: repo });
+    await mkdir(path.join(repo, 'scripts'), { recursive: true });
+    await mkdir(path.join(repo, 'audit-reports'), { recursive: true });
+    await writeFile(path.join(repo, 'scripts', 'mutation-selectors.json'), '{"one":["x"]}\n');
+    await writeFile(path.join(repo, 'audit-reports', 'mutation-result.json'), '{"killed":1}\n');
+    await writeFile(path.join(repo, 'src.mjs'), 'export const a = 1;\n');
+    const before = await workingTreeHash({ cwd: repo });
+
+    // Exactly what a gate run does: rewrite its catalog and append to a report.
+    await writeFile(path.join(repo, 'scripts', 'mutation-selectors.json'), '{"one":["x"],"two":["y"]}\n');
+    await writeFile(path.join(repo, 'audit-reports', 'mutation-result.json'), '{"killed":2}\n');
+    assert.equal(await workingTreeHash({ cwd: repo }), before, 'the gate owns both files');
+
+    await writeFile(path.join(repo, 'src.mjs'), 'export const a = 2;\n');
+    assert.notEqual(await workingTreeHash({ cwd: repo }), before, 'a tracked source change is certified bytes');
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+  }
+});
+
+test('Given a proof from another runtime or platform, When it is judged, Then it certifies nothing here', () => {
+  const certificate = createCertificate({ digest: DIGEST, mutants: 2, killed: 2, durationMs: 1000, nodeVersion: 'v22.0.0', platform: 'linux' });
+  assert.equal(isUsableCertificate(certificate, { digest: DIGEST, mutants: 2, nodeVersion: 'v22.0.0', platform: 'linux' }), true);
+  assert.equal(isUsableCertificate(certificate, { digest: DIGEST, mutants: 2, nodeVersion: 'v24.0.0', platform: 'linux' }), false, 'another node');
+  assert.equal(isUsableCertificate(certificate, { digest: DIGEST, mutants: 2, nodeVersion: 'v22.0.0', platform: 'win32' }), false, 'another platform');
+});
+
+test('Given certificates of mixed ages, When the folder is pruned, Then the age rule and the count rule both keep what they must', async () => {
+  const dir = await temporaryDir();
+  try {
+    const digests = [0, 1, 2].map(index => String(index + 5).repeat(64));
+    const stamps = [0, 30, 400]; // days old
+    for (const [index, digest] of digests.entries()) {
+      await writeCertificate(createCertificate({ digest, mutants: 1, killed: 1, durationMs: 1 }), { dir });
+      const stamp = new Date(Date.now() - stamps[index] * 86_400_000);
+      await utimes(path.join(dir, `${digest}.json`), stamp, stamp);
+    }
+    // With room to spare, the age rule alone must remove the 400-day-old file and keep the 2-day-old.
+    const removed = await pruneCertificates({ dir, keep: 10, keepDays: 90 });
+    const left = (await readdir(dir)).filter(name => name.endsWith('.json')).sort();
+    assert.equal(removed, 1);
+    assert.deepEqual(left, [`${digests[0]}.json`, `${digests[1]}.json`], 'the newest and the 30-day-old one stay; the 400-day-old one goes');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('Given a file nobody can read as a certificate, When the folder is pruned, Then it is left in place instead of deleted by guesswork', async () => {
+  const dir = await temporaryDir();
+  try {
+    const keep = createCertificate({ digest: DIGEST, mutants: 1, killed: 1, durationMs: 1 });
+    await writeCertificate(keep, { dir });
+    await writeFile(path.join(dir, `${OTHER}.json`), 'not json at all');
+    const stamp = new Date(Date.now() - 400 * 86_400_000);
+    await utimes(path.join(dir, `${OTHER}.json`), stamp, stamp);
+    assert.equal(await pruneCertificates({ dir, keep: 1, keepDays: 1 }), 0);
+    assert.ok((await readdir(dir)).includes(`${OTHER}.json`));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('Given a run id that would escape the folder, When a record is written, Then the write is refused', async () => {
+  const dir = await temporaryDir();
+  try {
+    await assert.rejects(() => writeRunRecord({ runId: '../../escape', schema: 'review-run@1' }, { dir }), /invalid run id/);
+    assert.equal(await readRunRecord(path.join(dir, '..', 'escape.json')), null, 'nothing escaped');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('Given a certificate whose digest is not a digest, When it is written, Then the write is refused', async () => {
+  const dir = await temporaryDir();
+  try {
+    await assert.rejects(() => writeCertificate({ schema: CERTIFICATE_SCHEMA, digest: '../../escape', mutants: 1, killed: 1 }, { dir }), /invalid certificate digest/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('Given a folder with no room at all, When it is pruned, Then the newest file still survives', async () => {
+  const dir = await temporaryDir();
+  try {
+    const digests = [0, 1].map(index => String(index + 7).repeat(64));
+    for (const digest of digests) {
+      await writeCertificate(createCertificate({ digest, mutants: 1, killed: 1, durationMs: 1 }), { dir });
+    }
+    const removed = await pruneFolder({ dir, suffix: '.json', keep: 0, keepDays: 3650 });
+    assert.equal(removed, 1, 'the count rule removes the second file');
+    assert.equal((await readdir(dir)).filter(name => name.endsWith('.json')).length, 1, 'the newest is never removed');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
   }
 });

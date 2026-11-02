@@ -55,7 +55,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "3b8b9f13183f712947d9958a05016511c9185fc239e9f7c3af718470e0abef6b",
-      "testHash": "c5a885897743283dc820dc045bb012a31412acf2128932539aa5933d0da65fc2"
+      "testHash": "3a0178a5146e29240e69e228bae33a3703668ed05bed6f7b9ed14d188e8230e9"
     },
     "anti-parasitic-both-to-either": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -66,7 +66,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "b8607c1dd6f7ba93c3e0b7431e95eb44980c25c7b9974dd0fc887acbf309bb74",
-      "testHash": "c5a885897743283dc820dc045bb012a31412acf2128932539aa5933d0da65fc2"
+      "testHash": "3a0178a5146e29240e69e228bae33a3703668ed05bed6f7b9ed14d188e8230e9"
     },
     "anti-parasitic-port-protection-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -77,7 +77,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "7cb2ae5cc876247bae2a345f17644a022a04d18c3ed82d839556f279b8e7e2e7",
-      "testHash": "c5a885897743283dc820dc045bb012a31412acf2128932539aa5933d0da65fc2"
+      "testHash": "3a0178a5146e29240e69e228bae33a3703668ed05bed6f7b9ed14d188e8230e9"
     },
     "multi-stage-snapshot-boundary-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -88,7 +88,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "db7a8493b32121111624ef1add91a1b21b8c908d6e5da232df1a148e0af79373",
-      "testHash": "c5a885897743283dc820dc045bb012a31412acf2128932539aa5933d0da65fc2"
+      "testHash": "3a0178a5146e29240e69e228bae33a3703668ed05bed6f7b9ed14d188e8230e9"
     },
     "multi-stage-yagni-boundary-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -99,7 +99,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "465a5de25c5a83dda3e244302a6b7eab09c0169bb39c82b5688b001fb8d5560c",
-      "testHash": "c5a885897743283dc820dc045bb012a31412acf2128932539aa5933d0da65fc2"
+      "testHash": "3a0178a5146e29240e69e228bae33a3703668ed05bed6f7b9ed14d188e8230e9"
     },
     "sync-hook-newer-overwritten": {
       "testFile": "tests/sync-targets.test.mjs",
@@ -166,7 +166,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "ec31109e99d1fdb90e4b481cab9c38734f3857a530dd4a68f4327ef171a166d5",
-      "testHash": "c5a885897743283dc820dc045bb012a31412acf2128932539aa5933d0da65fc2"
+      "testHash": "3a0178a5146e29240e69e228bae33a3703668ed05bed6f7b9ed14d188e8230e9"
     },
     "hunter-red-proof-field-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -177,7 +177,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "61f3ac262a7e6643d183a03c1ffd0e7ebebf3d58d8cbaacaf70427b43ac14e8e",
-      "testHash": "c5a885897743283dc820dc045bb012a31412acf2128932539aa5933d0da65fc2"
+      "testHash": "3a0178a5146e29240e69e228bae33a3703668ed05bed6f7b9ed14d188e8230e9"
     },
     "verifier-triage-field-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -188,7 +188,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "e6356f58a6e2d47ec64b32c1f6f7664d120a06d1b1d697a3dac8517b2c7b5ea5",
-      "testHash": "c5a885897743283dc820dc045bb012a31412acf2128932539aa5933d0da65fc2"
+      "testHash": "3a0178a5146e29240e69e228bae33a3703668ed05bed6f7b9ed14d188e8230e9"
     },
     "modular-suspicion-assert-delta": {
       "testFile": "tests/suspicion-map.test.mjs",
@@ -2799,13 +2799,13 @@
       "testHash": "0209dcef49fb216bf1722c92f698a10114639c807f8a2aab59f5b377643d63c5"
     },
     "run-record-newest-pruned": {
-      "testFile": "tests/review-run-store.test.mjs",
+      "testFile": "tests/mutation-certificate-store.test.mjs",
       "tests": [
-        "Given a newest record older than the window, When retention runs, Then the newest record is still kept"
+        "Given a folder with no room at all, When it is pruned, Then the newest file still survives"
       ],
       "ancestors": [],
-      "mutantHash": "c4c89c8b2c64afbecdaa4329691d1a9ba955fd82b142d480f0d0fa0c780f5867",
-      "testHash": "e60683c0871e8336d912e964ffed923201af596ddffe2071cff400177dc76383"
+      "mutantHash": "38b520d1d9c59f2dcb2318d09f8a4b6d87a13b3181260be770dac47b5ad83c07",
+      "testHash": "2345304f68d2f17abbba4c61006894fd21ec9493077283b96ca20000084b4dd7"
     },
     "maintainability-block-ignores-stated-cost": {
       "testFile": "tests/maintainability-verdict.test.mjs",
@@ -3120,7 +3120,7 @@
       ],
       "ancestors": [],
       "mutantHash": "97fddde30eed11c15c89120a375a113245753276dd374ee32325da03c4d73ce2",
-      "testHash": "45517a3e3e11d293a5b313a0cff31b50ff43813d5cf363e46561b9d33c29fc10"
+      "testHash": "86709506370ca79c70b43d7289780acb9ff9d91a03ad19c2a5f88af8ca1a9e6f"
     },
     "preflight-fingerprint-path-order-unstable": {
       "testFile": "tests/release-preflight.test.mjs",
@@ -3129,7 +3129,7 @@
       ],
       "ancestors": [],
       "mutantHash": "f64630c812e3ee6c9974fc7912f0e5d40fa78cdb243b6a85084a88ddcb97fbdc",
-      "testHash": "45517a3e3e11d293a5b313a0cff31b50ff43813d5cf363e46561b9d33c29fc10"
+      "testHash": "86709506370ca79c70b43d7289780acb9ff9d91a03ad19c2a5f88af8ca1a9e6f"
     },
     "preflight-fingerprint-paths-not-deduplicated": {
       "testFile": "tests/release-preflight.test.mjs",
@@ -3138,7 +3138,7 @@
       ],
       "ancestors": [],
       "mutantHash": "84f43a3fa1ced2d18456e09f40ebb3fd7e56a8bbdc4ab7aa19b8b905f97a93ac",
-      "testHash": "45517a3e3e11d293a5b313a0cff31b50ff43813d5cf363e46561b9d33c29fc10"
+      "testHash": "86709506370ca79c70b43d7289780acb9ff9d91a03ad19c2a5f88af8ca1a9e6f"
     },
     "preflight-fingerprint-ignores-mutant-definitions": {
       "testFile": "tests/release-preflight.test.mjs",
@@ -3147,7 +3147,7 @@
       ],
       "ancestors": [],
       "mutantHash": "276e448324e935f456d0e47ab5fb87a229b06a70e758e8f0d2c4d4410d138d57",
-      "testHash": "45517a3e3e11d293a5b313a0cff31b50ff43813d5cf363e46561b9d33c29fc10"
+      "testHash": "86709506370ca79c70b43d7289780acb9ff9d91a03ad19c2a5f88af8ca1a9e6f"
     },
     "preflight-require-frozen-continues": {
       "testFile": "tests/release-preflight.test.mjs",
@@ -3156,7 +3156,7 @@
       ],
       "ancestors": [],
       "mutantHash": "c5d2a29ff01f458b5178b08119f4e28ad6ab94db510361028eb1005c8391d503",
-      "testHash": "45517a3e3e11d293a5b313a0cff31b50ff43813d5cf363e46561b9d33c29fc10"
+      "testHash": "86709506370ca79c70b43d7289780acb9ff9d91a03ad19c2a5f88af8ca1a9e6f"
     },
     "preflight-fingerprint-catalog-source-dropped": {
       "testFile": "tests/release-preflight.test.mjs",
@@ -3165,7 +3165,7 @@
       ],
       "ancestors": [],
       "mutantHash": "cf1323465a2b0256115bf0e1c345fd3a7be7ea08923f6028388268caa8188dac",
-      "testHash": "45517a3e3e11d293a5b313a0cff31b50ff43813d5cf363e46561b9d33c29fc10"
+      "testHash": "86709506370ca79c70b43d7289780acb9ff9d91a03ad19c2a5f88af8ca1a9e6f"
     },
     "certificate-partial-kill-accepted": {
       "testFile": "tests/mutation-certificate-store.test.mjs",
@@ -3174,7 +3174,7 @@
       ],
       "ancestors": [],
       "mutantHash": "a780d9e9ee46c9bd0fb4c5c36a601f98fa0cb22eeb8e1a5ea02bbbc47e8409a9",
-      "testHash": "c65c026ba56aa24f97329beb1da160781b8ba0c7bad79d3f044b27342f7130d7"
+      "testHash": "2345304f68d2f17abbba4c61006894fd21ec9493077283b96ca20000084b4dd7"
     },
     "certificate-other-schema-accepted": {
       "testFile": "tests/mutation-certificate-store.test.mjs",
@@ -3183,7 +3183,7 @@
       ],
       "ancestors": [],
       "mutantHash": "d69c1d042981e123ff32afbbc21d987501b3de420387a63a69e9887e12219dc4",
-      "testHash": "c65c026ba56aa24f97329beb1da160781b8ba0c7bad79d3f044b27342f7130d7"
+      "testHash": "2345304f68d2f17abbba4c61006894fd21ec9493077283b96ca20000084b4dd7"
     },
     "preflight-fingerprint-selector-catalog-dropped": {
       "testFile": "tests/release-preflight.test.mjs",
@@ -3192,7 +3192,7 @@
       ],
       "ancestors": [],
       "mutantHash": "c45b2882cc4468d3495a9b7863c381ad9a64c032ce078dfb01d87f27e4f56591",
-      "testHash": "45517a3e3e11d293a5b313a0cff31b50ff43813d5cf363e46561b9d33c29fc10"
+      "testHash": "86709506370ca79c70b43d7289780acb9ff9d91a03ad19c2a5f88af8ca1a9e6f"
     },
     "preflight-unhashable-tree-continues": {
       "testFile": "tests/release-preflight.test.mjs",
@@ -3201,7 +3201,7 @@
       ],
       "ancestors": [],
       "mutantHash": "d74df71aeed6e793299a4ac3264babc4c897d65108251f725185db1684b3ad79",
-      "testHash": "45517a3e3e11d293a5b313a0cff31b50ff43813d5cf363e46561b9d33c29fc10"
+      "testHash": "86709506370ca79c70b43d7289780acb9ff9d91a03ad19c2a5f88af8ca1a9e6f"
     },
     "repo-identity-skips-realpath": {
       "testFile": "tests/repo-identity.test.mjs",
@@ -3283,6 +3283,51 @@
       "ancestors": [],
       "mutantHash": "c43f81f6affc77a6fb95cd0c390628a171338e25c034bd18d7c13c4cda2d8f53",
       "testHash": "1186d713b61caf8f68a72fb2b00714af24f3c3606ddcdc05b05570ff8a55022b"
+    },
+    "certificate-other-runtime-accepted": {
+      "testFile": "tests/mutation-certificate-store.test.mjs",
+      "tests": [
+        "Given a proof from another runtime or platform, When it is judged, Then it certifies nothing here"
+      ],
+      "ancestors": [],
+      "mutantHash": "de59be6e62d4986c1f0878515f4b20223129d068529c40b6b6b2682a0b61833a",
+      "testHash": "2345304f68d2f17abbba4c61006894fd21ec9493077283b96ca20000084b4dd7"
+    },
+    "certificate-other-platform-accepted": {
+      "testFile": "tests/mutation-certificate-store.test.mjs",
+      "tests": [
+        "Given a proof from another runtime or platform, When it is judged, Then it certifies nothing here"
+      ],
+      "ancestors": [],
+      "mutantHash": "df2c2f1727da44906d0be5363fecd9d71b7b0a29acea56dcd036e6e06e47d387",
+      "testHash": "2345304f68d2f17abbba4c61006894fd21ec9493077283b96ca20000084b4dd7"
+    },
+    "retention-deletes-what-it-cannot-read": {
+      "testFile": "tests/mutation-certificate-store.test.mjs",
+      "tests": [
+        "Given a file nobody can read as a certificate, When the folder is pruned, Then it is left in place instead of deleted by guesswork"
+      ],
+      "ancestors": [],
+      "mutantHash": "63da2e0e0bb510ac7770cd1f2c8ed9da8d17848315b3b041c8e7aed9b2bdd00f",
+      "testHash": "2345304f68d2f17abbba4c61006894fd21ec9493077283b96ca20000084b4dd7"
+    },
+    "retention-drops-the-age-rule": {
+      "testFile": "tests/mutation-certificate-store.test.mjs",
+      "tests": [
+        "Given certificates of mixed ages, When the folder is pruned, Then the age rule and the count rule both keep what they must"
+      ],
+      "ancestors": [],
+      "mutantHash": "d1b57f91ca5a2d1ecbc876012fe186bb3d696ad98c679f2ff867c953987c2c30",
+      "testHash": "2345304f68d2f17abbba4c61006894fd21ec9493077283b96ca20000084b4dd7"
+    },
+    "preflight-prune-bypasses-injection": {
+      "testFile": "tests/release-preflight.test.mjs",
+      "tests": [
+        "Given a gate run that passed, When the preflight is asked to recalibrate, Then the proof is written first, pruned once, and a failing prune never fails the release"
+      ],
+      "ancestors": [],
+      "mutantHash": "d7118c63e7f38be6b8a87b29c3ed92ca6b3fdc4d7920b4d3f9135a62a3b86b78",
+      "testHash": "86709506370ca79c70b43d7289780acb9ff9d91a03ad19c2a5f88af8ca1a9e6f"
     }
   }
 }
