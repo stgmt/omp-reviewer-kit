@@ -101,6 +101,9 @@ export async function main(argv, { env = process.env, stderr = process.stderr, s
     stdout.write(result.text ? `${result.text}\n` : '');
     log(verdict.pass ? 'review: PASS' : `review: BLOCK (${verdict.reasons.join('; ')})`);
     log(`review: report ${reportPath}`);
+    // In context on purpose: the tempting mistake after a BLOCK is to recalibrate an expensive
+    // mutation gate for a diff that is about to change again. The gate belongs after the PASS.
+    log('review: mutation gate - not part of this hook; run it once after PASS on the frozen diff, never per review round');
     logRunRecord(log, run);
     return verdict.pass ? 0 : 1;
   } catch (error) {

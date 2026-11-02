@@ -1,0 +1,5 @@
+ok   versions - 0.25.0
+ok   mutant anchors - 333 anchors match exactly once
+FAIL diff frozen - pending: M scripts/mutation-selectors.json
+release preflight: the diff is not frozen, so nothing was calibrated or committed
+EXIT=1

@@ -33,11 +33,15 @@ export const REQUIRED_FILES = [
   'src/domain/report-envelope.mjs',
   'src/domain/diff-budget.mjs',
   'src/domain/review-run-summary.mjs',
+  'src/infra/atomic-json-file.mjs',
   'src/infra/review-run-store.mjs',
   'src/native/review-telemetry.mjs',
   'scripts/review-runs.mjs',
-  // Release preflight: the facts of a release that are knowable before the review runs.
+  // Release preflight: the facts of a release that are knowable before the review runs, and the
+  // certificate that lets a second preflight reuse one gate run.
   'scripts/release-preflight.mjs',
+  'src/domain/mutation-certificate.mjs',
+  'src/infra/mutation-certificate-store.mjs',
   // Maintainability review: deterministic candidate file, one subagent stage, one measure script.
   'src/native/maintainability/config.mjs',
   'src/native/maintainability/extract.mjs',

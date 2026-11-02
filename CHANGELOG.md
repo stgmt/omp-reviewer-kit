@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.25.0] - 2026-11-02
+
+### Added
+- **A gate run is now a certificate, not a habit.** `scripts/release-preflight.mjs --recalibrate` stores its result in `<home>/.omp/review-kit-mutation/<digest>.json` (`OMP_REVIEW_KIT_MUTATION_CERT_DIR` overrides), keyed by a content hash of the whole working tree (`git write-tree` through a throwaway index, so the digest survives the release commit) plus the gate fingerprint. A second preflight on the same bytes prints `mutation certificate - 333/333 mutants proved in 213s, 5 min old` and runs nothing; any edit anywhere changes the digest and the gate runs again. The rules live in `src/domain/mutation-certificate.mjs`, the store in `src/infra/mutation-certificate-store.mjs`.
+- **The policy is written down, in the output.** A recalibration now prints, in the transcript an agent reads, that the gate runs once on the frozen diff and that a review round in progress is not a reason to recalibrate. The commit hook repeats it after every verdict (`review: mutation gate - not part of this hook; run it once after PASS on the frozen diff, never per review round`), and `.claude/skills/mutation-fast-default/SKILL.md` carries the rule as a section.
+- `src/infra/atomic-json-file.mjs` holds the atomic write shared by the run records and the certificates.
+
+### Changed
+- **A frozen diff is now the staged release, not a clean tree.** `checkFrozen` treats the index as the diff under review and refuses only an unstaged change or an untracked file, so a release that is staged and ready can be calibrated; the reports folder and `scripts/mutation-selectors.json` are never pending, because the gate writes the latter during the run it certifies.
+- **The mutation gate is local-only.** Its job in `ci.yml` and the step in `release.yml` are removed: a GitHub runner cannot see a local certificate and would repeat the whole catalog for nothing. `npm run test:mutation` and the preflight remain.
+
+### Removed
+- The unused `sleep`/rename helpers of `src/infra/review-run-store.mjs`; the store now calls the shared atomic writer.
+
 ## [0.24.1] - 2026-11-01
 
 ### Added
