@@ -5,7 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.25.2] - 2026-11-02
+
+### Fixed
+- **A proof certifies one runtime.** The certificate recorded `nodeVersion` and never compared it, and no platform at all, while the gate itself hashes `process.version` and `process.platform` into its fingerprint: a proof taken under Node 22 certified the catalog under Node 24, and one taken on Linux certified it on Windows. Both are compared now, and a mismatch simply means "no certificate".
+- **The after-run digest reads fresh bytes.** The preflight caches its reads for the before-run snapshot; that cache is no longer reused for the digest that is stored, so a stored proof is always keyed to the catalog the run ended with.
+- **The preflight never touches the real certificate folder in tests.** `pruneCert` is injectable like `readCert` and `writeCert`, so a test run cannot delete the owner's proofs for other repositories.
+- **`writeRunRecord` and `writeCertificate` validate their file names again.** Both go through the helper that enforces the id/digest shape, so a malformed id can no longer write outside its folder through the write path while the read path rejects it.
+- **Generated run artifacts are untracked.** `audit-reports/mutation-result*` and `audit-reports/*.log` are evidence of a run, not of the release: the ignore rules now cover both, and the eight files earlier commits tracked (two `mutation-result` documents, two smoke logs, two suite logs uploaded with the run that produced them, and two more suite logs of the 0.25.0 release) are removed from the index.
+
+### Changed
+- **`--recalibrate` refuses a moving tree on its own.** The frozen check no longer needs `--require-frozen`: a run on bytes that a half-saved finding can still change proves nothing, so recalibration refuses while an unstaged change or an untracked file exists.
+- **One retention rule.** `src/infra/retained-folder.mjs` prunes both folders; the run records and the certificates no longer keep two copies of the same loop with two sets of defaults, and a file nobody can parse is left alone instead of deleted.
 
 ## [0.25.1] - 2026-11-02
 
@@ -14,19 +25,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Record shapes that were written out at every producer now come from one place each: `doctorCheck(name, status, message)` for the `doctor()` checks, `src/infra/registration-record.mjs` for a persisted session registration, and `writeTarget(repoRoot, targetPath)` for the pair the symlink guard defends.
-
-## [0.25.1] - 2026-11-02
-
-### Fixed
-- **A proof certifies one runtime.** The certificate recorded `nodeVersion` and never compared it, and no platform at all, while the gate itself hashes `process.version` and `process.platform` into its fingerprint: a proof taken under Node 22 certified the catalog under Node 24, and one taken on Linux certified it on Windows. Both are compared now, and a mismatch simply means "no certificate".
-- **The after-run digest reads fresh bytes.** The preflight caches its reads for the before-run snapshot; that cache is no longer reused for the digest that is stored, so a stored proof is always keyed to the catalog the run ended with.
-- **The preflight never touches the real certificate folder in tests.** `pruneCert` is injectable like `readCert` and `writeCert`, so a test run cannot delete the owner's proofs for other repositories.
-- **`writeRunRecord` and `writeCertificate` validate their file names again.** Both go through the helper that enforces the id/digest shape, so a malformed id can no longer write outside its folder through the write path while the read path rejects it.
-- **Generated run artifacts are untracked.** `audit-reports/mutation-result*` and captured suite/gate logs are evidence of a run, not of the release: they are ignored now, and the logs a previous release committed are removed.
-
-### Changed
-- **`--recalibrate` refuses a moving tree on its own.** The frozen check no longer needs `--require-frozen`: a run on bytes that a half-saved finding can still change proves nothing, so recalibration refuses while an unstaged change or an untracked file exists.
-- **One retention rule.** `src/infra/retained-folder.mjs` prunes both folders; the run records and the certificates no longer keep two copies of the same loop with two sets of defaults, and a file nobody can parse is left alone instead of deleted.
 
 ## [0.25.0] - 2026-11-02
 
