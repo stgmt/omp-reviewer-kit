@@ -253,7 +253,7 @@
       ],
       "ancestors": [],
       "mutantHash": "0f2c0dae309ccc8b829b389a4a6e911fcbf401ffa059191afacc38e1b35743f0",
-      "testHash": "4ab0697e6348731ca21d059b563a4820302dd0a00b79eadaf085f8cbdc327af6"
+      "testHash": "5d7090376788186d19acc356ebdceb4d281c0bdd2e0ec7d64db7ac925ba515c4"
     },
     "target-policy-release-checkout-not-skipped": {
       "testFile": "tests/target-registry.test.mjs",
@@ -262,7 +262,7 @@
       ],
       "ancestors": [],
       "mutantHash": "0eae5823940e1c0fd79d090a3ca35b333e361a75af94bf6ffd5bc6daf5c25ec4",
-      "testHash": "4ab0697e6348731ca21d059b563a4820302dd0a00b79eadaf085f8cbdc327af6"
+      "testHash": "5d7090376788186d19acc356ebdceb4d281c0bdd2e0ec7d64db7ac925ba515c4"
     },
     "target-policy-worker-checkouts-not-skipped": {
       "testFile": "tests/target-registry.test.mjs",
@@ -271,7 +271,7 @@
       ],
       "ancestors": [],
       "mutantHash": "dac76babf81227ae2f49c1fdfd5a259f519b5c554c779cf0e5760a468eb4dfef",
-      "testHash": "4ab0697e6348731ca21d059b563a4820302dd0a00b79eadaf085f8cbdc327af6"
+      "testHash": "5d7090376788186d19acc356ebdceb4d281c0bdd2e0ec7d64db7ac925ba515c4"
     },
     "target-policy-case-sensitive": {
       "testFile": "tests/target-registry.test.mjs",
@@ -280,7 +280,7 @@
       ],
       "ancestors": [],
       "mutantHash": "7487ecded00d7ad68971747b60af47af42fd8f1c2013c1f15a934d5840248863",
-      "testHash": "4ab0697e6348731ca21d059b563a4820302dd0a00b79eadaf085f8cbdc327af6"
+      "testHash": "5d7090376788186d19acc356ebdceb4d281c0bdd2e0ec7d64db7ac925ba515c4"
     },
     "target-policy-forward-slash-only": {
       "testFile": "tests/target-registry.test.mjs",
@@ -289,7 +289,7 @@
       ],
       "ancestors": [],
       "mutantHash": "060bbc8412ad3726c648dd8868c08b8f90e96598a542db661834b3ef7112cf96",
-      "testHash": "4ab0697e6348731ca21d059b563a4820302dd0a00b79eadaf085f8cbdc327af6"
+      "testHash": "5d7090376788186d19acc356ebdceb4d281c0bdd2e0ec7d64db7ac925ba515c4"
     },
     "target-policy-bare-folder-skipped": {
       "testFile": "tests/target-registry.test.mjs",
@@ -298,7 +298,7 @@
       ],
       "ancestors": [],
       "mutantHash": "43d04ae40bc3f8c20e1828090616662678bfb429f871cf21f4908fc6bca1686d",
-      "testHash": "4ab0697e6348731ca21d059b563a4820302dd0a00b79eadaf085f8cbdc327af6"
+      "testHash": "5d7090376788186d19acc356ebdceb4d281c0bdd2e0ec7d64db7ac925ba515c4"
     },
     "target-policy-raw-path-matched": {
       "testFile": "tests/target-registry.test.mjs",
@@ -307,7 +307,7 @@
       ],
       "ancestors": [],
       "mutantHash": "259ab75b71a054714b6d354802bcb45705603190b33887cc72e91cc766fb54d9",
-      "testHash": "4ab0697e6348731ca21d059b563a4820302dd0a00b79eadaf085f8cbdc327af6"
+      "testHash": "5d7090376788186d19acc356ebdceb4d281c0bdd2e0ec7d64db7ac925ba515c4"
     },
     "target-registry-env-path-ignored": {
       "testFile": "tests/target-registry.test.mjs",
@@ -316,7 +316,7 @@
       ],
       "ancestors": [],
       "mutantHash": "d5bf91c822756394aca9cca874b6839cf91afaf306fe16ad16a68682fe8b9b8d",
-      "testHash": "4ab0697e6348731ca21d059b563a4820302dd0a00b79eadaf085f8cbdc327af6"
+      "testHash": "5d7090376788186d19acc356ebdceb4d281c0bdd2e0ec7d64db7ac925ba515c4"
     },
     "target-registry-keeps-non-strings": {
       "testFile": "tests/target-registry.test.mjs",
@@ -325,7 +325,7 @@
       ],
       "ancestors": [],
       "mutantHash": "9c1932204cb674a6f79c52192656b84743c0d7aca030f3208b503720824c0616",
-      "testHash": "4ab0697e6348731ca21d059b563a4820302dd0a00b79eadaf085f8cbdc327af6"
+      "testHash": "5d7090376788186d19acc356ebdceb4d281c0bdd2e0ec7d64db7ac925ba515c4"
     },
     "session-start-repairs-worker-checkout": {
       "testFile": "tests/target-session.test.mjs",
@@ -343,7 +343,7 @@
       ],
       "ancestors": [],
       "mutantHash": "0d6df5d5b0d0bf6b43a7917aff0f9a142d3ddbd28103ddbcb02ebe3f3a790009",
-      "testHash": "4ab0697e6348731ca21d059b563a4820302dd0a00b79eadaf085f8cbdc327af6"
+      "testHash": "5d7090376788186d19acc356ebdceb4d281c0bdd2e0ec7d64db7ac925ba515c4"
     },
     "target-registry-add-skipped": {
       "testFile": "tests/target-registry.test.mjs",
@@ -352,7 +352,7 @@
       ],
       "ancestors": [],
       "mutantHash": "474335805f175ee5c01850f458792fb2cb0772fe0314ff7dc30a6ee37ebc6354",
-      "testHash": "4ab0697e6348731ca21d059b563a4820302dd0a00b79eadaf085f8cbdc327af6"
+      "testHash": "5d7090376788186d19acc356ebdceb4d281c0bdd2e0ec7d64db7ac925ba515c4"
     },
     "target-registry-add-temp-repo": {
       "testFile": "tests/target-registry.test.mjs",
@@ -361,7 +361,7 @@
       ],
       "ancestors": [],
       "mutantHash": "31ca58e044055396bfc160c3d66e750c4a02a41efdaa8b2e71f03e5878fe6e93",
-      "testHash": "4ab0697e6348731ca21d059b563a4820302dd0a00b79eadaf085f8cbdc327af6"
+      "testHash": "5d7090376788186d19acc356ebdceb4d281c0bdd2e0ec7d64db7ac925ba515c4"
     },
     "target-registry-temp-never-ignored-by-default": {
       "testFile": "tests/target-registry.test.mjs",
@@ -370,7 +370,7 @@
       ],
       "ancestors": [],
       "mutantHash": "b9e23810452dadb9292f43627d75bfaa6f70266fb468073e8e2f83830eb8d647",
-      "testHash": "4ab0697e6348731ca21d059b563a4820302dd0a00b79eadaf085f8cbdc327af6"
+      "testHash": "5d7090376788186d19acc356ebdceb4d281c0bdd2e0ec7d64db7ac925ba515c4"
     },
     "target-registry-duplicates-allowed": {
       "testFile": "tests/target-registry.test.mjs",
@@ -378,8 +378,8 @@
         "Given a registry, When repositories are added, Then it keeps unique existing ones and refuses skipped ones"
       ],
       "ancestors": [],
-      "mutantHash": "f28bace654dbfa749e2093cefcff8f2b53eb919a616ba2716f33301feb44c83f",
-      "testHash": "4ab0697e6348731ca21d059b563a4820302dd0a00b79eadaf085f8cbdc327af6"
+      "mutantHash": "5b04e274352098b0f6565197974d449add2d382c1f1d38460c4325d0de04f9e5",
+      "testHash": "5d7090376788186d19acc356ebdceb4d281c0bdd2e0ec7d64db7ac925ba515c4"
     },
     "target-registry-cap-removed": {
       "testFile": "tests/target-registry.test.mjs",
@@ -388,7 +388,7 @@
       ],
       "ancestors": [],
       "mutantHash": "092ddb19374af1ef8a7fc88a18f25ffe6747ce78a3cf74328b7bbcb4e36bb2bc",
-      "testHash": "4ab0697e6348731ca21d059b563a4820302dd0a00b79eadaf085f8cbdc327af6"
+      "testHash": "5d7090376788186d19acc356ebdceb4d281c0bdd2e0ec7d64db7ac925ba515c4"
     },
     "target-heal-registry-read-throws": {
       "testFile": "tests/target-registry.test.mjs",
@@ -397,7 +397,7 @@
       ],
       "ancestors": [],
       "mutantHash": "d906dea949389b599e2e677fc8193d6e42747f12bed4ec9fdc39b1666f2a8f41",
-      "testHash": "4ab0697e6348731ca21d059b563a4820302dd0a00b79eadaf085f8cbdc327af6"
+      "testHash": "5d7090376788186d19acc356ebdceb4d281c0bdd2e0ec7d64db7ac925ba515c4"
     },
     "target-register-throws": {
       "testFile": "tests/target-registry.test.mjs",
@@ -406,7 +406,7 @@
       ],
       "ancestors": [],
       "mutantHash": "63c572a6f95a6d597741896b4283ff76a46feffb294ebb5995186f01174b7af1",
-      "testHash": "4ab0697e6348731ca21d059b563a4820302dd0a00b79eadaf085f8cbdc327af6"
+      "testHash": "5d7090376788186d19acc356ebdceb4d281c0bdd2e0ec7d64db7ac925ba515c4"
     },
     "check-layout-target-policy-not-required": {
       "testFile": "tests/check-layout.test.mjs",
@@ -433,7 +433,7 @@
       ],
       "ancestors": [],
       "mutantHash": "9b95b7e4262a3fbcd6c41f1b97cc8ed9163b1672dd4bc936cc3a458447f16844",
-      "testHash": "4ab0697e6348731ca21d059b563a4820302dd0a00b79eadaf085f8cbdc327af6"
+      "testHash": "5d7090376788186d19acc356ebdceb4d281c0bdd2e0ec7d64db7ac925ba515c4"
     },
     "check-layout-target-registry-not-required": {
       "testFile": "tests/check-layout.test.mjs",
@@ -468,8 +468,8 @@
         "Given a missing or malformed registry file, Then the list is empty and a later add still registers"
       ],
       "ancestors": [],
-      "mutantHash": "11872213911f39a26d7b37e1214a17136559bbf2400b33bbf2fe8633b0435ce3",
-      "testHash": "4ab0697e6348731ca21d059b563a4820302dd0a00b79eadaf085f8cbdc327af6"
+      "mutantHash": "16e9cdf5e0207236d6ff18fce8d11e4066d9180d4dd489c4fa07f071c6653383",
+      "testHash": "5d7090376788186d19acc356ebdceb4d281c0bdd2e0ec7d64db7ac925ba515c4"
     },
     "target-registry-remove-claims-success": {
       "testFile": "tests/target-registry.test.mjs",
@@ -477,8 +477,8 @@
         "Given a full registry, Then no further repository is added"
       ],
       "ancestors": [],
-      "mutantHash": "621cea0b87bd3d9a68f161387f0e206b3da3d5119de836cdc835ff26e6b857d7",
-      "testHash": "4ab0697e6348731ca21d059b563a4820302dd0a00b79eadaf085f8cbdc327af6"
+      "mutantHash": "4d724e671b1e6231250061640222fa74571952a56102fcff289ccdebc4199588",
+      "testHash": "5d7090376788186d19acc356ebdceb4d281c0bdd2e0ec7d64db7ac925ba515c4"
     },
     "target-registry-reads-temporary-files": {
       "testFile": "tests/target-registry.test.mjs",
@@ -486,8 +486,8 @@
         "Given foreign or half-written files next to the registrations, Then they are ignored and the owner file is never rewritten"
       ],
       "ancestors": [],
-      "mutantHash": "278a6790b5c3f191720b227081c36f2ac9fe4e173654d925c8486762698f67b4",
-      "testHash": "4ab0697e6348731ca21d059b563a4820302dd0a00b79eadaf085f8cbdc327af6"
+      "mutantHash": "ff4f396a034484dbb0fd0130b8b2763da3f3a690548841595ad91088b3b714e8",
+      "testHash": "5d7090376788186d19acc356ebdceb4d281c0bdd2e0ec7d64db7ac925ba515c4"
     },
     "sync-targets-ignores-session-registrations": {
       "testFile": "tests/target-registry.test.mjs",
@@ -496,7 +496,7 @@
       ],
       "ancestors": [],
       "mutantHash": "4bee330dbce05bd6642bc144c6b063eed03aaa06d30881e95291cffdee20e826",
-      "testHash": "4ab0697e6348731ca21d059b563a4820302dd0a00b79eadaf085f8cbdc327af6"
+      "testHash": "5d7090376788186d19acc356ebdceb4d281c0bdd2e0ec7d64db7ac925ba515c4"
     },
     "sync-targets-missing-config-fatal": {
       "testFile": "tests/target-registry.test.mjs",
@@ -505,7 +505,7 @@
       ],
       "ancestors": [],
       "mutantHash": "e201595985ad31bcbe8373332f9848e9a53e2700a4e216d9378fe6f76696629b",
-      "testHash": "4ab0697e6348731ca21d059b563a4820302dd0a00b79eadaf085f8cbdc327af6"
+      "testHash": "5d7090376788186d19acc356ebdceb4d281c0bdd2e0ec7d64db7ac925ba515c4"
     },
     "hook-digest-keeps-marker-line": {
       "testFile": "tests/hook-ownership.test.mjs",
@@ -974,7 +974,7 @@
       ],
       "ancestors": [],
       "mutantHash": "cd784561f3f9a1f6ce87a4a83390c7f79d798367c61f737c79aa0b86158dd67e",
-      "testHash": "8e1d13ecf91ff5106b527cdacee48aa4a465131d304f728677ff7569a858b7fa"
+      "testHash": "2689ce8a544d86ffda47ada52c400a9bdfab6c41a5c0cc94c355ca601bdf050a"
     },
     "setup-writes-worker-checkouts": {
       "testFile": "tests/extension.test.mjs",
@@ -1005,7 +1005,7 @@
       ],
       "ancestors": [],
       "mutantHash": "3f61658f47c9af109a62b4005a37eda35f0f9f8bbcf187f0166b5b5899fc94ea",
-      "testHash": "8e1d13ecf91ff5106b527cdacee48aa4a465131d304f728677ff7569a858b7fa"
+      "testHash": "2689ce8a544d86ffda47ada52c400a9bdfab6c41a5c0cc94c355ca601bdf050a"
     },
     "setup-error-message-unspaced": {
       "testFile": "tests/extension.test.mjs",
@@ -1025,7 +1025,7 @@
       ],
       "ancestors": [],
       "mutantHash": "90fb0cc28aa5bfab635f6bf0e69f10c994fb0d7019913ba21c0eea7e241480ea",
-      "testHash": "8e1d13ecf91ff5106b527cdacee48aa4a465131d304f728677ff7569a858b7fa"
+      "testHash": "2689ce8a544d86ffda47ada52c400a9bdfab6c41a5c0cc94c355ca601bdf050a"
     },
     "target-heal-ignores-auto-sync-switch": {
       "testFile": "tests/target-switches.test.mjs",
@@ -1043,7 +1043,7 @@
       ],
       "ancestors": [],
       "mutantHash": "31f8e80b5037b53bad5008e149a1b7ef8623921a17b9950dc952efea0334a326",
-      "testHash": "8e1d13ecf91ff5106b527cdacee48aa4a465131d304f728677ff7569a858b7fa"
+      "testHash": "2689ce8a544d86ffda47ada52c400a9bdfab6c41a5c0cc94c355ca601bdf050a"
     },
     "target-heal-keeps-dead-entries": {
       "testFile": "tests/target-heal.test.mjs",
@@ -1052,7 +1052,7 @@
       ],
       "ancestors": [],
       "mutantHash": "81bd2b1873b2932928683985db4986dff5d9efb97d93d1bcb4791850b8e952bd",
-      "testHash": "8e1d13ecf91ff5106b527cdacee48aa4a465131d304f728677ff7569a858b7fa"
+      "testHash": "2689ce8a544d86ffda47ada52c400a9bdfab6c41a5c0cc94c355ca601bdf050a"
     },
     "target-heal-touches-non-stale": {
       "testFile": "tests/target-heal.test.mjs",
@@ -1061,7 +1061,7 @@
       ],
       "ancestors": [],
       "mutantHash": "21226fd86ac8a70506b04744ac1c3b638e5ae9c68e6e8e08e630b69d63e2497f",
-      "testHash": "8e1d13ecf91ff5106b527cdacee48aa4a465131d304f728677ff7569a858b7fa"
+      "testHash": "2689ce8a544d86ffda47ada52c400a9bdfab6c41a5c0cc94c355ca601bdf050a"
     },
     "target-heal-ignores-budget": {
       "testFile": "tests/target-switches.test.mjs",
@@ -1079,7 +1079,7 @@
       ],
       "ancestors": [],
       "mutantHash": "8e0666b200d720462039533f60c5383daa85a0bb90a36800aad0bc64bf6ffa51",
-      "testHash": "8e1d13ecf91ff5106b527cdacee48aa4a465131d304f728677ff7569a858b7fa"
+      "testHash": "2689ce8a544d86ffda47ada52c400a9bdfab6c41a5c0cc94c355ca601bdf050a"
     },
     "target-refresh-ignores-auto-sync-switch": {
       "testFile": "tests/target-switches.test.mjs",
@@ -1096,7 +1096,7 @@
         "Given registered repositories, When doctor runs, Then it reports how many are stale"
       ],
       "ancestors": [],
-      "mutantHash": "479dd49c0b2d06b1d02fb2208f6033aa467bbab5dffda69b11014b2786af0d00",
+      "mutantHash": "8f29fec34ffea00dd0d6568d823af6de6293f20e45e450dcdfc3eb3b959fbd0f",
       "testHash": "70dc85fa02cd6b22ce3fa9acef6081043fa5ba74b93805c2ccae210048bcaa15"
     },
     "target-doctor-counts-current-as-stale": {
@@ -1178,7 +1178,7 @@
       ],
       "ancestors": [],
       "mutantHash": "92ccddfa418dfb119d5efc6a7e3ec321429690ba378bbf02c61c3d7b6624ed48",
-      "testHash": "8e1d13ecf91ff5106b527cdacee48aa4a465131d304f728677ff7569a858b7fa"
+      "testHash": "2689ce8a544d86ffda47ada52c400a9bdfab6c41a5c0cc94c355ca601bdf050a"
     },
     "installer-foreign-hooks-never-conflict": {
       "testFile": "tests/target-heal.test.mjs",
@@ -1187,7 +1187,7 @@
       ],
       "ancestors": [],
       "mutantHash": "4a8e94d4d464534adcd21232dbdcf95474ecad4e1940dace9c45a9599cb9df4b",
-      "testHash": "8e1d13ecf91ff5106b527cdacee48aa4a465131d304f728677ff7569a858b7fa"
+      "testHash": "2689ce8a544d86ffda47ada52c400a9bdfab6c41a5c0cc94c355ca601bdf050a"
     },
     "run-tests-exit-forced-zero": {
       "testFile": "tests/run-tests-wrapper.test.mjs",
@@ -1259,7 +1259,7 @@
       ],
       "ancestors": [],
       "mutantHash": "5b682a36e484adeb1b139529e125821b2793d1fd9b1c9ab52bbfaa3280fdae17",
-      "testHash": "8e1d13ecf91ff5106b527cdacee48aa4a465131d304f728677ff7569a858b7fa"
+      "testHash": "2689ce8a544d86ffda47ada52c400a9bdfab6c41a5c0cc94c355ca601bdf050a"
     },
     "doctor-hook-not-executable-message-swapped": {
       "testFile": "tests/target-heal.test.mjs",
@@ -1268,7 +1268,7 @@
       ],
       "ancestors": [],
       "mutantHash": "e04bb54c48b346c956d2436854a058bfc9edfb202fc24fb83a134f0904153071",
-      "testHash": "8e1d13ecf91ff5106b527cdacee48aa4a465131d304f728677ff7569a858b7fa"
+      "testHash": "2689ce8a544d86ffda47ada52c400a9bdfab6c41a5c0cc94c355ca601bdf050a"
     },
     "status-report-line-basename-only": {
       "testFile": "tests/extension.test.mjs",
@@ -1670,7 +1670,7 @@
       "ancestors": [
         "Feature: doctor and sync report the hook git really runs"
       ],
-      "mutantHash": "cabebc818517d995167d782a11fe5480eebf9eb8ea9c22cafc0d90ad206f7b28",
+      "mutantHash": "bdd1601665cc05d6eb41596b7428acda723b87ae8f4aac0328feb0d2ebacb672",
       "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
     },
     "doctor-unreviewed-registered-ignored": {
@@ -3093,7 +3093,7 @@
       ],
       "ancestors": [],
       "mutantHash": "4590875a49cdd6e36a536b788392f1cfbc4d72a433264a9966ab84e42b05959d",
-      "testHash": "cebe4d47bd00b3d32cf8d2fea6e7caea662f0fcebc91ab9087e5cbad9115abe2"
+      "testHash": "829973a3fdd2c23fbaed127a51e365bc30a19beb968ddb54708dfeccb1165afe"
     },
     "layout-required-diff-budget-missing": {
       "testFile": "tests/layout-required.test.mjs",
@@ -3102,7 +3102,7 @@
       ],
       "ancestors": [],
       "mutantHash": "5e5e868d9845a794b57762550c1e862638c5334c178ba1196f780c2a6fe92501",
-      "testHash": "cebe4d47bd00b3d32cf8d2fea6e7caea662f0fcebc91ab9087e5cbad9115abe2"
+      "testHash": "829973a3fdd2c23fbaed127a51e365bc30a19beb968ddb54708dfeccb1165afe"
     },
     "maintainability-signal-kill-treated-as-timeout": {
       "testFile": "tests/maintainability-extract.test.mjs",
@@ -3202,6 +3202,87 @@
       "ancestors": [],
       "mutantHash": "d74df71aeed6e793299a4ac3264babc4c897d65108251f725185db1684b3ad79",
       "testHash": "45517a3e3e11d293a5b313a0cff31b50ff43813d5cf363e46561b9d33c29fc10"
+    },
+    "repo-identity-skips-realpath": {
+      "testFile": "tests/repo-identity.test.mjs",
+      "tests": [
+        "Given a registration an earlier release keyed by its spelling, When it is removed through either spelling, Then the stale file is gone"
+      ],
+      "ancestors": [],
+      "mutantHash": "6cd4d4b2073fa3f2b5ecb49b8141c9de176734e89ed6b11dc4d966b0cabafc08",
+      "testHash": "3173413f9f7147488afb19cd966c3b21bff492bd392958c4474bb54fb7b41f91"
+    },
+    "repo-identity-candidate-cache-ignored": {
+      "testFile": "tests/repo-identity.test.mjs",
+      "tests": [
+        "Given one repository, When a candidate spelling repeats, Then it is resolved once and the comparison still matches"
+      ],
+      "ancestors": [],
+      "mutantHash": "11716bff02b1adac015dca4baaa1f7ed0de3fe1b4f8e083cd81689edd969a12a",
+      "testHash": "3173413f9f7147488afb19cd966c3b21bff492bd392958c4474bb54fb7b41f91"
+    },
+    "repo-registration-dedup-by-string": {
+      "testFile": "tests/repo-identity.test.mjs",
+      "tests": [
+        "Given the owner file names a repository by an alias, When a session registers the real path, Then one repository is listed"
+      ],
+      "ancestors": [],
+      "mutantHash": "ee91bcdef14d5eeec65ce2116c258706bd3a208594e9e746506d2a882372addb",
+      "testHash": "3173413f9f7147488afb19cd966c3b21bff492bd392958c4474bb54fb7b41f91"
+    },
+    "registration-record-keeps-non-finite-time": {
+      "testFile": "tests/target-registry.test.mjs",
+      "tests": [
+        "Given a persisted timestamp that is not finite, When session registrations are listed, Then it counts as the oldest instead of sorting past every finite one"
+      ],
+      "ancestors": [],
+      "mutantHash": "540625d63c6dec17f0d1de06135b6d9d338f4f4a958c94a595a4b1a04d37aa2e",
+      "testHash": "5d7090376788186d19acc356ebdceb4d281c0bdd2e0ec7d64db7ac925ba515c4"
+    },
+    "target-heal-alias-not-excluded": {
+      "testFile": "tests/target-heal.test.mjs",
+      "tests": [
+        "Given the current checkout registered through an alias, When targets are healed, Then that checkout is skipped and keeps its own runner"
+      ],
+      "ancestors": [],
+      "mutantHash": "15587ecfad0640ce76c104344e8edf9b8d5f16a74ffd5d7c272ce40df1a15f93",
+      "testHash": "2689ce8a544d86ffda47ada52c400a9bdfab6c41a5c0cc94c355ca601bdf050a"
+    },
+    "write-target-swaps-the-path": {
+      "testFile": "tests/hook-ownership.test.mjs",
+      "tests": [
+        "Given a repository on a legacy hook and a stale runner, When targets are healed, Then the hook and the runner are brought to the current release"
+      ],
+      "ancestors": [],
+      "mutantHash": "a1b3760ddc1b6057e092d726f59d963ef4dbb7f6e6c3c552679b4403286c9bb9",
+      "testHash": "d8055f0ab6f943b02b29ea8ee86c79fde367463c97757a685bcf814bc43f8097"
+    },
+    "layout-required-repo-identity-missing": {
+      "testFile": "tests/layout-required.test.mjs",
+      "tests": [
+        "Given the repository, When every required file is checked, Then the list names every run-record path and nothing is missing"
+      ],
+      "ancestors": [],
+      "mutantHash": "58fae5caef773915f05c2458e526a9dcb6666277e207d1f264dc34f0320987d0",
+      "testHash": "829973a3fdd2c23fbaed127a51e365bc30a19beb968ddb54708dfeccb1165afe"
+    },
+    "layout-required-registration-record-missing": {
+      "testFile": "tests/layout-required.test.mjs",
+      "tests": [
+        "Given the repository, When every required file is checked, Then the list names every run-record path and nothing is missing"
+      ],
+      "ancestors": [],
+      "mutantHash": "71704520fb9262eaf4f21d8b57dbee31120954f07b9c46a71130f17646d72a9e",
+      "testHash": "829973a3fdd2c23fbaed127a51e365bc30a19beb968ddb54708dfeccb1165afe"
+    },
+    "catalog-anchor-not-in-source": {
+      "testFile": "tests/mutation-catalog.test.mjs",
+      "tests": [
+        "Given the selector catalog, When it is compared with the mutants, Then every mutant has a current selector"
+      ],
+      "ancestors": [],
+      "mutantHash": "c43f81f6affc77a6fb95cd0c390628a171338e25c034bd18d7c13c4cda2d8f53",
+      "testHash": "1186d713b61caf8f68a72fb2b00714af24f3c3606ddcdc05b05570ff8a55022b"
     }
   }
 }

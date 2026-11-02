@@ -3,13 +3,13 @@
 // Windows an antivirus or the indexer can hold the target for a few milliseconds), and every read
 // ignores a file it cannot understand instead of failing the caller.
 
-import { realpathSync } from 'node:fs';
 import { readdir, readFile, rm, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
 import { RUN_SCHEMA, normalizeRunRecord, isTerminalRun } from '../domain/review-run-summary.mjs';
 import { writeJsonAtomic } from './atomic-json-file.mjs';
+import { sameRepositoryPredicate } from './repo-identity.mjs';
 
 const RUN_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,180}$/;
 const RECORD_SUFFIX = '.json';
@@ -46,36 +46,6 @@ export function runRecordFile(dir, runId) {
  * @param {string} value
  * @returns {string|null}
  */
-function repoIdentity(value) {
-  if (typeof value !== 'string' || value.length === 0) return null;
-  let resolved;
-  try {
-    resolved = path.resolve(value);
-  } catch {
-    return null;
-  }
-  try {
-    resolved = realpathSync.native(resolved);
-  } catch {
-    // A deleted checkout still owns the records it wrote; keep the resolved path.
-  }
-  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
-}
-
-/**
- * @param {string} repoRoot
- * @returns {(candidate: unknown) => boolean}
- */
-function sameRepoPredicate(repoRoot) {
-  const expected = repoIdentity(repoRoot);
-  const seen = new Map();
-  return candidate => {
-    if (expected === null || typeof candidate !== 'string' || candidate.length === 0) return false;
-    if (!seen.has(candidate)) seen.set(candidate, repoIdentity(candidate));
-    return seen.get(candidate) === expected;
-  };
-}
-
 /**
  * Writes one record atomically: a reader sees either the previous file or the new one, never a
  * half-written record. A partially written temporary file is removed on failure.
@@ -123,7 +93,7 @@ export async function readRunRecords(options = {}) {
     return [];
   }
   const records = [];
-  const matchesRepo = options.repoRoot ? sameRepoPredicate(options.repoRoot) : null;
+  const matchesRepo = options.repoRoot ? sameRepositoryPredicate(options.repoRoot) : null;
   for (const name of names) {
     if (!name.endsWith(RECORD_SUFFIX) || name.startsWith('.')) continue;
     const record = await readRunRecord(path.join(dir, name));

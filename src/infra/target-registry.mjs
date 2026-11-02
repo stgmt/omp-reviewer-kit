@@ -5,6 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { isSkippedTarget } from '../domain/target-policy.mjs';
+import { repoIdentity, sameRepository, sameRepositoryPredicate } from './repo-identity.mjs';
+import { readRegistration, registrationOf } from './registration-record.mjs';
 
 // A soft bound: concurrent registrations may overshoot it by a few entries.
 const MAX_TARGETS = 200;
@@ -13,8 +15,6 @@ const MAX_TARGETS = 200;
 export function defaultTargetRegistryPath(env = process.env) {
   return env.OMP_REVIEW_KIT_TARGETS || path.join(os.homedir(), '.omp', 'review-kit-targets.json');
 }
-
-const samePath = (a, b) => (process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b);
 
 function realOf(target) {
   try {
@@ -55,7 +55,9 @@ export class FileTargetRegistry {
   }
 
   #entryFile(repo) {
-    const key = process.platform === 'win32' ? repo.toLowerCase() : repo;
+    // One registration per repository, keyed by identity, so two spellings of one checkout cannot
+    // both be registered and a removal through either spelling finds the same file.
+    const key = repoIdentity(repo) ?? repo;
     return path.join(this.#entriesDir, `${createHash('sha256').update(key).digest('hex').slice(0, 32)}.json`);
   }
 
@@ -79,16 +81,20 @@ export class FileTargetRegistry {
     const registered = [];
     for (const name of names) {
       try {
-        const { path: repo, addedAt } = JSON.parse(await readFile(path.join(this.#entriesDir, name), 'utf8'));
-        if (typeof repo === 'string' && repo.length > 0) registered.push({ repo: path.resolve(repo), addedAt: Number(addedAt) || 0 });
+        const entry = readRegistration(JSON.parse(await readFile(path.join(this.#entriesDir, name), 'utf8')));
+        if (entry) registered.push(entry);
       } catch {
         // a half-written or foreign file is not a registration
       }
     }
     registered.sort((a, b) => a.addedAt - b.addedAt || (a.repo < b.repo ? -1 : 1));
     const repos = [];
+    const seen = new Set();
     for (const { repo } of [...listed, ...registered]) {
-      if (!repos.some((known) => samePath(known, repo))) repos.push(repo);
+      const identity = repoIdentity(repo) ?? repo;
+      if (seen.has(identity)) continue;
+      seen.add(identity);
+      repos.push(repo);
     }
     return repos;
   }
@@ -98,12 +104,12 @@ export class FileTargetRegistry {
     const repo = path.resolve(String(repoRoot ?? ''));
     if (!existsSync(repo) || isSkippedTarget(repo) || (this.#ignoreTemp && insideTemp(repo))) return false;
     const current = await this.list();
-    if (current.some((entry) => samePath(entry, repo))) return false;
+    if (current.some((entry) => sameRepository(entry, repo))) return false;
     if (current.length >= MAX_TARGETS) return false;
     await mkdir(this.#entriesDir, { recursive: true });
     const temporary = path.join(this.#entriesDir, `${randomUUID()}.tmp`);
     try {
-      await writeFile(temporary, `${JSON.stringify({ path: repo, addedAt: Date.now() })}\n`, 'utf8');
+      await writeFile(temporary, `${JSON.stringify(registrationOf(repo))}\n`, 'utf8');
       await rename(temporary, this.#entryFile(repo));
     } catch (error) {
       await unlink(temporary).catch(() => {});
@@ -115,15 +121,40 @@ export class FileTargetRegistry {
   /**
    * Drops a registration made by a session. Entries of the owner's file are never rewritten.
    *
+   * A registration is removed by repository identity, not by the file name it happens to carry: an
+   * earlier release keyed the file by the written spelling, so an entry registered through an alias
+   * lives under a name this release cannot compute from the real path. Every stored entry is read and
+   * the matching one is unlinked, whichever spelling or format wrote it.
+   *
    * @returns {Promise<boolean>} true when a registration was removed
    */
   async remove(repoRoot) {
     const repo = path.resolve(String(repoRoot ?? ''));
+    const matches = sameRepositoryPredicate(repo);
+    let names = [];
     try {
-      await unlink(this.#entryFile(repo));
-      return true;
+      names = (await readdir(this.#entriesDir)).filter((name) => name.endsWith('.json'));
     } catch {
-      return false;
+      names = [];
     }
+    let removed = false;
+    for (const name of names) {
+      const file = path.join(this.#entriesDir, name);
+      let stored = null;
+      try {
+        stored = readRegistration(JSON.parse(await readFile(file, 'utf8')));
+      } catch {
+        stored = null;
+      }
+      const keyedHere = file === this.#entryFile(repo);
+      if (stored === null ? !keyedHere : !matches(stored.repo)) continue;
+      try {
+        await unlink(file);
+        removed = true;
+      } catch {
+        // A file another session already removed is not a failure.
+      }
+    }
+    return removed;
   }
 }

@@ -1,12 +1,33 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 
 import { PluginInstallerService } from '../src/application/installer-service.mjs';
 import { CANONICAL_RUNNER, STALE_RUNNER, workspace } from './target-workspace.mjs';
+
+test('Given the current checkout registered through an alias, When targets are healed, Then that checkout is skipped and keeps its own runner', async () => {
+  const ws = await workspace();
+  try {
+    const real = await ws.makeRepo('current');
+    const alias = path.join(ws.base, 'current-alias');
+    await symlink(real, alias, process.platform === 'win32' ? 'junction' : 'dir');
+    // The registration stores the alias spelling while the session knows its real path.
+    assert.equal(await ws.registry.add(alias), true);
+    await ws.makeStale(alias);
+
+    const skipped = await ws.installer.healTargets({ budgetMs: Infinity, exceptRoot: real });
+    assert.deepEqual(skipped, { checked: 0, healed: [], failed: [], pruned: [] }, 'the alias spelling is the same repository');
+    assert.equal(await readFile(ws.runnerOf(real), 'utf8'), STALE_RUNNER, 'the current checkout is never healed under another spelling');
+
+    const healed = await ws.installer.healTargets({ budgetMs: Infinity });
+    assert.deepEqual(healed, { checked: 1, healed: [path.resolve(alias)], failed: [], pruned: [] }, 'without the exclusion the registration is healed');
+  } finally {
+    await ws.cleanup();
+  }
+});
 
 test('Given a registered repository with a stale runner, When targets are healed, Then the runner is replaced and nothing else changes', async () => {
   const ws = await workspace();

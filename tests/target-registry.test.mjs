@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -163,6 +164,55 @@ test('Given foreign or half-written files next to the registrations, Then they a
     assert.equal(await ws.registry.remove(added), false);
     assert.deepEqual(await ws.registry.list(), [path.resolve(owned)]);
     assert.equal(await readFile(ws.registryFile, 'utf8'), ownerText);
+  } finally {
+    await ws.cleanup();
+  }
+});
+
+test('Given a persisted timestamp that is not finite, When session registrations are listed, Then it counts as the oldest instead of sorting past every finite one', async () => {
+  const ws = await workspace();
+  try {
+    const broken = await ws.makeRepo('broken-time', { hook: false });
+    const normal = await ws.makeRepo('normal-time', { hook: false });
+    const entriesDir = `${ws.registryFile}.d`;
+    await mkdir(entriesDir, { recursive: true });
+    // 1e400 parses as Infinity: a persisted value the writer never produces but a reader must survive.
+    await writeFile(path.join(entriesDir, 'broken.json'), `{"path":${JSON.stringify(path.resolve(broken))},"addedAt":1e400}`, 'utf8');
+    await writeFile(path.join(entriesDir, 'normal.json'), JSON.stringify({ path: path.resolve(normal), addedAt: 1 }), 'utf8');
+
+    assert.deepEqual(await ws.registry.list(), [path.resolve(broken), path.resolve(normal)], 'the non-finite timestamp sorts as zero, so healing reaches the newer registration');
+  } finally {
+    await ws.cleanup();
+  }
+});
+
+test('Given a registry at its cap, When one repository is registered under two spellings, Then the alias pair takes one slot and a further repository still fits', async () => {
+  const ws = await workspace();
+  try {
+    const real = await ws.makeRepo('checkout', { hook: false });
+    const alias = path.join(ws.base, 'checkout-alias');
+    await symlink(real, alias, process.platform === 'win32' ? 'junction' : 'dir');
+    // The owner file names the real path; the session registry holds the alias, written the way an
+    // earlier release keyed it. Identity, not spelling, decides whether that pair is one repository.
+    await writeFile(ws.registryFile, JSON.stringify([path.resolve(real)]), 'utf8');
+    const entriesDir = `${ws.registryFile}.d`;
+    await mkdir(entriesDir, { recursive: true });
+    const legacyKey = process.platform === 'win32' ? path.resolve(alias).toLowerCase() : path.resolve(alias);
+    const legacyFile = path.join(entriesDir, `${createHash('sha256').update(legacyKey).digest('hex').slice(0, 32)}.json`);
+    await writeFile(legacyFile, JSON.stringify({ path: path.resolve(alias), addedAt: 0 }), 'utf8');
+    // 198 more distinct registrations, written straight into the session folder so the case stays fast.
+    for (let index = 0; index < 198; index += 1) {
+      const dir = path.join(ws.base, `filled-${index}`);
+      await mkdir(dir);
+      await writeFile(path.join(entriesDir, `filled-${index}.json`), JSON.stringify({ path: path.resolve(dir), addedAt: index + 1 }), 'utf8');
+    }
+    assert.equal((await ws.registry.list()).length, 199, 'the alias pair is one repository, so the cap has not been reached');
+
+    const extra = await ws.makeRepo('extra', { hook: false });
+    assert.equal(await ws.registry.add(extra), true, 'the last free slot is used by a distinct repository');
+    assert.equal((await ws.registry.list()).length, 200);
+    const oneMore = await ws.makeRepo('one-more', { hook: false });
+    assert.equal(await ws.registry.add(oneMore), false, 'the cap refuses a 201st repository');
   } finally {
     await ws.cleanup();
   }
