@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.1] - 2026-11-02
+
 ### Fixed
 - One repository has one identity for every consumer that compares repository paths. The run history already resolved the real path, but the target registry and the session heal compared letter case only, so one checkout reached through a junction or a symlink could be registered twice, healed twice, or healed while it is the current checkout. The rule now lives once in `src/infra/repo-identity.mjs`; registrations are keyed and deduplicated by that identity, removal finds a registration written by an earlier, spelling-keyed release, and the size cap counts identities rather than spellings.
 
