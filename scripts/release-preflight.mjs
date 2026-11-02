@@ -268,11 +268,14 @@ export async function runPreflight({
   treeHash = () => workingTreeHash({ cwd }),
   readCert = digest => readCertificate(digest),
   writeCert = certificate => writeCertificate(certificate),
+  pruneCert = () => pruneCertificates(),
   now = () => Date.now(),
 } = {}) {
   const recalibrate = argv.includes('--recalibrate');
+  // A gate run proves bytes; a tree with unstaged or untracked work is not a stable set of bytes, and
+  // the proof would be worthless the moment the finding under the cursor is saved.
+  const requireFrozen = argv.includes('--require-frozen') || recalibrate;
   const skipTests = argv.includes('--skip-tests');
-  const requireFrozen = argv.includes('--require-frozen');
   const lines = [];
   let ok = true;
   const note = (value) => { lines.push(value); log(value); };
@@ -291,7 +294,7 @@ export async function runPreflight({
   if (requireFrozen) {
     ok &&= frozen.ok;
     note(report('diff frozen', frozen.ok, frozen.ok
-      ? 'no pending change outside the reports folder'
+      ? 'nothing unstaged or untracked outside the reports and the gate catalog'
       : `pending: ${frozen.pending.join(' | ')}`));
     if (requireFrozen && !frozen.ok) {
       note('release preflight: the diff is not frozen, so nothing was calibrated or committed');
@@ -314,6 +317,8 @@ export async function runPreflight({
     if (recalibrate) {
       // The gate proves the catalog for one byte state. A certificate is that proof; without one the
       // run happens once here, and a second preflight on the same bytes answers in milliseconds.
+      // Movement is judged by the tree hash: it covers every tracked file, and the only files a run
+      // may legitimately change are the reports and the selector catalog, both excluded from it.
       const tree = await treeHash();
       if (tree === null) {
         // Without a hash of the current bytes there is no way to tell whether the gate proved the
@@ -325,7 +330,7 @@ export async function runPreflight({
       }
       const digest = await treeFingerprint({ mutants, readFile, treeHash: tree });
       const cached = await readCert(digest);
-      const reusable = digest !== null && isUsableCertificate(cached, { digest, mutants: mutants.length });
+      const reusable = isUsableCertificate(cached, { digest, mutants: mutants.length });
       if (reusable) {
         note(report('mutation certificate', true, `${describeCertificate(cached, now())}; the gate is not run again on these bytes`));
       } else {
@@ -340,6 +345,7 @@ export async function runPreflight({
           note(report('gate snapshot', false, 'the tree could not be hashed after the gate run, so the verdict cannot be tied to the current bytes'));
           return 1;
         }
+        // Fresh reads: this digest must see the bytes as they are after the run, not as they were.
         const after = await treeFingerprint({ mutants, readFile, treeHash: afterTree });
         // A run certifies the bytes it started from. If a review finding is still being applied, the
         // bytes move under the run and its verdict would certify nothing: report that instead.
@@ -348,16 +354,16 @@ export async function runPreflight({
           note(report('gate snapshot', false, 'the gate run changed the certified bytes; its verdict does not certify the current tree - rerun once the review findings are closed'));
           return 1;
         }
-        if (digest !== null) note(report('gate snapshot', true, 'the bytes did not move during the gate run'));
+        note(report('gate snapshot', true, 'the bytes did not move during the gate run'));
         const catalogAfter = code === 0 ? JSON.parse(await readFile('scripts/mutation-selectors.json')) : null;
         const again = catalogAfter?.mappings ? await checkSelectors({ mutants, selectors: catalogAfter.mappings, root: cwd, findStale }) : { ok: false, stale: ['calibration failed'] };
         ok &&= code === 0 && again.ok;
         note(report('recalibration', code === 0 && again.ok, code === 0 && again.ok ? 'selectors re-proved and the full catalog certified' : 'the gate did not certify the catalog'));
-        if (code === 0 && again.ok && after) {
+        if (code === 0 && again.ok) {
           const stored = createCertificate({ digest: after, mutants: mutants.length, killed: mutants.length, durationMs, createdAt: new Date(now()).toISOString() });
           try {
             await writeCert(stored);
-            await pruneCertificates().catch(() => 0);
+            await pruneCert().catch(() => 0);
             note(report('mutation certificate', true, `${describeCertificate(stored, now())}; stored for these bytes`));
           } catch (error) {
             // Fail-open: the run passed, and the next preflight simply runs the gate again.

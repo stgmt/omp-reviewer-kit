@@ -3,12 +3,13 @@
 // bytes?" — so a release repeats a three-minute run instead of trusting a hash comparison. A failed
 // write or an unreadable file is not an error the caller has to handle: the run simply happens again.
 
-import { readdir, readFile, rm, stat } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
 import { CERTIFICATE_SCHEMA } from '../domain/mutation-certificate.mjs';
 import { writeJsonAtomic } from './atomic-json-file.mjs';
+import { pruneFolder } from './retained-folder.mjs';
 
 const DIGEST = /^[0-9a-f]{64}$/;
 const SUFFIX = '.json';
@@ -47,7 +48,8 @@ export function certificateFile(dir, digest) {
  */
 export async function writeCertificate(certificate, options = {}) {
   const dir = options.dir ?? certificatesRootDir(options);
-  return writeJsonAtomic(dir, `${certificate.digest}${SUFFIX}`, certificate, options);
+  // `certificateFile` validates the digest, so a certificate can never be written outside its folder.
+  return writeJsonAtomic(dir, path.basename(certificateFile(dir, certificate.digest)), certificate, options);
 }
 
 /**
@@ -72,48 +74,27 @@ export async function readCertificate(digest, options = {}) {
 }
 
 /**
- * Keeps the newest `keep` certificates and drops files older than `keepDays`. Best effort: a file
- * that cannot be read or removed is left in place and retried on the next prune.
+ * Keeps the newest `keep` certificates and drops files older than `keepDays`. A file nobody can read
+ * as a certificate is left in place: deleting what the tool cannot parse is not retention.
  *
  * @param {{ dir?: string, env?: NodeJS.ProcessEnv, home?: string, keep?: number, keepDays?: number, now?: number }} [options]
  * @returns {Promise<number>} how many files were removed
  */
 export async function pruneCertificates(options = {}) {
   const dir = options.dir ?? certificatesRootDir(options);
-  const keep = Number.isInteger(options.keep) ? options.keep : 50;
-  const keepDays = typeof options.keepDays === 'number' ? options.keepDays : 90;
-  const now = typeof options.now === 'number' ? options.now : Date.now();
-  let names;
-  try {
-    names = await readdir(dir);
-  } catch {
-    return 0;
-  }
-  const entries = [];
-  for (const name of names) {
-    if (!name.endsWith(SUFFIX) || name.startsWith('.')) continue;
-    const file = path.join(dir, name);
-    let modified;
-    try {
-      modified = (await stat(file)).mtimeMs;
-    } catch {
-      continue;
-    }
-    entries.push({ file, modified });
-  }
-  entries.sort((left, right) => right.modified - left.modified);
-  const cutoff = now - keepDays * 24 * 60 * 60 * 1000;
-  let removed = 0;
-  for (let index = 0; index < entries.length; index += 1) {
-    const entry = entries[index];
-    if (index === 0) continue;
-    if (index < keep && entry.modified >= cutoff) continue;
-    try {
-      await rm(entry.file, { force: true });
-      removed += 1;
-    } catch {
-      // Best effort: a locked certificate is retried on the next prune.
-    }
-  }
-  return removed;
+  return pruneFolder({
+    dir,
+    suffix: SUFFIX,
+    keep: Number.isInteger(options.keep) ? options.keep : 50,
+    keepDays: typeof options.keepDays === 'number' ? options.keepDays : 90,
+    ...(typeof options.now === 'number' ? { now: options.now } : {}),
+    describe: async (file) => {
+      try {
+        const parsed = JSON.parse(await readFile(file, 'utf8'));
+        return parsed && typeof parsed === 'object' && parsed.schema === CERTIFICATE_SCHEMA ? parsed : null;
+      } catch {
+        return null;
+      }
+    },
+  });
 }
