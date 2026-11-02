@@ -6,7 +6,8 @@
 // deciding test invalidates its selector. Both were discovered only after a 20-minute review had
 // already run. A hash comparison costs milliseconds; the review does not.
 
-import { readFile as readFileFs } from 'node:fs/promises';
+import { readFile as readFileFs, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
@@ -14,10 +15,18 @@ import { createHash } from 'node:crypto';
 
 import { MUTANTS } from './run-mutation-tests.mjs';
 import { findStaleMutants } from './mutation-runner.mjs';
+import { createCertificate, describeCertificate, isUsableCertificate } from '../src/domain/mutation-certificate.mjs';
+import { pruneCertificates, readCertificate, writeCertificate } from '../src/infra/mutation-certificate-store.mjs';
 
 /** Version sources that must agree before a release. `field` walks into the parsed document. */
 /** The file the gate process loads its curated mutants from. */
 export const MUTANT_CATALOG_FILE = 'scripts/run-mutation-tests.mjs';
+
+/** The gate's own output: it rewrites this file when it recalibrates, so it is not a certified byte. */
+export const SELECTOR_CATALOG_FILE = 'scripts/mutation-selectors.json';
+
+/** Reports are written by tooling, never reviewed, and never part of a certificate. */
+const REPORTS_DIR = 'audit-reports';
 
 export const VERSION_SOURCES = Object.freeze([
   { file: 'package.json', field: ['version'] },
@@ -136,12 +145,73 @@ export async function gateFingerprint({ mutants, readFile }) {
   return hash.digest('hex');
 }
 
-/** A frozen diff: nothing unstaged outside the reports folder, so a review result stays valid. */
+/**
+ * Content hash of the whole working tree: `git write-tree` through a throwaway index, so the digest
+ * is the same before and after the release commit, and any edit anywhere changes it. The gate's own
+ * output and the reports folder are excluded, because the gate rewrites the former during the very
+ * run that is being certified and the latter is never reviewed. `null` when git cannot produce a
+ * tree — the caller then refuses to reuse a certificate instead of guessing.
+ *
+ * @param {{ cwd?: string, capture?: typeof capture }} [options]
+ * @returns {Promise<string|null>}
+ */
+export async function workingTreeHash({ cwd = process.cwd(), capture: captureFn = capture, exclude = [SELECTOR_CATALOG_FILE, REPORTS_DIR] } = {}) {
+  const index = path.join(tmpdir(), `review-kit-index-${process.pid}-${Date.now().toString(36)}.index`);
+  const env = { ...process.env, GIT_INDEX_FILE: index };
+  const pathspecs = ['.', ...exclude.map(entry => `:(exclude)${entry}`)];
+  try {
+    const added = await captureFn('git', ['add', '-A', '--', ...pathspecs], { cwd, env });
+    if (added.code !== 0) return null;
+    const tree = await captureFn('git', ['write-tree'], { cwd, env });
+    if (tree.code !== 0) return null;
+    const value = tree.stdout.trim();
+    return /^[0-9a-f]{40,64}$/.test(value) ? value : null;
+  } finally {
+    await rm(index, { force: true }).catch(() => {});
+  }
+}
+
+/**
+ * The bytes a gate run certifies, complete: the catalog and the files the gate executes, plus a hash
+ * of everything else in the tree, because a deciding test also imports modules that are not targets.
+ *
+ * @param {{ mutants: Array<{ file: string, testFile: string }>, readFile: (file: string) => Promise<string>, treeHash: string }} options
+ * @returns {Promise<string>}
+ */
+export async function treeFingerprint({ mutants, readFile, treeHash }) {
+  const gate = await gateFingerprint({ mutants, readFile });
+  const hash = createHash('sha256').update(gate).update('\u0000').update(String(treeHash));
+  // The catalog names the deciding tests, so a repointed selector is another proof input — even
+  // though the gate writes this file itself while it runs.
+  try {
+    hash.update((await readFile(SELECTOR_CATALOG_FILE)).replace(/\r\n/g, '\n'));
+  } catch {
+    hash.update(':catalog-missing');
+  }
+  return hash.digest('hex');
+}
+
+/**
+ * A frozen diff: nothing half-applied. The index may carry the release (that is the diff under
+ * review); what must not exist is an unstaged modification or an untracked file, because both mean a
+ * finding is still being written while the gate would be proving the bytes it started from. The
+ * reports folder and the gate's own selector catalog are never part of the reviewed diff.
+ */
 export function checkFrozen({ status }) {
   const pending = String(status)
     .split('\n')
-    .map(line => line.trim())
-    .filter(line => line.length > 0 && !/(^|[/\\])audit-reports\//.test(line) && !/^[?]{2} audit-reports/.test(line));
+    .map(line => line.replace(/\s+$/, ''))
+    .filter(line => line.length > 0)
+    .filter((line) => {
+      // `XY path`: the path starts after the two status columns and one separator.
+      const path = line.slice(3).replace(/^"|"$/g, '');
+      if (path.startsWith(`${REPORTS_DIR}/`)) return false;
+      if (path === SELECTOR_CATALOG_FILE) return false;
+      // Y is the worktree column. A space there means the change lives only in the index.
+      const code = line.slice(0, 2);
+      const worktree = code.length === 2 ? code[1] : ' ';
+      return worktree !== ' ' || code === '??';
+    });
   return { ok: pending.length === 0, pending };
 }
 
@@ -150,6 +220,19 @@ function run(command, args, { cwd, env = process.env } = {}) {
     const child = spawn(command, args, { cwd, env, stdio: 'inherit', shell: false });
     child.on('close', code => resolve(code ?? 1));
     child.on('error', () => resolve(1));
+  });
+}
+
+/** Same runner, but the output is captured instead of streamed: used to hash the tree. */
+function capture(command, args, { cwd, env = process.env } = {}) {
+  return new Promise(resolve => {
+    const child = spawn(command, args, { cwd, env, shell: false });
+    let stdout = '';
+    let stderr = '';
+    child.stdout?.on('data', chunk => { stdout += chunk; });
+    child.stderr?.on('data', chunk => { stderr += chunk; });
+    child.on('close', code => resolve({ code: code ?? 1, stdout, stderr }));
+    child.on('error', error => resolve({ code: 1, stdout, stderr: String(error) }));
   });
 }
 
@@ -182,6 +265,10 @@ export async function runPreflight({
   runCommand = run,
   status = () => gitStatus(cwd),
   findStale = findStaleMutants,
+  treeHash = () => workingTreeHash({ cwd }),
+  readCert = digest => readCertificate(digest),
+  writeCert = certificate => writeCertificate(certificate),
+  now = () => Date.now(),
 } = {}) {
   const recalibrate = argv.includes('--recalibrate');
   const skipTests = argv.includes('--skip-tests');
@@ -224,22 +311,61 @@ export async function runPreflight({
   if (catalog?.mappings) {
     const selectors = await checkSelectors({ mutants, selectors: catalog.mappings, root: cwd, findStale });
     note(report('selector staleness', selectors.ok, selectors.ok ? 'every selector fits its test bytes' : `${selectors.stale.length} stale: ${selectors.stale.slice(0, 8).join(', ')}${selectors.stale.length > 8 ? ', ...' : ''}`));
-    if (!selectors.ok && recalibrate) {
-      // A gate run certifies the bytes it started from. If a review finding is still being applied,
-      // the bytes move under the run and its verdict would certify nothing: report that instead.
-      const before = await gateFingerprint({ mutants, readFile });
-      const code = await runCommand(process.execPath, ['scripts/run-mutation-tests.mjs', '--calibrate-stale'], { cwd });
-      const moved = await gateFingerprint({ mutants, readFile });
-      if (before !== moved) {
+    if (recalibrate) {
+      // The gate proves the catalog for one byte state. A certificate is that proof; without one the
+      // run happens once here, and a second preflight on the same bytes answers in milliseconds.
+      const tree = await treeHash();
+      if (tree === null) {
+        // Without a hash of the current bytes there is no way to tell whether the gate proved the
+        // release or a copy that has already moved. Certifying is impossible; saying so is not.
         ok = false;
-        note(report('gate snapshot', false, 'the gate run changed the certified bytes; its verdict does not certify the current tree - rerun once the review findings are closed'));
+        note(report('mutation certificate', false, 'the working tree could not be hashed, so no gate run can be certified'));
+        note('release preflight: fix the tree hashing (git index/object store) before recalibrating');
         return 1;
       }
-      note(report('gate snapshot', true, 'the bytes did not move during the gate run'));
-      const after = code === 0 ? JSON.parse(await readFile('scripts/mutation-selectors.json')) : null;
-      const again = after?.mappings ? await checkSelectors({ mutants, selectors: after.mappings, root: cwd, findStale }) : { ok: false, stale: ['calibration failed'] };
-      ok &&= code === 0 && again.ok;
-      note(report('recalibration', code === 0 && again.ok, code === 0 && again.ok ? 'selectors re-proved and the full catalog certified' : 'the gate did not certify the catalog'));
+      const digest = await treeFingerprint({ mutants, readFile, treeHash: tree });
+      const cached = await readCert(digest);
+      const reusable = digest !== null && isUsableCertificate(cached, { digest, mutants: mutants.length });
+      if (reusable) {
+        note(report('mutation certificate', true, `${describeCertificate(cached, now())}; the gate is not run again on these bytes`));
+      } else {
+        const started = now();
+        const code = await runCommand(process.execPath, ['scripts/run-mutation-tests.mjs', '--calibrate-stale'], { cwd });
+        const durationMs = now() - started;
+        // The gate rewrites its selector catalog while it runs, so the movement check compares the
+        // tree only; the catalog is read again afterwards, into the digest that is stored.
+        const afterTree = await treeHash();
+        if (afterTree === null) {
+          ok = false;
+          note(report('gate snapshot', false, 'the tree could not be hashed after the gate run, so the verdict cannot be tied to the current bytes'));
+          return 1;
+        }
+        const after = await treeFingerprint({ mutants, readFile, treeHash: afterTree });
+        // A run certifies the bytes it started from. If a review finding is still being applied, the
+        // bytes move under the run and its verdict would certify nothing: report that instead.
+        if (afterTree !== tree) {
+          ok = false;
+          note(report('gate snapshot', false, 'the gate run changed the certified bytes; its verdict does not certify the current tree - rerun once the review findings are closed'));
+          return 1;
+        }
+        if (digest !== null) note(report('gate snapshot', true, 'the bytes did not move during the gate run'));
+        const catalogAfter = code === 0 ? JSON.parse(await readFile('scripts/mutation-selectors.json')) : null;
+        const again = catalogAfter?.mappings ? await checkSelectors({ mutants, selectors: catalogAfter.mappings, root: cwd, findStale }) : { ok: false, stale: ['calibration failed'] };
+        ok &&= code === 0 && again.ok;
+        note(report('recalibration', code === 0 && again.ok, code === 0 && again.ok ? 'selectors re-proved and the full catalog certified' : 'the gate did not certify the catalog'));
+        if (code === 0 && again.ok && after) {
+          const stored = createCertificate({ digest: after, mutants: mutants.length, killed: mutants.length, durationMs, createdAt: new Date(now()).toISOString() });
+          try {
+            await writeCert(stored);
+            await pruneCertificates().catch(() => 0);
+            note(report('mutation certificate', true, `${describeCertificate(stored, now())}; stored for these bytes`));
+          } catch (error) {
+            // Fail-open: the run passed, and the next preflight simply runs the gate again.
+            note(report('mutation certificate', true, `the proof was not stored (${error instanceof Error ? error.message : String(error)}); the next preflight runs the gate again`));
+          }
+        }
+      }
+      note('note: the mutation gate runs once, on the frozen diff after the review. A review round in progress is not a reason to recalibrate, and every edit to a deciding test, a mutant target or the catalog invalidates this certificate.');
     } else {
       ok &&= selectors.ok;
     }

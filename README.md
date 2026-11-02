@@ -245,6 +245,14 @@ The development mutation gate requires Node 22 or newer. It uses four asynchrono
 
 `scripts/mutation-selectors.json` maps every curated mutant to a calibrated deciding test. An ordinary run verifies its green baseline and then requires an assertion failure from the selected test. A timeout, a process, import or reporter failure, a missing test, or an incomplete catalog blocks the gate rather than counting as a kill. `node scripts/run-mutation-tests.mjs --calibrate-stale` recalibrates only the mutants whose selector no longer fits, keeps proven selectors when part of a run fails, and then runs the ordinary gate over every mutant. Its exit code is always the verdict of the full gate.
 
+### When the gate runs
+
+The gate proves the catalog for one state of the bytes, so it runs once per release, on the frozen diff, after the review passed — `node scripts/release-preflight.mjs --require-frozen --recalibrate`. A review round with open findings is not a reason to recalibrate: the diff is about to change.
+
+A passed run stores a certificate in `<home>/.omp/review-kit-mutation/<digest>.json` (`OMP_REVIEW_KIT_MUTATION_CERT_DIR` overrides), keyed by a content hash of the whole working tree plus the gate fingerprint (targets, deciding tests, catalog and the curated definitions). A second preflight on the same bytes prints `mutation certificate - N/N mutants proved …` and runs nothing; any edit anywhere changes the digest and the gate runs again. The certificate only ever skips a repeat run: it cannot turn a failure into a pass, and a failed write leaves the next preflight to run the gate.
+
+The gate is local-only. GitHub Actions does not run it, because a runner cannot see the local certificate and would repeat the whole catalog.
+
 ### Live check
 
 The live case of the hook suite runs a real `git commit` through the installed hook with the owner's OMP configuration and spends model budget. It is opt-in:

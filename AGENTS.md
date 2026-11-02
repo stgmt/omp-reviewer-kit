@@ -26,6 +26,8 @@
    - `runReviewerTask` (`src/native/task-engine.mjs`) loads the pinned OMP library, creates a `TaskTool` session whose extension root is the kit, and calls `execute` with `agent: 'reviewer-kit'`. The only settings overlay is the structural `task.structured: true`.
    - The reviewer completes with native `yield` containing one Markdown string. `decodeReport` decodes it once.
    - `evaluateReview` (`src/native/verdict.mjs`) makes the verdict. `saveReport` writes the report through `src/infra/filesystem-report-store-adapter.mjs`.
+**Mutation certificate.** `src/domain/mutation-certificate.mjs` holds the pure rules; `src/infra/mutation-certificate-store.mjs` writes one `<digest>.json` under `<home>/.omp/review-kit-mutation` (`OMP_REVIEW_KIT_MUTATION_CERT_DIR`) through `src/infra/atomic-json-file.mjs`, the same atomic writer the run records use. It exists so one gate run proves the catalog once per byte state instead of once per attempt.
+
 **Run record.** `src/native/review-telemetry.mjs` carries OMP's own numbers into one record per run: `src/infra/review-run-store.mjs` writes it atomically under `<home>/.omp/review-kit-runs` (`OMP_REVIEW_KIT_RUNS_DIR`), `src/domain/review-run-summary.mjs` holds the pure schema, duration and count rules, and `scripts/review-runs.mjs` reads it (`--last`, `--all`, `--repo`, `--run`, `--json`, `--follow`). The record is an observation of the review: it never carries the report, a prompt, a file body or a finding's text, it is written after the verdict, every write is fail-open, and no `Date.now` of it can reach `verdict.mjs` or the exit code. `task-engine.stageEvidence` keeps the per-stage `durationMs`/`tokens`/`requests`/`contextTokens` OMP reports and `progressEvents` turns `details.progress` into live stage lines (`OMP_REVIEW_KIT_PROGRESS=0` silences them). Retention: newest 200 and 30 days, never the newest record and never a live run; a record of another schema is ignored, never migrated.
 
 6. **Verdict invariant** (`src/native/verdict.mjs`): PASS requires all of the following. The reviewer result is a single completed, non-aborted native task with exit 0 and a valid yield. The Markdown has exactly one solitary `REVIEW_RESULT=PASS` line, and it is the last non-empty line. Every mandatory stage completed: the scout (at least one), a hunter for each planned lane, and the verifier for the `full` profile. No verifier-confirmed finding remains, and no blocking coverage gap remains when the scout reports a runnable test harness. A gap blocks only when it is `severity: "blocking"` with a non-empty `impact`, its file class is not `test`, its per-entry `test_harness` is not `absent`, and the scout reports `test_harness: present`; advisory gaps, `test`-class files and per-item harness-absent gaps never block. Anything else is BLOCK.
@@ -105,6 +107,10 @@ Before changing or running the mutation gate, follow `.claude/skills/mutation-fa
 
 Mutant work rules (the full standard is in the skill; these are the ones that cost hours before):
 
+- **When the gate runs:** once per release, on the frozen diff, after the review's `REVIEW_RESULT=PASS`. A review round that still has open findings is not a reason to recalibrate: the diff is about to change, and every edit to a deciding test, a mutant target or the catalog invalidates the proof. The preflight refuses `--recalibrate` while an unstaged change or an untracked file is present: the staged release is the diff under review, but a half-applied finding is not. The reports folder and the gate's own selector catalog never count as pending.
+- **A passed run is stored, not repeated.** `scripts/release-preflight.mjs` writes a certificate (`~/.omp/review-kit-mutation/<digest>.json`, `OMP_REVIEW_KIT_MUTATION_CERT_DIR` overrides) keyed by the content hash of the whole working tree plus the gate fingerprint. A second preflight on the same bytes answers in milliseconds with `mutation certificate - 333/333 mutants proved …` and runs nothing. The certificate is evidence only: it can skip a repeat run, never change a verdict, and a failed write is fail-open.
+- **CI does not run the gate.** GitHub Actions cannot see a local certificate, so a CI run would re-run the whole catalog for nothing; the gate is local-only (`npm run test:mutation` and the preflight).
+
 - Removing a temporary tree always retries (`removeTree`, `REMOVE_OPTIONS`). A plain `rm` with `recursive` on a tree is a defect, not a flake.
 - Every proof is persisted at once (`onProven`). A run that dies keeps what it proved.
 - Infrastructure errors (timeout, crash, cleanup failure, zero selected tests, a red suite on the pristine tree) are never kills. Fix the cause and rerun; do not rerun blindly.
@@ -114,6 +120,6 @@ Mutant work rules (the full standard is in the skill; these are the ones that co
 - Run the gate in the background with a log file. Measure the time from the log; do not promise a duration.
 - Never commit `audit-reports/mutation-result*`.
 
-CI runs Node 22 and 24 on Ubuntu and Windows (Bun 1.4.1, `bun install --frozen-lockfile`), plus the mutation gate on Ubuntu. Node 18 and 20 are not in CI and are not verified for this release.
+CI runs Node 22 and 24 on Ubuntu and Windows (Bun 1.4.1, `bun install --frozen-lockfile`); it does not run the mutation gate. Node 18 and 20 are not in CI and are not verified for this release.
 
 Releases follow `.claude/skills/release-and-deliver/SKILL.md`. Read it before any release step.

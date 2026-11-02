@@ -70,10 +70,6 @@ jobs:
       - name: Run test suite
         run: npm test
 
-      - name: Run mutation gate
-        if: runner.os == 'Linux'
-        run: npm run test:mutation
-
   release:
     name: Verify and publish immutable release
     needs: verify

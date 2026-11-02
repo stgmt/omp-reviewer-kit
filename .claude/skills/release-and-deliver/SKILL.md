@@ -26,7 +26,7 @@ Run `node scripts/release-preflight.mjs --require-frozen` (add `--recalibrate` w
 - the selector catalog against the current test bytes: staleness is a hash comparison, not a test run;
 - the layout check and the full suite.
 
-Order of a release, and why: **the review comes first, the mutation gate last**. Every edit made after a review starts invalidates that review, and every edit to a deciding test invalidates its selectors. The preflight refuses `--recalibrate` while the diff is not frozen, so a gate run never happens while review findings are still open. Recalibrate and run the gate once, on the frozen diff, immediately before the commit.
+Order of a release, and why: **the review comes first, the mutation gate last**. Every edit made after a review starts invalidates that review, and every edit to a deciding test invalidates its selectors. The preflight refuses `--recalibrate` while an unstaged change or an untracked file exists, so a gate run never happens while review findings are still being written; the staged release itself is the diff under review. Recalibrate and run the gate once, on the frozen diff, immediately before the commit; a passed run is stored as a certificate keyed by a hash of the whole tree, so a second preflight on the same bytes answers in milliseconds instead of re-running the catalog. The gate runs locally only — CI does not run it.
 
 ## 1. Tests before the commit
 

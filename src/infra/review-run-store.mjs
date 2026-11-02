@@ -4,21 +4,15 @@
 // ignores a file it cannot understand instead of failing the caller.
 
 import { realpathSync } from 'node:fs';
-import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { readdir, readFile, rm, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
 import { RUN_SCHEMA, normalizeRunRecord, isTerminalRun } from '../domain/review-run-summary.mjs';
+import { writeJsonAtomic } from './atomic-json-file.mjs';
 
 const RUN_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,180}$/;
 const RECORD_SUFFIX = '.json';
-const RENAME_ATTEMPTS = 20;
-const RENAME_DELAY_MS = 25;
-const RETRYABLE = new Set(['EBUSY', 'EPERM', 'EACCES', 'ENOTEMPTY']);
-
-// The temporary file name must be unique even for two writes of one record in the same millisecond:
-// the pid and the clock are not enough, because the host fires progress events without awaiting them.
-let tempSequence = 0;
 
 /**
  * Root folder of run records. Default `<home>/.omp/review-kit-runs`, so one machine has one view
@@ -42,8 +36,6 @@ export function runRecordFile(dir, runId) {
   if (!RUN_ID.test(String(runId ?? ''))) throw new Error(`invalid run id: ${String(runId)}`);
   return path.join(dir, `${runId}${RECORD_SUFFIX}`);
 }
-
-const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
  * One repository is written down under many spellings: `E:/repo` and `E:\\repo`, a directory reached
@@ -84,19 +76,6 @@ function sameRepoPredicate(repoRoot) {
   };
 }
 
-async function renameWithRetry(from, to, renameFile) {
-  for (let attempt = 1; attempt <= RENAME_ATTEMPTS; attempt += 1) {
-    try {
-      await renameFile(from, to);
-      return;
-    } catch (error) {
-      const code = error && typeof error === 'object' ? error.code : undefined;
-      if (!RETRYABLE.has(code) || attempt === RENAME_ATTEMPTS) throw error;
-      await sleep(RENAME_DELAY_MS);
-    }
-  }
-}
-
 /**
  * Writes one record atomically: a reader sees either the previous file or the new one, never a
  * half-written record. A partially written temporary file is removed on failure.
@@ -107,20 +86,8 @@ async function renameWithRetry(from, to, renameFile) {
  */
 export async function writeRunRecord(record, options = {}) {
   const dir = options.dir ?? runsRootDir(options);
-  const renameFile = typeof options.renameFile === 'function' ? options.renameFile : rename;
   const normalized = normalizeRunRecord(record);
-  const file = runRecordFile(dir, normalized.runId);
-  await mkdir(dir, { recursive: true });
-  tempSequence = (tempSequence + 1) % 1_000_000;
-  const temp = path.join(dir, `.${normalized.runId}.${process.pid}.${Date.now().toString(36)}.${tempSequence.toString(36)}.tmp`);
-  try {
-    await writeFile(temp, `${JSON.stringify(normalized, null, 2)}\n`, 'utf8');
-    await renameWithRetry(temp, file, renameFile);
-  } catch (error) {
-    await rm(temp, { force: true }).catch(() => {});
-    throw error;
-  }
-  return file;
+  return writeJsonAtomic(dir, `${normalized.runId}${RECORD_SUFFIX}`, normalized, options);
 }
 
 /**
