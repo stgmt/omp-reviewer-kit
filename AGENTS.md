@@ -44,7 +44,7 @@
 - `src/native/`: the native review (`native-host.mjs`, `native-review.mjs`, `task-engine.mjs`, `snapshot.mjs`, `assignment.mjs`, `verdict.mjs`).
 - `src/application/`: `installer-service.mjs`.
 - `src/domain/`: value and policy modules (`diff-identity.mjs`, `file-class.mjs`, `hook-template.mjs`, `hook-shim.mjs`, `git-commit-command.mjs`, `runner-version.mjs`, `target-policy.mjs`, `suspicion-map.mjs`, `prompt-token.mjs`, `slop-*.mjs`).
-- `src/infra/`: `filesystem-report-store-adapter.mjs`, `target-registry.mjs`, `vendored-kit-files.mjs`, `process-tree.mjs`.
+- `src/infra/`: `repo-identity.mjs` (the one repository identity: real path, folded per platform), `registration-record.mjs` (the persisted session registration, one writer and one reader), `review-run-store.mjs`, `filesystem-report-store-adapter.mjs`, `target-registry.mjs`, `vendored-kit-files.mjs`, `process-tree.mjs`.
 - `src/extension.mjs`: the OMP extension.
 - `agents/`, `skills/`: agent and skill definitions loaded by OMP.
 - `scripts/`: launcher, hook stamp, sync and setup helpers, `check-layout.mjs`, `run-tests.mjs`, the mutation gate (`run-mutation-tests.mjs`, `mutation-runner.mjs`, `mutation-selectors.json`, `mutation-test-reporter.mjs`), and `audit-range.mjs`.

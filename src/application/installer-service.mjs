@@ -8,6 +8,7 @@ import { isSkippedTarget } from '../domain/target-policy.mjs';
 import { hookBodyDigest, isHookNewer, isOwnedHook } from '../domain/hook-template.mjs';
 import { HOOK_SHIM, isOwnedShim, isShimNewer } from '../domain/hook-shim.mjs';
 import { FileTargetRegistry } from '../infra/target-registry.mjs';
+import { sameRepository } from '../infra/repo-identity.mjs';
 import { repoReportsDir } from '../infra/filesystem-report-store-adapter.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -286,6 +287,27 @@ export function parseConfigOrigin(stdout) {
 /**
  * Domain & Application service managing the installation and diagnostics of the Git review hook.
  */
+/**
+ * One diagnostic check of `doctor()`. The record shape is produced here once, so a new field is one
+ * edit instead of a coordinated change at every producer, and the status consumer keeps one contract.
+ *
+ * @param {string} name
+ * @param {'OK'|'WARN'|'FAIL'} status
+ * @param {string} message
+ * @returns {{ name: string, status: 'OK'|'WARN'|'FAIL', message: string }}
+ */
+const doctorCheck = (name, status, message) => ({ name, status, message });
+
+/**
+ * The write target the symlink guard defends: one repository root and the path inside it. Produced
+ * here once, so a change to the pair is one edit instead of a coordinated one at every call site.
+ *
+ * @param {string} repoRoot
+ * @param {string} targetPath
+ * @returns {{ repoRoot: string, targetPath: string }}
+ */
+const writeTarget = (repoRoot, targetPath) => ({ repoRoot, targetPath });
+
 export class PluginInstallerService {
   #pluginRoot;
   #targets;
@@ -334,10 +356,10 @@ export class PluginInstallerService {
    * @returns {Promise<boolean>} True if file was written/updated, false if unchanged.
    */
   async #writeIfChanged(repoRoot, filePath, content, mode) {
-    await this.#assertNoSymlinkComponents(repoRoot, filePath);
+    await this.#assertNoSymlinkComponents(writeTarget(repoRoot, filePath));
 
     const dir = path.dirname(filePath);
-    await this.#assertNoSymlinkComponents(repoRoot, dir);
+    await this.#assertNoSymlinkComponents(writeTarget(repoRoot, dir));
     const safeDirectory = await createSafeDirectory(repoRoot, dir);
     const safeDir = safeDirectory.path;
     const safeFilePath = path.join(safeDir, path.basename(filePath));
@@ -399,7 +421,7 @@ export class PluginInstallerService {
     }
   }
 
-  async #findSymlinkComponent(repoRoot, targetPath) {
+  async #findSymlinkComponent({ repoRoot, targetPath }) {
     const relativePath = path.relative(repoRoot, targetPath);
     if (!relativePath || relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
       return targetPath;
@@ -423,8 +445,8 @@ export class PluginInstallerService {
     return null;
   }
 
-  async #assertNoSymlinkComponents(repoRoot, targetPath) {
-    const symlinkPath = await this.#findSymlinkComponent(repoRoot, targetPath);
+  async #assertNoSymlinkComponents(target) {
+    const symlinkPath = await this.#findSymlinkComponent(target);
     if (symlinkPath) {
       throw new Error('Refusing to write through symlink component: ' + symlinkPath);
     }
@@ -745,7 +767,7 @@ export class PluginInstallerService {
     let hookNewer = false;
     let hookChained = false;
     let hookExecutable = process.platform === 'win32';
-    const hookSymlinkPath = await this.#findSymlinkComponent(repoRoot, hookPath);
+    const hookSymlinkPath = await this.#findSymlinkComponent(writeTarget(repoRoot, hookPath));
 
     if (hookSymlinkPath) {
       hookFilePresent = true;
@@ -788,7 +810,7 @@ export class PluginInstallerService {
     let chainedHookPresent = false;
     let chainedHookCurrent = false;
     let chainedHookExecutable = process.platform === 'win32';
-    const chainedSymlinkPath = await this.#findSymlinkComponent(repoRoot, chainedHookPath);
+    const chainedSymlinkPath = await this.#findSymlinkComponent(writeTarget(repoRoot, chainedHookPath));
 
     if (chainedSymlinkPath) {
       chainedHookPresent = true;
@@ -822,7 +844,7 @@ export class PluginInstallerService {
     // install channels (OMP user/project scope, Claude shell) must not
     // overwrite each other's runner in a shared repository.
     let runnerNewer = false;
-    const runnerSymlinkPath = await this.#findSymlinkComponent(repoRoot, runnerPath);
+    const runnerSymlinkPath = await this.#findSymlinkComponent(writeTarget(repoRoot, runnerPath));
 
     if (runnerSymlinkPath) {
       runnerPresent = true;
@@ -948,8 +970,8 @@ export class PluginInstallerService {
     const repoRoot = inspection.repoRoot;
     const gitHooksDir = path.join(repoRoot, '.githooks');
     const runnerDir = path.join(repoRoot, '.omp', 'review-kit');
-    await this.#assertNoSymlinkComponents(repoRoot, gitHooksDir);
-    await this.#assertNoSymlinkComponents(repoRoot, runnerDir);
+    await this.#assertNoSymlinkComponents(writeTarget(repoRoot, gitHooksDir));
+    await this.#assertNoSymlinkComponents(writeTarget(repoRoot, runnerDir));
     await mkdir(gitHooksDir, { recursive: true });
     await mkdir(runnerDir, { recursive: true });
 
@@ -1067,7 +1089,8 @@ export class PluginInstallerService {
       return summary;
     }
     const except = exceptRoot ? path.resolve(exceptRoot) : null;
-    const same = (a, b) => (process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b);
+    // One repository is one target, whatever spelling the registration arrived in.
+    const same = sameRepository;
     const deadline = Date.now() + budgetMs;
     for (const repo of targets) {
       if (Date.now() > deadline) break;
@@ -1192,25 +1215,25 @@ export class PluginInstallerService {
     const nodeVer = process.version;
     const major = parseInt(nodeVer.replace(/^v/, '').split('.')[0], 10);
     if (major >= 18) {
-      checks.push({ name: 'Node.js runtime', status: 'OK', message: `${nodeVer} (compatible with >=18)` });
+      checks.push(doctorCheck('Node.js runtime', 'OK', `${nodeVer} (compatible with >=18)`));
     } else {
-      checks.push({ name: 'Node.js runtime', status: 'FAIL', message: `${nodeVer} (requires >=18.0.0)` });
+      checks.push(doctorCheck('Node.js runtime', 'FAIL', `${nodeVer} (requires >=18.0.0)`));
     }
 
     // Check 2: Git availability
     const gitCheck = this.runGit(['--version'], targetDir);
     if (gitCheck.status === 0) {
-      checks.push({ name: 'Git executable', status: 'OK', message: gitCheck.stdout.trim() });
+      checks.push(doctorCheck('Git executable', 'OK', gitCheck.stdout.trim()));
     } else {
-      checks.push({ name: 'Git executable', status: 'FAIL', message: 'git command not found on PATH' });
+      checks.push(doctorCheck('Git executable', 'FAIL', 'git command not found on PATH'));
     }
 
     // Check 3: Repository root
     const repoRoot = this.getRepoRoot(targetDir);
     if (repoRoot) {
-      checks.push({ name: 'Git repository', status: 'OK', message: `Root: ${repoRoot}` });
+      checks.push(doctorCheck('Git repository', 'OK', `Root: ${repoRoot}`));
     } else {
-      checks.push({ name: 'Git repository', status: 'WARN', message: 'Current directory is not inside a Git repository' });
+      checks.push(doctorCheck('Git repository', 'WARN', 'Current directory is not inside a Git repository'));
     }
 
     // Check 4: OMP CLI availability
@@ -1222,32 +1245,20 @@ export class PluginInstallerService {
 
     const ompRes = spawnSync(execName, execArgs, { encoding: 'utf8', windowsHide: true, timeout: 5000 });
     if (ompRes.status === 0 && ompRes.stdout.trim()) {
-      checks.push({
-        name: 'OMP executable',
-        status: 'OK',
-        message: `${customOmp ? '(custom) ' : ''}${ompRes.stdout.trim()}`,
-      });
+      checks.push(doctorCheck('OMP executable', 'OK', `${customOmp ? '(custom) ' : ''}${ompRes.stdout.trim()}`));
     } else {
-      checks.push({
-        name: 'OMP executable',
-        status: 'WARN',
-        message: customOmp
-          ? `Configured OMP_REVIEW_KIT_OMP ("${customOmp}") did not respond to --version`
-          : 'omp command not responding in current environment',
-      });
+      checks.push(doctorCheck('OMP executable', 'WARN', customOmp
+        ? `Configured OMP_REVIEW_KIT_OMP ("${customOmp}") did not respond to --version`
+        : 'omp command not responding in current environment'));
     }
 
     // Check 5: Hook configuration if in repo
     if (repoRoot) {
       const hookStatus = await this.status(repoRoot);
       if (hookStatus.state === 'active') {
-        checks.push({ name: 'Pre-commit hook', status: 'OK', message: 'Configured and active in .githooks/' });
+        checks.push(doctorCheck('Pre-commit hook', 'OK', 'Configured and active in .githooks/'));
       } else if (hookStatus.state === 'conflict') {
-        checks.push({
-          name: 'Pre-commit hook conflict',
-          status: 'WARN',
-          message: hookStatus.conflictReason ?? 'Pre-commit hook conflict detected',
-        });
+        checks.push(doctorCheck('Pre-commit hook conflict', 'WARN', hookStatus.conflictReason ?? 'Pre-commit hook conflict detected'));
       } else if (hookStatus.state === 'stale') {
         // A skipped worker checkout is never written by the kit: say so instead of promising a repair.
         const notExecutable = hookStatus.hookExecutable === false;
@@ -1258,13 +1269,9 @@ export class PluginInstallerService {
             : notExecutable
               ? 'Pre-commit hook is not executable and will be repaired on next session.'
               : 'Review runner script is stale and will be updated on next session.';
-        checks.push({ name: 'Pre-commit hook', status: 'WARN', message });
+        checks.push(doctorCheck('Pre-commit hook', 'WARN', message));
       } else {
-        checks.push({
-          name: 'Pre-commit hook',
-          status: 'WARN',
-          message: 'Hook not configured in repository.',
-        });
+        checks.push(doctorCheck('Pre-commit hook', 'WARN', 'Hook not configured in repository.'));
       }
     }
 
@@ -1272,8 +1279,8 @@ export class PluginInstallerService {
       const hook = await this.assessHook(repoRoot).catch(() => null);
       if (hook?.kitExpected) {
         checks.push(hook.effective
-          ? { name: 'Effective pre-commit hook', status: 'OK', message: `git runs ${hook.hookPath} (${hook.kind})` }
-          : { name: 'Effective pre-commit hook', status: 'FAIL', message: `commits here are NOT reviewed: git runs "${hook.hookPath}" (core.hooksPath ${hook.hooksPath ?? 'unset'}), ${hook.kind === 'foreign' ? "another tool's hook that does not call the review" : hook.kind === 'not-executable' ? 'which is not executable' : 'which does not exist'}. Run /reviewer-kit:setup, or: git config core.hooksPath .githooks` });
+          ? doctorCheck('Effective pre-commit hook', 'OK', `git runs ${hook.hookPath} (${hook.kind})`)
+          : doctorCheck('Effective pre-commit hook', 'FAIL', `commits here are NOT reviewed: git runs "${hook.hookPath}" (core.hooksPath ${hook.hooksPath ?? 'unset'}), ${hook.kind === 'foreign' ? "another tool's hook that does not call the review" : hook.kind === 'not-executable' ? 'which is not executable' : 'which does not exist'}. Run /reviewer-kit:setup, or: git config core.hooksPath .githooks`));
       }
     }
 
@@ -1291,16 +1298,12 @@ export class PluginInstallerService {
             if (hook?.kitExpected && !hook.effective) unreviewed.push(repo);
           }
         }
-        checks.push({
-          name: 'Registered repositories',
-          status: stale > 0 || unreviewed.length > 0 ? 'WARN' : 'OK',
-          message: stale > 0 || unreviewed.length > 0
+        checks.push(doctorCheck('Registered repositories', stale > 0 || unreviewed.length > 0 ? 'WARN' : 'OK', stale > 0 || unreviewed.length > 0
             ? [
               stale > 0 ? `${stale} of ${targets.length} registered repositories carry a stale hook or runner; they are repaired when a session starts in any repository` : '',
               unreviewed.length > 0 ? `${unreviewed.length} would commit without the review (git does not run the kit hook): ${unreviewed.slice(0, 5).join(', ')}${unreviewed.length > 5 ? ', ...' : ''}` : '',
             ].filter(Boolean).join('; ')
-            : `${targets.length} registered, all current`,
-        });
+            : `${targets.length} registered, all current`));
       }
     } catch {
       // the registry is a convenience; an unreadable one is not a diagnosis

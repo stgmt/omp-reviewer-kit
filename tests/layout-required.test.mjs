@@ -9,7 +9,11 @@ import path from 'node:path';
 
 import { REQUIRED_FILES, assertRequiredFiles } from '../src/infra/layout-required.mjs';
 
-const RUN_RECORD_PATHS = [
+// Paths a consumer imports or a command runs by name: dropping one of them from the list would let
+// the layout check accept a tree that fails at the first import instead of at the check.
+const PINNED_PATHS = [
+  'src/infra/registration-record.mjs',
+  'src/infra/repo-identity.mjs',
   'src/domain/report-envelope.mjs',
   'src/domain/diff-budget.mjs',
   'src/domain/review-run-summary.mjs',
@@ -19,11 +23,11 @@ const RUN_RECORD_PATHS = [
 ];
 
 test('Given the repository, When every required file is checked, Then the list names every run-record path and nothing is missing', async () => {
-  for (const file of RUN_RECORD_PATHS) assert.ok(REQUIRED_FILES.includes(file), `${file} is required`);
+  for (const file of PINNED_PATHS) assert.ok(REQUIRED_FILES.includes(file), `${file} is required`);
   await assertRequiredFiles(process.cwd(), REQUIRED_FILES);
 });
 
-for (const victim of RUN_RECORD_PATHS) {
+for (const victim of PINNED_PATHS) {
   test(`Given a tree without ${victim}, When the required files are checked, Then the check fails naming that path`, async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'layout-required-'));
     try {

@@ -34,6 +34,8 @@ export const REQUIRED_FILES = [
   'src/domain/diff-budget.mjs',
   'src/domain/review-run-summary.mjs',
   'src/infra/atomic-json-file.mjs',
+  'src/infra/registration-record.mjs',
+  'src/infra/repo-identity.mjs',
   'src/infra/review-run-store.mjs',
   'src/native/review-telemetry.mjs',
   'scripts/review-runs.mjs',
