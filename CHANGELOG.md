@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.1] - 2026-11-03
+
+### Fixed
+- **A fresh `omp plugin install` can review again.** The launcher looked for `@oh-my-pi/pi-coding-agent` by resolving its `package.json`, but the package does not export that path, so only a copy inside the kit folder was ever found — and a reinstall wipes that copy. Resolution now goes through an exported entry (`…/sdk`) and walks up to the manifest, which is how OMP's hoisted install is found; the kit folder stays the first candidate. Measured on the delivered 0.26.0 plugin: the hook blocked every commit with "the OMP library is not installed", and after this fix the same launcher resolves the hoisted install.
+
 ## [0.26.0] - 2026-11-02
 
 ### Added

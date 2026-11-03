@@ -97,8 +97,12 @@ test('Given the OMP library is hoisted above the kit folder, When the launcher l
     await mkdir(path.dirname(hoisted), { recursive: true });
     await mkdir(kit, { recursive: true });
     await writeFile(hoisted, JSON.stringify({ name: '@oh-my-pi/pi-coding-agent', version: '18.12.5' }));
+    const entry = path.join(path.dirname(hoisted), 'dist', 'sdk.mjs');
+    await mkdir(path.dirname(entry), { recursive: true });
+    await writeFile(entry, 'export const sdk = 1;\n');
     await writeFile(path.join(kit, 'package.json'), JSON.stringify({ name: 'omp-reviewer-kit', version: '0.0.0' }));
-    assert.equal(findLibrary(kit), hoisted, 'a hoisted install is the install');
+    // Resolution lands on an exported entry, never on the manifest the package does not export.
+    assert.equal(findLibrary(kit, () => entry), hoisted, 'a hoisted install is the install');
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -116,4 +120,34 @@ test('Given the launcher module is imported, When it loads, Then it starts nothi
   assert.equal(String(child.stderr ?? ''), '', 'no launcher diagnostic on import');
   assert.equal(String(child.stdout ?? ''), '', 'no host output on import');
   void fileURLToPath;
+});
+
+test('Given the package exports no package.json, When the launcher resolves a hoisted install, Then it finds the manifest by walking up from an exported entry', async () => {
+  const { mkdtemp, mkdir, writeFile, rm } = await import('node:fs/promises');
+  const path = (await import('node:path')).default;
+  const { tmpdir } = await import('node:os');
+  const { findLibrary } = await import('../scripts/run-review.mjs');
+  const root = await mkdtemp(path.join(tmpdir(), 'kit-hoisted-entry-'));
+  try {
+    const pkgDir = path.join(root, 'plugins', 'node_modules', '@oh-my-pi', 'pi-coding-agent');
+    const entry = path.join(pkgDir, 'dist', 'sdk.mjs');
+    await mkdir(path.dirname(entry), { recursive: true });
+    await writeFile(entry, 'export const sdk = 1;\n');
+    await writeFile(path.join(pkgDir, 'package.json'), JSON.stringify({ name: '@oh-my-pi/pi-coding-agent', version: '18.12.5' }));
+    const kit = path.join(root, 'plugins', 'node_modules', 'omp-reviewer-kit');
+    await mkdir(kit, { recursive: true });
+    await writeFile(path.join(kit, 'package.json'), JSON.stringify({ name: 'omp-reviewer-kit', version: '0.0.0' }));
+    // The real resolver refuses `…/package.json`; the exported entry resolves.
+    const resolve = specifier => {
+      if (specifier.endsWith('/package.json')) {
+        const error = new Error('not exported');
+        error.code = 'ERR_PACKAGE_PATH_NOT_EXPORTED';
+        throw error;
+      }
+      return entry;
+    };
+    assert.equal(findLibrary(kit, resolve), path.join(pkgDir, 'package.json'));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
