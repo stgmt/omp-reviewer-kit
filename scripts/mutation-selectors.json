@@ -8,7 +8,7 @@
       ],
       "ancestors": [],
       "mutantHash": "c1bc02d530288ebbbf3a4ceb048b0757bad76de1518f66822aa2d6d6e84348bb",
-      "testHash": "158e20b999d45067cf9be7d540f0cc4cb43560be1d9f6a5d62320ddd2ac7aa81"
+      "testHash": "02e2bf933ff4bdad676aa9db3ab322f4e46965dfc27e7269f7a5e28018d3e397"
     },
     "layout-claude-version-guard-removed": {
       "testFile": "tests/check-layout.test.mjs",
@@ -17,7 +17,7 @@
       ],
       "ancestors": [],
       "mutantHash": "127a2eb5995b5c38f2822e38b8c371c6273e5c4cc5f1d8bf6c632e76fa2fa4e4",
-      "testHash": "158e20b999d45067cf9be7d540f0cc4cb43560be1d9f6a5d62320ddd2ac7aa81"
+      "testHash": "02e2bf933ff4bdad676aa9db3ab322f4e46965dfc27e7269f7a5e28018d3e397"
     },
     "layout-claude-source-guard-removed": {
       "testFile": "tests/check-layout.test.mjs",
@@ -26,7 +26,7 @@
       ],
       "ancestors": [],
       "mutantHash": "6efcac9d8172715b4d6323350f9ad1835204fb55ca54e34c1e80a83502097289",
-      "testHash": "158e20b999d45067cf9be7d540f0cc4cb43560be1d9f6a5d62320ddd2ac7aa81"
+      "testHash": "02e2bf933ff4bdad676aa9db3ab322f4e46965dfc27e7269f7a5e28018d3e397"
     },
     "layout-claude-exact-set-removed": {
       "testFile": "tests/check-layout.test.mjs",
@@ -35,7 +35,7 @@
       ],
       "ancestors": [],
       "mutantHash": "f6a628edfdbbf459d9d9fb2f8170b01cb837987cc7e0dfd0ddaf3a2b1a8ecfce",
-      "testHash": "158e20b999d45067cf9be7d540f0cc4cb43560be1d9f6a5d62320ddd2ac7aa81"
+      "testHash": "02e2bf933ff4bdad676aa9db3ab322f4e46965dfc27e7269f7a5e28018d3e397"
     },
     "layout-claude-size-cap-raised": {
       "testFile": "tests/check-layout.test.mjs",
@@ -44,7 +44,7 @@
       ],
       "ancestors": [],
       "mutantHash": "e5cef810053c84308c0740389540c2725f6809c5f56deb7947d085d0ebbd395b",
-      "testHash": "158e20b999d45067cf9be7d540f0cc4cb43560be1d9f6a5d62320ddd2ac7aa81"
+      "testHash": "02e2bf933ff4bdad676aa9db3ab322f4e46965dfc27e7269f7a5e28018d3e397"
     },
     "anti-parasitic-hunter-check-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -104,13 +104,13 @@
     "sync-hook-newer-overwritten": {
       "testFile": "tests/sync-targets.test.mjs",
       "tests": [
-        "Given a hook from a newer kit release, When the registry is synced with --apply, Then it is kept"
+        "Given a hook written in a newer format, When the registry is synced with --apply, Then it is kept"
       ],
       "ancestors": [
         "Feature: sync-targets puts the thin runner stub in place without rolling a newer runner back"
       ],
       "mutantHash": "50ddd66c000036d09cb4e4b494dc947275fb0298917d10ef253ee86e7fd972e7",
-      "testHash": "173b161edbb6928637d60e4ed033a2e5a667f15f97ece97a546af909b3ef1006"
+      "testHash": "94edac8c4b97effba227195486032c7a29522f7ecf9c74f87f6cae0d4dcf7628"
     },
     "check-layout-stub-size-cap-raised": {
       "testFile": "tests/check-layout.test.mjs",
@@ -119,7 +119,7 @@
       ],
       "ancestors": [],
       "mutantHash": "41878e79fac086f1e271a6f90ff21124844059f8e4d0bef810f9cb32b8ae4b52",
-      "testHash": "158e20b999d45067cf9be7d540f0cc4cb43560be1d9f6a5d62320ddd2ac7aa81"
+      "testHash": "02e2bf933ff4bdad676aa9db3ab322f4e46965dfc27e7269f7a5e28018d3e397"
     },
     "agent-review-risk-hunter-test-suite-ban-removed": {
       "testFile": "tests/agent-contract.test.mjs",
@@ -415,7 +415,7 @@
       ],
       "ancestors": [],
       "mutantHash": "e04b8deaabd373c66162305dbd177b82d9ccc10833213056dbdf94d41452ef3f",
-      "testHash": "158e20b999d45067cf9be7d540f0cc4cb43560be1d9f6a5d62320ddd2ac7aa81"
+      "testHash": "02e2bf933ff4bdad676aa9db3ab322f4e46965dfc27e7269f7a5e28018d3e397"
     },
     "target-refresh-registers-without-hook": {
       "testFile": "tests/target-session.test.mjs",
@@ -442,7 +442,7 @@
       ],
       "ancestors": [],
       "mutantHash": "87a9c1e5967e9cbe665607525f5a1021da38b02d88147278d084b829004ffc2c",
-      "testHash": "158e20b999d45067cf9be7d540f0cc4cb43560be1d9f6a5d62320ddd2ac7aa81"
+      "testHash": "02e2bf933ff4bdad676aa9db3ab322f4e46965dfc27e7269f7a5e28018d3e397"
     },
     "target-refresh-skips-current-repair": {
       "testFile": "tests/target-session.test.mjs",
@@ -513,17 +513,17 @@
         "Given a template, When it is stamped again or has CRLF line endings, Then the marker is stable"
       ],
       "ancestors": [],
-      "mutantHash": "bfb55401ad43526123b0660ac23ac4bd99860695c817c3e572f4a93555d44628",
-      "testHash": "d8055f0ab6f943b02b29ea8ee86c79fde367463c97757a685bcf814bc43f8097"
+      "mutantHash": "14b2c41861038f2aeaa885f084408049ea763b9bf9f2ba5f94969bc57a76b3bc",
+      "testHash": "122cf326aa9270021595d00d88fecf89de14c110cb458959c4c6a7c881124aff"
     },
     "hook-digest-untrimmed": {
       "testFile": "tests/hook-ownership.test.mjs",
       "tests": [
-        "Given the shipped template, Then its marker names the package version and verifies, and an edit to its body breaks ownership"
+        "Given the shipped template, Then its marker names the hook format and not the release, and an edit to its body breaks ownership"
       ],
       "ancestors": [],
       "mutantHash": "ff0ce7acc1fbe57e166d57da8e8bfce9eddb518ae8c3e3af4ba42d489e954753",
-      "testHash": "d8055f0ab6f943b02b29ea8ee86c79fde367463c97757a685bcf814bc43f8097"
+      "testHash": "122cf326aa9270021595d00d88fecf89de14c110cb458959c4c6a7c881124aff"
     },
     "hook-ownership-ignores-digest": {
       "testFile": "tests/hook-ownership.test.mjs",
@@ -532,16 +532,16 @@
       ],
       "ancestors": [],
       "mutantHash": "527aa634093ff05224cbd823e3f361775cc159574c337d38d71cbdb7c050aad8",
-      "testHash": "d8055f0ab6f943b02b29ea8ee86c79fde367463c97757a685bcf814bc43f8097"
+      "testHash": "122cf326aa9270021595d00d88fecf89de14c110cb458959c4c6a7c881124aff"
     },
     "hook-newer-not-strict": {
       "testFile": "tests/hook-ownership.test.mjs",
       "tests": [
-        "Given a hook stamped by a newer release, Then it is ours and is never treated as older than the plugin template"
+        "Given a hook stamped by a newer format, Then it is ours and is never treated as older than the plugin template"
       ],
       "ancestors": [],
-      "mutantHash": "9d453b447be600fe48771fa918dc4e81804356fd37bda582a0bab73b74fb1efb",
-      "testHash": "d8055f0ab6f943b02b29ea8ee86c79fde367463c97757a685bcf814bc43f8097"
+      "mutantHash": "a5e4a647880ba1051ec84f74f2ee4067769ec74b0b91c3072d6304a85f680066",
+      "testHash": "122cf326aa9270021595d00d88fecf89de14c110cb458959c4c6a7c881124aff"
     },
     "hook-newer-check-dropped": {
       "testFile": "tests/hook-ownership.test.mjs",
@@ -550,7 +550,7 @@
       ],
       "ancestors": [],
       "mutantHash": "52ac66a94a5ff7606b1c60e83f4cd01c9e203012fa09c60896f3f0e316fb89cd",
-      "testHash": "d8055f0ab6f943b02b29ea8ee86c79fde367463c97757a685bcf814bc43f8097"
+      "testHash": "122cf326aa9270021595d00d88fecf89de14c110cb458959c4c6a7c881124aff"
     },
     "installer-hook-newer-ignored": {
       "testFile": "tests/hook-ownership.test.mjs",
@@ -559,7 +559,7 @@
       ],
       "ancestors": [],
       "mutantHash": "80c626efc6745d6ee2031002fd6791d1fcc460e2932eab8d1b4a6552a26a5a33",
-      "testHash": "d8055f0ab6f943b02b29ea8ee86c79fde367463c97757a685bcf814bc43f8097"
+      "testHash": "122cf326aa9270021595d00d88fecf89de14c110cb458959c4c6a7c881124aff"
     },
     "installer-hook-newer-overwritten": {
       "testFile": "tests/hook-ownership.test.mjs",
@@ -568,7 +568,7 @@
       ],
       "ancestors": [],
       "mutantHash": "4b07d4968cddfaff24fdb1147415dce32fa6932da8b18d356fc266173060f2f5",
-      "testHash": "d8055f0ab6f943b02b29ea8ee86c79fde367463c97757a685bcf814bc43f8097"
+      "testHash": "122cf326aa9270021595d00d88fecf89de14c110cb458959c4c6a7c881124aff"
     },
     "installer-legacy-hook-unrecognised": {
       "testFile": "tests/hook-ownership.test.mjs",
@@ -577,7 +577,7 @@
       ],
       "ancestors": [],
       "mutantHash": "61e83c72adaa14bab34ac9ed9a0a15f25cc4736352181be9033c3ec411f31a86",
-      "testHash": "d8055f0ab6f943b02b29ea8ee86c79fde367463c97757a685bcf814bc43f8097"
+      "testHash": "122cf326aa9270021595d00d88fecf89de14c110cb458959c4c6a7c881124aff"
     },
     "installer-hook-newer-not-current": {
       "testFile": "tests/hook-ownership.test.mjs",
@@ -586,7 +586,7 @@
       ],
       "ancestors": [],
       "mutantHash": "8a70859ccc9e85ae3004044553ea369bf100e53e67c99131d3e7e3d34108bcb1",
-      "testHash": "d8055f0ab6f943b02b29ea8ee86c79fde367463c97757a685bcf814bc43f8097"
+      "testHash": "122cf326aa9270021595d00d88fecf89de14c110cb458959c4c6a7c881124aff"
     },
     "check-layout-hook-marker-unchecked": {
       "testFile": "tests/check-layout.test.mjs",
@@ -594,17 +594,17 @@
         "check-layout rejects a hook template whose marker is missing, stale, or no longer matches its body"
       ],
       "ancestors": [],
-      "mutantHash": "23d8fef1bc3c996c11d82baa7b72c7bcb2f766333064617be049f9767ce85ca0",
-      "testHash": "158e20b999d45067cf9be7d540f0cc4cb43560be1d9f6a5d62320ddd2ac7aa81"
+      "mutantHash": "26ad52638207e0a249593352fa3edbcd9e0dfb7011075722836f71faf1e00dfc",
+      "testHash": "02e2bf933ff4bdad676aa9db3ab322f4e46965dfc27e7269f7a5e28018d3e397"
     },
     "stamp-hook-writes-unstamped-template": {
       "testFile": "tests/hook-ownership.test.mjs",
       "tests": [
-        "Given a template with a wrong-version marker, When stamp-hook runs, Then the marker is replaced and the body is preserved"
+        "Given a template with a stale marker, When stamp-hook runs, Then the marker is replaced and the body is preserved"
       ],
       "ancestors": [],
-      "mutantHash": "8a365da82cf311ec801c3da06143456b116fc7b0730bb18edbf7415ba6df7fc3",
-      "testHash": "d8055f0ab6f943b02b29ea8ee86c79fde367463c97757a685bcf814bc43f8097"
+      "mutantHash": "45ad338f35328e3248f7c41947f3a400598a412f399cf989e9f6a1b971c84e77",
+      "testHash": "122cf326aa9270021595d00d88fecf89de14c110cb458959c4c6a7c881124aff"
     },
     "stub-missing-plugin-passes": {
       "testFile": "tests/runner-stub.test.mjs",
@@ -659,7 +659,7 @@
         "Feature: sync-targets puts the thin runner stub in place without rolling a newer runner back"
       ],
       "mutantHash": "525e0b06e542fcbc862da51579f5bdb924e9b042c721d2e69fa4856e17b3449a",
-      "testHash": "173b161edbb6928637d60e4ed033a2e5a667f15f97ece97a546af909b3ef1006"
+      "testHash": "94edac8c4b97effba227195486032c7a29522f7ecf9c74f87f6cae0d4dcf7628"
     },
     "check-layout-stub-identity-skipped": {
       "testFile": "tests/check-layout.test.mjs",
@@ -668,7 +668,7 @@
       ],
       "ancestors": [],
       "mutantHash": "ade717609c5049adc158de741e132cedcf9e686329700dcaebb3940e300ddb9b",
-      "testHash": "158e20b999d45067cf9be7d540f0cc4cb43560be1d9f6a5d62320ddd2ac7aa81"
+      "testHash": "02e2bf933ff4bdad676aa9db3ab322f4e46965dfc27e7269f7a5e28018d3e397"
     },
     "reviewer-kit-task-role-identity-omitted": {
       "testFile": "tests/agent-contract.test.mjs",
@@ -3093,7 +3093,7 @@
       ],
       "ancestors": [],
       "mutantHash": "4590875a49cdd6e36a536b788392f1cfbc4d72a433264a9966ab84e42b05959d",
-      "testHash": "77682a9d2530060b03d14acfbd027a54be83d7c1d32275b52b42c8e8d8ad0961"
+      "testHash": "52ff77d9f6708417ee792fea813aa79e4fc4592c05ff9e509aa017be36ddf52a"
     },
     "layout-required-diff-budget-missing": {
       "testFile": "tests/layout-required.test.mjs",
@@ -3102,7 +3102,7 @@
       ],
       "ancestors": [],
       "mutantHash": "5e5e868d9845a794b57762550c1e862638c5334c178ba1196f780c2a6fe92501",
-      "testHash": "77682a9d2530060b03d14acfbd027a54be83d7c1d32275b52b42c8e8d8ad0961"
+      "testHash": "52ff77d9f6708417ee792fea813aa79e4fc4592c05ff9e509aa017be36ddf52a"
     },
     "maintainability-signal-kill-treated-as-timeout": {
       "testFile": "tests/maintainability-extract.test.mjs",
@@ -3237,7 +3237,7 @@
       ],
       "ancestors": [],
       "mutantHash": "a1b3760ddc1b6057e092d726f59d963ef4dbb7f6e6c3c552679b4403286c9bb9",
-      "testHash": "d8055f0ab6f943b02b29ea8ee86c79fde367463c97757a685bcf814bc43f8097"
+      "testHash": "122cf326aa9270021595d00d88fecf89de14c110cb458959c4c6a7c881124aff"
     },
     "layout-required-repo-identity-missing": {
       "testFile": "tests/layout-required.test.mjs",
@@ -3246,7 +3246,7 @@
       ],
       "ancestors": [],
       "mutantHash": "58fae5caef773915f05c2458e526a9dcb6666277e207d1f264dc34f0320987d0",
-      "testHash": "77682a9d2530060b03d14acfbd027a54be83d7c1d32275b52b42c8e8d8ad0961"
+      "testHash": "52ff77d9f6708417ee792fea813aa79e4fc4592c05ff9e509aa017be36ddf52a"
     },
     "layout-required-registration-record-missing": {
       "testFile": "tests/layout-required.test.mjs",
@@ -3255,7 +3255,7 @@
       ],
       "ancestors": [],
       "mutantHash": "71704520fb9262eaf4f21d8b57dbee31120954f07b9c46a71130f17646d72a9e",
-      "testHash": "77682a9d2530060b03d14acfbd027a54be83d7c1d32275b52b42c8e8d8ad0961"
+      "testHash": "52ff77d9f6708417ee792fea813aa79e4fc4592c05ff9e509aa017be36ddf52a"
     },
     "catalog-anchor-not-in-source": {
       "testFile": "tests/mutation-catalog.test.mjs",
@@ -3813,7 +3813,7 @@
       ],
       "ancestors": [],
       "mutantHash": "d8ac2c0f6a47767eeea36b63b92299d874ecb164e3e246c3ac59e1eaf8c37a13",
-      "testHash": "77682a9d2530060b03d14acfbd027a54be83d7c1d32275b52b42c8e8d8ad0961"
+      "testHash": "52ff77d9f6708417ee792fea813aa79e4fc4592c05ff9e509aa017be36ddf52a"
     },
     "contract-oversized-module-skipped-silently": {
       "testFile": "tests/contract-stage.test.mjs",
@@ -3949,6 +3949,60 @@
       "ancestors": [],
       "mutantHash": "2954e695165f7668fa3c1094c9fb1043e467b7c34ceed230f018c3624bdab9d4",
       "testHash": "ea6292acc4677ac49ba9c864004459b98884511dd7b903134e3a7878e201b871"
+    },
+    "deliver-broken-host-counted-skipped": {
+      "testFile": "tests/deliver.test.mjs",
+      "tests": [
+        "Given Claude Code is installed but does not answer, When delivery runs, Then delivery fails instead of skipping"
+      ],
+      "ancestors": [],
+      "mutantHash": "bee1c6060cd9214876006f1606e95451f0958f08528488185c9228c8cf7b22f6",
+      "testHash": "d134683dd584f790f7c933f301cadb7ad97202b1eb10159e4b98a75f72072ebb"
+    },
+    "deliver-release-marker-accepted": {
+      "testFile": "tests/deliver.test.mjs",
+      "tests": [
+        "Given the shipped hook still names a release, When delivery runs, Then the invariant check fails"
+      ],
+      "ancestors": [],
+      "mutantHash": "b586125327aca66e13fcdb5efe4c57252c35452bdd78c3ca4351fdee6c1619cd",
+      "testHash": "d134683dd584f790f7c933f301cadb7ad97202b1eb10159e4b98a75f72072ebb"
+    },
+    "layout-deliver-not-required": {
+      "testFile": "tests/layout-required.test.mjs",
+      "tests": [
+        "Given the native review imports the contract stage, When the layout is checked, Then all three contract modules are required and their absence is rejected"
+      ],
+      "ancestors": [],
+      "mutantHash": "2e51b4fdb7e434170599bfed9dc915cb1ee9491f584c9850b86e4768fa8d4d4a",
+      "testHash": "52ff77d9f6708417ee792fea813aa79e4fc4592c05ff9e509aa017be36ddf52a"
+    },
+    "stamp-hook-strips-body-markers": {
+      "testFile": "tests/hook-ownership.test.mjs",
+      "tests": [
+        "Given an unstamped hook whose body quotes a marker-shaped line, When it is stamped, Then the quoted data survives and the digest covers it"
+      ],
+      "ancestors": [],
+      "mutantHash": "291256b6ce8f95d5ca13a04a844b3b155058b8c64478e35d3a738907958d0f0e",
+      "testHash": "122cf326aa9270021595d00d88fecf89de14c110cb458959c4c6a7c881124aff"
+    },
+    "deliver-cli-always-zero": {
+      "testFile": "tests/deliver.test.mjs",
+      "tests": [
+        "Given the delivery CLI runs where the shipped hook names a release, When it finishes, Then it exits nonzero"
+      ],
+      "ancestors": [],
+      "mutantHash": "ba4edee19eb4cffe5bb9f06a1b76f7ea76c06cbf0bcce0eb8cebfa2ff276e843",
+      "testHash": "d134683dd584f790f7c933f301cadb7ad97202b1eb10159e4b98a75f72072ebb"
+    },
+    "hook-legacy-marker-not-owned": {
+      "testFile": "tests/hook-ownership.test.mjs",
+      "tests": [
+        "Given a hook written by an earlier release, When it is read and healed, Then it is ours, it migrates once, and a second heal changes nothing"
+      ],
+      "ancestors": [],
+      "mutantHash": "813950fe04ff0bc275ba8d922784168d4c0894e1211ff2adc93ec04a3f92e6d5",
+      "testHash": "122cf326aa9270021595d00d88fecf89de14c110cb458959c4c6a7c881124aff"
     }
   }
 }

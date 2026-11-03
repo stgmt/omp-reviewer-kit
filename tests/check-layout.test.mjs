@@ -229,7 +229,7 @@ test('check-layout rejects a hook template whose marker is missing, stale, or no
 
   const stale = await layoutFixture();
   try {
-    await stale.edit('templates/githooks/pre-commit', (text) => text.replace(/hook v\d+\.\d+\.\d+/, 'hook v0.0.1'));
+    await stale.edit('templates/githooks/pre-commit', (text) => text.replace(/hook-format v\d+/, 'hook-format v0'));
     const result = stale.check();
     assert.notEqual(result.status, 0);
     assert.match(failure(result), /stamp-hook\.mjs/);

@@ -1,7 +1,7 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 
-import { isOwnedHook, parseHookMarker } from '../src/domain/hook-template.mjs';
+import { HOOK_FORMAT, isOwnedHook, parseHookFormat } from '../src/domain/hook-template.mjs';
 import { isRunnerNewer } from '../src/domain/runner-version.mjs';
 import { CLAUDE_PLUGIN_FILES, CLAUDE_PLUGIN_MAX_BYTES, REQUIRED_FILES, assertRequiredFiles } from '../src/infra/layout-required.mjs';
 
@@ -36,11 +36,12 @@ if (!isRunnerNewer(stubRunner, algorithm)) {
   throw new Error(`templates/review-kit/run-review.mjs must carry a runner marker above the algorithm's v${pkg.version}.`);
 }
 
-// The hook template carries the marker of the release that ships it (see src/domain/hook-template.mjs):
-// installed repositories recognise an unedited hook by that marker, so a stale or missing one is fatal.
+// The hook template carries the hook format and the digest of its own body (see
+// src/domain/hook-template.mjs). A release does not touch it: installed repositories recognise an
+// unedited hook by that marker, and a release that changed the file would rewrite every repository.
 const hookTemplate = await readFile('templates/githooks/pre-commit', 'utf8');
-if (!isOwnedHook(hookTemplate) || parseHookMarker(hookTemplate).version !== pkg.version) {
-  throw new Error(`templates/githooks/pre-commit must carry the marker of v${pkg.version}; run node scripts/stamp-hook.mjs.`);
+if (!isOwnedHook(hookTemplate) || parseHookFormat(hookTemplate).format !== HOOK_FORMAT) {
+  throw new Error(`templates/githooks/pre-commit must carry hook-format v${HOOK_FORMAT} and a matching digest; run node scripts/stamp-hook.mjs.`);
 }
 
 // The Claude shell: version-synchronized, exact file set, small payload.

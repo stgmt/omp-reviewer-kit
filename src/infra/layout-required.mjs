@@ -82,6 +82,7 @@ export const REQUIRED_FILES = [
   'scripts/mutation-test-reporter.mjs',
   'scripts/mutation-selectors.json',
   'scripts/setup-hook.mjs',
+  'scripts/deliver.mjs',
   'scripts/install-hook.ps1',
   'scripts/install-hook.sh',
   'src/index.mjs',
