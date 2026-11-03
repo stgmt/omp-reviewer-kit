@@ -3895,6 +3895,51 @@
       "ancestors": [],
       "mutantHash": "be3ce2f5b1b2939dcdf2e5e636fee7c32eb835f842f9602d938e269a87ecaded",
       "testHash": "08adb6973907698690bacb3a612fee1c6380d0734c35e2d980311a27b3ffa413"
+    },
+    "centralization-exemption-ignored": {
+      "testFile": "tests/maintainability-centralization.test.mjs",
+      "tests": [
+        "Given a passing reviewer and an exempt group, When the verdict is evaluated, Then the review passes"
+      ],
+      "ancestors": [],
+      "mutantHash": "87bd39f303787482b79a859f411acfb18f4fa3fed69d040f357fe6bc505f2636",
+      "testHash": "23d216ec1bd274faa420d43b40f7c86e5f7b1acf434c130c0d03ac8fcb3ff2df"
+    },
+    "centralization-unread-consumer-exempted": {
+      "testFile": "tests/maintainability-centralization.test.mjs",
+      "tests": [
+        "Given a consumer whose source could not be read, When the group is classified, Then the exemption is not granted"
+      ],
+      "ancestors": [],
+      "mutantHash": "305ac5aa5ab6a492160157bb290ac8622fe475384b444761eaa74ed12cc5bccc",
+      "testHash": "23d216ec1bd274faa420d43b40f7c86e5f7b1acf434c130c0d03ac8fcb3ff2df"
+    },
+    "centralization-foreign-consumer-exempted": {
+      "testFile": "tests/maintainability-centralization.test.mjs",
+      "tests": [
+        "Given a consumer that only mentions the owner in a comment, When the group is classified, Then it is not centralisation"
+      ],
+      "ancestors": [],
+      "mutantHash": "1b2464b3c2bf1eee4bfdd555a4450238d73dfdb43d3779c0e1d1148347666a15",
+      "testHash": "23d216ec1bd274faa420d43b40f7c86e5f7b1acf434c130c0d03ac8fcb3ff2df"
+    },
+    "centralization-comment-import-accepted": {
+      "testFile": "tests/maintainability-centralization.test.mjs",
+      "tests": [
+        "Given a comment or an unrelated string naming the owner, When the specifiers are read, Then neither counts as an import"
+      ],
+      "ancestors": [],
+      "mutantHash": "d163ef79e02c6bc861dba9d78edecf1ef0339b680c580cef76462f2119ecdef1",
+      "testHash": "23d216ec1bd274faa420d43b40f7c86e5f7b1acf434c130c0d03ac8fcb3ff2df"
+    },
+    "centralization-specifier-context-ignored": {
+      "testFile": "tests/maintainability-centralization.test.mjs",
+      "tests": [
+        "Given a comment or an unrelated string naming the owner, When the specifiers are read, Then neither counts as an import"
+      ],
+      "ancestors": [],
+      "mutantHash": "f3a4cc1f743136ec52d738efa835a15aab08bc7795d7a45898f048fe2724d9c2",
+      "testHash": "23d216ec1bd274faa420d43b40f7c86e5f7b1acf434c130c0d03ac8fcb3ff2df"
     }
   }
 }

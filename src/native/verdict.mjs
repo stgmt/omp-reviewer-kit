@@ -80,8 +80,12 @@ function classIndex(fileClasses) {
  * @param {object} candidate
  * @returns {boolean}
  */
-export function maintainabilityBlocks(candidate) {
+export function maintainabilityBlocks(candidate, { centralization = new Set() } = {}) {
   if (!candidate || typeof candidate !== 'object') return false;
+  const id = candidate.candidate_id ?? candidate.groupId ?? candidate.id;
+  // A group that is one shared contract with its consumers and its test is the shape of a single
+  // definition, not a duplicated design: it is centralisation, and the policy exempts it.
+  if (id && centralization.has(id)) return false;
   if (candidate.decision !== 'confirmed') return false;
   if (candidate.forwarding_only === true) return false;
   if (candidate.priority !== 'P2') return false;
@@ -100,7 +104,7 @@ export function maintainabilityBlocks(candidate) {
  * }} input
  * @returns {{ pass: boolean, verdict: 'PASS'|'BLOCK', reasons: string[] }}
  */
-export function evaluateReview({ reviewer, stages, profile, lanes, fileClasses = [], planned = [], maintainability = null, contract = null }) {
+export function evaluateReview({ reviewer, stages, profile, lanes, fileClasses = [], planned = [], maintainability = null, contract = null, maintainabilityCentralization = new Set() }) {
   const reasons = [];
   if (!reviewer) {
     reasons.push('reviewer task result missing');
@@ -164,7 +168,7 @@ export function evaluateReview({ reviewer, stages, profile, lanes, fileClasses =
     if (maintainabilitySummary && maintainabilitySummary.policy === 'block') {
       const blockingItems = maintainabilityStages
         .flatMap(stage => (Array.isArray(stage.data?.candidates) ? stage.data.candidates : []))
-        .filter(maintainabilityBlocks);
+        .filter(candidate => maintainabilityBlocks(candidate, { centralization: maintainabilityCentralization }));
       if (blockingItems.length > 0) {
         reasons.push(`${MAINTAINABILITY_AGENT} confirmed ${blockingItems.length} maintainability item(s) with a stated cost but the reviewer passed`);
       }
