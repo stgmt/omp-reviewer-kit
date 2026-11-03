@@ -35,6 +35,12 @@ export function classifyContractCentralization({ occurrences, classOf, sources =
   const owner = definers.slice().sort((left, right) => (counts.get(right) - counts.get(left)) || (left < right ? -1 : 1))[0];
   const consumers = moduleFiles.filter(file => file !== owner);
   for (const consumer of consumers) {
+    // A consumer that both imports the owner and defines the same rule itself is not a user of the
+    // contract: it keeps its own copy next to the import, and that copy is exactly what this policy
+    // exists to stop.
+    if ((occurrences ?? []).some(occurrence => occurrence?.path === consumer && occurrence?.role === 'definition')) {
+      return not(`${consumer} defines the rule as well as importing it`);
+    }
     const source = sources.get(consumer);
     if (typeof source !== 'string') return not('consumer source unread');
     if (!mentionsModule(source, owner)) return not(`${consumer} does not use ${owner}`);
