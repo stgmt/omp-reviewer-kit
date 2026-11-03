@@ -163,3 +163,22 @@ test('Given a consumer that only mentions the owner in a comment, When the group
   });
   assert.equal(verdict.centralization, false);
 });
+
+test('Given a consumer that imports the owner and also defines the same rule, When the group is classified, Then it is not centralisation', () => {
+  const verdict = classifyContractCentralization({
+    occurrences: [
+      { path: 'src/domain/source-span.mjs', role: 'definition' },
+      { path: 'src/domain/source-span.mjs', role: 'forwarder' },
+      { path: 'src/infra/copy.mjs', role: 'definition' },
+      { path: 'src/infra/copy.mjs', role: 'call-site' },
+      { path: 'tests/source-span.test.mjs', role: 'call-site' },
+    ],
+    classOf: productionClassOf,
+    sources: new Map([
+      ['src/domain/source-span.mjs', 'export function sourceSpan(a, b) {}'],
+      ['src/infra/copy.mjs', "import { sourceSpan } from '../domain/source-span.mjs';\nexport function myOwnSpan(a, b) { return a; }\nsourceSpan(1, 2);"],
+    ]),
+  });
+  assert.equal(verdict.centralization, false);
+  assert.match(verdict.reason, /defines the rule as well as importing it/);
+});
