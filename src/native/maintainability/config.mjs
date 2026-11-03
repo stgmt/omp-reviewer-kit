@@ -1,6 +1,9 @@
 // Configuration of the maintainability analysis: one place for every threshold the spec names.
 // Values are documented defaults; the policy is the only switch read from the environment.
 
+import { applyNumberOverrides } from '../../domain/config-overrides.mjs';
+import { resolvePolicyFromEnv } from '../../domain/policy-env.mjs';
+
 export const SCHEMA = 'maintainability@1';
 export const POLICIES = Object.freeze(['off', 'advisory', 'block']);
 export const POLICY_ENV = 'OMP_REVIEW_KIT_MAINTAINABILITY';
@@ -25,8 +28,7 @@ export const DEFAULT_CONFIG = Object.freeze({
  * @returns {'off'|'advisory'|'block'}
  */
 export function resolvePolicy(env = {}) {
-  const raw = String(env?.[POLICY_ENV] ?? '').trim().toLowerCase();
-  return POLICIES.includes(raw) ? raw : 'block';
+  return resolvePolicyFromEnv(env, { name: POLICY_ENV, policies: POLICIES, fallback: 'block' });
 }
 
 /**
@@ -34,11 +36,5 @@ export function resolvePolicy(env = {}) {
  * @returns {typeof DEFAULT_CONFIG}
  */
 export function resolveConfig(overrides = {}) {
-  const config = { ...DEFAULT_CONFIG };
-  for (const [key, value] of Object.entries(overrides ?? {})) {
-    if (!(key in DEFAULT_CONFIG)) throw new Error(`unknown maintainability config key: ${key}`);
-    if (!Number.isInteger(value) || value <= 0) throw new Error(`maintainability config ${key} must be a positive integer`);
-    config[key] = value;
-  }
-  return config;
+  return applyNumberOverrides(DEFAULT_CONFIG, overrides, { label: 'maintainability', integer: true });
 }

@@ -4,19 +4,12 @@
 
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { sourceSpan } from '../../domain/source-span.mjs';
+import { unparsedRecord } from '../../domain/unparsed-record.mjs';
+import { JS_EXTENSIONS, parseJavaScript } from '../scan/js-parse.mjs';
+import { runPythonChild } from '../scan/python-child.mjs';
 
 /** Extensions each adapter owns. Anything else is `unsupported-syntax` for its paths. */
-const JS_EXTENSIONS = new Map([
-  ['.mjs', ['jsx', 'decorators-legacy']],
-  ['.cjs', ['jsx', 'decorators-legacy']],
-  ['.js', ['jsx', 'decorators-legacy']],
-  ['.jsx', ['jsx', 'decorators-legacy']],
-  ['.ts', ['typescript']],
-  ['.mts', ['typescript']],
-  ['.cts', ['typescript']],
-  ['.tsx', ['typescript', 'jsx']],
-]);
-const SECOND_ATTEMPT = ['typescript', 'jsx', 'decorators-legacy'];
 const PYTHON_EXTENSIONS = new Set(['.py', '.pyi']);
 
 const SKIP_DIRECTORIES = new Set(['node_modules', '.git', '.review', 'dist', 'build', 'out', 'coverage', 'vendor', '__pycache__', '.venv', 'venv']);
@@ -97,11 +90,13 @@ json.dump({'signatures': out, 'errors': errors}, sys.stdout)
  *
  * @param {{ rootDir: string, config: object, classify: (filePath: string) => string }} input
  */
-export async function collectExecutableFiles({ rootDir, config, classify }) {
+export async function collectExecutableFiles({ rootDir, config, classify, now = null, deadline = null, maxSkipped = Infinity }) {
   const found = [];
   const skipped = [];
   const queue = [''];
+  let truncated = false;
   while (queue.length > 0) {
+    if (now && deadline !== null && now() > deadline) { truncated = true; break; }
     const relative = queue.shift();
     const absolute = relative ? path.join(rootDir, relative) : rootDir;
     let entries;
@@ -111,6 +106,9 @@ export async function collectExecutableFiles({ rootDir, config, classify }) {
       continue;
     }
     for (const entry of entries) {
+      // A directory with a thousand entries is one queue iteration: the budget has to be checked
+      // per entry too, or a flat tree overruns the deadline it was given.
+      if (now && deadline !== null && now() > deadline) { truncated = true; break; }
       const child = relative ? `${relative}/${entry.name}` : entry.name;
       if (entry.isDirectory()) {
         if (SKIP_DIRECTORIES.has(entry.name) || entry.name.startsWith('.')) continue;
@@ -120,13 +118,16 @@ export async function collectExecutableFiles({ rootDir, config, classify }) {
       if (!entry.isFile()) continue;
       if (classify(child) !== 'executable') continue;
       if (found.length >= config.maxScanFiles) {
-        skipped.push({ path: child, reason: 'max-scan-files' });
+        // Past the file ceiling the walk keeps going only to report what it did not read; an
+        // unbounded excess list would hold the whole tree in memory for that reason alone.
+        if (skipped.length < maxSkipped) skipped.push(unparsedRecord(child, 'max-scan-files'));
+        else truncated = true;
         continue;
       }
       found.push(child);
     }
   }
-  return { paths: found.sort(), skipped };
+  return { paths: found.sort(), skipped, truncated };
 }
 
 async function readDirSorted(dir) {
@@ -150,7 +151,7 @@ async function readDirSorted(dir) {
  * @returns {Promise<{
  *   status: 'ok'|'failed',
  *   signatures: Array<object>,
- *   unparsedFiles: Array<{ path: string, reason: string }>,
+ *   unparsedFiles: Array<unparsedRecord(string, string)>,
  *   failures: Array<{ path: string|null, reason: string, message: string }>,
  *   languages: Array<{ language: string, parser: string, filesParsed: number, filesFailed: number }>,
  *   truncated: boolean,
@@ -194,30 +195,30 @@ export async function extractSignatures({
     const extension = path.extname(relative).toLowerCase();
     const jsPlugins = JS_EXTENSIONS.get(extension);
     if (!jsPlugins && !PYTHON_EXTENSIONS.has(extension)) {
-      unparsedFiles.push({ path: relative, reason: 'unsupported-syntax' });
+      unparsedFiles.push(unparsedRecord(relative, 'unsupported-syntax'));
       continue;
     }
     let size = 0;
     try {
       size = (await stat(absolute)).size;
     } catch {
-      unparsedFiles.push({ path: relative, reason: 'unreadable' });
+      unparsedFiles.push(unparsedRecord(relative, 'unreadable'));
       counts[jsPlugins ? 'javascript' : 'python'].filesFailed += 1;
       continue;
     }
     if (size > config.maxFileBytes) {
-      unparsedFiles.push({ path: relative, reason: 'too-large' });
+      unparsedFiles.push(unparsedRecord(relative, 'too-large'));
       continue;
     }
     let source;
     try {
       source = await readFile(absolute, 'utf8');
     } catch {
-      unparsedFiles.push({ path: relative, reason: 'unreadable' });
+      unparsedFiles.push(unparsedRecord(relative, 'unreadable'));
       continue;
     }
     if (source.includes('\u0000')) {
-      unparsedFiles.push({ path: relative, reason: 'unreadable' });
+      unparsedFiles.push(unparsedRecord(relative, 'unreadable'));
       continue;
     }
     filesRead += 1;
@@ -234,13 +235,13 @@ export async function extractSignatures({
     }
     if (!parser) {
       counts.javascript.filesFailed += 1;
-      unparsedFiles.push({ path: relative, reason: 'unavailable-parser' });
+      unparsedFiles.push(unparsedRecord(relative, 'unavailable-parser'));
       continue;
     }
-    const parsed = parseJavaScript({ relative, source, plugins: jsPlugins, parser });
+    const parsed = parseJavaScriptFile({ relative, source, plugins: jsPlugins, parser });
     if (parsed.error) {
       counts.javascript.filesFailed += 1;
-      unparsedFiles.push({ path: relative, reason: 'syntax' });
+      unparsedFiles.push(unparsedRecord(relative, 'syntax'));
       continue;
     }
     counts.javascript.filesParsed += 1;
@@ -251,16 +252,20 @@ export async function extractSignatures({
     const python = await runPythonAdapter({ files: pythonFiles, pythonBin, timeoutMs: Math.max(1000, deadline - now()), spawnSync });
     if (python.status === 'timeout') {
       truncated = true;
-      unparsedFiles.push({ path: '<python-adapter>', reason: 'analysis-budget-exhausted' });
+      unparsedFiles.push(unparsedRecord('<python-adapter>', 'analysis-budget-exhausted'));
+    } else if (python.status === 'failed' && python.reason === 'analysis-budget-exhausted') {
+      // The budget ran out before the child answered: the scan is partial, not broken.
+      truncated = true;
+      unparsedFiles.push(unparsedRecord('<python-adapter>', 'analysis-budget-exhausted'));
     } else if (python.status === 'failed') {
       failures.push({ path: null, reason: python.reason, message: python.message });
       counts.python.filesFailed += pythonFiles.length;
-      for (const file of pythonFiles) unparsedFiles.push({ path: file.path, reason: python.reason });
+      for (const file of pythonFiles) unparsedFiles.push(unparsedRecord(file.path, python.reason));
     } else {
       signatures.push(...python.signatures);
       counts.python.filesParsed += pythonFiles.length - python.errors.length;
       counts.python.filesFailed += python.errors.length;
-      for (const error of python.errors) unparsedFiles.push({ path: error.path, reason: error.reason === 'syntax' ? 'syntax' : error.reason });
+      for (const error of python.errors) unparsedFiles.push(unparsedRecord(error.path, error.reason === 'syntax' ? 'syntax' : error.reason));
     }
   }
 
@@ -307,23 +312,9 @@ function sortSignatures(signatures) {
  * One file through `@babel/parser`. A dialect the first plugin set rejects gets one documented
  * second attempt; when both fail the file is unparsed, never silently empty.
  */
-function parseJavaScript({ relative, source, plugins, parser }) {
-  const attempts = [plugins, SECOND_ATTEMPT];
-  for (const attempt of attempts) {
-    try {
-      const ast = parser.parse(source, {
-        sourceType: 'unambiguous',
-        allowReturnOutsideFunction: true,
-        allowAwaitOutsideFunction: true,
-        errorRecovery: false,
-        plugins: attempt,
-      });
-      return { signatures: collectJavaScript(relative, ast) };
-    } catch {
-      continue;
-    }
-  }
-  return { error: true };
+function parseJavaScriptFile({ relative, source, plugins, parser }) {
+  const ast = parseJavaScript({ relative, source, plugins, parser });
+  return ast ? { signatures: collectJavaScript(relative, ast) } : { error: true };
 }
 
 function collectJavaScript(relative, ast) {
@@ -346,8 +337,7 @@ function collectJavaScript(relative, ast) {
         language: 'javascript',
         name: functionName(node, parent),
         params,
-        lineStart: node.loc?.start?.line ?? 0,
-        lineEnd: node.loc?.end?.line ?? node.loc?.start?.line ?? 0,
+        ...sourceSpan(node.loc?.start?.line ?? 0, node.loc?.end?.line ?? node.loc?.start?.line ?? 0),
         role,
       });
       return;
@@ -366,8 +356,7 @@ function collectJavaScript(relative, ast) {
         language: 'javascript',
         name: null,
         params: [...new Set(names)].sort(),
-        lineStart: node.loc?.start?.line ?? 0,
-        lineEnd: node.loc?.end?.line ?? node.loc?.start?.line ?? 0,
+        ...sourceSpan(node.loc?.start?.line ?? 0, node.loc?.end?.line ?? node.loc?.start?.line ?? 0),
         role: 'call-site',
       });
     }
@@ -501,30 +490,16 @@ function walk(node, visit, parent = null) {
   }
 }
 
+export { walk as walkAst };
+
 /**
  * Python through one child interpreter: the adapter answers with signatures or with a reason the
  * analysis can record. A missing interpreter is `no-interpreter`, never a silent skip.
  */
 async function runPythonAdapter({ files, pythonBin, timeoutMs, spawnSync }) {
-  const spawn = spawnSync ?? (await import('node:child_process')).spawnSync;
-  const result = spawn(pythonBin, ['-c', PYTHON_SCRIPT], {
-    input: JSON.stringify({ files }),
-    encoding: 'utf8',
-    timeout: timeoutMs,
-    maxBuffer: 64 * 1024 * 1024,
-    windowsHide: true,
-  });
-  if (result?.error?.code === 'ENOENT') return { status: 'failed', reason: 'no-interpreter', message: 'python interpreter not found' };
-  if (result?.error?.code === 'ETIMEDOUT') return { status: 'timeout', reason: 'analysis-budget-exhausted', message: 'python adapter exceeded the scan budget' };
-  if (result?.error) return { status: 'failed', reason: 'failed', message: String(result.error.message ?? result.error) };
-  if (result?.signal) return { status: 'failed', reason: 'failed', message: `python adapter stopped by ${result.signal}` };
-  if (result?.status !== 0) return { status: 'failed', reason: 'failed', message: String(result?.stderr ?? '').slice(0, 500) || `python adapter exit ${result?.status}` };
-  let payload;
-  try {
-    payload = JSON.parse(String(result.stdout ?? ''));
-  } catch {
-    return { status: 'failed', reason: 'failed', message: 'python adapter returned unreadable output' };
-  }
+  const child = await runPythonChild({ script: PYTHON_SCRIPT, files, pythonBin, timeoutMs, spawnSync });
+  if (child.status !== 'ok') return { status: 'failed', reason: child.reason, message: child.message };
+  const payload = child.payload;
   return {
     status: 'ok',
     signatures: Array.isArray(payload?.signatures) ? payload.signatures : [],

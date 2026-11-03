@@ -4,6 +4,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { classifyFilePath } from '../../domain/file-class.mjs';
+import { analysisHeader } from '../../domain/analysis-header.mjs';
 import { SCHEMA, resolveConfig, resolvePolicy } from './config.mjs';
 import { collectExecutableFiles, extractSignatures } from './extract.mjs';
 import { groupClumps } from './group.mjs';
@@ -76,8 +77,7 @@ export async function analyzeTree({
   const unanalysed = extracted.unparsedFiles.filter(entry => entry.reason !== 'unsupported-syntax');
 
   const analysis = {
-    schema: SCHEMA,
-    diffHash,
+    ...analysisHeader({ schema: SCHEMA, diffHash, policy }),
     status,
     coverage: unanalysed.length > 0 || extracted.truncated || grouped.dropped > 0 ? 'partial' : 'full',
     scan: {
@@ -142,9 +142,7 @@ export async function writeAnalysis(analysisPath, analysis) {
  * }>}
  */
 export async function runMaintainabilityAnalysis({
-  snapshotDir,
-  changedPaths,
-  diffHash,
+  context,
   env = {},
   config = resolveConfig(),
   now = Date.now,
@@ -152,6 +150,7 @@ export async function runMaintainabilityAnalysis({
   loadParser,
   spawnSync,
 }) {
+  const { dir: snapshotDir, changedPaths, diffHash } = context.snapshot;
   const policy = resolvePolicy(env);
   if (policy === 'off') return { policy, skipped: true, reason: 'policy-off', analysis: null, analysisPath: null };
   let result;

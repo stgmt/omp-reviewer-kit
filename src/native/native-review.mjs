@@ -8,6 +8,8 @@ import { fallbackOf, provenanceOf, reviewerTranscript, reviewerYield, runReviewe
 import { readFallbackEvidence } from './fallback-evidence.mjs';
 import { BUDGET_REASONS, assessDiff, readDiffBudget } from '../domain/diff-budget.mjs';
 import { runMaintainabilityAnalysis } from './maintainability/analyze.mjs';
+import { runReuseAnalysis } from './reuse/analyze.mjs';
+import { renderReuseLines } from './reuse/report.mjs';
 import { evaluateReview } from './verdict.mjs';
 
 const clock = () => Date.now();
@@ -51,6 +53,8 @@ export async function runNativeReview({
   runTask = runReviewerTask,
   now = clock,
   analysisConfig = undefined,
+  reuseConfig = undefined,
+  reuseMaxLines = 12,
 }) {
   const startedMs = now();
   const snapshotStarted = now();
@@ -79,25 +83,42 @@ export async function runNativeReview({
       };
     if (budget.refused) return { staged: true, refused: budget };
     onProgress(`review: ${changedPaths.length} staged path(s), profile ${profile}, lanes ${lanes.join(', ')}`);
+    const context = { snapshot: { dir, changedPaths, diffHash }, repo, profile, lanes };
     const analysisStarted = now();
     const analysis = await runMaintainabilityAnalysis({
-      snapshotDir: dir,
-      changedPaths,
-      diffHash,
+      context,
       env,
       now,
       config: analysisConfig ?? undefined,
     });
     const maintainabilityMs = now() - analysisStarted;
     const maintainability = summarizeMaintainability(analysis);
+    const reuseStarted = now();
+    const reuse = await runReuseAnalysis({
+      context,
+      env,
+      now,
+      config: reuseConfig ?? undefined,
+    });
+    const reuseMs = now() - reuseStarted;
+    const reuseLines = reuse.skipped ? [] : renderReuseLines(reuse.analysis, { maxLines: reuseMaxLines });
+    if (!reuse.skipped && reuse.artifactWritten === false) onProgress(`review: reuse artifact not written (${reuse.artifactError}); hints still supplied`);
+    if (!reuse.skipped) onProgress(`review: reuse hints ${reuseLines.length > 0 ? `${reuse.analysis.candidates.length} candidate(s)` : 'none'} (${reuse.analysis.scan.units} unit(s), coverage ${reuse.analysis.coverage}, ${reuseMs} ms)`);
     if (!analysis.skipped) onProgress(`review: maintainability ${maintainability.status} (${maintainability.groups} group(s), coverage ${maintainability.coverage}, policy ${maintainability.policy})`);
     const assignment = buildAssignment({
-      snapshotDir: dir,
-      repoRoot: repo,
-      diffHash,
-      profile,
-      lanes,
-      changedPaths,
+      context,
+      reuse: reuse.skipped
+        ? { policy: reuse.policy, reason: reuse.reason, files: 0, units: 0, coverage: null, lines: [] }
+        : {
+          policy: reuse.policy,
+          reason: null,
+          files: reuse.analysis.scan.filesScanned,
+          units: reuse.analysis.scan.units,
+          coverage: reuse.analysis.coverage,
+          status: reuse.analysis.status,
+          unparsed: reuse.analysis.scan.unparsedTotal ?? reuse.analysis.scan.unparsed.length,
+          lines: reuseLines,
+        },
       maintainability: analysis.skipped
         ? { path: null, policy: analysis.policy, status: 'not-run', coverage: null, candidates: 0, reason: analysis.reason }
         : {
