@@ -48,6 +48,8 @@ The verdict is computed by code from your answer, not from prose. A candidate ma
 
 Anything else — a rejected or unproven candidate, an empty `stated_cost`, `P1`, a pure forwarding chain — appears in the report as a note and cannot block.
 
+A group whose occurrences are one shared module, the consumers that import it, and its contract test is **not** a maintenance cost: the coordinated edits it names are the reason the rule was extracted in the first place. Do not confirm such a group — record it as rejected with the reason "one shared contract: owner, its consumers, its test". The kit also exempts it at verdict time by the group id, so confirming it cannot block; a group that reaches a second independent implementation, a copy in a module that does not import the owner, or has no contract test, is not exempt.
+
 Be conservative about cost. A vague "this will be hard to maintain" is not a cost; a named change with named sites is.
 
 ## Output

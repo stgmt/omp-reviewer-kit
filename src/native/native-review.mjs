@@ -10,6 +10,9 @@ import { BUDGET_REASONS, assessDiff, readDiffBudget } from '../domain/diff-budge
 import { runMaintainabilityAnalysis } from './maintainability/analyze.mjs';
 import { runReuseAnalysis } from './reuse/analyze.mjs';
 import { renderReuseLines } from './reuse/report.mjs';
+import { classifyFilePath } from '../domain/file-class.mjs';
+import { centralizationGroupIds } from '../domain/maintainability-centralization.mjs';
+import { isTestPath } from '../domain/suspicion-map.mjs';
 import { evaluateReview } from './verdict.mjs';
 
 const clock = () => Date.now();
@@ -144,6 +147,7 @@ export async function runNativeReview({
       yieldReason: yielded?.reason ?? null,
       yieldPayload: yielded?.observed ?? null,
     };
+    const maintainabilityCentralization = await centralizationGroups({ analysis: analysis.analysis ?? analysis, snapshotDir: dir });
     const verdictStarted = now();
     const verdict = evaluateReview({
       reviewer: reviewerView,
@@ -157,6 +161,7 @@ export async function runNativeReview({
         coverage: maintainability.coverage,
         planned: maintainability.planned,
       },
+      maintainabilityCentralization,
     });
     const verdictMs = now() - verdictStarted;
     const finishedMs = now();
@@ -238,4 +243,39 @@ function summarizeMaintainability({ policy, skipped, reason, analysis }) {
     truncated: analysis.scan?.truncated === true,
     planned: analysis.status === 'analyzed',
   };
+}
+
+/**
+ * The ids of the maintainability groups that are one shared contract with its consumers and its
+ * test. Reading the consumer sources is bounded: a group whose consumer cannot be read keeps
+ * blocking, because the exemption has to be proven, never assumed.
+ *
+ * @param {{ analysis: object, snapshotDir: string }} input
+ * @returns {Promise<Set<string>>}
+ */
+/**
+ * The maintainability groups that are one shared contract, read from the snapshot. Test files are
+ * re-tagged here: the file classifier upgrades an executable-looking test file, so the contract test
+ * would never be recognised as one.
+ *
+ * @param {{ analysis: object, snapshotDir: string }} input
+ * @returns {Promise<Set<string>>}
+ */
+async function centralizationGroups({ analysis, snapshotDir }) {
+  const groups = Array.isArray(analysis?.groups) ? analysis.groups : [];
+  if (groups.length === 0) return new Set();
+  const { readFile } = await import('node:fs/promises');
+  const modulePath = await import('node:path');
+  const { exempt } = await centralizationGroupIds({
+    groups,
+    classOf: file => (isTestPath(file) ? 'test' : classifyFilePath(file)),
+    readSource: async file => {
+      try {
+        return await readFile(modulePath.join(snapshotDir, file), 'utf8');
+      } catch {
+        return null;
+      }
+    },
+  });
+  return exempt;
 }
