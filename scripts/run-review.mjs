@@ -1,4 +1,4 @@
-// omp-reviewer-kit runner v0.26.1
+// omp-reviewer-kit runner v0.26.2
 // omp-reviewer-kit runner: the Node launcher of the native review. The review runs under Bun in
 // src/native/native-host.mjs because OMP's library is a Bun package. This launcher only checks that
 // Bun and the pinned OMP library are installed, then hands the staged repository to the host.
@@ -12,36 +12,46 @@ import { fileURLToPath } from 'node:url';
 
 const kitRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const host = path.join(kitRoot, 'src', 'native', 'native-host.mjs');
-// The package does not export `./package.json`, so resolution must go through an exported entry and
-// the package root is then found by walking up from it.
-const LIBRARY_ENTRY = '@oh-my-pi/pi-coding-agent/sdk';
+// Resolution of the manifest is not a reliable way to find this package: it exports neither
+// `./package.json` nor, for `require`, its own entry points (they are `import`-only). The launcher only
+// needs the directory, so it walks up the way Node would and checks the one path that must exist in a
+// workspace or plugin install.
 const LIBRARY_NAME = '@oh-my-pi/pi-coding-agent';
+const LIBRARY_ENTRY = '@oh-my-pi/pi-coding-agent/sdk';
+const LIBRARY_SUFFIX = path.join('node_modules', '@oh-my-pi', 'pi-coding-agent', 'package.json');
 const bun = process.env.OMP_REVIEW_KIT_BUN || 'bun';
 
 /**
- * Where the pinned OMP library actually lives. A workspace install hoists it to a parent
- * `node_modules` — OMP does exactly that for its own plugins — so the kit's own folder is only the
- * first candidate, not the only one. Resolution keeps the kit working from whichever copy the host
- * installed, instead of demanding a manual `bun install` after every plugin update.
+ * The installed `package.json` of the pinned OMP library: the kit's own folder first, then every parent
+ * directory, which is where a hoisted workspace or plugin install puts it. A module-resolution attempt
+ * covers a layout the walk cannot see (a linked package); it is never the only attempt, because the
+ * package declares no `require` condition.
  *
  * @param {string} root
- * @param {(specifier: string) => string} [resolve]
+ * @param {{ resolveEntry?: (specifier: string) => string, exists?: (file: string) => boolean }} [options]
  * @returns {string|null}
  */
-export function findLibrary(root = kitRoot, resolve = specifier => createRequire(path.join(root, 'package.json')).resolve(specifier)) {
-  const candidates = [path.join(root, 'node_modules', '@oh-my-pi', 'pi-coding-agent', 'package.json')];
-  try {
-    candidates.push(packageRootOf(resolve(LIBRARY_ENTRY)));
-  } catch {
-    // Not resolvable from the kit folder either: the direct candidate above still covers a local install.
+export function findLibrary(root = kitRoot, { resolveEntry = specifier => import.meta.resolve(specifier), exists = existsSync } = {}) {
+  let dir = path.resolve(root);
+  for (;;) {
+    const candidate = path.join(dir, LIBRARY_SUFFIX);
+    if (exists(candidate)) return candidate;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
   }
-  for (const candidate of candidates) if (candidate && existsSync(candidate)) return candidate;
+  try {
+    const entry = resolveEntry(LIBRARY_ENTRY);
+    const manifest = packageRootOf(entry.startsWith('file:') ? fileURLToPath(entry) : entry);
+    if (manifest && exists(manifest)) return manifest;
+  } catch {
+    // A layout neither the walk nor the resolver can see is reported as missing, with the fix to run.
+  }
   return null;
 }
 
 /**
- * The `package.json` of the package an entry point belongs to: resolution lands on a file inside the
- * package, and the manifest is what the launcher verifies.
+ * The `package.json` of the package an entry point belongs to.
  *
  * @param {string} entry
  * @returns {string|null}

@@ -101,8 +101,9 @@ test('Given the OMP library is hoisted above the kit folder, When the launcher l
     await mkdir(path.dirname(entry), { recursive: true });
     await writeFile(entry, 'export const sdk = 1;\n');
     await writeFile(path.join(kit, 'package.json'), JSON.stringify({ name: 'omp-reviewer-kit', version: '0.0.0' }));
-    // Resolution lands on an exported entry, never on the manifest the package does not export.
-    assert.equal(findLibrary(kit, () => entry), hoisted, 'a hoisted install is the install');
+    // Only the walk can find this one: the resolver is deliberately broken here.
+    const refuse = () => { const error = new Error('not resolvable'); error.code = 'ERR_MODULE_NOT_FOUND'; throw error; };
+    assert.equal(findLibrary(kit, { resolveEntry: refuse }), hoisted, 'a hoisted install is found by walking up');
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -146,7 +147,7 @@ test('Given the package exports no package.json, When the launcher resolves a ho
       }
       return entry;
     };
-    assert.equal(findLibrary(kit, resolve), path.join(pkgDir, 'package.json'));
+    assert.equal(findLibrary(kit, { resolveEntry: () => `file:///${entry.replace(/\\/g, '/')}` }), path.join(pkgDir, 'package.json'));
   } finally {
     await rm(root, { recursive: true, force: true });
   }
