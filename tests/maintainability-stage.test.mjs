@@ -7,6 +7,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { runNativeReview } from '../src/native/native-review.mjs';
+import { completed } from './support/stage-fixtures.mjs';
 
 function git(cwd, args) {
   return execFileSync('git', ['-c', 'core.autocrlf=false', '-c', 'core.eol=lf', ...args], { cwd, encoding: 'utf8' });
@@ -36,7 +37,6 @@ const reviewerWithYield = text => ({
   resolvedModel: 'm',
   extractedToolData: { yield: [{ status: 'success', data: text }] },
 });
-const completed = (agent, data) => ({ agent, exitCode: 0, aborted: false, structuredStatus: 'valid', data });
 const baseStages = () => [
   completed('review-context-scout', { test_harness: 'present' }),
   completed('review-risk-hunter', { lane: 'correctness' }),

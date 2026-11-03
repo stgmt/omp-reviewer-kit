@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { runNativeReview } from '../src/native/native-review.mjs';
+import { completed } from './support/stage-fixtures.mjs';
 
 const REMOVE = { recursive: true, force: true, maxRetries: 20, retryDelay: 250 };
 
@@ -59,7 +60,6 @@ const reviewerWithYield = text => ({
   resolvedModel: 'm',
   extractedToolData: { yield: [{ status: 'success', data: text }] },
 });
-const completed = (agent, data) => ({ agent, exitCode: 0, aborted: false, structuredStatus: 'valid', data });
 const baseStages = () => [
   completed('review-context-scout', { test_harness: 'present' }),
   completed('review-risk-hunter', { lane: 'correctness' }),

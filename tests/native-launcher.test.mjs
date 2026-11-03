@@ -34,7 +34,7 @@ test('Given the OMP library is not installed beside the launcher, When the launc
       env: process.env,
     });
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /the OMP library is not installed/);
+    assert.match(result.stderr, /the OMP library \(@oh-my-pi\/pi-coding-agent\) is not installed/);
     assert.match(result.stderr, /bun install/);
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -83,4 +83,37 @@ test('Given the review host is ended by a signal, When the launcher runs, Then t
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test('Given the OMP library is hoisted above the kit folder, When the launcher looks for it, Then it accepts the resolvable install', async () => {
+  const { mkdtemp, mkdir, writeFile, rm } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const path = (await import('node:path')).default;
+  const { findLibrary } = await import('../scripts/run-review.mjs');
+  const root = await mkdtemp(path.join(tmpdir(), 'kit-hoisted-'));
+  try {
+    const kit = path.join(root, 'plugins', 'node_modules', 'omp-reviewer-kit');
+    const hoisted = path.join(root, 'plugins', 'node_modules', '@oh-my-pi', 'pi-coding-agent', 'package.json');
+    await mkdir(path.dirname(hoisted), { recursive: true });
+    await mkdir(kit, { recursive: true });
+    await writeFile(hoisted, JSON.stringify({ name: '@oh-my-pi/pi-coding-agent', version: '18.12.5' }));
+    await writeFile(path.join(kit, 'package.json'), JSON.stringify({ name: 'omp-reviewer-kit', version: '0.0.0' }));
+    assert.equal(findLibrary(kit), hoisted, 'a hoisted install is the install');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('Given the launcher module is imported, When it loads, Then it starts nothing and prints no diagnostic', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const { fileURLToPath } = await import('node:url');
+  const child = spawnSync(process.execPath, ['--input-type=module', '-e', `await import(${JSON.stringify(new URL('../scripts/run-review.mjs', import.meta.url).href)})`], {
+    encoding: 'utf8',
+    env: { ...process.env, OMP_REVIEW_KIT_BUN: 'definitely-not-a-binary' },
+    windowsHide: true,
+  });
+  assert.equal(child.status, 0, 'an import is not a review');
+  assert.equal(String(child.stderr ?? ''), '', 'no launcher diagnostic on import');
+  assert.equal(String(child.stdout ?? ''), '', 'no host output on import');
+  void fileURLToPath;
 });

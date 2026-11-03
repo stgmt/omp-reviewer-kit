@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.0] - 2026-11-02
+
+### Added
+- **Contract reconciliation, a deterministic stage.** For every changed JavaScript/TypeScript module the review now finds a producer and its consumer — `writeRecord`/`readRecord`, `serialize…`/`parse…`, `encode…`/`decode…` — builds a record with the writer's own defaults (only the parameters without a default are filled in) and hands it to the reader in a child process. A reader that throws on the record its own writer just produced is reported with the file, both function names, the thrown error and the record itself, and blocks the commit under the `block` policy. Measured on a planted defect — writer defaults `service: null`, reader requires a non-empty string — the stage reported `writeRecord -> readRecord: ledger: service must be a name` and the record `{"service":null}` in under a second, where a model review of the same diff had listed both halves as neutral facts and reported a different defect.
+- **The stage never claims agreement it did not observe.** No pair in the diff is `no-pairs`, a writer that throws is `partial`, an unparsable module is listed as unparsed, a probe that cannot run is `failed`. Only a real round-trip is `ok`. Policy `OMP_REVIEW_KIT_CONTRACT` (`off`/`advisory`/`block`, default `advisory`): the stage reports the throw in the assignment and the report, and blocking is an opt-in until its argument grounding has a record in the field — a heuristic input must never be the reason a valid commit is refused.
+- **The launcher finds the OMP library where the host installed it.** A workspace install hoists `@oh-my-pi/pi-coding-agent` to a parent `node_modules`, which is exactly what OMP does for its own plugins; the launcher used to look only in the kit folder and refused to review after a fresh `omp plugin install`. It now resolves through the module resolver with the kit folder as one candidate, and keeps the actionable install command for the truly missing case.
+
 ## [0.25.3] - 2026-11-02
 
 ### Changed
