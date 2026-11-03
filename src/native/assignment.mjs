@@ -22,7 +22,7 @@ import { sanitizePromptToken } from '../domain/prompt-token.mjs';
  * }} input
  * @returns {string}
  */
-export function buildAssignment({ context, maintainability = null, reuse = null }) {
+export function buildAssignment({ context, maintainability = null, reuse = null, contract = null }) {
   const { snapshot, repo: repoRoot, profile, lanes } = context;
   const { dir: snapshotDir, diffHash, changedPaths } = snapshot;
   const review = `${snapshotDir}/.review`;
@@ -39,6 +39,7 @@ export function buildAssignment({ context, maintainability = null, reuse = null 
     `Risk lanes for this diff: ${JSON.stringify(lanes)}`,
     maintainabilityLine(maintainability),
     reuseLine(reuse),
+    contractLine(contract),
     'No suspicion map, previous-round block, execution evidence block or hunter shards are supplied for this assignment.',
     '',
     'Changed paths:',
@@ -77,6 +78,29 @@ function reuseLine(reuse) {
  * candidate file is, which policy governs blocking, and how much of the snapshot was read.
  * A skipped analysis is stated with its reason, never left implicit.
  */
+/**
+ * The producer/consumer reconciliation the review already performed by calling the code: which pairs
+ * were probed, what the reader said, and — when nothing could be probed — that this is an absence of
+ * evidence, not a clean bill. The reviewer may add findings on top; it cannot undo them.
+ */
+function contractLine(contract) {
+  if (!contract) return 'Contract reconciliation: not run for this diff.';
+  if (contract.status === 'off') return 'Contract reconciliation: switched off by OMP_REVIEW_KIT_CONTRACT; nothing was probed.';
+  const rejected = (contract.rejected ?? [])
+    .map(pair => `- ${pair.file} ${pair.writer} -> ${pair.reader}: ${pair.reader} rejected the record ${pair.writer} produced (${pair.error}); record: ${pair.record}`);
+  const skipped = [
+    ...(contract.unparsedFiles ?? []).map(file => `- unparsed: ${file}`),
+    ...(contract.unproven ?? []).map(item => `- not probed: ${item}`),
+  ];
+  const lines = [
+    `Contract reconciliation (deterministic, performed before this task): ${contract.probed} pair(s) probed, status ${contract.status}, policy ${contract.policy}.`,
+    contract.note ? `Note: ${contract.note}` : null,
+    ...rejected,
+    ...(skipped.length > 0 ? ['Work the stage did not settle:', ...skipped] : []),
+  ].filter(Boolean);
+  return lines.join('\n');
+}
+
 function maintainabilityLine(maintainability) {
   if (!maintainability || !maintainability.path) {
     const reason = maintainability?.reason ?? 'not-run';

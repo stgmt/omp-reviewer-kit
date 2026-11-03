@@ -7,6 +7,7 @@ import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { runNativeReview } from '../src/native/native-review.mjs';
+import { completed } from './support/stage-fixtures.mjs';
 
 function git(cwd, args) {
   return execFileSync('git', ['-c', 'core.autocrlf=false', '-c', 'core.eol=lf', ...args], { cwd, encoding: 'utf8' });
@@ -97,11 +98,12 @@ test('Given the native task throws, When the review runs, Then the error reaches
 });
 
 const PASS_REPORT = '## Review\n\nREVIEW_RESULT=PASS';
-const completed = (agent, data) => ({ agent, exitCode: 0, aborted: false, structuredStatus: 'valid', data, role: 'task', model: 'm' });
+// The native task reports its role and resolved model on every stage; the shared fixture stays minimal.
+const stage = (agent, data) => completed(agent, data, { role: 'task', model: 'm' });
 const completeStages = [
-  completed('review-context-scout', { test_harness: 'present' }),
-  completed('review-risk-hunter', { lane: 'correctness' }),
-  completed('review-finding-verifier', { confirmed_findings: [], confirmed_coverage_gaps: [] }),
+  stage('review-context-scout', { test_harness: 'present' }),
+  stage('review-risk-hunter', { lane: 'correctness' }),
+  stage('review-finding-verifier', { confirmed_findings: [], confirmed_coverage_gaps: [] }),
 ];
 const reviewerWithYield = data => ({
   exitCode: 0,
@@ -147,9 +149,9 @@ test('Given a test-class file with a confirmed blocking gap, When the review run
   const parent = await mkdtemp(path.join(tmpdir(), 'native-review-parent-'));
   try {
     const stages = [
-      completed('review-context-scout', { test_harness: 'present' }),
-      completed('review-risk-hunter', { lane: 'correctness' }),
-      completed('review-finding-verifier', {
+      stage('review-context-scout', { test_harness: 'present' }),
+      stage('review-risk-hunter', { lane: 'correctness' }),
+      stage('review-finding-verifier', {
         confirmed_findings: [],
         confirmed_coverage_gaps: [{ coverage_id: 'coverage-1', file_path: 'feature.test.mjs', severity: 'blocking', impact: 'a helper returns the wrong fixture' }],
       }),

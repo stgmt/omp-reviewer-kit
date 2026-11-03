@@ -3,9 +3,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MAINTAINABILITY_AGENT, evaluateReview, maintainabilityBlocks } from '../src/native/verdict.mjs';
+import { completed, reviewerPass } from './support/stage-fixtures.mjs';
 
-const reviewerPass = () => ({ exitCode: 0, aborted: false, yieldStatus: 'success', text: '## Review\n\nREVIEW_RESULT=PASS' });
-const completed = (agent, data) => ({ agent, exitCode: 0, aborted: false, structuredStatus: 'valid', data });
 const baseStages = () => [
   completed('review-context-scout', { test_harness: 'present' }),
   completed('review-risk-hunter', { lane: 'correctness' }),

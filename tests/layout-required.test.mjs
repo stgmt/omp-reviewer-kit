@@ -46,3 +46,23 @@ for (const victim of PINNED_PATHS) {
     }
   });
 }
+
+test('Given the native review imports the contract stage, When the layout is checked, Then all three contract modules are required and their absence is rejected', async () => {
+  const { mkdtemp, mkdir, rm } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const path = (await import('node:path')).default;
+  for (const file of ['src/native/contract/find.mjs', 'src/native/contract/analyze.mjs', 'src/native/contract/probe.mjs']) {
+    assert.ok(REQUIRED_FILES.includes(file), `${file} is required`);
+    const root = await mkdtemp(path.join(tmpdir(), 'layout-contract-'));
+    try {
+      // Everything present but the one file under test.
+      for (const other of REQUIRED_FILES.filter(entry => entry !== file)) {
+        await mkdir(path.dirname(path.join(root, other)), { recursive: true });
+        await (await import('node:fs/promises')).writeFile(path.join(root, other), '// fixture\n');
+      }
+      await assert.rejects(() => assertRequiredFiles(root, REQUIRED_FILES), new RegExp(file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
+});

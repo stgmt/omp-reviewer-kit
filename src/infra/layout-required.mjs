@@ -45,6 +45,10 @@ export const REQUIRED_FILES = [
   'scripts/release-preflight.mjs',
   'src/domain/mutation-certificate.mjs',
   'src/infra/mutation-certificate-store.mjs',
+  // Contract reconciliation: a producer and its consumer are settled by calling them.
+  'src/native/contract/find.mjs',
+  'src/native/contract/analyze.mjs',
+  'src/native/contract/probe.mjs',
   // Maintainability review: deterministic candidate file, one subagent stage, one measure script.
   'src/native/maintainability/config.mjs',
   'src/native/maintainability/extract.mjs',

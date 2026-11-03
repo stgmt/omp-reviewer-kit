@@ -2594,7 +2594,7 @@
       ],
       "ancestors": [],
       "mutantHash": "cfddc99f396535520a4dc4d36df4dd6c29c4067721f6e7df898722f180927074",
-      "testHash": "51c892efe92ba37afcb6587f5f391257171fc0ff9b669d0461f8f849538bd859"
+      "testHash": "6882002498092c371ad0b1c92eb5f10520b86de6e51237b2bd3198f30bee2878"
     },
     "native-launcher-library-check-ignored": {
       "testFile": "tests/native-launcher.test.mjs",
@@ -2602,8 +2602,8 @@
         "Given the OMP library is not installed beside the launcher, When the launcher runs, Then it blocks naming the install command"
       ],
       "ancestors": [],
-      "mutantHash": "0a554a7a4cca0fb534a25d4888a707e0d61fcfffca0872bde5c416f30227eecf",
-      "testHash": "51c892efe92ba37afcb6587f5f391257171fc0ff9b669d0461f8f849538bd859"
+      "mutantHash": "87aa17171ea7b87881645b811ce28abab947aa81bcb2a9de03f7f2cf6382e2b7",
+      "testHash": "6882002498092c371ad0b1c92eb5f10520b86de6e51237b2bd3198f30bee2878"
     },
     "native-stub-missing-plugin-passes": {
       "testFile": "tests/runner-stub.test.mjs",
@@ -2814,7 +2814,7 @@
       ],
       "ancestors": [],
       "mutantHash": "5467cab74f04643a7b7988a90ea227b7a04fdff627b6a2ce995884a5f6749eb4",
-      "testHash": "43c9ec2eb4296c26bc51c222ced7365d5fac9177699aea95db31991f100728f5"
+      "testHash": "2d2b42921ba3a5c33239a28ccf82712ab7d9be22b1ea2a3345f5811f43960fa1"
     },
     "maintainability-block-ignores-priority": {
       "testFile": "tests/maintainability-verdict.test.mjs",
@@ -2823,7 +2823,7 @@
       ],
       "ancestors": [],
       "mutantHash": "227d3111b52fe338f426b297ff5cbba83e488d595d4a0de01c7c8d48dff3e13a",
-      "testHash": "43c9ec2eb4296c26bc51c222ced7365d5fac9177699aea95db31991f100728f5"
+      "testHash": "2d2b42921ba3a5c33239a28ccf82712ab7d9be22b1ea2a3345f5811f43960fa1"
     },
     "maintainability-block-ignores-forwarder": {
       "testFile": "tests/maintainability-verdict.test.mjs",
@@ -2832,7 +2832,7 @@
       ],
       "ancestors": [],
       "mutantHash": "9ee5df4c2c70296fcaa8eb6025ec0e655ad1ad42afdbfc5d8cebc05d966b57a1",
-      "testHash": "43c9ec2eb4296c26bc51c222ced7365d5fac9177699aea95db31991f100728f5"
+      "testHash": "2d2b42921ba3a5c33239a28ccf82712ab7d9be22b1ea2a3345f5811f43960fa1"
     },
     "maintainability-planned-stage-optional": {
       "testFile": "tests/maintainability-verdict.test.mjs",
@@ -2841,7 +2841,7 @@
       ],
       "ancestors": [],
       "mutantHash": "6dd7ac0ec28ec85f189f6edb65097645f9f5a87b67db994fc3af4096ebd69129",
-      "testHash": "43c9ec2eb4296c26bc51c222ced7365d5fac9177699aea95db31991f100728f5"
+      "testHash": "2d2b42921ba3a5c33239a28ccf82712ab7d9be22b1ea2a3345f5811f43960fa1"
     },
     "maintainability-group-outside-change-reported": {
       "testFile": "tests/maintainability-grouping.test.mjs",
@@ -2877,7 +2877,7 @@
       ],
       "ancestors": [],
       "mutantHash": "49df5bd9cad0fe777bacc97ecbb68c8baf5407ad3d6149cc656836466e20a070",
-      "testHash": "1fed55102e3e0706d0659d7e629d8401e7e9b7d267b7cd39031cb0b3e78a4acb"
+      "testHash": "90bb1d1240fdbced8ec2e0e0c5709006b7649248af5cc4ba10c90e199d1c45b3"
     },
     "maintainability-file-size-cap-removed": {
       "testFile": "tests/maintainability-extract.test.mjs",
@@ -3093,7 +3093,7 @@
       ],
       "ancestors": [],
       "mutantHash": "4590875a49cdd6e36a536b788392f1cfbc4d72a433264a9966ab84e42b05959d",
-      "testHash": "829973a3fdd2c23fbaed127a51e365bc30a19beb968ddb54708dfeccb1165afe"
+      "testHash": "77682a9d2530060b03d14acfbd027a54be83d7c1d32275b52b42c8e8d8ad0961"
     },
     "layout-required-diff-budget-missing": {
       "testFile": "tests/layout-required.test.mjs",
@@ -3102,7 +3102,7 @@
       ],
       "ancestors": [],
       "mutantHash": "5e5e868d9845a794b57762550c1e862638c5334c178ba1196f780c2a6fe92501",
-      "testHash": "829973a3fdd2c23fbaed127a51e365bc30a19beb968ddb54708dfeccb1165afe"
+      "testHash": "77682a9d2530060b03d14acfbd027a54be83d7c1d32275b52b42c8e8d8ad0961"
     },
     "maintainability-signal-kill-treated-as-timeout": {
       "testFile": "tests/maintainability-extract.test.mjs",
@@ -3246,7 +3246,7 @@
       ],
       "ancestors": [],
       "mutantHash": "58fae5caef773915f05c2458e526a9dcb6666277e207d1f264dc34f0320987d0",
-      "testHash": "829973a3fdd2c23fbaed127a51e365bc30a19beb968ddb54708dfeccb1165afe"
+      "testHash": "77682a9d2530060b03d14acfbd027a54be83d7c1d32275b52b42c8e8d8ad0961"
     },
     "layout-required-registration-record-missing": {
       "testFile": "tests/layout-required.test.mjs",
@@ -3255,7 +3255,7 @@
       ],
       "ancestors": [],
       "mutantHash": "71704520fb9262eaf4f21d8b57dbee31120954f07b9c46a71130f17646d72a9e",
-      "testHash": "829973a3fdd2c23fbaed127a51e365bc30a19beb968ddb54708dfeccb1165afe"
+      "testHash": "77682a9d2530060b03d14acfbd027a54be83d7c1d32275b52b42c8e8d8ad0961"
     },
     "catalog-anchor-not-in-source": {
       "testFile": "tests/mutation-catalog.test.mjs",
@@ -3625,6 +3625,276 @@
       "ancestors": [],
       "mutantHash": "cdc8a87af7fb4df114c0a8277e075451072d8388291c3e53472e5fc5d216228f",
       "testHash": "72ace86414a4b9a599f221707aa5cfb159395c862665a101d4d9d64231a34d2c"
+    },
+    "native-launcher-hoisted-resolution-dropped": {
+      "testFile": "tests/native-launcher.test.mjs",
+      "tests": [
+        "Given the OMP library is hoisted above the kit folder, When the launcher looks for it, Then it accepts the resolvable install"
+      ],
+      "ancestors": [],
+      "mutantHash": "3e39abfe2a695edb68b070a3f0a0a254afbba4c968491adfe3bd4cbb7e915e2f",
+      "testHash": "6882002498092c371ad0b1c92eb5f10520b86de6e51237b2bd3198f30bee2878"
+    },
+    "contract-probe-cap-removed": {
+      "testFile": "tests/contract-stage.test.mjs",
+      "tests": [
+        "Given more writer/reader families than the probe budget, When the stage runs, Then only the budgeted ones are probed and the rest are named"
+      ],
+      "ancestors": [],
+      "mutantHash": "305f82c5b98be3a351b911b0646f7a6d617873512b8af794bd0a726cb21b48c8",
+      "testHash": "daa8f32c89957faa4177d03fe7d4804d7df6f03d5243127864562dcd015e89a7"
+    },
+    "contract-probe-silence-accepted": {
+      "testFile": "tests/contract-stage.test.mjs",
+      "tests": [
+        "Given a module that ends the probe process before it answers, When the stage runs, Then the analysis failed instead of passing quietly"
+      ],
+      "ancestors": [],
+      "mutantHash": "9879a5fbd6c5168461eda3d7233ff3bfa7725b8807c2faae2e6c24622175c94e",
+      "testHash": "daa8f32c89957faa4177d03fe7d4804d7df6f03d5243127864562dcd015e89a7"
+    },
+    "native-review-contract-not-forwarded": {
+      "testFile": "tests/native-review-contract.test.mjs",
+      "tests": [
+        "Given the contract stage throws, When the review runs, Then the failure reaches the verdict instead of being swallowed"
+      ],
+      "ancestors": [],
+      "mutantHash": "3795ceb1a024966ce5b33ea9ac370e916a883797403447dcdc7974c0a6e1f61d",
+      "testHash": "3ca09aef97262c6b04f98f3031a98407998ff970aea10670e9ebf0b2d1f34fac"
+    },
+    "contract-missing-manifest-empty-scan": {
+      "testFile": "tests/contract-stage.test.mjs",
+      "tests": [
+        "Given the changed-file manifest is missing and no paths are supplied, When the stage runs, Then it fails instead of reporting an empty scan"
+      ],
+      "ancestors": [],
+      "mutantHash": "deca6784d29756f88ba2e01470002d89c4f285275a3ccb047eed4f88eb27bada",
+      "testHash": "daa8f32c89957faa4177d03fe7d4804d7df6f03d5243127864562dcd015e89a7"
+    },
+    "contract-reader-shape-unchecked": {
+      "testFile": "tests/contract-stage.test.mjs",
+      "tests": [
+        "Given a reader that needs context beyond the record, When the stage runs, Then the pair is left unsettled"
+      ],
+      "ancestors": [],
+      "mutantHash": "2b0adda3ccea110e754532714eb8b831227070e9fdc32cf995bba05cb685ee52",
+      "testHash": "daa8f32c89957faa4177d03fe7d4804d7df6f03d5243127864562dcd015e89a7"
+    },
+    "contract-unknown-policy-blocks": {
+      "testFile": "tests/contract-stage.test.mjs",
+      "tests": [
+        "Given an unknown non-empty policy value, When the stage runs, Then it stays advisory instead of turning a heuristic into a block"
+      ],
+      "ancestors": [],
+      "mutantHash": "43f37327f28d353b911859cc022854bf88fcb782586fc0de1be3f019ce2ee5f2",
+      "testHash": "daa8f32c89957faa4177d03fe7d4804d7df6f03d5243127864562dcd015e89a7"
+    },
+    "hook-kit-dispatch-canonical-skipped": {
+      "testFile": "tests/hook-kit-dispatch.test.mjs",
+      "tests": [
+        "Given the kit repository itself, When the hook runs, Then the canonical runner executes and a stale vendored copy does not"
+      ],
+      "ancestors": [],
+      "mutantHash": "4dbb3b3ea7ba9955a446b34c36d93fab0b26accb4822950a98ca684de51a0bfe",
+      "testHash": "93efb9056659b3d9a7576ad9727225f10ac7f62d1a9104573dab8f8bf72a2b64"
+    },
+    "contract-default-export-not-scanned": {
+      "testFile": "tests/contract-stage.test.mjs",
+      "tests": [
+        "Given a named writer and a named default-exported reader, When the stage runs, Then the reader is invoked through the default binding"
+      ],
+      "ancestors": [],
+      "mutantHash": "5a4a80fbcf3c1fe17289e557d993a073b86afcaaa6ef4902e30a6c1f0d05f508",
+      "testHash": "daa8f32c89957faa4177d03fe7d4804d7df6f03d5243127864562dcd015e89a7"
+    },
+    "contract-arrow-export-not-scanned": {
+      "testFile": "tests/contract-stage.test.mjs",
+      "tests": [
+        "Given writer and reader exported as arrow-valued variables, When the stage runs, Then both are found and the rejection is reported"
+      ],
+      "ancestors": [],
+      "mutantHash": "d0b46360e2684bdd8d18703f78ffbc87fabb0106114640263f6745ff514c45b0",
+      "testHash": "daa8f32c89957faa4177d03fe7d4804d7df6f03d5243127864562dcd015e89a7"
+    },
+    "contract-reader-verb-validate-dropped": {
+      "testFile": "tests/contract-stage.test.mjs",
+      "tests": [
+        "Given every recognised verb pair in one module, When the stage runs, Then each pair is discovered and its rejection reported"
+      ],
+      "ancestors": [],
+      "mutantHash": "67e0969069208609590766f0f125f9de877a201adc833d12653d8eae2833107c",
+      "testHash": "daa8f32c89957faa4177d03fe7d4804d7df6f03d5243127864562dcd015e89a7"
+    },
+    "contract-reader-verb-restore-dropped": {
+      "testFile": "tests/contract-stage.test.mjs",
+      "tests": [
+        "Given every recognised verb pair in one module, When the stage runs, Then each pair is discovered and its rejection reported"
+      ],
+      "ancestors": [],
+      "mutantHash": "14ad8457b09348481e66f5fb2a0dde64697d29816b66d100d7040303e9f70cc0",
+      "testHash": "daa8f32c89957faa4177d03fe7d4804d7df6f03d5243127864562dcd015e89a7"
+    },
+    "contract-writer-verb-encode-dropped": {
+      "testFile": "tests/contract-stage.test.mjs",
+      "tests": [
+        "Given every recognised verb pair in one module, When the stage runs, Then each pair is discovered and its rejection reported"
+      ],
+      "ancestors": [],
+      "mutantHash": "b89cd30e9705b5efc983305681abdaacf0cc61c7dac38c071a58e062dbce20dc",
+      "testHash": "daa8f32c89957faa4177d03fe7d4804d7df6f03d5243127864562dcd015e89a7"
+    },
+    "contract-writer-verb-tojson-dropped": {
+      "testFile": "tests/contract-stage.test.mjs",
+      "tests": [
+        "Given every recognised verb pair in one module, When the stage runs, Then each pair is discovered and its rejection reported"
+      ],
+      "ancestors": [],
+      "mutantHash": "fdc19963cbab2e63458c5ae82ab07e55787f527bef32382ded3ea263826dd47d",
+      "testHash": "daa8f32c89957faa4177d03fe7d4804d7df6f03d5243127864562dcd015e89a7"
+    },
+    "contract-writer-verb-make-dropped": {
+      "testFile": "tests/contract-stage.test.mjs",
+      "tests": [
+        "Given every recognised verb pair in one module, When the stage runs, Then each pair is discovered and its rejection reported"
+      ],
+      "ancestors": [],
+      "mutantHash": "7946828dbb29e4024cb940000ee26546f3ee8ada028457876b731a3fd8bee5ed",
+      "testHash": "daa8f32c89957faa4177d03fe7d4804d7df6f03d5243127864562dcd015e89a7"
+    },
+    "contract-probe-export-guard-removed": {
+      "testFile": "tests/contract-stage.test.mjs",
+      "tests": [
+        "Given a reader that is not exported, When the stage runs, Then the pair stays unsettled instead of being rejected"
+      ],
+      "ancestors": [],
+      "mutantHash": "28ac6c1aabf1a5cecd6dfe5cf866151c663eac791a0618283cfbb1b179216cd0",
+      "testHash": "daa8f32c89957faa4177d03fe7d4804d7df6f03d5243127864562dcd015e89a7"
+    },
+    "native-review-contract-crash-swallowed": {
+      "testFile": "tests/native-review-contract.test.mjs",
+      "tests": [
+        "Given the contract stage throws, When the review runs, Then the failure reaches the verdict instead of being swallowed"
+      ],
+      "ancestors": [],
+      "mutantHash": "f8a1608f471d64285af942e25cc59edb1b864d3c6525445a1c5a2582b4905af9",
+      "testHash": "3ca09aef97262c6b04f98f3031a98407998ff970aea10670e9ebf0b2d1f34fac"
+    },
+    "contract-suffix-js-dropped": {
+      "testFile": "tests/contract-stage.test.mjs",
+      "tests": [
+        "Given a changed .js module with a broken pair, When the stage runs, Then the suffix is analysed like any other"
+      ],
+      "ancestors": [],
+      "mutantHash": "a3b5fc9a8d53bc35d349906bffdf68c7a3c3efd4f5f2c77c4a16375f85d1ff7a",
+      "testHash": "daa8f32c89957faa4177d03fe7d4804d7df6f03d5243127864562dcd015e89a7"
+    },
+    "contract-probe-timeout-removed": {
+      "testFile": "tests/contract-stage.test.mjs",
+      "tests": [
+        "Given a staged module that blocks during import, When the probe times out, Then the analysis failed instead of hanging"
+      ],
+      "ancestors": [],
+      "mutantHash": "ecf4f1462deaaa8e01dbfab7804f3cd6d7f1f7d6f55197bdeebd337c8da1f6e9",
+      "testHash": "daa8f32c89957faa4177d03fe7d4804d7df6f03d5243127864562dcd015e89a7"
+    },
+    "native-launcher-import-runs-a-review": {
+      "testFile": "tests/native-launcher.test.mjs",
+      "tests": [
+        "Given the launcher module is imported, When it loads, Then it starts nothing and prints no diagnostic"
+      ],
+      "ancestors": [],
+      "mutantHash": "d1cb48e486e54d3603685a6f29bc9f097cb11a418a8c6dbdf1bb1c640ad2694f",
+      "testHash": "6882002498092c371ad0b1c92eb5f10520b86de6e51237b2bd3198f30bee2878"
+    },
+    "layout-contract-probe-not-required": {
+      "testFile": "tests/layout-required.test.mjs",
+      "tests": [
+        "Given the native review imports the contract stage, When the layout is checked, Then all three contract modules are required and their absence is rejected"
+      ],
+      "ancestors": [],
+      "mutantHash": "d8ac2c0f6a47767eeea36b63b92299d874ecb164e3e246c3ac59e1eaf8c37a13",
+      "testHash": "77682a9d2530060b03d14acfbd027a54be83d7c1d32275b52b42c8e8d8ad0961"
+    },
+    "contract-oversized-module-skipped-silently": {
+      "testFile": "tests/contract-stage.test.mjs",
+      "tests": [
+        "Given a changed module over the size limit and a missing path, When the stage runs, Then both are reported as skipped work"
+      ],
+      "ancestors": [],
+      "mutantHash": "35af232be6cb8cf30f551911ea6baef845ef6ee80e01eb30002a1cb1266ef0a8",
+      "testHash": "daa8f32c89957faa4177d03fe7d4804d7df6f03d5243127864562dcd015e89a7"
+    },
+    "contract-writer-verb-serialize-dropped": {
+      "testFile": "tests/contract-stage.test.mjs",
+      "tests": [
+        "Given a serialize/parse pair, When the stage runs, Then the alternate verbs are recognised and the rejection is reported"
+      ],
+      "ancestors": [],
+      "mutantHash": "75691d52b86dd73143bf1f976eda99d7d2030ab8d93943019069508341f52d92",
+      "testHash": "daa8f32c89957faa4177d03fe7d4804d7df6f03d5243127864562dcd015e89a7"
+    },
+    "contract-reader-verb-parse-dropped": {
+      "testFile": "tests/contract-stage.test.mjs",
+      "tests": [
+        "Given a serialize/parse pair, When the stage runs, Then the alternate verbs are recognised and the rejection is reported"
+      ],
+      "ancestors": [],
+      "mutantHash": "78becdada4d001a28bb9492bafb0beaaf93ebbb45d1d3f99305aa141de5624e0",
+      "testHash": "daa8f32c89957faa4177d03fe7d4804d7df6f03d5243127864562dcd015e89a7"
+    },
+    "contract-number-value-is-string": {
+      "testFile": "tests/contract-stage.test.mjs",
+      "tests": [
+        "Given numeric and boolean required parameters, When the stage runs, Then the probe supplies 1 and true and the round-trip holds"
+      ],
+      "ancestors": [],
+      "mutantHash": "3be59a12b9a30258fca5375fa89b3ffdb312bcb9435b9ed70a810896456e84f0",
+      "testHash": "daa8f32c89957faa4177d03fe7d4804d7df6f03d5243127864562dcd015e89a7"
+    },
+    "contract-boolean-value-is-string": {
+      "testFile": "tests/contract-stage.test.mjs",
+      "tests": [
+        "Given numeric and boolean required parameters, When the stage runs, Then the probe supplies 1 and true and the round-trip holds"
+      ],
+      "ancestors": [],
+      "mutantHash": "32898da17b32cb6182e171248431b064a04b19e492ada5d99e693d98aa1cdaac",
+      "testHash": "daa8f32c89957faa4177d03fe7d4804d7df6f03d5243127864562dcd015e89a7"
+    },
+    "contract-probe-fills-defaults": {
+      "testFile": "tests/contract-stage.test.mjs",
+      "tests": [
+        "Given a writer with a defaulted trailing parameter, When the stage runs, Then the writer applies its own default instead of a guessed value"
+      ],
+      "ancestors": [],
+      "mutantHash": "dae3ad8a7a39d97138418c13c1dd95457b7a840584bbfa9c3f1c01f02c9eac5b",
+      "testHash": "daa8f32c89957faa4177d03fe7d4804d7df6f03d5243127864562dcd015e89a7"
+    },
+    "contract-policy-off-ignored": {
+      "testFile": "tests/contract-stage.test.mjs",
+      "tests": [
+        "Given the stage is switched off, When the review runs, Then nothing is probed and the policy says so"
+      ],
+      "ancestors": [],
+      "mutantHash": "50d9e73fb4047c4d26ff1855415e875ec3f16aac34595e4996221bae57d509b9",
+      "testHash": "daa8f32c89957faa4177d03fe7d4804d7df6f03d5243127864562dcd015e89a7"
+    },
+    "contract-partial-reported-as-clean": {
+      "testFile": "tests/contract-stage.test.mjs",
+      "tests": [
+        "Given a writer that throws before producing a record, When the stage runs, Then the pair is unproven, not a violation"
+      ],
+      "ancestors": [],
+      "mutantHash": "32d9647832bb366e90c1480c7f6ff0c4f7009c9f24bc5e6c1d21270e81aacc5b",
+      "testHash": "daa8f32c89957faa4177d03fe7d4804d7df6f03d5243127864562dcd015e89a7"
+    },
+    "contract-verdict-ignores-violation": {
+      "testFile": "tests/contract-verdict.test.mjs",
+      "tests": [
+        "Given a reader that rejects the record its own writer produces, When the verdict is made, Then a passing reviewer cannot rescue the commit"
+      ],
+      "ancestors": [],
+      "mutantHash": "be3ce2f5b1b2939dcdf2e5e636fee7c32eb835f842f9602d938e269a87ecaded",
+      "testHash": "08adb6973907698690bacb3a612fee1c6380d0734c35e2d980311a27b3ffa413"
     }
   }
 }
