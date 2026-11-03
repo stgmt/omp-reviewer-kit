@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.4] - 2026-11-03
+
 ### Fixed
 - **A copy that sits next to an import is no longer exempt.** The centralisation exemption accepted a consumer that imports the owner *and* keeps its own definition of the same rule, because only the import was checked. Such a consumer now keeps the group blocking: the exemption is for one definition with users, not for a copy that happens to import the original. Found by probing the exemption after its release, not by a test.
 
