@@ -1,18 +1,21 @@
-// omp-reviewer-kit runner v0.26.0
+// omp-reviewer-kit runner v0.26.1
 // omp-reviewer-kit runner: the Node launcher of the native review. The review runs under Bun in
 // src/native/native-host.mjs because OMP's library is a Bun package. This launcher only checks that
 // Bun and the pinned OMP library are installed, then hands the staged repository to the host.
 // Usage (the hook passes nothing): node scripts/run-review.mjs [repository]
 
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const kitRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const host = path.join(kitRoot, 'src', 'native', 'native-host.mjs');
-const LIBRARY = '@oh-my-pi/pi-coding-agent/package.json';
+// The package does not export `./package.json`, so resolution must go through an exported entry and
+// the package root is then found by walking up from it.
+const LIBRARY_ENTRY = '@oh-my-pi/pi-coding-agent/sdk';
+const LIBRARY_NAME = '@oh-my-pi/pi-coding-agent';
 const bun = process.env.OMP_REVIEW_KIT_BUN || 'bun';
 
 /**
@@ -28,13 +31,36 @@ const bun = process.env.OMP_REVIEW_KIT_BUN || 'bun';
 export function findLibrary(root = kitRoot, resolve = specifier => createRequire(path.join(root, 'package.json')).resolve(specifier)) {
   const candidates = [path.join(root, 'node_modules', '@oh-my-pi', 'pi-coding-agent', 'package.json')];
   try {
-    candidates.push(resolve(LIBRARY));
+    candidates.push(packageRootOf(resolve(LIBRARY_ENTRY)));
   } catch {
-    // Not resolvable from the kit folder: a hoisted install still shows up through `require.resolve`
-    // of the host process, which the candidate list below covers.
+    // Not resolvable from the kit folder either: the direct candidate above still covers a local install.
   }
-  for (const candidate of candidates) if (existsSync(candidate)) return candidate;
+  for (const candidate of candidates) if (candidate && existsSync(candidate)) return candidate;
   return null;
+}
+
+/**
+ * The `package.json` of the package an entry point belongs to: resolution lands on a file inside the
+ * package, and the manifest is what the launcher verifies.
+ *
+ * @param {string} entry
+ * @returns {string|null}
+ */
+export function packageRootOf(entry) {
+  let dir = path.dirname(entry);
+  for (;;) {
+    const manifest = path.join(dir, 'package.json');
+    if (existsSync(manifest)) {
+      try {
+        if (JSON.parse(readFileSync(manifest, 'utf8')).name === LIBRARY_NAME) return manifest;
+      } catch {
+        // A manifest that cannot be parsed is not the library; keep walking.
+      }
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
 }
 
 function block(message) {
