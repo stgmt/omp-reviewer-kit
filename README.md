@@ -245,6 +245,10 @@ The development mutation gate requires Node 22 or newer. It uses four asynchrono
 
 `scripts/mutation-selectors.json` maps every curated mutant to a calibrated deciding test. An ordinary run verifies its green baseline and then requires an assertion failure from the selected test. A timeout, a process, import or reporter failure, a missing test, or an incomplete catalog blocks the gate rather than counting as a kill. `node scripts/run-mutation-tests.mjs --calibrate-stale` recalibrates only the mutants whose selector no longer fits, keeps proven selectors when part of a run fails, and then runs the ordinary gate over every mutant. Its exit code is always the verdict of the full gate.
 
+### Contract reconciliation
+
+Before any model reads the diff, the review settles the producer/consumer pairs the changed modules contain: an exported `write*/serialize*/encode*/toJSON*` function is called with the arguments its own signature requires (parameters with defaults are left to the writer), and the record it produces is handed to the exported `read*/parse*/decode*/fromJSON*/validate*` function in a child process. A reader that throws on that record blocks the commit and names the file, both functions, the thrown error and the record. Everything else is reported as unproven: `no-pairs` when the diff holds no such pair, `partial` when a pair could not be called (an unknown parameter domain, a reader that needs context, an unparsable module, a path beyond the scan budget), `failed` when the probe itself broke. `OMP_REVIEW_KIT_CONTRACT=off|advisory|block` — default `advisory`: the throw is always reported, and blocking is opted into.
+
 ### When the gate runs
 
 The gate proves the catalog for one state of the bytes, so it runs once per release, on the frozen diff, after the review passed — `node scripts/release-preflight.mjs --require-frozen --recalibrate`. A review round with open findings is not a reason to recalibrate: the diff is about to change.

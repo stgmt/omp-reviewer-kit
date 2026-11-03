@@ -7,12 +7,13 @@ import { buildAssignment } from './assignment.mjs';
 import { fallbackOf, provenanceOf, reviewerTranscript, reviewerYield, runReviewerTask } from './task-engine.mjs';
 import { readFallbackEvidence } from './fallback-evidence.mjs';
 import { BUDGET_REASONS, assessDiff, readDiffBudget } from '../domain/diff-budget.mjs';
-import { runMaintainabilityAnalysis } from './maintainability/analyze.mjs';
-import { runReuseAnalysis } from './reuse/analyze.mjs';
-import { renderReuseLines } from './reuse/report.mjs';
 import { classifyFilePath } from '../domain/file-class.mjs';
 import { centralizationGroupIds } from '../domain/maintainability-centralization.mjs';
 import { isTestPath } from '../domain/suspicion-map.mjs';
+import { runMaintainabilityAnalysis } from './maintainability/analyze.mjs';
+import { runReuseAnalysis } from './reuse/analyze.mjs';
+import { runContractAnalysis } from './contract/analyze.mjs';
+import { renderReuseLines } from './reuse/report.mjs';
 import { evaluateReview } from './verdict.mjs';
 
 const clock = () => Date.now();
@@ -54,6 +55,7 @@ export async function runNativeReview({
   onProgress = () => {},
   onEvent = () => {},
   runTask = runReviewerTask,
+  runContract = runContractAnalysis,
   now = clock,
   analysisConfig = undefined,
   reuseConfig = undefined,
@@ -108,8 +110,34 @@ export async function runNativeReview({
     if (!reuse.skipped && reuse.artifactWritten === false) onProgress(`review: reuse artifact not written (${reuse.artifactError}); hints still supplied`);
     if (!reuse.skipped) onProgress(`review: reuse hints ${reuseLines.length > 0 ? `${reuse.analysis.candidates.length} candidate(s)` : 'none'} (${reuse.analysis.scan.units} unit(s), coverage ${reuse.analysis.coverage}, ${reuseMs} ms)`);
     if (!analysis.skipped) onProgress(`review: maintainability ${maintainability.status} (${maintainability.groups} group(s), coverage ${maintainability.coverage}, policy ${maintainability.policy})`);
+    // Deterministic and cheap: a producer/consumer pair is settled by calling it, not by asking a model.
+    const contractStarted = now();
+    const contractAnalysis = await runContract(dir, env, { changedPaths }).catch(error => ({
+      schema: 'contract@1',
+      status: 'failed',
+      files: 0,
+      pairs: [],
+      unparsedFiles: [],
+      unproven: [],
+      policy: 'block',
+      note: `the contract stage crashed: ${error instanceof Error ? error.message : String(error)}`,
+    }));
+    const contractMs = now() - contractStarted;
+    const contract = {
+      policy: contractAnalysis.policy,
+      status: contractAnalysis.status,
+      rejected: (contractAnalysis.pairs ?? [])
+        .filter(pair => pair.outcome === 'reader-rejects-written-record')
+        .map(pair => ({ file: pair.file, writer: pair.writer, reader: pair.reader, error: pair.error, record: pair.record })),
+      probed: (contractAnalysis.pairs ?? []).length,
+      note: contractAnalysis.note,
+      unproven: contractAnalysis.unproven ?? [],
+      unparsedFiles: contractAnalysis.unparsedFiles ?? [],
+    };
+    onProgress(`review: contract ${contract.status} (${contract.probed} pair(s), policy ${contract.policy})`);
     const assignment = buildAssignment({
       context,
+      contract,
       reuse: reuse.skipped
         ? { policy: reuse.policy, reason: reuse.reason, files: 0, units: 0, coverage: null, lines: [] }
         : {
@@ -155,13 +183,14 @@ export async function runNativeReview({
       profile,
       lanes,
       fileClasses,
+      maintainabilityCentralization,
       maintainability: {
         policy: maintainability.policy,
         status: maintainability.status,
         coverage: maintainability.coverage,
         planned: maintainability.planned,
       },
-      maintainabilityCentralization,
+      contract,
     });
     const verdictMs = now() - verdictStarted;
     const finishedMs = now();
@@ -192,6 +221,7 @@ export async function runNativeReview({
       text: reviewerView?.text ?? '',
       verdict,
       maintainability,
+      contract,
       runSummary: {
         startedAt: new Date(startedMs).toISOString(),
         finishedAt: new Date(finishedMs).toISOString(),
@@ -204,7 +234,7 @@ export async function runNativeReview({
           sessionFile: reviewerTranscript(reviewer),
           fallbackApplied: fallback.applied,
         },
-        timings: { snapshotMs, maintainabilityMs, nativeTaskMs, verdictMs },
+        timings: { snapshotMs, maintainabilityMs, contractMs, nativeTaskMs, verdictMs },
       },
     };
   } finally {
@@ -245,14 +275,6 @@ function summarizeMaintainability({ policy, skipped, reason, analysis }) {
   };
 }
 
-/**
- * The ids of the maintainability groups that are one shared contract with its consumers and its
- * test. Reading the consumer sources is bounded: a group whose consumer cannot be read keeps
- * blocking, because the exemption has to be proven, never assumed.
- *
- * @param {{ analysis: object, snapshotDir: string }} input
- * @returns {Promise<Set<string>>}
- */
 /**
  * The maintainability groups that are one shared contract, read from the snapshot. Test files are
  * re-tagged here: the file classifier upgrades an executable-looking test file, so the contract test

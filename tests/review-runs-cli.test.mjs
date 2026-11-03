@@ -1,6 +1,8 @@
 // Given/When/Then over the read-only runs command and the follow watcher. Every case works on a
 // temporary runs folder; nothing here writes a record, stops a review or needs a model.
 import { test } from 'node:test';
+
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
@@ -151,16 +153,20 @@ test('Given a run that settles while watched, When follow polls it, Then every t
     const runId = 'run-live';
     await writeRunRecord(record({ runId, state: 'running', runnerPid: process.pid, durationMs: null, stages: [] }), { dir });
     const lines = [];
-    setTimeout(() => {
-      writeRunRecord(record({ runId, state: 'running', runnerPid: process.pid, durationMs: null, stages: [{ agent: 'review-context-scout', status: 'completed', durationMs: 62_000 }] }), { dir });
-    }, 30);
-    setTimeout(() => {
-      writeRunRecord(record({ runId }), { dir });
-    }, 90);
-    const settled = await followRun({ dir, runId, out: line => lines.push(line), intervalMs: 10, timeoutMs: 5_000 });
-    assert.equal(settled, true);
-    assert.match(lines[0], /^stage review-context-scout completed 1m02s$/);
-    assert.match(lines[lines.length - 1], /^run-live  PASS/);
+    // The writes happen while the follower polls, and they are awaited before the folder is removed:
+    // a write still in flight when the temporary folder disappears is a test leak, not a product defect.
+    const duringFollow = [
+      delay(30).then(() => writeRunRecord(record({ runId, state: 'running', runnerPid: process.pid, durationMs: null, stages: [{ agent: 'review-context-scout', status: 'completed', durationMs: 62_000 }] }), { dir })),
+      delay(90).then(() => writeRunRecord(record({ runId }), { dir })),
+    ];
+    try {
+      const settled = await followRun({ dir, runId, out: line => lines.push(line), intervalMs: 10, timeoutMs: 5_000 });
+      assert.equal(settled, true);
+      assert.match(lines[0], /^stage review-context-scout completed 1m02s$/);
+      assert.match(lines[lines.length - 1], /^run-live  PASS/);
+    } finally {
+      await Promise.allSettled(duringFollow);
+    }
   });
 });
 

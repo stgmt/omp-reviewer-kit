@@ -78,7 +78,6 @@ function classIndex(fileClasses) {
  * pure forwarder. Text in the report never contributes.
  *
  * @param {object} candidate
- * @param {{ centralization?: Set<string> }} [context] ids of groups that are one shared contract
  * @returns {boolean}
  */
 export function maintainabilityBlocks(candidate, { centralization = new Set() } = {}) {
@@ -105,7 +104,7 @@ export function maintainabilityBlocks(candidate, { centralization = new Set() } 
  * }} input
  * @returns {{ pass: boolean, verdict: 'PASS'|'BLOCK', reasons: string[] }}
  */
-export function evaluateReview({ reviewer, stages, profile, lanes, fileClasses = [], planned = [], maintainability = null, maintainabilityCentralization = new Set() }) {
+export function evaluateReview({ reviewer, stages, profile, lanes, fileClasses = [], planned = [], maintainability = null, contract = null, maintainabilityCentralization = new Set() }) {
   const reasons = [];
   if (!reviewer) {
     reasons.push('reviewer task result missing');
@@ -177,6 +176,17 @@ export function evaluateReview({ reviewer, stages, profile, lanes, fileClasses =
   }
 
   if (marker.verdict === 'BLOCK') reasons.push('reviewer verdict BLOCK');
+  // A producer/consumer pair is settled by calling it: the reader either accepts the record the
+  // writer produces or throws. That answer needs no model and no interpretation.
+  const contractSummary = contract && typeof contract === 'object' ? contract : null;
+  if (contractSummary && contractSummary.policy !== 'off') {
+    if (contractSummary.status === 'failed') reasons.push(`contract analysis failed: ${contractSummary.note ?? 'no reason recorded'}`);
+    if (contractSummary.status === 'contract-violated' && contractSummary.policy === 'block') {
+      for (const rejection of contractSummary.rejected ?? []) {
+        reasons.push(`contract violated: ${rejection.file} ${rejection.writer} produces a record ${rejection.reader} rejects (${rejection.error})`);
+      }
+    }
+  }
   const pass = reasons.length === 0 && marker.verdict === 'PASS';
   return { pass, verdict: pass ? 'PASS' : 'BLOCK', reasons };
 }
