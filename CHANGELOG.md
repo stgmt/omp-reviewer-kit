@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.28.0] - 2026-11-03
+
+### Changed
+- **A release no longer patches the repositories that use the kit.** The installed hook carried the release version (`# omp-reviewer-kit hook v0.26.3 body-sha256:…`), so every release changed the file in all 80 registered repositories and demanded a sync. It now carries the hook *format* and the digest of its own body (`# omp-reviewer-kit hook-format v1 body-sha256:…`): the release version lives only in the plugin and the marketplaces, and a release that leaves the hook alone leaves every repository byte-identical. Hooks written by earlier releases are recognised through the same body digest, keep their ownership, and are rewritten exactly once by the next sync.
+- **One delivery command.** `node scripts/deliver.mjs` upgrades this kit's OMP marketplace entry (scoped — never another plugin), updates the Claude Code plugin, and rejects a shipped hook that still names *any* release version, not only the current one. It has no repository step, and that absence is checked rather than assumed. Codex and the other hosts need nothing: they run the same git hook, which now never changes.
+- `stampHookTemplate` takes the format instead of a version; `scripts/stamp-hook.mjs` stamps the format and the digest; `check-layout` rejects a template whose marker is stale or whose body no longer matches it, and the hook template may no longer contain a release version at all.
+
 ## [0.26.2] - 2026-11-03
 
 ### Fixed

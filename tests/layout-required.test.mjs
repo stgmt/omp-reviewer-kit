@@ -51,7 +51,7 @@ test('Given the native review imports the contract stage, When the layout is che
   const { mkdtemp, mkdir, rm } = await import('node:fs/promises');
   const { tmpdir } = await import('node:os');
   const path = (await import('node:path')).default;
-  for (const file of ['src/native/contract/find.mjs', 'src/native/contract/analyze.mjs', 'src/native/contract/probe.mjs']) {
+  for (const file of ['src/native/contract/find.mjs', 'src/native/contract/analyze.mjs', 'src/native/contract/probe.mjs', 'scripts/deliver.mjs']) {
     assert.ok(REQUIRED_FILES.includes(file), `${file} is required`);
     const root = await mkdtemp(path.join(tmpdir(), 'layout-contract-'));
     try {
