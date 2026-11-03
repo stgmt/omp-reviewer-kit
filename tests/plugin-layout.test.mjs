@@ -49,7 +49,8 @@ const manifest = JSON.parse(await readFile('package.json', 'utf8'));
 describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
   it('manifest and skills declare fixed reviewer identities', () => {
     assert.equal(manifest.name, 'omp-reviewer-kit');
-    assert.equal(manifest.version, '0.25.3');
+    assert.match(manifest.version, /^\d+\.\d+\.\d+$/);
+    assert.equal(manifest.version, manifest.omp.version);
     assert.match(realitySkill, /name: reality-first-review/);
     assert.match(multiStageSkill, /name: multi-stage-review/);
     assert.match(rangeAuditSkill, /name: range-audit/);
@@ -183,12 +184,12 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
   it('review-profile contract: the native assignment names the profile and the staged snapshot manifest', async () => {
     const { buildAssignment } = await import('../src/native/assignment.mjs');
     const assignment = buildAssignment({
-      snapshotDir: '/tmp/snap',
-      repoRoot: '/repo',
-      diffHash: 'a'.repeat(64),
-      profile: 'spec-docs',
-      lanes: ['content-risk'],
-      changedPaths: ['docs/SPEC.md'],
+      context: {
+        snapshot: { dir: '/tmp/snap', diffHash: 'a'.repeat(64), changedPaths: ['docs/SPEC.md'] },
+        repo: '/repo',
+        profile: 'spec-docs',
+        lanes: ['content-risk'],
+      },
     });
     assert.match(assignment, /^Review profile for this diff: spec-docs$/m);
     assert.match(assignment, /^Risk lanes for this diff: \["content-risk"\]$/m);

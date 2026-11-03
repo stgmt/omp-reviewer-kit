@@ -55,7 +55,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "3b8b9f13183f712947d9958a05016511c9185fc239e9f7c3af718470e0abef6b",
-      "testHash": "559ccbaf3a5446e4cce9394f6325f1708786d1c0916796c648235449c8c2ccc0"
+      "testHash": "dafa5b95ee2753a04197bc5d9454a30ec1295cadabee3b7c4fd18cdb1675543a"
     },
     "anti-parasitic-both-to-either": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -66,7 +66,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "b8607c1dd6f7ba93c3e0b7431e95eb44980c25c7b9974dd0fc887acbf309bb74",
-      "testHash": "559ccbaf3a5446e4cce9394f6325f1708786d1c0916796c648235449c8c2ccc0"
+      "testHash": "dafa5b95ee2753a04197bc5d9454a30ec1295cadabee3b7c4fd18cdb1675543a"
     },
     "anti-parasitic-port-protection-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -77,7 +77,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "7cb2ae5cc876247bae2a345f17644a022a04d18c3ed82d839556f279b8e7e2e7",
-      "testHash": "559ccbaf3a5446e4cce9394f6325f1708786d1c0916796c648235449c8c2ccc0"
+      "testHash": "dafa5b95ee2753a04197bc5d9454a30ec1295cadabee3b7c4fd18cdb1675543a"
     },
     "multi-stage-snapshot-boundary-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -88,7 +88,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "db7a8493b32121111624ef1add91a1b21b8c908d6e5da232df1a148e0af79373",
-      "testHash": "559ccbaf3a5446e4cce9394f6325f1708786d1c0916796c648235449c8c2ccc0"
+      "testHash": "dafa5b95ee2753a04197bc5d9454a30ec1295cadabee3b7c4fd18cdb1675543a"
     },
     "multi-stage-yagni-boundary-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -99,7 +99,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "465a5de25c5a83dda3e244302a6b7eab09c0169bb39c82b5688b001fb8d5560c",
-      "testHash": "559ccbaf3a5446e4cce9394f6325f1708786d1c0916796c648235449c8c2ccc0"
+      "testHash": "dafa5b95ee2753a04197bc5d9454a30ec1295cadabee3b7c4fd18cdb1675543a"
     },
     "sync-hook-newer-overwritten": {
       "testFile": "tests/sync-targets.test.mjs",
@@ -166,7 +166,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "ec31109e99d1fdb90e4b481cab9c38734f3857a530dd4a68f4327ef171a166d5",
-      "testHash": "559ccbaf3a5446e4cce9394f6325f1708786d1c0916796c648235449c8c2ccc0"
+      "testHash": "dafa5b95ee2753a04197bc5d9454a30ec1295cadabee3b7c4fd18cdb1675543a"
     },
     "hunter-red-proof-field-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -177,7 +177,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "61f3ac262a7e6643d183a03c1ffd0e7ebebf3d58d8cbaacaf70427b43ac14e8e",
-      "testHash": "559ccbaf3a5446e4cce9394f6325f1708786d1c0916796c648235449c8c2ccc0"
+      "testHash": "dafa5b95ee2753a04197bc5d9454a30ec1295cadabee3b7c4fd18cdb1675543a"
     },
     "verifier-triage-field-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -188,7 +188,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "e6356f58a6e2d47ec64b32c1f6f7664d120a06d1b1d697a3dac8517b2c7b5ea5",
-      "testHash": "559ccbaf3a5446e4cce9394f6325f1708786d1c0916796c648235449c8c2ccc0"
+      "testHash": "dafa5b95ee2753a04197bc5d9454a30ec1295cadabee3b7c4fd18cdb1675543a"
     },
     "modular-suspicion-assert-delta": {
       "testFile": "tests/suspicion-map.test.mjs",
@@ -2543,7 +2543,7 @@
       ],
       "ancestors": [],
       "mutantHash": "0f733e388ed49bc73beb71b57e7db114f5676247697f8c632616860bbabd4aa4",
-      "testHash": "10e0c45c1e3636d3242c98e7c8ef05962fe7569b51c33e09328cf474f6fccb06"
+      "testHash": "eafc5c6fed56ab5ae9b60a9e3833084a78800da9fad3216b19ab767ee594bd3e"
     },
     "native-host-skip-not-detected": {
       "testFile": "tests/e2e-native-hook.test.mjs",
@@ -2659,7 +2659,7 @@
       ],
       "ancestors": [],
       "mutantHash": "1ecc9ac531020706752ceb88337902c10a91d4cf79980dfb8915db2509a5931b",
-      "testHash": "10e0c45c1e3636d3242c98e7c8ef05962fe7569b51c33e09328cf474f6fccb06"
+      "testHash": "eafc5c6fed56ab5ae9b60a9e3833084a78800da9fad3216b19ab767ee594bd3e"
     },
     "native-verdict-lane-identity-ignored": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -3110,7 +3110,7 @@
         "Given the Python adapter is killed without a timeout, When extracted, Then the analysis fails instead of claiming a budget exhaustion"
       ],
       "ancestors": [],
-      "mutantHash": "78aa74597214492a872bf04bcb059ac00c3fde5caadd76ce6f71f1f861521633",
+      "mutantHash": "d4d7b8d736083709a4932b2c1201f4ded047c0cc8ae8ee7607e74184f06b5e2d",
       "testHash": "d95184a87ec0bb140c741a0cdfc6e828d8a42068ebee7f9bee0c729345ea721a"
     },
     "preflight-fingerprint-target-path-dropped": {
@@ -3156,15 +3156,6 @@
       ],
       "ancestors": [],
       "mutantHash": "c5d2a29ff01f458b5178b08119f4e28ad6ab94db510361028eb1005c8391d503",
-      "testHash": "a4fcd64457ecf0922630bac27678cc1179db3158d6bf8a5f6a0afb8bee05fd05"
-    },
-    "preflight-fingerprint-catalog-source-dropped": {
-      "testFile": "tests/release-preflight.test.mjs",
-      "tests": [
-        "Given overlapping mutants, When the fingerprint is taken, Then only the deduplicated path set and the mutant definitions matter"
-      ],
-      "ancestors": [],
-      "mutantHash": "cf1323465a2b0256115bf0e1c345fd3a7be7ea08923f6028388268caa8188dac",
       "testHash": "a4fcd64457ecf0922630bac27678cc1179db3158d6bf8a5f6a0afb8bee05fd05"
     },
     "certificate-other-schema-accepted": {
@@ -3337,6 +3328,303 @@
       "ancestors": [],
       "mutantHash": "4db94a0e7ec4e29b8ec294396e9cee3288724be52a03ab700b1cdb6d4e8902e8",
       "testHash": "6c3f8156cd33078b496d2f7925319dfc84378d7ee72dc9c5053f79c31b6e5825"
+    },
+    "reuse-jaccard-empty-match": {
+      "testFile": "tests/reuse-shape.test.mjs",
+      "tests": [
+        "Given two empty shingle sets, When the similarity is asked, Then it is zero rather than a perfect match"
+      ],
+      "ancestors": [],
+      "mutantHash": "26693accbbf55663e781dc4079f1093d4f895a6935e3dff46790a3571a9c7e27",
+      "testHash": "15de03f22f18ff10c2db0fcb660394b3f4d7a8fda2de68607ce8f59a6a58eb8b"
+    },
+    "reuse-shape-keeps-identifiers": {
+      "testFile": "tests/reuse-shape.test.mjs",
+      "tests": [
+        "Given comments and string bodies, When the shape is taken, Then neither contributes tokens of its own"
+      ],
+      "ancestors": [],
+      "mutantHash": "b4d1188b1188c3c3e94e1a2d699ea40247ff7a259971e4db471352a45d875b3f",
+      "testHash": "15de03f22f18ff10c2db0fcb660394b3f4d7a8fda2de68607ce8f59a6a58eb8b"
+    },
+    "reuse-call-chain-truncated": {
+      "testFile": "tests/reuse-shape.test.mjs",
+      "tests": [
+        "Given call-shaped text inside comments and strings, When the calls are collected, Then only real invocations are named"
+      ],
+      "ancestors": [],
+      "mutantHash": "71952e4f3adee92a0def817294f26112ea109915c86d380516befd0188965dea",
+      "testHash": "15de03f22f18ff10c2db0fcb660394b3f4d7a8fda2de68607ce8f59a6a58eb8b"
+    },
+    "reuse-cache-schema-ignored": {
+      "testFile": "tests/reuse-scan.test.mjs",
+      "tests": [
+        "Given a stored entry of another schema, When the cache is asked, Then it answers nothing rather than migrating the entry"
+      ],
+      "ancestors": [],
+      "mutantHash": "2a29c6b810e500ab14cd08f061d9e189e98f0d88faee387df3fe2ca3175aea1e",
+      "testHash": "aa90cd941b69cb074c189529ac097c00121aa80a72c920ae132bcd457e88d440"
+    },
+    "reuse-test-paths-scanned": {
+      "testFile": "tests/reuse-scan.test.mjs",
+      "tests": [
+        "Given a test file that copies production code, When the snapshot is scanned, Then it contributes no unit"
+      ],
+      "ancestors": [],
+      "mutantHash": "f82943855e5090e71c21f783e7f11b83bb9bd4350b7ab2b089bbd651d7d2f0ce",
+      "testHash": "aa90cd941b69cb074c189529ac097c00121aa80a72c920ae132bcd457e88d440"
+    },
+    "reuse-policy-off-ignored": {
+      "testFile": "tests/reuse-stage.test.mjs",
+      "tests": [
+        "Given the off policy, When the stage runs, Then nothing is scanned and the reason is stated"
+      ],
+      "ancestors": [],
+      "mutantHash": "753c76f51e1495bbe0f5804bcad1d68fb9b1f1efc321bdca79cf61d63c91b7fc",
+      "testHash": "72ace86414a4b9a599f221707aa5cfb159395c862665a101d4d9d64231a34d2c"
+    },
+    "reuse-nested-pair-counted": {
+      "testFile": "tests/reuse-index.test.mjs",
+      "tests": [
+        "Given a definition nested inside another, When candidates are computed, Then the pair is not counted as a second implementation"
+      ],
+      "ancestors": [],
+      "mutantHash": "bd533c67ee0ad86455d878a022f3f277ab09899661947bc2a4c12f161dac9454",
+      "testHash": "1b6cf30a54e68dd5c6a61dd21eb71402bb583c2dd563ae48aeae759d8d78b39d"
+    },
+    "reuse-call-strings-scanned": {
+      "testFile": "tests/reuse-shape.test.mjs",
+      "tests": [
+        "Given call-shaped text inside comments and strings, When the calls are collected, Then only real invocations are named"
+      ],
+      "ancestors": [],
+      "mutantHash": "266d5b226b26faf7519184de646ba0d340ec439b966eda4d5e8668636702aada",
+      "testHash": "15de03f22f18ff10c2db0fcb660394b3f4d7a8fda2de68607ce8f59a6a58eb8b"
+    },
+    "reuse-python-cache-bypassed": {
+      "testFile": "tests/reuse-scan.test.mjs",
+      "tests": [
+        "Given a functionless Python file, When the snapshot is scanned twice, Then the second scan answers from the cache"
+      ],
+      "ancestors": [],
+      "mutantHash": "4260764b365b90a4b95f12e0387f5c39f9a6155efba2f9d829c6d9ab4cbad2f5",
+      "testHash": "aa90cd941b69cb074c189529ac097c00121aa80a72c920ae132bcd457e88d440"
+    },
+    "reuse-boilerplate-cutoff-widened": {
+      "testFile": "tests/reuse-index.test.mjs",
+      "tests": [
+        "Given a snapshot of a hundred units, When the boilerplate cutoff is asked for, Then a shingle shared by thirteen units is boilerplate"
+      ],
+      "ancestors": [],
+      "mutantHash": "b5753773e8e6d29f6c18e21b4bd1950aa96da573378fb1c7d354100765a84612",
+      "testHash": "1b6cf30a54e68dd5c6a61dd21eb71402bb583c2dd563ae48aeae759d8d78b39d"
+    },
+    "unparsed-record-reason-dropped": {
+      "testFile": "tests/maintainability-extract.test.mjs",
+      "tests": [
+        "Given a file over the byte limit, When extracted, Then it is reported too large and never parsed"
+      ],
+      "ancestors": [],
+      "mutantHash": "15b224395e1577cb0be5b28bef58e313a9d0dafe13c2a8818c3bcb4fe466c6af",
+      "testHash": "d95184a87ec0bb140c741a0cdfc6e828d8a42068ebee7f9bee0c729345ea721a"
+    },
+    "reuse-same-line-siblings-suppressed": {
+      "testFile": "tests/reuse-index.test.mjs",
+      "tests": [
+        "Given two similar sibling definitions on one physical line, When candidates are computed, Then the pair is reported"
+      ],
+      "ancestors": [],
+      "mutantHash": "aa3b4c16d6b76434c3b9f337cc035346215c51d3784db8d38818f62012a4455a",
+      "testHash": "1b6cf30a54e68dd5c6a61dd21eb71402bb583c2dd563ae48aeae759d8d78b39d"
+    },
+    "reuse-empty-python-parse-not-cached": {
+      "testFile": "tests/reuse-scan.test.mjs",
+      "tests": [
+        "Given a functionless Python file, When the snapshot is scanned twice, Then the second scan answers from the cache"
+      ],
+      "ancestors": [],
+      "mutantHash": "48d556cac552de02ab41cfb2cf7e99c689453b908d8026bd232e9355ddde573a",
+      "testHash": "aa90cd941b69cb074c189529ac097c00121aa80a72c920ae132bcd457e88d440"
+    },
+    "reuse-hint-name-unsanitized": {
+      "testFile": "tests/reuse-stage.test.mjs",
+      "tests": [
+        "Given a method name carrying a newline and a bidi override, When the hints are rendered, Then the name cannot start a new assignment line"
+      ],
+      "ancestors": [],
+      "mutantHash": "89a27534f2f8665c28c78be2c48feb3747efc954504bd0692ff9473f4bb81d61",
+      "testHash": "72ace86414a4b9a599f221707aa5cfb159395c862665a101d4d9d64231a34d2c"
+    },
+    "python-child-missing-interpreter-as-failure": {
+      "testFile": "tests/maintainability-extract.test.mjs",
+      "tests": [
+        "Given a missing Python interpreter, When extracted, Then python paths are unparsed with no-interpreter and the status fails"
+      ],
+      "ancestors": [],
+      "mutantHash": "33a40bea5a2f32ef149d5e4f5f1f2521bcdb74bfe5f6ecf191f953cb91f5dc49",
+      "testHash": "d95184a87ec0bb140c741a0cdfc6e828d8a42068ebee7f9bee0c729345ea721a"
+    },
+    "js-parse-fallback-dropped": {
+      "testFile": "tests/reuse-scan.test.mjs",
+      "tests": [
+        "Given a file its first plugin set rejects, When the snapshot is scanned, Then the documented second attempt still yields units"
+      ],
+      "ancestors": [],
+      "mutantHash": "7fa0a3b6c44e0c1567a2a2deed50d5bfdf21ee409e60e5da1c88ba0ab95e4c65",
+      "testHash": "aa90cd941b69cb074c189529ac097c00121aa80a72c920ae132bcd457e88d440"
+    },
+    "reuse-cache-malformed-units-accepted": {
+      "testFile": "tests/reuse-scan.test.mjs",
+      "tests": [
+        "Given a cache entry whose units carry no source span, When the cache is asked, Then it is a miss and the file is parsed again"
+      ],
+      "ancestors": [],
+      "mutantHash": "c13bb781b2c64c2875cdfa05846b1803c3488f2d2c1eda18f303280ffc52bdc9",
+      "testHash": "aa90cd941b69cb074c189529ac097c00121aa80a72c920ae132bcd457e88d440"
+    },
+    "reuse-analysis-failure-thrown": {
+      "testFile": "tests/reuse-stage.test.mjs",
+      "tests": [
+        "Given a scan that cannot complete, When the stage runs, Then it reports the failure instead of throwing at the review"
+      ],
+      "ancestors": [],
+      "mutantHash": "c6f20779632f15fb5760846af9c5ab2f89c3fdc57e2f50a8f1d2e583a28aacaa",
+      "testHash": "72ace86414a4b9a599f221707aa5cfb159395c862665a101d4d9d64231a34d2c"
+    },
+    "discovery-entry-loop-ignores-deadline": {
+      "testFile": "tests/reuse-scan.test.mjs",
+      "tests": [
+        "Given a flat directory larger than the budget, When the tree is collected, Then the entry loop stops at the deadline"
+      ],
+      "ancestors": [],
+      "mutantHash": "5cbf93617bdaabce27a8a3c05304507a8430dd0a7ed1cf0db16a78b7ca19691b",
+      "testHash": "aa90cd941b69cb074c189529ac097c00121aa80a72c920ae132bcd457e88d440"
+    },
+    "reuse-pair-identity-by-line": {
+      "testFile": "tests/reuse-index.test.mjs",
+      "tests": [
+        "Given two same-line siblings matching one existing unit, When candidates are computed, Then both pairs survive deduplication"
+      ],
+      "ancestors": [],
+      "mutantHash": "ebcbb48599caa963a9639a3d36ccdcaff280706a5f0cce597e667fb144fdc053",
+      "testHash": "1b6cf30a54e68dd5c6a61dd21eb71402bb583c2dd563ae48aeae759d8d78b39d"
+    },
+    "source-span-end-dropped": {
+      "testFile": "tests/source-span.test.mjs",
+      "tests": [
+        "Given a missing start, When the span is built, Then it begins at line one"
+      ],
+      "ancestors": [],
+      "mutantHash": "325de0040b4cdc400c87739ccee2948aaaacaf9b35b2e07a85b729cc8b86386f",
+      "testHash": "cb15fc1913a3d4d02a8a7ea15a2b333f573e4c523d19e28e055eec54afea4a61"
+    },
+    "reuse-hint-total-cap-ignored": {
+      "testFile": "tests/reuse-stage.test.mjs",
+      "tests": [
+        "Given the default budget, When twenty candidates are rendered, Then the whole section never exceeds twelve lines"
+      ],
+      "ancestors": [],
+      "mutantHash": "7fa7f6c5cba5cacd202c903ae9798563d221191147996c177d6da3798aebdf2f",
+      "testHash": "72ace86414a4b9a599f221707aa5cfb159395c862665a101d4d9d64231a34d2c"
+    },
+    "reuse-hint-coverage-line-dropped": {
+      "testFile": "tests/reuse-stage.test.mjs",
+      "tests": [
+        "Given the default budget, When twenty candidates are rendered, Then the whole section never exceeds twelve lines"
+      ],
+      "ancestors": [],
+      "mutantHash": "56e57784cca522241cb61b282ea4e7505fce35948deab65e11323c9338659360",
+      "testHash": "72ace86414a4b9a599f221707aa5cfb159395c862665a101d4d9d64231a34d2c"
+    },
+    "reuse-unparsed-total-capped": {
+      "testFile": "tests/reuse-scan.test.mjs",
+      "tests": [
+        "Given more malformed files than the retained list, When the snapshot is scanned, Then the total is reported apart from the capped list"
+      ],
+      "ancestors": [],
+      "mutantHash": "6c78893497d529d7d3afaf447c19ea721237f90cddab119ee5dcb325d7e80f0b",
+      "testHash": "aa90cd941b69cb074c189529ac097c00121aa80a72c920ae132bcd457e88d440"
+    },
+    "analysis-header-diffhash-dropped": {
+      "testFile": "tests/analysis-header.test.mjs",
+      "tests": [
+        "Given an artifact identity, When the header is built, Then the schema, the diff and the policy are all carried"
+      ],
+      "ancestors": [],
+      "mutantHash": "57a9f0f18c821e3b00a407365d3ff764305d1aa4cf321f57bd6905683f572d6a",
+      "testHash": "40baa2e277c0e6f75a9d920f96b28b6aacbcb15e07f2369e5b7086cc8179c8e2"
+    },
+    "reuse-cache-unit-span-unchecked": {
+      "testFile": "tests/reuse-scan.test.mjs",
+      "tests": [
+        "Given a cache entry whose units carry no source span, When the cache is asked, Then it is a miss and the file is parsed again"
+      ],
+      "ancestors": [],
+      "mutantHash": "94e2910125f86d3e5c8a1cda4413d35801f5d598dd825f134fe884cac10348e3",
+      "testHash": "aa90cd941b69cb074c189529ac097c00121aa80a72c920ae132bcd457e88d440"
+    },
+    "policy-env-fallback-ignored": {
+      "testFile": "tests/policy-env.test.mjs",
+      "tests": [
+        "Given no environment at all, When the switch is read, Then the caller fallback is returned"
+      ],
+      "ancestors": [],
+      "mutantHash": "05e88abba0d7a7d12917e9a2557bd6d06427268f05a17dbe3d7c03b883baf276",
+      "testHash": "e6ecc9513b4160f84106b52b3d60480b172133e16f0aea48d3771523ef36c9cd"
+    },
+    "discovery-excess-list-unbounded": {
+      "testFile": "tests/scan-budget.test.mjs",
+      "tests": [
+        "Given more files than the ceiling, When the walk retains two skipped records, Then exactly two are kept and the walk is marked truncated"
+      ],
+      "ancestors": [],
+      "mutantHash": "4d6762f6a04a43afa41b0bd2dddeb8e30f721a1198007fd7bf482ce0c9ec7d00",
+      "testHash": "d08dcbba3bbfa097bc4ed002bb0f999fe0b5e444ca960fcc79aabd6d9fd0cfde"
+    },
+    "measure-unrelated-case-expected-match": {
+      "testFile": "tests/measure-reuse-index.test.mjs",
+      "tests": [
+        "Given a fixture repository, When the measurement runs, Then the known copies match and the unrelated function does not"
+      ],
+      "ancestors": [],
+      "mutantHash": "1f49fcd5fad0435e3137824ed3c051d04f80b93f1e80f6154630dc4f4a66a600",
+      "testHash": "3876095f37d6b0ac7acfabc6bfe0a21c817aaeaa9ad0fe7280a477cd21b13cc8"
+    },
+    "reuse-cache-key-drops-path": {
+      "testFile": "tests/reuse-scan.test.mjs",
+      "tests": [
+        "Given identical bytes at two paths, When the cache is asked, Then each path gets its own entry"
+      ],
+      "ancestors": [],
+      "mutantHash": "094c6b5a0a42fcb437562f5d11432842bc043e2a33767ab450b161fcf7a476c9",
+      "testHash": "aa90cd941b69cb074c189529ac097c00121aa80a72c920ae132bcd457e88d440"
+    },
+    "measure-diagnostic-names-other-path": {
+      "testFile": "tests/measure-reuse-index.test.mjs",
+      "tests": [
+        "Given a regular file as the target, When the measurement runs, Then the diagnostic names the file the user supplied"
+      ],
+      "ancestors": [],
+      "mutantHash": "0ca0a04f194982e822ef45c234cd2e0f636f5748aeed3d93c31eccb5f40f45af",
+      "testHash": "3876095f37d6b0ac7acfabc6bfe0a21c817aaeaa9ad0fe7280a477cd21b13cc8"
+    },
+    "config-overrides-inherited-key-accepted": {
+      "testFile": "tests/config-overrides.test.mjs",
+      "tests": [
+        "Given a name inherited from Object.prototype, When it is overridden, Then it is rejected like any unknown key"
+      ],
+      "ancestors": [],
+      "mutantHash": "7bc394cdab9b7a8c26e0905021875d89d0867e6866ce9689ea834de632ca4b3f",
+      "testHash": "fbca877fc53ab80eeb3c3583f5fdf8196cfb6f77241ef87108e3e037227ba888"
+    },
+    "reuse-python-interpreter-ignored": {
+      "testFile": "tests/reuse-stage.test.mjs",
+      "tests": [
+        "Given a configured Python interpreter, When the stage runs, Then it is the one the scan uses"
+      ],
+      "ancestors": [],
+      "mutantHash": "cdc8a87af7fb4df114c0a8277e075451072d8388291c3e53472e5fc5d216228f",
+      "testHash": "72ace86414a4b9a599f221707aa5cfb159395c862665a101d4d9d64231a34d2c"
     }
   }
 }

@@ -24,6 +24,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`--recalibrate` refuses a moving tree on its own.** The frozen check no longer needs `--require-frozen`: a run on bytes that a half-saved finding can still change proves nothing, so recalibration refuses while an unstaged change or an untracked file exists.
 - **One retention rule.** `src/infra/retained-folder.mjs` prunes both folders; the run records and the certificates no longer keep two copies of the same loop with two sets of defaults, and a file nobody can parse is left alone instead of deleted.
 
+### Added
+- **A deterministic reuse hint, before the model reads anything.** `src/native/reuse/` scans the snapshot into units — every function or method with a range, a shape and the calls it names — and reports pairs where the changed code has the same shape as code that already exists, whatever the two are called. The shape drops names and keeps structure, so a renamed copy still matches: 5-token shingles, an inverted index to narrow the field, and a boilerplate filter that drops the shingles a tenth of the units share. JS/TS go through `@babel/parser`, Python through `ast` in one child interpreter; test-class paths are skipped. At most 12 lines reach the assignment (`.review/reuse.json` keeps the whole list with the numbers behind it).
+- The hint is additive by construction: it adds an input to the review, never removes one, never enters `evaluateReview`, and can neither block nor pass a commit. `OMP_REVIEW_KIT_REUSE` (`off`/`advisory`, default `advisory`) is the only switch. A truncated or failed scan says so, and the assignment never claims that no duplicate exists.
+- **A content-addressed scan cache.** Unchanged bytes are answered from `~/.omp/review-kit-cache/reuse` (`OMP_REVIEW_KIT_REUSE_CACHE_DIR` overrides) instead of being parsed again: measured on this repository, 218 ms cold and 33 ms warm. Every read and write is best-effort, and an entry of another schema is ignored, never migrated.
+- `scripts/measure-reuse-index.mjs` reproduces the measurement: a synthetic corpus (renamed copy, reformatted copy, copy with renamed names inside, and an unrelated function of the same length) plus the pairs this repository produces and the cold/warm cost.
+
+### Changed
+- The version pin lives in `package.json` and the release checklist, not in test literals: `tests/marketplace.test.mjs` and `tests/plugin-layout.test.mjs` now assert that every source agrees with `package.json` — both marketplace catalogs, the Claude manifest and the runner marker — instead of naming the release number three more times. A version bump no longer turns the suite red on three lines that only repeat the number.
+- Two rules that exist twice now exist once: `resolvePolicyFromEnv` (`src/domain/policy-env.mjs`) and `applyNumberOverrides` (`src/domain/config-overrides.mjs`) are shared by the maintainability and reuse analyses, and the AST walker of the reuse scan is the maintainability one (`walkAst`).
+
 ## [0.25.1] - 2026-11-02
 
 ### Fixed
