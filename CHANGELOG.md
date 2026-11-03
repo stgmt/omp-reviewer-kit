@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.2] - 2026-11-03
+
+### Fixed
+- **The library lookup no longer depends on a resolution the package refuses.** 0.26.1 resolved an exported entry, but the package declares its entry points for `import` only, so `require.resolve` refused even `"."` and a fresh plugin install was still blocked. The launcher now walks up from its own folder through every parent — the one path that exists in a plugin or workspace install — and keeps a module-resolution attempt as a second chance, never the only one. Measured on the installed 0.26.1 plugin: both `findLibrary()` and every commit were refused; 0.26.2 resolves `C:\Users\stigm\.omp\plugins\node_modules\@oh-my-pi\pi-coding-agent\package.json`.
+
 ## [0.26.1] - 2026-11-03
 
 ### Fixed
