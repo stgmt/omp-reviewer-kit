@@ -6,3 +6,8 @@ audit-reports/commit-reviews/
 
 # Review-session commit-message scratch files
 Temp/
+
+# Gate and suite run artifacts: evidence of a run, not of the release
+mutation-result.json
+mutation-result.json.jsonl
+audit-reports/*.log
