@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.3] - 2026-11-03
+
 ### Changed
 - **A shared contract is not a maintenance cost.** The maintainability stage used to confirm any repeated parameter group, including the one formed by one module, the consumers that import it and its contract test — the shape of a single definition with users, and exactly what the rule exists to create. `classifyContractCentralization` (`src/domain/maintainability-centralization.mjs`) recognises that shape and `evaluateReview` exempts it by group id. The exemption is proven, not assumed: every non-test occurrence must be the owner or import it by name, a contract test must be present, and a consumer whose source cannot be read leaves the group blocking. A second independent implementation, a copy in a module that does not import the owner, or a group without a contract test still blocks.
 
