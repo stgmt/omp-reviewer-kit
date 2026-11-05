@@ -1,4 +1,4 @@
-// omp-reviewer-kit runner v0.29.0
+// omp-reviewer-kit runner v0.29.1
 // omp-reviewer-kit runner: the Node launcher of the native review. The review runs under Bun in
 // src/native/native-host.mjs because OMP's library is a Bun package. This launcher only checks that
 // Bun and the pinned OMP library are installed, then hands the staged repository to the host.
@@ -9,6 +9,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isMainModule } from '../src/infra/main-module.mjs';
 
 const kitRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const host = path.join(kitRoot, 'src', 'native', 'native-host.mjs');
@@ -93,6 +94,6 @@ function main(argv) {
   process.exitCode = child.status ?? 1;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isMainModule(import.meta.url)) {
   main(process.argv.slice(2));
 }

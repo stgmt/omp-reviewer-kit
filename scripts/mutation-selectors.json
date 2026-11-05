@@ -2594,7 +2594,7 @@
       ],
       "ancestors": [],
       "mutantHash": "cfddc99f396535520a4dc4d36df4dd6c29c4067721f6e7df898722f180927074",
-      "testHash": "022bab1d4af0217f9dd7a4b82fa20680a71b33a2d2e04181a695e1feff6a7315"
+      "testHash": "7474443e473b568f99d2a0bbde8d835df4cdcb2d860f8355509c43aa76ef0ed0"
     },
     "native-launcher-library-check-ignored": {
       "testFile": "tests/native-launcher.test.mjs",
@@ -2603,7 +2603,7 @@
       ],
       "ancestors": [],
       "mutantHash": "87aa17171ea7b87881645b811ce28abab947aa81bcb2a9de03f7f2cf6382e2b7",
-      "testHash": "022bab1d4af0217f9dd7a4b82fa20680a71b33a2d2e04181a695e1feff6a7315"
+      "testHash": "7474443e473b568f99d2a0bbde8d835df4cdcb2d860f8355509c43aa76ef0ed0"
     },
     "native-stub-missing-plugin-passes": {
       "testFile": "tests/runner-stub.test.mjs",
@@ -3633,7 +3633,7 @@
       ],
       "ancestors": [],
       "mutantHash": "1b9482b79404b46689396ee7e311c1dccbb55c206fa91ea2c3b33f840a37f7af",
-      "testHash": "022bab1d4af0217f9dd7a4b82fa20680a71b33a2d2e04181a695e1feff6a7315"
+      "testHash": "7474443e473b568f99d2a0bbde8d835df4cdcb2d860f8355509c43aa76ef0ed0"
     },
     "contract-probe-cap-removed": {
       "testFile": "tests/contract-stage.test.mjs",
@@ -3803,8 +3803,8 @@
         "Given the launcher module is imported, When it loads, Then it starts nothing and prints no diagnostic"
       ],
       "ancestors": [],
-      "mutantHash": "d1cb48e486e54d3603685a6f29bc9f097cb11a418a8c6dbdf1bb1c640ad2694f",
-      "testHash": "022bab1d4af0217f9dd7a4b82fa20680a71b33a2d2e04181a695e1feff6a7315"
+      "mutantHash": "ce3b822b417f8ea12223d3232b294c825464b922890bf13260b9aee50eb6d737",
+      "testHash": "7474443e473b568f99d2a0bbde8d835df4cdcb2d860f8355509c43aa76ef0ed0"
     },
     "layout-contract-probe-not-required": {
       "testFile": "tests/layout-required.test.mjs",
@@ -4055,7 +4055,7 @@
         "Given a path containing a space, When the module identity is compared, Then the decoded path matches"
       ],
       "ancestors": [],
-      "mutantHash": "d19e655e52c0a45087954e461ce50bf5e769c9ea983e5b3493ed02ee855b13f8",
+      "mutantHash": "24b194281ba9e13de17a7df917867c3df8c1187909b1f7d450b08a2e231d5628",
       "testHash": "1eeea23e7796f005e8a2e2ed1b072ad9aad6995f68f8d36c75772f2d93db856d"
     },
     "codex-hook-contract-not-selected": {
