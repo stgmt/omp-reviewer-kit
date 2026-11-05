@@ -3,6 +3,9 @@
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import path from 'node:path';
+import { tmpdir } from 'node:os';
+import { pathToFileURL } from 'node:url';
 import { asksForHelp, commandOf, decideGuard, denyContract, isCommitCommand, stripShellComment, substitutions } from '../scripts/hook-guard.mjs';
 import { isMainModule } from '../src/infra/main-module.mjs';
 
@@ -76,10 +79,14 @@ test('Given a command that only mentions help elsewhere, When the guard decides,
 });
 
 test('Given a path containing a space, When the module identity is compared, Then the decoded path matches', () => {
-  const withSpace = 'C:/Users/some one/kit/scripts/hook-guard.mjs';
-  const encoded = new URL('file:///C:/Users/some%20one/kit/scripts/hook-guard.mjs').href;
-  assert.equal(isMainModule(encoded, withSpace), true, 'the percent-encoded pathname must not defeat the comparison');
-  assert.equal(isMainModule(encoded, 'C:/elsewhere.mjs'), false);
+  // Built from the running platform and a real temporary path, so the assertion holds on Windows and
+  // on POSIX instead of comparing two different path shapes.
+  const dir = path.join(tmpdir(), 'some one');
+  const file = path.join(dir, 'hook-guard.mjs');
+  const encoded = pathToFileURL(file).href;
+  assert.match(encoded, /some%20one/, 'the URL really carries the percent-encoded space');
+  assert.equal(isMainModule(encoded, file), true, 'the percent-encoded pathname must not defeat the comparison');
+  assert.equal(isMainModule(encoded, path.join(dir, 'other.mjs')), false);
   assert.equal(isMainModule(encoded, undefined), false);
 });
 
