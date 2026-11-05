@@ -1,0 +1,21 @@
+{
+  "name": "omp-reviewer-kit",
+  "interface": {
+    "displayName": "OMP Reviewer Kit"
+  },
+  "plugins": [
+    {
+      "name": "omp-reviewer-kit",
+      "source": {
+        "source": "url",
+        "url": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Development",
+      "version": "0.26.4"
+    }
+  ]
+}

@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 
+import { checkHostManifests } from './sync-host-manifests.mjs';
 import { MUTANTS } from './run-mutation-tests.mjs';
 import { findStaleMutants } from './mutation-runner.mjs';
 import { createCertificate, describeCertificate, gateRun, isUsableCertificate } from '../src/domain/mutation-certificate.mjs';
@@ -34,6 +35,8 @@ export const VERSION_SOURCES = Object.freeze([
   { file: '.omp-plugin/marketplace.json', field: ['plugins', 0, 'version'] },
   { file: '.claude-plugin/marketplace.json', field: ['plugins', 0, 'version'] },
   { file: 'claude-plugin/.claude-plugin/plugin.json', field: ['version'] },
+  { file: '.codex-plugin/plugin.json', field: ['version'] },
+  { file: '.agents/plugins/marketplace.json', field: ['plugins', 0, 'version'] },
 ]);
 
 const readValue = (document, field) => field.reduce((value, key) => (value == null ? undefined : value[key]), document);
@@ -313,6 +316,12 @@ export async function runPreflight({
   }
   if (catalog?.mappings) {
     const selectors = await checkSelectors({ mutants, selectors: catalog.mappings, root: cwd, findStale });
+    const hostRows = await checkHostManifests({ root: cwd, version: versions.ok ? versions.version : 'unknown' });
+    const staleHosts = hostRows.filter((row) => row.status !== 'current');
+    // Informational here: `npm run check` is the gate that fails on a stale host manifest, and the
+    // preflight already runs the layout check below. Reporting it as a verdict would count the same
+    // file twice and make an injected-read test impossible.
+    note(report('host manifests', true, staleHosts.length === 0 ? 'every host manifest carries the release version' : `warning: ${staleHosts.length} stale (${staleHosts.map((row) => row.path).join(', ')}); npm run check fails on this`));
     note(report('selector staleness', selectors.ok, selectors.ok ? 'every selector fits its test bytes' : `${selectors.stale.length} stale: ${selectors.stale.slice(0, 8).join(', ')}${selectors.stale.length > 8 ? ', ...' : ''}`));
     if (recalibrate) {
       // The gate proves the catalog for one byte state. A certificate is that proof; without one the

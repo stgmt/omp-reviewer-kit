@@ -1,0 +1,14 @@
+{
+  "name": "omp-reviewer-kit",
+  "version": "0.26.4",
+  "description": "Evidence-first multi-stage review system and Git pre-commit hook for OMP, Claude Code, Codex and OpenCode.",
+  "skills": "./skills",
+  "hooks": "./.codex-plugin/hooks.json",
+  "interface": {
+    "display_name": "OMP Reviewer Kit",
+    "short_description": "Evidence-first review and a commit guard",
+    "developer_name": "stgmt",
+    "category": "development",
+    "website_url": "https://github.com/stgmt/omp-reviewer-kit"
+  }
+}
