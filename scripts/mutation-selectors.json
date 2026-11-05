@@ -4038,7 +4038,7 @@
       ],
       "ancestors": [],
       "mutantHash": "3a13d796bd3c14d9b5f26c43e08b02cd1ffb5841a522c68b3b099fb0a261fb9d",
-      "testHash": "8dec6fa7caa564b52cf5ef7849d5b6a9fe6cfbc4a0b19e78970ecd13095c7218"
+      "testHash": "1eeea23e7796f005e8a2e2ed1b072ad9aad6995f68f8d36c75772f2d93db856d"
     },
     "host-doctor-duplicate-mode-ignored": {
       "testFile": "tests/host-doctor.test.mjs",
@@ -4056,7 +4056,7 @@
       ],
       "ancestors": [],
       "mutantHash": "d19e655e52c0a45087954e461ce50bf5e769c9ea983e5b3493ed02ee855b13f8",
-      "testHash": "8dec6fa7caa564b52cf5ef7849d5b6a9fe6cfbc4a0b19e78970ecd13095c7218"
+      "testHash": "1eeea23e7796f005e8a2e2ed1b072ad9aad6995f68f8d36c75772f2d93db856d"
     },
     "codex-hook-contract-not-selected": {
       "testFile": "tests/host-delivery-cli.test.mjs",
@@ -4146,7 +4146,7 @@
       ],
       "ancestors": [],
       "mutantHash": "019194b81eb18ab8acb94fa051bd14274f0d7b2044fde21c1810dd0316c8b7e4",
-      "testHash": "8dec6fa7caa564b52cf5ef7849d5b6a9fe6cfbc4a0b19e78970ecd13095c7218"
+      "testHash": "1eeea23e7796f005e8a2e2ed1b072ad9aad6995f68f8d36c75772f2d93db856d"
     },
     "plugin-array-comment-brackets-counted": {
       "testFile": "tests/host-install-plan.test.mjs",
@@ -4191,7 +4191,7 @@
       ],
       "ancestors": [],
       "mutantHash": "d6b2faf7230fcf3a0f603b51fe24b0fd67377e377d0e1976787c45ca0ef8f93e",
-      "testHash": "8dec6fa7caa564b52cf5ef7849d5b6a9fe6cfbc4a0b19e78970ecd13095c7218"
+      "testHash": "1eeea23e7796f005e8a2e2ed1b072ad9aad6995f68f8d36c75772f2d93db856d"
     },
     "mutation-copy-roots-host-dirs-dropped": {
       "testFile": "tests/host-delivery-cli.test.mjs",
@@ -4218,7 +4218,7 @@
       ],
       "ancestors": [],
       "mutantHash": "f70c1d1fade686541e4005c50d9bead59506e11a04f3f3c35c3f6b307bfb9eff",
-      "testHash": "8dec6fa7caa564b52cf5ef7849d5b6a9fe6cfbc4a0b19e78970ecd13095c7218"
+      "testHash": "1eeea23e7796f005e8a2e2ed1b072ad9aad6995f68f8d36c75772f2d93db856d"
     },
     "host-install-remove-creates-config": {
       "testFile": "tests/host-delivery-cli.test.mjs",
@@ -4254,7 +4254,7 @@
       ],
       "ancestors": [],
       "mutantHash": "244867a9f8e2826f2152893335a363c590c0e289d1b2f4fe4bdef7209142deba",
-      "testHash": "8dec6fa7caa564b52cf5ef7849d5b6a9fe6cfbc4a0b19e78970ecd13095c7218"
+      "testHash": "1eeea23e7796f005e8a2e2ed1b072ad9aad6995f68f8d36c75772f2d93db856d"
     },
     "install-record-unsorted-duplicates": {
       "testFile": "tests/host-install-plan.test.mjs",
