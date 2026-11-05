@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- The host doctor recognizes OMP's marketplace runtime link as one installation, while retaining the conflict warning for distinct installations and malformed registrations.
+
 ## [0.29.1] - 2026-11-05
 
 ### Fixed

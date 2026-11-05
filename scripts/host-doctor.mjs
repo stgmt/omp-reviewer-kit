@@ -6,7 +6,7 @@
 // a host with two install modes for one name is reported as a conflict — the one state an operator
 // has to resolve by hand.
 
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile, readdir, realpath } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { isMainModule } from '../src/infra/main-module.mjs';
@@ -48,6 +48,27 @@ export async function inspectOmp({ home, readFileImpl = readFile, listDirImpl = 
     npmInstalled = false;
   }
   const marketplaceEntries = Object.entries(registry?.plugins ?? {}).filter(([key]) => key.startsWith(`${KIT}@`));
+  if (npmInstalled) {
+    let matching = false;
+    let distinct = false;
+    for (const records of marketplaceEntries.map(([, records]) => records)) {
+      if (!Array.isArray(records)) continue;
+      for (const record of records) {
+        if (typeof record?.installPath !== 'string') continue;
+        try {
+          // OMP exposes marketplace packages through node_modules; that link is not a second install.
+          if (await realpath(path.join(root, 'node_modules', KIT)) === await realpath(record.installPath)) {
+            matching = true;
+          } else {
+            distinct = true;
+          }
+        } catch {
+          // An unreadable registration cannot prove that two installations are the same.
+        }
+      }
+    }
+    if (matching && !distinct) npmInstalled = false;
+  }
   const marketplaces = await readJson(path.join(home, '.omp', 'marketplaces.json'), readFileImpl);
   const ourMarketplace = (marketplaces?.marketplaces ?? []).find(entry => entry?.name === KIT) ?? null;
   const lockVersion = lock?.plugins?.[KIT]?.version ?? null;
