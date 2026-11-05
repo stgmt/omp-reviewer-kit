@@ -249,6 +249,12 @@ The development mutation gate requires Node 22 or newer. It uses four asynchrono
 
 Before any model reads the diff, the review settles the producer/consumer pairs the changed modules contain: an exported `write*/serialize*/encode*/toJSON*` function is called with the arguments its own signature requires (parameters with defaults are left to the writer), and the record it produces is handed to the exported `read*/parse*/decode*/fromJSON*/validate*` function in a child process. A reader that throws on that record blocks the commit and names the file, both functions, the thrown error and the record. Everything else is reported as unproven: `no-pairs` when the diff holds no such pair, `partial` when a pair could not be called (an unknown parameter domain, a reader that needs context, an unparsable module, a path beyond the scan budget), `failed` when the probe itself broke. `OMP_REVIEW_KIT_CONTRACT=off|advisory|block` — default `advisory`: the throw is always reported, and blocking is opted into.
 
+### Delivering an update
+
+One command moves every host to the current release: `node scripts/deliver.mjs`. It upgrades the OMP marketplace entry, updates the Claude Code plugin, and reports whether the shipped hook still names only the hook *format*.
+
+Repositories are not part of it on purpose. Their `.githooks/pre-commit` carries `hook-format v1` and the digest of its own body — never the release version — so a new release leaves the file byte-identical and no repository is rewritten. The review itself always runs from the installed plugin, which is what the release actually replaces. `scripts/sync-targets.mjs` therefore writes a hook once, for a repository that has none or one from before formats existed, and has nothing to do afterwards.
+
 ### When the gate runs
 
 The gate proves the catalog for one state of the bytes, so it runs once per release, on the frozen diff, after the review passed — `node scripts/release-preflight.mjs --require-frozen --recalibrate`. A review round with open findings is not a reason to recalibrate: the diff is about to change.

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 
-import { stampHookTemplate } from '../src/domain/hook-template.mjs';
+import { HOOK_FORMAT, stampHookTemplate } from '../src/domain/hook-template.mjs';
 import { syncTarget } from '../scripts/sync-targets.mjs';
 
 const RUNNER = '.omp/review-kit/run-review.mjs';
@@ -38,8 +38,8 @@ describe('Feature: sync-targets puts the thin runner stub in place without rolli
     }
   });
 
-  it('Given a hook from a newer kit release, When the registry is synced with --apply, Then it is kept', async () => {
-    const newer = stampHookTemplate(HOOK, '99.0.0');
+  it('Given a hook written in a newer format, When the registry is synced with --apply, Then it is kept', async () => {
+    const newer = stampHookTemplate(HOOK, HOOK_FORMAT + 1);
     const repo = await repoWithRunner(null);
     try {
       await mkdir(path.join(repo, '.githooks'), { recursive: true });
