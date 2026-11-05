@@ -4264,6 +4264,15 @@
       "ancestors": [],
       "mutantHash": "b7a4c0e79b07365f4488ed7e1f1c2e371afec357ed46bf199d34794bb63c5f77",
       "testHash": "7eb5df328425a5b3c351673b6e5c252f347cc479e926a8e02b4c05dd3727b10e"
+    },
+    "host-doctor-nonstring-path-matches": {
+      "testFile": "tests/host-doctor-runtime-link.test.mjs",
+      "tests": [
+        "Given a non-string marketplace path, When OMP is inspected, Then it remains a possible duplicate"
+      ],
+      "ancestors": [],
+      "mutantHash": "b51b3d8fbde0ef229e58117048ed983a67d3160e0c43cb9ecb92aa2ab742dd3f",
+      "testHash": "4d9b59f4bbec8978f30041c1ae5171099057757889695a5ff9082b81dd921ece"
     }
   }
 }
