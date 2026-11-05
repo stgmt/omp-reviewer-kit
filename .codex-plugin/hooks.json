@@ -1,0 +1,18 @@
+{
+  "description": "Blocks a git commit until the review passes.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/scripts/hook-guard.mjs\" --codex",
+            "timeout": 3600,
+            "statusMessage": "reviewing the staged change"
+          }
+        ]
+      }
+    ]
+  }
+}

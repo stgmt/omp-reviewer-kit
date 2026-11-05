@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 import { terminateProcessTree } from '../src/infra/process-tree.mjs';
 
 const reporter = new URL('./mutation-test-reporter.mjs', import.meta.url).href;
-const DIRECTORIES_TO_COPY = ['src', 'scripts', 'agents', 'skills', 'tests', 'templates', '.omp-plugin', '.omp/review-kit', '.claude-plugin', 'claude-plugin', '.github', '.specs/native-task-review'];
+export const DIRECTORIES_TO_COPY = ['src', 'scripts', 'agents', 'skills', 'tests', 'templates', '.omp-plugin', '.omp/review-kit', '.claude-plugin', 'claude-plugin', '.github', '.specs/native-task-review', '.codex-plugin', '.agents', 'opencode'];
 const FILES_TO_COPY = ['package.json', 'README.md', 'AGENTS.md', 'ROADMAP.md', 'CHANGELOG.md'];
 const exclusiveSuites = new Set(['execution-timeout', 'superseded-runs', 'run-signal-guard', 'review-run-records', 'omp-cli-reviewer-adapter', 'extension', 'run-tests-wrapper', 'claude-bridge', 'review-progress', 'target-heal', 'target-switches', 'status-latest-review', 'mutation-runner']);
 const catalogCheck = (event) => /mutation manifest:|mutant anchors|curated mutant/i.test(event.name);
@@ -208,7 +208,13 @@ export async function runMutationGate(mutants, { root = process.cwd(), workers =
     for (let i = 0; i < workers; i++) {
       const dir = path.join(base, `worker-${i}`);
       await mkdir(dir);
-      for (const name of [...DIRECTORIES_TO_COPY, ...FILES_TO_COPY]) await cp(path.join(root, name), path.join(dir, name), { recursive: true });
+      // A repository that does not carry every host directory still mutates: a missing root is skipped,
+      // never a reason to fail the gate.
+      for (const name of [...DIRECTORIES_TO_COPY, ...FILES_TO_COPY]) {
+        const source = path.join(root, name);
+        if (!existsSync(source)) continue;
+        await cp(source, path.join(dir, name), { recursive: true });
+      }
       // The OMP library is 800 MB and read-only for every worker: each worker links the project's node_modules instead of copying it.
       if (existsSync(path.join(root, 'node_modules'))) await symlink(path.join(root, 'node_modules'), path.join(dir, 'node_modules'), 'junction');
       const baseline = await captureTree(dir);

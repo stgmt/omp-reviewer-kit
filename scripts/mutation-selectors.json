@@ -3120,7 +3120,7 @@
       ],
       "ancestors": [],
       "mutantHash": "97fddde30eed11c15c89120a375a113245753276dd374ee32325da03c4d73ce2",
-      "testHash": "a4fcd64457ecf0922630bac27678cc1179db3158d6bf8a5f6a0afb8bee05fd05"
+      "testHash": "ada62d5d8aef21b8ec64310b76e0ff102f8fe5aa926a75ad8160688f589fd88b"
     },
     "preflight-fingerprint-path-order-unstable": {
       "testFile": "tests/release-preflight.test.mjs",
@@ -3129,7 +3129,7 @@
       ],
       "ancestors": [],
       "mutantHash": "f64630c812e3ee6c9974fc7912f0e5d40fa78cdb243b6a85084a88ddcb97fbdc",
-      "testHash": "a4fcd64457ecf0922630bac27678cc1179db3158d6bf8a5f6a0afb8bee05fd05"
+      "testHash": "ada62d5d8aef21b8ec64310b76e0ff102f8fe5aa926a75ad8160688f589fd88b"
     },
     "preflight-fingerprint-paths-not-deduplicated": {
       "testFile": "tests/release-preflight.test.mjs",
@@ -3138,7 +3138,7 @@
       ],
       "ancestors": [],
       "mutantHash": "84f43a3fa1ced2d18456e09f40ebb3fd7e56a8bbdc4ab7aa19b8b905f97a93ac",
-      "testHash": "a4fcd64457ecf0922630bac27678cc1179db3158d6bf8a5f6a0afb8bee05fd05"
+      "testHash": "ada62d5d8aef21b8ec64310b76e0ff102f8fe5aa926a75ad8160688f589fd88b"
     },
     "preflight-fingerprint-ignores-mutant-definitions": {
       "testFile": "tests/release-preflight.test.mjs",
@@ -3147,7 +3147,7 @@
       ],
       "ancestors": [],
       "mutantHash": "276e448324e935f456d0e47ab5fb87a229b06a70e758e8f0d2c4d4410d138d57",
-      "testHash": "a4fcd64457ecf0922630bac27678cc1179db3158d6bf8a5f6a0afb8bee05fd05"
+      "testHash": "ada62d5d8aef21b8ec64310b76e0ff102f8fe5aa926a75ad8160688f589fd88b"
     },
     "preflight-require-frozen-continues": {
       "testFile": "tests/release-preflight.test.mjs",
@@ -3156,7 +3156,7 @@
       ],
       "ancestors": [],
       "mutantHash": "c5d2a29ff01f458b5178b08119f4e28ad6ab94db510361028eb1005c8391d503",
-      "testHash": "a4fcd64457ecf0922630bac27678cc1179db3158d6bf8a5f6a0afb8bee05fd05"
+      "testHash": "ada62d5d8aef21b8ec64310b76e0ff102f8fe5aa926a75ad8160688f589fd88b"
     },
     "certificate-other-schema-accepted": {
       "testFile": "tests/mutation-certificate-store.test.mjs",
@@ -3174,7 +3174,7 @@
       ],
       "ancestors": [],
       "mutantHash": "c45b2882cc4468d3495a9b7863c381ad9a64c032ce078dfb01d87f27e4f56591",
-      "testHash": "a4fcd64457ecf0922630bac27678cc1179db3158d6bf8a5f6a0afb8bee05fd05"
+      "testHash": "ada62d5d8aef21b8ec64310b76e0ff102f8fe5aa926a75ad8160688f589fd88b"
     },
     "preflight-unhashable-tree-continues": {
       "testFile": "tests/release-preflight.test.mjs",
@@ -3183,7 +3183,7 @@
       ],
       "ancestors": [],
       "mutantHash": "d74df71aeed6e793299a4ac3264babc4c897d65108251f725185db1684b3ad79",
-      "testHash": "a4fcd64457ecf0922630bac27678cc1179db3158d6bf8a5f6a0afb8bee05fd05"
+      "testHash": "ada62d5d8aef21b8ec64310b76e0ff102f8fe5aa926a75ad8160688f589fd88b"
     },
     "repo-identity-skips-realpath": {
       "testFile": "tests/repo-identity.test.mjs",
@@ -3309,7 +3309,7 @@
       ],
       "ancestors": [],
       "mutantHash": "d7118c63e7f38be6b8a87b29c3ed92ca6b3fdc4d7920b4d3f9135a62a3b86b78",
-      "testHash": "a4fcd64457ecf0922630bac27678cc1179db3158d6bf8a5f6a0afb8bee05fd05"
+      "testHash": "ada62d5d8aef21b8ec64310b76e0ff102f8fe5aa926a75ad8160688f589fd88b"
     },
     "certificate-run-digest-ignored": {
       "testFile": "tests/mutation-certificate-store.test.mjs",
@@ -4003,6 +4003,267 @@
       "ancestors": [],
       "mutantHash": "813950fe04ff0bc275ba8d922784168d4c0894e1211ff2adc93ec04a3f92e6d5",
       "testHash": "122cf326aa9270021595d00d88fecf89de14c110cb458959c4c6a7c881124aff"
+    },
+    "host-manifest-claude-source-root": {
+      "testFile": "tests/host-manifests.test.mjs",
+      "tests": [
+        "Given the Claude catalogue, When it is built, Then the entry points at the shell and Codex gets its own native catalogue at the root"
+      ],
+      "ancestors": [],
+      "mutantHash": "1b477ad0053a0e4fd2027f41e4997631433f998c235c1d41f5278aee1709fcf5",
+      "testHash": "8a10bb634ed7f56386efad0a6e0241652d6364ccc24093880d598711ce26a57e"
+    },
+    "codex-hooks-matcher-any-tool": {
+      "testFile": "tests/host-manifests.test.mjs",
+      "tests": [
+        "Given the Codex hooks file, When it is built, Then it guards the shell tool through the shared guard script"
+      ],
+      "ancestors": [],
+      "mutantHash": "22f18b6873a47d352721f5acbd3eb5102002fc52af7234cffbd47222eb8c8756",
+      "testHash": "8a10bb634ed7f56386efad0a6e0241652d6364ccc24093880d598711ce26a57e"
+    },
+    "host-manifest-check-crlf-differs": {
+      "testFile": "tests/host-manifests.test.mjs",
+      "tests": [
+        "Given a checkout with CRLF manifests, When the check runs, Then the line ending is not a difference"
+      ],
+      "ancestors": [],
+      "mutantHash": "43a5af7077dd7d0f17be00cef27c6ce96c7eca3915a80c2725e4175550721023",
+      "testHash": "8a10bb634ed7f56386efad0a6e0241652d6364ccc24093880d598711ce26a57e"
+    },
+    "hook-guard-status-null-allowed": {
+      "testFile": "tests/host-hook-guard.test.mjs",
+      "tests": [
+        "Given a review that crashed, When the guard decides, Then it blocks rather than letting the commit through"
+      ],
+      "ancestors": [],
+      "mutantHash": "3a13d796bd3c14d9b5f26c43e08b02cd1ffb5841a522c68b3b099fb0a261fb9d",
+      "testHash": "1eeea23e7796f005e8a2e2ed1b072ad9aad6995f68f8d36c75772f2d93db856d"
+    },
+    "host-doctor-duplicate-mode-ignored": {
+      "testFile": "tests/host-doctor.test.mjs",
+      "tests": [
+        "Given the npm form and a marketplace registration, When OMP is inspected, Then two install modes are reported as a conflict"
+      ],
+      "ancestors": [],
+      "mutantHash": "07c791b9b703b9c94d886abbfd8531b48c5d3f35e7e721fc3f156af7f8feb959",
+      "testHash": "80d9a84dc312776e1b94813bebe92b9584f08aafe5e158cc80121ac62cd82e20"
+    },
+    "hook-guard-main-check-encoded": {
+      "testFile": "tests/host-hook-guard.test.mjs",
+      "tests": [
+        "Given a path containing a space, When the module identity is compared, Then the decoded path matches"
+      ],
+      "ancestors": [],
+      "mutantHash": "d19e655e52c0a45087954e461ce50bf5e769c9ea983e5b3493ed02ee855b13f8",
+      "testHash": "1eeea23e7796f005e8a2e2ed1b072ad9aad6995f68f8d36c75772f2d93db856d"
+    },
+    "codex-hook-contract-not-selected": {
+      "testFile": "tests/host-delivery-cli.test.mjs",
+      "tests": [
+        "Given a repository without host manifests, When the sync check runs, Then it names the files and exits nonzero"
+      ],
+      "ancestors": [],
+      "mutantHash": "24f675ffef8e6a104158007eb472dd80312ca421c8546bf233458bbe75f0327f",
+      "testHash": "3f18dabb3d464bde20fe154ba87d436c6cd831992b84ba5e340be588a0510d32"
+    },
+    "nonzero-status-returns-allow": {
+      "testFile": "tests/host-delivery-cli.test.mjs",
+      "tests": [
+        "Given the OpenCode module, When the child review exits nonzero, Then the decision blocks with its reason"
+      ],
+      "ancestors": [],
+      "mutantHash": "8bf12dc8afb49dff774fc39a60ad9b141d9d267af71e60cb98c4402481e65892",
+      "testHash": "3f18dabb3d464bde20fe154ba87d436c6cd831992b84ba5e340be588a0510d32"
+    },
+    "blocked-opencode-decision-not-thrown": {
+      "testFile": "tests/host-delivery-cli.test.mjs",
+      "tests": [
+        "Given the registered OpenCode hook, When a commit is blocked, Then the hook rejects with the reason, and a passing review resolves"
+      ],
+      "ancestors": [],
+      "mutantHash": "d82b9d6a7cd9d14da8a9383beb53cb7b8a895f8d205dcbfea7ed8640f3ff536a",
+      "testHash": "3f18dabb3d464bde20fe154ba87d436c6cd831992b84ba5e340be588a0510d32"
+    },
+    "host-install-flat-files-skipped": {
+      "testFile": "tests/host-delivery-cli.test.mjs",
+      "tests": [
+        "Given a user file with the same name, When the installer copies components, Then the user file is neither overwritten nor recorded"
+      ],
+      "ancestors": [],
+      "mutantHash": "8eba3e23ea9da8069dd4be4e8adeacc37032a83805b1b603768b896c690f451b",
+      "testHash": "3f18dabb3d464bde20fe154ba87d436c6cd831992b84ba5e340be588a0510d32"
+    },
+    "layout-stale-manifest-throw-removed": {
+      "testFile": "tests/host-delivery-cli.test.mjs",
+      "tests": [
+        "Given a stale generated manifest, When the layout gate checks it, Then it throws naming the file"
+      ],
+      "ancestors": [],
+      "mutantHash": "917e944f6211d5f3ffada684cb7902d1c998aedada3f717d9d606a8520886a08",
+      "testHash": "3f18dabb3d464bde20fe154ba87d436c6cd831992b84ba5e340be588a0510d32"
+    },
+    "layout-host-manifest-call-removed": {
+      "testFile": "tests/host-delivery-cli.test.mjs",
+      "tests": [
+        "Given an otherwise valid checkout with one stale generated manifest, When the layout gate runs there, Then it exits nonzero and names the file"
+      ],
+      "ancestors": [],
+      "mutantHash": "31920aa25faf5c00ebc06a9b680860f96e148be4331b3f6eff5798cac5ed4ab0",
+      "testHash": "3f18dabb3d464bde20fe154ba87d436c6cd831992b84ba5e340be588a0510d32"
+    },
+    "host-install-record-overwritten": {
+      "testFile": "tests/host-delivery-cli.test.mjs",
+      "tests": [
+        "Given two applies to the same config, When the kit is removed afterwards, Then every component the first apply copied is deleted"
+      ],
+      "ancestors": [],
+      "mutantHash": "303e5c70ab507ea51888246225de405effea07f0470f20d8b3f7bde5667ab047",
+      "testHash": "3f18dabb3d464bde20fe154ba87d436c6cd831992b84ba5e340be588a0510d32"
+    },
+    "host-doctor-sibling-counted": {
+      "testFile": "tests/host-delivery-cli.test.mjs",
+      "tests": [
+        "Given a config with only a sibling package, When OpenCode is inspected, Then this kit is not reported installed"
+      ],
+      "ancestors": [],
+      "mutantHash": "bdf882431d276e5a05c050ad01a6c088d8920e1a855f3f9f13fd7c36ae676800",
+      "testHash": "3f18dabb3d464bde20fe154ba87d436c6cd831992b84ba5e340be588a0510d32"
+    },
+    "host-doctor-commented-toml-counted": {
+      "testFile": "tests/host-doctor.test.mjs",
+      "tests": [
+        "Given TOML with a hash inside a quoted value, When the comments are stripped, Then the value is kept"
+      ],
+      "ancestors": [],
+      "mutantHash": "d6788a2c2f6d243d2238c1632381d4db6d640d56be39ca76b904dc3423058481",
+      "testHash": "80d9a84dc312776e1b94813bebe92b9584f08aafe5e158cc80121ac62cd82e20"
+    },
+    "hook-guard-escape-unaware": {
+      "testFile": "tests/host-hook-guard.test.mjs",
+      "tests": [
+        "Given a message with an escaped quote before --help, When the segments are classified, Then the commit still counts"
+      ],
+      "ancestors": [],
+      "mutantHash": "019194b81eb18ab8acb94fa051bd14274f0d7b2044fde21c1810dd0316c8b7e4",
+      "testHash": "1eeea23e7796f005e8a2e2ed1b072ad9aad6995f68f8d36c75772f2d93db856d"
+    },
+    "plugin-array-comment-brackets-counted": {
+      "testFile": "tests/host-install-plan.test.mjs",
+      "tests": [
+        "Given a plugin array whose comment holds a bracket, When the array is rewritten, Then the file stays valid and the comment does not truncate it"
+      ],
+      "ancestors": [],
+      "mutantHash": "9cd2626ba7c9b47e86b39afeeddd1e003863539075f9491c3378f5a69a05eb4a",
+      "testHash": "7eb5df328425a5b3c351673b6e5c252f347cc479e926a8e02b4c05dd3727b10e"
+    },
+    "plugin-writer-comment-brackets-counted": {
+      "testFile": "tests/host-install-plan.test.mjs",
+      "tests": [
+        "Given a plugin array whose comment holds a bracket, When the array is rewritten, Then the file stays valid and the comment does not truncate it"
+      ],
+      "ancestors": [],
+      "mutantHash": "f650149ca465c2709d9f33931ab720a24d3b77abe11b04cdd10ca6bbc67b50e9",
+      "testHash": "7eb5df328425a5b3c351673b6e5c252f347cc479e926a8e02b4c05dd3727b10e"
+    },
+    "plugin-tuple-options-flattened": {
+      "testFile": "tests/host-install-plan.test.mjs",
+      "tests": [
+        "Given a config with a tuple plugin, When the kit is installed and removed, Then the tuple keeps its options"
+      ],
+      "ancestors": [],
+      "mutantHash": "d2625c8525c5404b5c5ac86beba08fa8096871a2c56ddf48263270b403158f63",
+      "testHash": "7eb5df328425a5b3c351673b6e5c252f347cc479e926a8e02b4c05dd3727b10e"
+    },
+    "host-doctor-json-conflict-healthy": {
+      "testFile": "tests/host-doctor.test.mjs",
+      "tests": [
+        "Given two OMP install modes, When the doctor prints JSON, Then the conflict is in the report and the exit status is nonzero"
+      ],
+      "ancestors": [],
+      "mutantHash": "214ca271a9574b392820f90772787e7cb22c5da115332d7f56161735bdce5a34",
+      "testHash": "80d9a84dc312776e1b94813bebe92b9584f08aafe5e158cc80121ac62cd82e20"
+    },
+    "hook-guard-shell-comment-help": {
+      "testFile": "tests/host-hook-guard.test.mjs",
+      "tests": [
+        "Given a commit followed by a shell comment mentioning --help, When it is classified, Then the commit counts"
+      ],
+      "ancestors": [],
+      "mutantHash": "d6b2faf7230fcf3a0f603b51fe24b0fd67377e377d0e1976787c45ca0ef8f93e",
+      "testHash": "1eeea23e7796f005e8a2e2ed1b072ad9aad6995f68f8d36c75772f2d93db856d"
+    },
+    "mutation-copy-roots-host-dirs-dropped": {
+      "testFile": "tests/host-delivery-cli.test.mjs",
+      "tests": [
+        "Given the mutation gate, When a worker copies the tree, Then every host directory the catalog mutates is copied"
+      ],
+      "ancestors": [],
+      "mutantHash": "c2a5669076cddc8f697e143ba5ef83422d61bca0cda23da2dac863600e9da7e0",
+      "testHash": "3f18dabb3d464bde20fe154ba87d436c6cd831992b84ba5e340be588a0510d32"
+    },
+    "plugin-writer-comment-example-selected": {
+      "testFile": "tests/host-install-plan.test.mjs",
+      "tests": [
+        "Given a JSONC file with a commented plugin example before the active array, When the array is rewritten, Then the active one is replaced and the config stays valid"
+      ],
+      "ancestors": [],
+      "mutantHash": "2c999d3f4d8848b03b0a7306c89b7f1c01457e2b50e3eba2f12d20064182acda",
+      "testHash": "7eb5df328425a5b3c351673b6e5c252f347cc479e926a8e02b4c05dd3727b10e"
+    },
+    "hook-guard-subshell-not-unwrapped": {
+      "testFile": "tests/host-hook-guard.test.mjs",
+      "tests": [
+        "Given a command whose substitution asks for help, When it is classified, Then it is not a commit"
+      ],
+      "ancestors": [],
+      "mutantHash": "f70c1d1fade686541e4005c50d9bead59506e11a04f3f3c35c3f6b307bfb9eff",
+      "testHash": "1eeea23e7796f005e8a2e2ed1b072ad9aad6995f68f8d36c75772f2d93db856d"
+    },
+    "host-install-remove-creates-config": {
+      "testFile": "tests/host-delivery-cli.test.mjs",
+      "tests": [
+        "Given no OpenCode config at all, When a removal runs, Then no config file is created"
+      ],
+      "ancestors": [],
+      "mutantHash": "2fdfa3199e72c47ab5ce4d8e3b2a8bdd4d6af02cb688c020c4d661dced7b8f94",
+      "testHash": "3f18dabb3d464bde20fe154ba87d436c6cd831992b84ba5e340be588a0510d32"
+    },
+    "host-install-remove-creates-config-dup": {
+      "testFile": "tests/host-delivery-cli.test.mjs",
+      "tests": [
+        "Given no OpenCode config at all, When a removal runs, Then no config file is created"
+      ],
+      "ancestors": [],
+      "mutantHash": "de3a6acfb51ce01d575f52bfa0424fa3d558cc635aa49694cbcb1308f501108f",
+      "testHash": "3f18dabb3d464bde20fe154ba87d436c6cd831992b84ba5e340be588a0510d32"
+    },
+    "installer-overwrites-broken-config": {
+      "testFile": "tests/host-delivery-cli.test.mjs",
+      "tests": [
+        "Given a truncated config, When an install runs, Then the file is left exactly as it was"
+      ],
+      "ancestors": [],
+      "mutantHash": "41333cf4cb783c39db90da984c0d30b01a0b035a0bdf034c881f716a8eee9a71",
+      "testHash": "3f18dabb3d464bde20fe154ba87d436c6cd831992b84ba5e340be588a0510d32"
+    },
+    "hook-guard-pathspec-help-bypass": {
+      "testFile": "tests/host-hook-guard.test.mjs",
+      "tests": [
+        "Given a commit that passes -h as a path after --, When it is classified, Then it is still a commit"
+      ],
+      "ancestors": [],
+      "mutantHash": "244867a9f8e2826f2152893335a363c590c0e289d1b2f4fe4bdef7209142deba",
+      "testHash": "1eeea23e7796f005e8a2e2ed1b072ad9aad6995f68f8d36c75772f2d93db856d"
+    },
+    "install-record-unsorted-duplicates": {
+      "testFile": "tests/host-install-plan.test.mjs",
+      "tests": [
+        "Given a version and files, When the install record is built, Then it is deduplicated and sorted"
+      ],
+      "ancestors": [],
+      "mutantHash": "b7a4c0e79b07365f4488ed7e1f1c2e371afec357ed46bf199d34794bb63c5f77",
+      "testHash": "7eb5df328425a5b3c351673b6e5c252f347cc479e926a8e02b4c05dd3727b10e"
     }
   }
 }

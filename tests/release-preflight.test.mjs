@@ -37,6 +37,8 @@ const documents = (version, overrides = {}) => {
     ['.omp-plugin/marketplace.json', JSON.stringify({ plugins: [{ version }] })],
     ['.claude-plugin/marketplace.json', JSON.stringify({ plugins: [{ version }] })],
     ['claude-plugin/.claude-plugin/plugin.json', JSON.stringify({ version })],
+    ['.codex-plugin/plugin.json', JSON.stringify({ version })],
+    ['.agents/plugins/marketplace.json', JSON.stringify({ plugins: [{ version }] })],
     ['CHANGELOG.md', `# Changelog\n\n## [${version}] - 2026-11-01\n`],
   ]);
   for (const [file, content] of Object.entries(overrides)) files.set(file, content);
@@ -50,7 +52,7 @@ test('Given every version source and the changelog agree, When the versions are 
   const result = await checkVersions({ readFile: documents('1.2.3') });
   assert.equal(result.ok, true);
   assert.equal(result.version, '1.2.3');
-  assert.equal(VERSION_SOURCES.length, 5, 'package version, plugin version, two catalogs and the Claude manifest');
+  assert.equal(VERSION_SOURCES.length, 7, 'package version twice, both marketplaces, the Claude manifest and the two Codex manifests');
 });
 
 test('Given one catalog still names the previous release, When the versions are checked, Then the disagreement names the files', async () => {

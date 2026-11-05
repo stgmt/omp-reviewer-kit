@@ -11,12 +11,14 @@
     "url": "https://github.com/stgmt/omp-reviewer-kit.git"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18.0.0",
+    "opencode": ">=1.19.0"
   },
   "exports": {
     ".": "./src/index.mjs",
     "./runner": "./scripts/run-review.mjs",
-    "./extension": "./src/extension.mjs"
+    "./extension": "./src/extension.mjs",
+    "./server": "./opencode/plugin.mjs"
   },
   "files": [
     "scripts",

@@ -1,5 +1,4 @@
 {
-  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "omp-reviewer-kit",
   "owner": {
     "name": "stgmt"
@@ -7,7 +6,7 @@
   "plugins": [
     {
       "name": "omp-reviewer-kit",
-      "description": "Evidence-first multi-stage OMP review system and Git pre-commit hook.",
+      "description": "Evidence-first multi-stage review system and Git pre-commit hook for OMP, Claude Code, Codex and OpenCode.",
       "source": "./",
       "category": "development",
       "homepage": "https://github.com/stgmt/omp-reviewer-kit",

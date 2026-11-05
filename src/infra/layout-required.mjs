@@ -11,6 +11,18 @@ export const CLAUDE_PLUGIN_FILES = ['.claude-plugin/plugin.json','commands/docto
 export const CLAUDE_PLUGIN_MAX_BYTES = 100 * 1024;
 
 export const REQUIRED_FILES = [
+  'src/infra/main-module.mjs',
+  'opencode/plugin.mjs',
+  'scripts/hook-guard.mjs',
+  'scripts/host-install.mjs',
+  'scripts/host-doctor.mjs',
+  'scripts/sync-host-manifests.mjs',
+  'src/domain/host-manifests.mjs',
+  'src/domain/host-install-plan.mjs',
+  '.codex-plugin/plugin.json',
+  '.codex-plugin/hooks.json',
+  '.agents/plugins/marketplace.json',
+
   'package.json',
   '.omp-plugin/marketplace.json',
   '.claude-plugin/marketplace.json',

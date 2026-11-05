@@ -2,6 +2,7 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 import { HOOK_FORMAT, isOwnedHook, parseHookFormat } from '../src/domain/hook-template.mjs';
+import { assertHostManifestsCurrent, checkHostManifests } from './sync-host-manifests.mjs';
 import { isRunnerNewer } from '../src/domain/runner-version.mjs';
 import { CLAUDE_PLUGIN_FILES, CLAUDE_PLUGIN_MAX_BYTES, REQUIRED_FILES, assertRequiredFiles } from '../src/infra/layout-required.mjs';
 
@@ -71,5 +72,7 @@ for (const file of shellFiles) shellBytes += (await stat(file)).size;
 if (shellBytes > CLAUDE_PLUGIN_MAX_BYTES) {
   throw new Error(`claude-plugin/ is ${shellBytes} bytes; the limit is ${CLAUDE_PLUGIN_MAX_BYTES}.`);
 }
+
+assertHostManifestsCurrent(await checkHostManifests({ root: process.cwd(), version: pkg.version }), pkg.version);
 
 console.log(`layout ok: ${REQUIRED_FILES.length} files verified; vendored runner is the stub and the algorithm carries its version marker`);

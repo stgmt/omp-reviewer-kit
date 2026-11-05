@@ -1,12 +1,20 @@
 {
   "name": "omp-reviewer-kit",
   "version": "0.28.0",
-  "description": "Claude Code shell for omp-reviewer-kit: evidence-first review of staged Git changes on OMP; installs and drives the OMP plugin.",
+  "description": "Evidence-first multi-stage review system and Git pre-commit hook for OMP, Claude Code, Codex and OpenCode.",
   "author": {
-    "name": "stgmt"
+    "name": "stgmt",
+    "url": "https://github.com/stgmt"
   },
   "homepage": "https://github.com/stgmt/omp-reviewer-kit",
-  "repository": "https://github.com/stgmt/omp-reviewer-kit",
+  "repository": "https://github.com/stgmt/omp-reviewer-kit.git",
   "license": "MIT",
+  "keywords": [
+    "review",
+    "quality",
+    "git-hooks",
+    "agents",
+    "skills"
+  ],
   "agents": []
 }
