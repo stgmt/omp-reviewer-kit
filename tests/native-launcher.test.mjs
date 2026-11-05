@@ -11,6 +11,13 @@ import { fileURLToPath } from 'node:url';
 const kitRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const launcher = path.join(kitRoot, 'scripts', 'run-review.mjs');
 
+async function copyLauncher(root) {
+  await mkdir(path.join(root, 'scripts'), { recursive: true });
+  await mkdir(path.join(root, 'src', 'infra'), { recursive: true });
+  await copyFile(launcher, path.join(root, 'scripts', 'run-review.mjs'));
+  await copyFile(path.join(kitRoot, 'src', 'infra', 'main-module.mjs'), path.join(root, 'src', 'infra', 'main-module.mjs'));
+}
+
 test('Given Bun cannot be started, When the launcher runs, Then it blocks with the Bun diagnostic and no review', () => {
   const result = spawnSync(process.execPath, [launcher], {
     cwd: kitRoot,
@@ -24,8 +31,7 @@ test('Given Bun cannot be started, When the launcher runs, Then it blocks with t
 test('Given the OMP library is not installed beside the launcher, When the launcher runs, Then it blocks naming the install command', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'launcher-test-'));
   try {
-    await mkdir(path.join(root, 'scripts'));
-    await copyFile(launcher, path.join(root, 'scripts', 'run-review.mjs'));
+    await copyLauncher(root);
     const repo = path.join(root, 'repo');
     await mkdir(repo);
     const result = spawnSync(process.execPath, [path.join(root, 'scripts', 'run-review.mjs')], {
@@ -45,8 +51,7 @@ test('Given the OMP library is not installed beside the launcher, When the launc
 // (`node --version`) passes, and the host is whatever file the test writes at src/native.
 async function launcherRoot() {
   const root = await mkdtemp(path.join(tmpdir(), 'launcher-test-'));
-  await mkdir(path.join(root, 'scripts'));
-  await copyFile(launcher, path.join(root, 'scripts', 'run-review.mjs'));
+  await copyLauncher(root);
   await mkdir(path.join(root, 'node_modules', '@oh-my-pi', 'pi-coding-agent'), { recursive: true });
   await writeFile(path.join(root, 'node_modules', '@oh-my-pi', 'pi-coding-agent', 'package.json'), '{}\n');
   return root;
