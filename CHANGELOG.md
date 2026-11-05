@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.0] - 2026-11-05
+
+### Added
+- **One package, four hosts.** `src/domain/host-manifests.mjs` and `scripts/sync-host-manifests.mjs` make `package.json` the only place a release number is written: they generate the OMP catalogue, the Claude catalogue and plugin manifest, the Codex plugin manifest and hooks file, and the native Codex marketplace. `--check` fails on any disagreement and runs inside `npm run check` and the release preflight.
+- `scripts/hook-guard.mjs`: one commit guard for hosts without a Git hook of their own. Its classifier is deliberately wider than Git's — subshells, command and process substitution, nested substitutions and `--no-verify` all reach the review, while comments, single-quoted spans and double-quoted text without a substitution are ignored; a help request is skipped, and past the substitution bound the guard blocks rather than calling a command safe.
+- `opencode/plugin.mjs` with `exports["./server"]` and `engines.opencode`: the entry OpenCode resolves, verified against 1.19.3, without which a git install is refused.
+- `scripts/host-install.mjs`: the OpenCode installer. It edits the JSONC config preserving comments and tuple options, copies flat and directory components, never overwrites a user file, keeps a cumulative record through `installRecord`, refuses a config it cannot preserve, and on removal resolves real paths so neither the config root nor a symlinked directory pointing outside it is deleted — and it never creates a config that did not exist. For OMP, Claude Code and Codex it prints their own commands instead of re-implementing them.
+- `scripts/host-doctor.mjs`: version, install mode and paths per host, an `activeToml` reader and the exact `isKitPackageSpec` identity; two install modes for one name, or a marketplace pointing at a local checkout, exit nonzero — including in `--json`.
+- `src/infra/main-module.mjs`: one correct "was this script started as a program" check through `fileURLToPath`, so an install under a path with a space still runs.
+
+### Changed
+- The mutation gate copies the host directories into its worker trees; a missing root is skipped instead of failing the gate.
+
 ## [0.28.0] - 2026-11-03
 
 ### Changed
