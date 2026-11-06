@@ -47,6 +47,23 @@ for (const victim of PINNED_PATHS) {
   });
 }
 
+for (const victim of ['src/infra/ensure-review-runtime.mjs', 'bun.lock']) {
+  test(`Given an installation missing ${victim}, When the layout is checked, Then it is rejected`, async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'layout-runtime-'));
+    try {
+      for (const file of REQUIRED_FILES) {
+        if (file === victim) continue;
+        const absolute = path.join(root, file);
+        await mkdir(path.dirname(absolute), { recursive: true });
+        await writeFile(absolute, '');
+      }
+      await assert.rejects(() => assertRequiredFiles(root, REQUIRED_FILES), /missing required file/);
+    } finally {
+      await rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+    }
+  });
+}
+
 test('Given the native review imports the contract stage, When the layout is checked, Then all three contract modules are required and their absence is rejected', async () => {
   const { mkdtemp, mkdir, rm } = await import('node:fs/promises');
   const { tmpdir } = await import('node:os');

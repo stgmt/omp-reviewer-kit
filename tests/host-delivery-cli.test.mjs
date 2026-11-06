@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import test from 'node:test';
+import { INSTALL_MANIFEST } from '../src/domain/host-install-plan.mjs';
 
 const REMOVE = { recursive: true, force: true, maxRetries: 20, retryDelay: 250 };
 const ROOT = process.cwd();
@@ -28,13 +29,13 @@ test('Given the OpenCode module, When a shell command that is not a commit runs,
   const module = await import(pathToFileURL(path.join(ROOT, 'opencode', 'plugin.mjs')).href);
   const hooks = await module.default.server();
   assert.equal(typeof hooks['tool.execute.before'], 'function');
-  await hooks['tool.execute.before']({ tool: 'bash', args: { command: 'npm test' } });
+  await hooks['tool.execute.before']({ tool: 'bash' }, { args: { command: 'npm test' } });
 });
 
 test('Given the OpenCode module, When a non-shell tool runs, Then the guard is not consulted at all', async () => {
   const module = await import(pathToFileURL(path.join(ROOT, 'opencode', 'plugin.mjs')).href);
   const hooks = await module.default.server();
-  await hooks['tool.execute.before']({ tool: 'read', args: { filePath: 'x' } });
+  await hooks['tool.execute.before']({ tool: 'read' }, { args: { filePath: 'x' } });
 });
 
 test('Given the configured Codex hook, When a commit is denied, Then the command carries --codex and the answer is Codex denial', async () => {
@@ -85,6 +86,78 @@ test('Given the installer in dry-run for OpenCode, Then it changes nothing and p
   });
   assert.equal(result.status, 0);
   assert.match(result.stdout, /dry run/);
+});
+
+test('Given an unreadable install manifest, When the installer applies, Then it reports refusal and exits nonzero', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'oc-refused-cli-'));
+  try {
+    const configDir = path.join(root, 'opencode');
+    await mkdir(configDir, { recursive: true });
+    await writeFile(path.join(configDir, INSTALL_MANIFEST), '{not json', 'utf8');
+    const result = run('scripts/host-install.mjs', ['--host', 'opencode', '--apply'], {
+      env: { ...process.env, OPENCODE_CONFIG_DIR: configDir },
+    });
+    assert.equal(result.status, 1);
+    assert.match(result.stdout, /^refused —/);
+    assert.match(result.stderr, /refused: the install manifest is unreadable/);
+    await assert.rejects(readFile(path.join(configDir, 'opencode.json'), 'utf8'));
+  } finally {
+    await rm(root, REMOVE);
+  }
+});
+
+test('Given a conflicting user agent, When installation is planned or applied, Then the existing profile stays unchanged', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'oc-conflict-cli-'));
+  try {
+    const configDir = path.join(root, 'opencode');
+    const asset = path.join(configDir, 'agents', 'reviewer-kit.md');
+    const manifest = path.join(configDir, INSTALL_MANIFEST);
+    const configText = JSON.stringify({ plugin: ['other-plugin'], model: 'user-model' }, null, 2);
+    const manifestText = JSON.stringify({ version: '1.0.0', files: [] }, null, 2);
+    await mkdir(path.dirname(asset), { recursive: true });
+    await writeFile(path.join(configDir, 'opencode.json'), configText, 'utf8');
+    await writeFile(asset, 'user-owned incompatible agent', 'utf8');
+    await writeFile(manifest, manifestText, 'utf8');
+    for (const args of [['--host', 'opencode'], ['--host', 'opencode', '--apply']]) {
+      const result = run('scripts/host-install.mjs', args, {
+        env: { ...process.env, OPENCODE_CONFIG_DIR: configDir },
+      });
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /agents\/reviewer-kit\.md/);
+      assert.equal(await readFile(path.join(configDir, 'opencode.json'), 'utf8'), configText);
+      assert.equal(await readFile(manifest, 'utf8'), manifestText);
+      assert.equal(await readFile(asset, 'utf8'), 'user-owned incompatible agent');
+      await assert.rejects(readFile(path.join(configDir, 'commands', 'review.md'), 'utf8'), { code: 'ENOENT' });
+      await assert.rejects(readFile(path.join(configDir, 'agents', 'review-context-scout.md'), 'utf8'), { code: 'ENOENT' });
+    }
+  } finally {
+    await rm(root, REMOVE);
+  }
+});
+
+test('Given an edited manifest-owned file, When the installer removes itself, Then it reports the preserved path', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'oc-preserved-cli-'));
+  try {
+    const configDir = path.join(root, 'opencode');
+    const asset = path.join(configDir, 'agents', 'reviewer-kit.md');
+    await mkdir(path.dirname(asset), { recursive: true });
+    await writeFile(path.join(configDir, 'opencode.json'), JSON.stringify({
+      plugin: ['omp-reviewer-kit@git+https://github.com/stgmt/omp-reviewer-kit.git'],
+    }), 'utf8');
+    await writeFile(asset, 'user-edited agent', 'utf8');
+    await writeFile(path.join(configDir, INSTALL_MANIFEST), JSON.stringify({
+      version: '1.0.0',
+      files: [{ path: 'agents/reviewer-kit.md', sha256: '0'.repeat(64) }],
+    }), 'utf8');
+    const result = run('scripts/host-install.mjs', ['--host', 'opencode', '--apply', '--remove'], {
+      env: { ...process.env, OPENCODE_CONFIG_DIR: configDir },
+    });
+    assert.equal(result.status, 0);
+    assert.match(result.stdout, /preserved \(ignored\): agents\/reviewer-kit\.md/);
+    assert.equal(await readFile(asset, 'utf8'), 'user-edited agent');
+  } finally {
+    await rm(root, REMOVE);
+  }
 });
 
 test('Given a repository without host manifests, When the sync check runs, Then it names the files and exits nonzero', () => {
@@ -253,11 +326,11 @@ test('Given the registered OpenCode hook, When a commit is blocked, Then the hoo
     try {
       await writeFile(path.join(kitRoot, 'scripts', 'run-review.mjs'), "process.stdout.write('review: BLOCK (finding)\\n');\nprocess.exit(1);\n", 'utf8');
       await assert.rejects(
-        hooks['tool.execute.before']({ tool: 'bash', args: { command: 'git commit -m x' } }),
+        hooks['tool.execute.before']({ tool: 'bash' }, { args: { command: 'git commit -m x' } }),
         /blocked this commit/,
       );
       await writeFile(path.join(kitRoot, 'scripts', 'run-review.mjs'), "process.stdout.write('review: PASS\\n');\nprocess.exit(0);\n", 'utf8');
-      await hooks['tool.execute.before']({ tool: 'bash', args: { command: 'git commit -m x' } });
+      await hooks['tool.execute.before']({ tool: 'bash' }, { args: { command: 'git commit -m x' } });
     } finally {
       if (previous === undefined) delete process.env.OMP_REVIEW_KIT_ROOT;
       else process.env.OMP_REVIEW_KIT_ROOT = previous;
@@ -267,19 +340,38 @@ test('Given the registered OpenCode hook, When a commit is blocked, Then the hoo
   }
 });
 
-test('Given a kit with flat agent and command files, When the installer copies components, Then the Markdown files are copied too', async () => {
-  const kit = await mkdtemp(path.join(os.tmpdir(), 'oc-flat-'));
-  const config = await mkdtemp(path.join(os.tmpdir(), 'oc-flat-config-'));
+test('Given the OpenCode hook runs under Bun, When the review blocks a commit, Then the hook rejects it', async () => {
+  const kitRoot = await mkdtemp(path.join(os.tmpdir(), 'oc-bun-hook-'));
   try {
-    await mkdir(path.join(kit, 'agents'), { recursive: true });
-    await mkdir(path.join(kit, 'claude-plugin', 'commands'), { recursive: true });
-    await writeFile(path.join(kit, 'agents', 'reviewer.md'), '# reviewer\n', 'utf8');
-    await writeFile(path.join(kit, 'claude-plugin', 'commands', 'review.md'), '# review\n', 'utf8');
+    await mkdir(path.join(kitRoot, 'scripts'), { recursive: true });
+    await writeFile(path.join(kitRoot, 'scripts', 'run-review.mjs'), 'process.exit(1);\n', 'utf8');
+    const moduleUrl = pathToFileURL(path.join(ROOT, 'opencode', 'plugin.mjs')).href;
+    const code = `import { beforeTool } from ${JSON.stringify(moduleUrl)};\n`
+      + `try { await beforeTool({ tool: 'bash' }, { args: { command: 'git commit -m x' } }); process.exitCode = 2; }\n`
+      + `catch (error) { if (!/blocked this commit/.test(error.message)) process.exitCode = 3; }\n`;
+    const result = spawnSync('bun', ['-e', code], {
+      cwd: ROOT, encoding: 'utf8', windowsHide: true, timeout: 60000,
+      env: { ...process.env, OMP_REVIEW_KIT_ROOT: kitRoot },
+    });
+    assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
+  } finally {
+    await rm(kitRoot, REMOVE);
+  }
+});
+
+test('Given a user file with the same name, When the installer copies components, Then the user file is neither overwritten nor recorded', async () => {
+  const kit = await mkdtemp(path.join(os.tmpdir(), 'oc-collide-'));
+  const config = await mkdtemp(path.join(os.tmpdir(), 'oc-collide-config-'));
+  try {
+    await mkdir(path.join(kit, 'opencode', 'agents'), { recursive: true });
+    await mkdir(path.join(config, 'agents'), { recursive: true });
+    await writeFile(path.join(kit, 'opencode', 'agents', 'reviewer.md'), '# kit reviewer\n', 'utf8');
+    await writeFile(path.join(config, 'agents', 'reviewer.md'), '# my own agent\n', 'utf8');
     const { copyComponents } = await import('../scripts/host-install.mjs');
-    const { copied } = await copyComponents({ configDir: config, kitRoot: kit });
-    assert.ok(copied.includes('agents/reviewer.md'), 'a flat agent is a component');
-    assert.ok(copied.includes('commands/review.md'), 'a flat command is a component');
-    assert.equal(await readFile(path.join(config, 'agents', 'reviewer.md'), 'utf8'), '# reviewer\n');
+    const { copied, conflicts } = await copyComponents({ configDir: config, kitRoot: kit });
+    assert.deepEqual(copied, []);
+    assert.deepEqual(conflicts, ['agents/reviewer.md']);
+    assert.equal(await readFile(path.join(config, 'agents', 'reviewer.md'), 'utf8'), '# my own agent\n', 'the user file survives');
   } finally {
     await rm(kit, REMOVE);
     await rm(config, REMOVE);
@@ -296,24 +388,6 @@ test('Given a stale generated manifest, When the layout gate checks it, Then it 
   assert.equal(assertHostManifestsCurrent([{ path: 'x', status: 'current' }], '9.9.9'), undefined);
 });
 
-test('Given a user file with the same name, When the installer copies components, Then the user file is neither overwritten nor recorded', async () => {
-  const kit = await mkdtemp(path.join(os.tmpdir(), 'oc-collide-'));
-  const config = await mkdtemp(path.join(os.tmpdir(), 'oc-collide-config-'));
-  try {
-    await mkdir(path.join(kit, 'agents'), { recursive: true });
-    await mkdir(path.join(config, 'agents'), { recursive: true });
-    await writeFile(path.join(kit, 'agents', 'reviewer.md'), '# kit reviewer\n', 'utf8');
-    await writeFile(path.join(config, 'agents', 'reviewer.md'), '# my own agent\n', 'utf8');
-    const { copyComponents } = await import('../scripts/host-install.mjs');
-    const { copied, conflicts } = await copyComponents({ configDir: config, kitRoot: kit });
-    assert.deepEqual(copied, []);
-    assert.deepEqual(conflicts, ['agents/reviewer.md']);
-    assert.equal(await readFile(path.join(config, 'agents', 'reviewer.md'), 'utf8'), '# my own agent\n', 'the user file survives');
-  } finally {
-    await rm(kit, REMOVE);
-    await rm(config, REMOVE);
-  }
-});
 
 test('Given the layout gate, When it evaluates host manifests, Then it throws through the shared decision instead of ignoring them', async () => {
   const { checkHostManifests, assertHostManifestsCurrent } = await import('../scripts/sync-host-manifests.mjs');
@@ -349,14 +423,12 @@ test('Given two applies to the same config, When the kit is removed afterwards, 
   try {
     const configDir = path.join(root, 'opencode');
     const { applyOpenCode } = await import('../scripts/host-install.mjs');
-    const first = await applyOpenCode({ apply: true, remove: false, force: false, env: { OPENCODE_CONFIG_DIR: configDir }, home: root, kitRoot: ROOT });
+    await applyOpenCode({ apply: true, remove: false, force: false, env: { OPENCODE_CONFIG_DIR: configDir }, home: root, kitRoot: ROOT });
     const second = await applyOpenCode({ apply: true, remove: false, force: true, env: { OPENCODE_CONFIG_DIR: configDir }, home: root, kitRoot: ROOT });
-    assert.ok(first.changed.length > 0);
-    assert.equal(second.conflicts.length > 0, true, 'the second apply finds the components already there');
-    const manifest = JSON.parse(await readFile(path.join(configDir, '.omp-reviewer-kit-manifest.json'), 'utf8'));
-    assert.ok(manifest.files.length > 0, 'the record survives the second apply');
+    assert.deepEqual(second.conflicts, []);
     await applyOpenCode({ apply: true, remove: true, force: false, env: { OPENCODE_CONFIG_DIR: configDir }, home: root, kitRoot: ROOT });
-    await assert.rejects(readFile(path.join(configDir, manifest.files[0]), 'utf8'));
+    await assert.rejects(readFile(path.join(configDir, 'agents', 'reviewer-kit.md'), 'utf8'), { code: 'ENOENT' });
+    await assert.rejects(readFile(path.join(configDir, 'commands', 'review.md'), 'utf8'), { code: 'ENOENT' });
   } finally {
     await rm(root, REMOVE);
   }

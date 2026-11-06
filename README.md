@@ -4,7 +4,7 @@
 
 Native Oh My Pi plugin for multi-stage, evidence-first code review of staged Git changes.
 
-**Requirements (0.22.0):** Git; Bun 1.4.1 (the review runs on Bun); Node.js 22 or 24 (CI tests both); and the OMP library `@oh-my-pi/pi-coding-agent` 18.12.5, which the plugin pins and installs with `bun install` (see [Installation](#standard-installation-recommended)). The review uses your own OMP configuration. The kit does not choose models.
+**Requirements:** Git; Bun 1.4.1 (the review runs on Bun); Node.js 22 or 24 (CI tests both); and the pinned OMP library `@oh-my-pi/pi-coding-agent` 18.12.5. If the library is not already installed alongside the plugin, the launcher prepares its locked dependencies automatically as described below. The review uses your own OMP configuration. The kit does not choose models.
 
 ## Names
 
@@ -76,15 +76,24 @@ omp plugin install omp-reviewer-kit@omp-reviewer-kit --scope project
 omp plugin install omp-reviewer-kit@omp-reviewer-kit --scope user
 ```
 
-### Install the pinned OMP library (required)
+### Locked review dependencies
 
-The review imports the OMP library that the plugin pins. Installing the plugin does not run Bun install scripts, so run this once in the plugin directory (the launcher prints the exact command when the library is missing):
+When the pinned OMP library is not already available, the first review uses Bun to install the plugin's locked dependencies into `~/.omp/review-kit-runtime/`, outside the reviewed repository. Installation scripts are disabled. Registry access is needed for the first installation; subsequent reviews reuse the completed cache without network access. If preparation fails, the review blocks instead of allowing the commit.
 
-```bash
-bun install --cwd ~/.omp/plugins/node_modules/omp-reviewer-kit
+Developers working on a checkout can instead run `bun install --frozen-lockfile` in that checkout. `/omp-reviewer-kit:doctor` in Claude Code checks Bun and the library next to the plugin. If it cannot verify the library there, it warns rather than claiming the hoisted installation or runtime cache is ready; the review itself verifies or prepares the runtime.
+
+### OpenCode
+
+The OpenCode installer registers the GitHub release matching the installer's version and installs the OpenCode-specific agents, skills, and commands into the user configuration directory. Each release has a distinct cache key, so an upgrade cannot silently reuse the previous package. Use a published release checkout:
+
+```sh
+git clone https://github.com/stgmt/omp-reviewer-kit.git
+node omp-reviewer-kit/scripts/host-install.mjs --host opencode --apply
 ```
 
-Check the result with `/omp-reviewer-kit:doctor` in Claude Code, which reports Bun and the OMP library version. The plugin-directory install path has not been verified end to end; see `.specs/native-task-review/STATUS.md`.
+Restart OpenCode after installation. `/review` invokes the same staged-change review used by the commit hook; `/setup` installs the hook in the current repository. `/doctor` checks the installation. `/audit-range` and `/slop` are read-only diagnostics, not commit gates. The review agents cannot run a shell or edit files; their bounded `review_git` tool reads the index and Git history.
+
+The installer refuses to replace user-owned or edited files. A conflict is reported before the plugin configuration is changed; resolve the named paths and retry. To remove the installation without deleting edited files, run `node omp-reviewer-kit/scripts/host-install.mjs --host opencode --remove --apply`.
 
 ## Configuring the Hook via OMP Slash Commands
 

@@ -312,20 +312,15 @@ function readJsonFile(file) {
 }
 
 /**
- * The native review imports the OMP library that the plugin pins. The library must sit next to the plugin
- * at exactly that version. The omp executable is only compared: a different one is a warning, because the
- * review runs the library. No model is called.
+ * Reports a directly verifiable pinned library. If it is not beside the plugin, the launcher
+ * will search hoisted installs or prepare the locked cache when a review actually runs.
  */
 export function libraryLines({ plugin, omp }) {
   const pinned = readJsonFile(path.join(plugin.dir, 'package.json'))?.dependencies?.[OMP_PACKAGE];
   if (!pinned) return [{ status: 'FAIL', text: `The plugin does not pin ${OMP_PACKAGE}. ${SETUP_HINT}` }];
-  const installed = readJsonFile(path.join(plugin.dir, 'node_modules', ...OMP_PACKAGE.split('/'), 'package.json'))?.version;
-  const install = `bun install --cwd "${plugin.dir}"`;
-  if (!installed) {
-    return [{ status: 'FAIL', text: `The OMP library ${OMP_PACKAGE} is not installed next to the plugin. Run: ${install}` }];
-  }
-  if (installed !== pinned) {
-    return [{ status: 'FAIL', text: `The OMP library ${installed} is installed, but the plugin pins ${pinned}. Run: ${install}` }];
+  const installed = readJsonFile(path.join(plugin.dir, 'node_modules', ...OMP_PACKAGE.split('/'), 'package.json'));
+  if (installed?.name !== OMP_PACKAGE || installed.version !== pinned) {
+    return [{ status: 'WARN', text: `The pinned OMP library was not verified next to the plugin. The launcher will look for it or prepare the locked runtime when a review runs; first-time preparation may need registry access.` }];
   }
   const lines = [{ status: 'OK', text: `OMP library ${pinned} (native review)` }];
   if (compareVersions(omp.version, pinned) !== 0) {

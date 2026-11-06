@@ -16,6 +16,8 @@ async function copyLauncher(root) {
   await mkdir(path.join(root, 'src', 'infra'), { recursive: true });
   await copyFile(launcher, path.join(root, 'scripts', 'run-review.mjs'));
   await copyFile(path.join(kitRoot, 'src', 'infra', 'main-module.mjs'), path.join(root, 'src', 'infra', 'main-module.mjs'));
+  await copyFile(path.join(kitRoot, 'src', 'infra', 'ensure-review-runtime.mjs'), path.join(root, 'src', 'infra', 'ensure-review-runtime.mjs'));
+  await writeFile(path.join(root, 'package.json'), JSON.stringify({ dependencies: { '@oh-my-pi/pi-coding-agent': '18.12.5' } }));
 }
 
 test('Given Bun cannot be started, When the launcher runs, Then it blocks with the Bun diagnostic and no review', () => {
@@ -28,7 +30,7 @@ test('Given Bun cannot be started, When the launcher runs, Then it blocks with t
   assert.match(result.stderr, /review: BLOCK \(bun is required for the native review/);
 });
 
-test('Given the OMP library is not installed beside the launcher, When the launcher runs, Then it blocks naming the install command', async () => {
+test('Given the OMP library is missing and its runtime cannot be prepared, When the launcher runs, Then it blocks the review', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'launcher-test-'));
   try {
     await copyLauncher(root);
@@ -41,7 +43,7 @@ test('Given the OMP library is not installed beside the launcher, When the launc
     });
     assert.equal(result.status, 1);
     assert.match(result.stderr, /the OMP library \(@oh-my-pi\/pi-coding-agent\) is not installed/);
-    assert.match(result.stderr, /bun install/);
+    assert.match(result.stderr, /runtime could not be prepared/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -53,9 +55,31 @@ async function launcherRoot() {
   const root = await mkdtemp(path.join(tmpdir(), 'launcher-test-'));
   await copyLauncher(root);
   await mkdir(path.join(root, 'node_modules', '@oh-my-pi', 'pi-coding-agent'), { recursive: true });
-  await writeFile(path.join(root, 'node_modules', '@oh-my-pi', 'pi-coding-agent', 'package.json'), '{}\n');
+  await writeFile(path.join(root, 'node_modules', '@oh-my-pi', 'pi-coding-agent', 'package.json'), JSON.stringify({ name: '@oh-my-pi/pi-coding-agent', version: '18.12.5' }));
   return root;
 }
+
+test('Given an installed library with the wrong identity or version, When the locked runtime cannot be prepared, Then the review blocks', async t => {
+  const root = await launcherRoot();
+  t.after(() => rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }));
+  const repo = path.join(root, 'repo');
+  await mkdir(repo);
+  const initialized = spawnSync('git', ['init', '-q'], { cwd: repo, encoding: 'utf8', windowsHide: true });
+  assert.equal(initialized.status, 0, initialized.stderr);
+  const library = path.join(root, 'node_modules', '@oh-my-pi', 'pi-coding-agent', 'package.json');
+  for (const installed of [
+    { name: '@oh-my-pi/pi-coding-agent', version: '0.0.0' },
+    { name: 'not-the-omp-library', version: '18.12.5' },
+  ]) {
+    await writeFile(library, JSON.stringify(installed));
+    const child = spawnSync(process.execPath, [path.join(root, 'scripts', 'run-review.mjs'), repo], {
+      cwd: repo, encoding: 'utf8', windowsHide: true,
+      env: { ...process.env, HOME: root, USERPROFILE: root, OMP_REVIEW_KIT_BUN: process.execPath },
+    });
+    assert.equal(child.status, 1);
+    assert.match(child.stderr, /runtime could not be prepared/);
+  }
+});
 
 test('Given the repository directory does not exist, When the launcher runs, Then it blocks naming the host that could not start', async () => {
   const root = await launcherRoot();
@@ -105,7 +129,7 @@ test('Given the OMP library is hoisted above the kit folder, When the launcher l
     const entry = path.join(path.dirname(hoisted), 'dist', 'sdk.mjs');
     await mkdir(path.dirname(entry), { recursive: true });
     await writeFile(entry, 'export const sdk = 1;\n');
-    await writeFile(path.join(kit, 'package.json'), JSON.stringify({ name: 'omp-reviewer-kit', version: '0.0.0' }));
+    await writeFile(path.join(kit, 'package.json'), JSON.stringify({ name: 'omp-reviewer-kit', version: '0.0.0', dependencies: { '@oh-my-pi/pi-coding-agent': '18.12.5' } }));
     // Only the walk can find this one: the resolver is deliberately broken here.
     const refuse = () => { const error = new Error('not resolvable'); error.code = 'ERR_MODULE_NOT_FOUND'; throw error; };
     assert.equal(findLibrary(kit, { resolveEntry: refuse }), hoisted, 'a hoisted install is found by walking up');
@@ -142,7 +166,7 @@ test('Given the package exports no package.json, When the launcher resolves a ho
     await writeFile(path.join(pkgDir, 'package.json'), JSON.stringify({ name: '@oh-my-pi/pi-coding-agent', version: '18.12.5' }));
     const kit = path.join(root, 'plugins', 'node_modules', 'omp-reviewer-kit');
     await mkdir(kit, { recursive: true });
-    await writeFile(path.join(kit, 'package.json'), JSON.stringify({ name: 'omp-reviewer-kit', version: '0.0.0' }));
+    await writeFile(path.join(kit, 'package.json'), JSON.stringify({ name: 'omp-reviewer-kit', version: '0.0.0', dependencies: { '@oh-my-pi/pi-coding-agent': '18.12.5' } }));
     // The real resolver refuses `…/package.json`; the exported entry resolves.
     const resolve = specifier => {
       if (specifier.endsWith('/package.json')) {

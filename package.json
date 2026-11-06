@@ -1,6 +1,6 @@
 {
   "name": "omp-reviewer-kit",
-  "version": "0.29.1",
+  "version": "0.30.0",
   "private": true,
   "description": "Multi-stage OMP review system and Git pre-commit hook for evidence-first code review.",
   "type": "module",
@@ -26,13 +26,19 @@
     "agents",
     "skills",
     "src",
+    "opencode",
+    "claude-plugin",
+    ".claude-plugin",
+    ".codex-plugin",
+    ".agents",
+    "bun.lock",
     ".omp-plugin",
     "ROADMAP.md",
     "CHANGELOG.md"
   ],
   "omp": {
     "name": "omp-reviewer-kit",
-    "version": "0.29.1",
+    "version": "0.30.0",
     "extensions": [
       "./src/extension.mjs"
     ]
@@ -44,6 +50,7 @@
   },
   "dependencies": {
     "@babel/parser": "7.29.9",
-    "@oh-my-pi/pi-coding-agent": "18.12.5"
+    "@oh-my-pi/pi-coding-agent": "18.12.5",
+    "zod": "4.1.8"
   }
 }

@@ -110,9 +110,3 @@ test('sync-targets CLI prints the drift table with the apply hint and exits 1, t
   }
 });
 
-test('package.json files allowlist no longer ships the Claude shell, which has its own tree', async () => {
-  const pkg = await json('package.json');
-  assert.ok(!pkg.files.includes('.claude-plugin'));
-  assert.ok(!pkg.files.includes('commands'));
-  for (const entry of ['scripts', 'src', 'templates']) assert.ok(pkg.files.includes(entry), 'files must include ' + entry);
-});

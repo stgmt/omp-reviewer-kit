@@ -1,15 +1,15 @@
-// omp-reviewer-kit runner v0.29.1
+// omp-reviewer-kit runner v0.30.0
 // omp-reviewer-kit runner: the Node launcher of the native review. The review runs under Bun in
-// src/native/native-host.mjs because OMP's library is a Bun package. This launcher only checks that
-// Bun and the pinned OMP library are installed, then hands the staged repository to the host.
+// src/native/native-host.mjs because OMP's library is a Bun package. The launcher checks Bun and
+// prepares the pinned library outside the repository when a host install does not include it.
 // Usage (the hook passes nothing): node scripts/run-review.mjs [repository]
 
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isMainModule } from '../src/infra/main-module.mjs';
+import { ensureReviewRuntime } from '../src/infra/ensure-review-runtime.mjs';
 
 const kitRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const host = path.join(kitRoot, 'src', 'native', 'native-host.mjs');
@@ -23,20 +23,34 @@ const LIBRARY_SUFFIX = path.join('node_modules', '@oh-my-pi', 'pi-coding-agent',
 const bun = process.env.OMP_REVIEW_KIT_BUN || 'bun';
 
 /**
- * The installed `package.json` of the pinned OMP library: the kit's own folder first, then every parent
- * directory, which is where a hoisted workspace or plugin install puts it. A module-resolution attempt
- * covers a layout the walk cannot see (a linked package); it is never the only attempt, because the
- * package declares no `require` condition.
+ * Finds an installed OMP library matching the plugin's exact dependency pin. The kit's own
+ * folder is checked first, then hoisted parents and finally module resolution.
  *
  * @param {string} root
  * @param {{ resolveEntry?: (specifier: string) => string, exists?: (file: string) => boolean }} [options]
  * @returns {string|null}
  */
 export function findLibrary(root = kitRoot, { resolveEntry = specifier => import.meta.resolve(specifier), exists = existsSync } = {}) {
+  let expected;
+  try {
+    expected = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).dependencies?.[LIBRARY_NAME];
+  } catch {
+    return null;
+  }
+  if (typeof expected !== 'string' || expected === '') return null;
+  const matches = manifest => {
+    if (!exists(manifest)) return false;
+    try {
+      const pkg = JSON.parse(readFileSync(manifest, 'utf8'));
+      return pkg.name === LIBRARY_NAME && pkg.version === expected;
+    } catch {
+      return false;
+    }
+  };
   let dir = path.resolve(root);
   for (;;) {
     const candidate = path.join(dir, LIBRARY_SUFFIX);
-    if (exists(candidate)) return candidate;
+    if (matches(candidate)) return candidate;
     const parent = path.dirname(dir);
     if (parent === dir) break;
     dir = parent;
@@ -44,7 +58,7 @@ export function findLibrary(root = kitRoot, { resolveEntry = specifier => import
   try {
     const entry = resolveEntry(LIBRARY_ENTRY);
     const manifest = packageRootOf(entry.startsWith('file:') ? fileURLToPath(entry) : entry);
-    if (manifest && exists(manifest)) return manifest;
+    if (manifest && matches(manifest)) return manifest;
   } catch {
     // A layout neither the walk nor the resolver can see is reported as missing, with the fix to run.
   }
@@ -84,11 +98,24 @@ function main(argv) {
   if (probe.error || probe.status !== 0) {
     return block(`bun is required for the native review (set OMP_REVIEW_KIT_BUN or install https://bun.sh): ${probe.error?.message ?? `exit ${probe.status}`}`);
   }
-  if (!findLibrary()) {
-    return block(`the OMP library (@oh-my-pi/pi-coding-agent) is not installed next to ${kitRoot} or above it; run: bun install --cwd "${kitRoot}" (or reinstall the plugin: omp plugin install github:stgmt/omp-reviewer-kit)`);
-  }
   const repo = path.resolve(argv[0] ?? process.cwd());
-  const child = spawnSync(bun, [host, repo], { stdio: 'inherit', env: process.env, windowsHide: true, cwd: repo });
+  const env = { ...process.env };
+  delete env.OMP_REVIEW_KIT_RUNTIME_ROOT;
+  if (!findLibrary()) {
+    try {
+      const root = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd: repo, encoding: 'utf8', windowsHide: true });
+      if (root.error || root.status !== 0 || !String(root.stdout ?? '').trim()) {
+        throw new Error('cannot determine the reviewed repository root');
+      }
+      process.stderr.write('review: preparing the pinned OMP runtime outside the repository\n');
+      const runtime = ensureReviewRuntime({ kitRoot, repoRoot: String(root.stdout).trim(), bun, bunVersion: String(probe.stdout).trim() });
+      env.OMP_REVIEW_KIT_RUNTIME_ROOT = runtime;
+      env.NODE_PATH = [path.join(runtime, 'node_modules'), process.env.NODE_PATH].filter(Boolean).join(path.delimiter);
+    } catch (error) {
+      return block(`the OMP library (@oh-my-pi/pi-coding-agent) is not installed and its runtime could not be prepared: ${error.message}`);
+    }
+  }
+  const child = spawnSync(bun, [host, repo], { stdio: 'inherit', env, windowsHide: true, cwd: repo });
   if (child.error) return block(`cannot start the native review host: ${child.error.message}`);
   // A host that ended by signal has no status: that is a failed review, never a pass.
   process.exitCode = child.status ?? 1;

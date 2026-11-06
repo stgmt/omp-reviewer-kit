@@ -724,7 +724,7 @@ test('doctor fails with an actionable line when Bun is not on PATH', async () =>
   }
 });
 
-test('libraryLines fails on a missing or differing library, warns on another omp, and passes when all match', async () => {
+test('library diagnostics distinguish an unverified runtime from a matching installed library', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'omp-bridge-library-'));
   const plugin = { dir, version: WANTED };
   const libraryDir = path.join(dir, 'node_modules', '@oh-my-pi', 'pi-coding-agent');
@@ -737,21 +737,21 @@ test('libraryLines fails on a missing or differing library, warns on another omp
     const omp = { version: 'omp/18.12.5' };
 
     const missing = libraryLines({ plugin, omp });
-    assert.equal(missing[0].status, 'FAIL');
-    assert.match(missing[0].text, /is not installed next to the plugin\. Run: bun install --cwd/);
+    assert.equal(missing[0].status, 'WARN');
 
     await mkdir(libraryDir, { recursive: true });
-    await writeFile(path.join(libraryDir, 'package.json'), JSON.stringify({ version: '18.12.4' }));
-    assert.match(libraryLines({ plugin, omp })[0].text, /18\.12\.4 is installed, but the plugin pins 18\.12\.5/);
+    await writeFile(path.join(libraryDir, 'package.json'), JSON.stringify({ name: '@oh-my-pi/pi-coding-agent', version: '18.12.4' }));
+    assert.equal(libraryLines({ plugin, omp })[0].status, 'WARN');
+    await writeFile(path.join(libraryDir, 'package.json'), JSON.stringify({ name: 'wrong-package', version: '18.12.5' }));
+    assert.equal(libraryLines({ plugin, omp })[0].status, 'WARN');
 
-    await writeFile(path.join(libraryDir, 'package.json'), JSON.stringify({ version: '18.12.5' }));
-    assert.deepEqual(libraryLines({ plugin, omp }), [{ status: 'OK', text: 'OMP library 18.12.5 (native review)' }]);
+    await writeFile(path.join(libraryDir, 'package.json'), JSON.stringify({ name: '@oh-my-pi/pi-coding-agent', version: '18.12.5' }));
+    assert.equal(libraryLines({ plugin, omp })[0].status, 'OK');
 
     const newer = libraryLines({ plugin, omp: { version: 'omp/18.13.0' } });
     assert.deepEqual(newer.map((line) => line.status), ['OK', 'WARN']);
-    assert.match(newer[1].text, /omp 18\.13\.0 differs from the library 18\.12\.5/);
   } finally {
-    await rm(dir, { recursive: true, force: true });
+    await rm(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
   }
 });
 

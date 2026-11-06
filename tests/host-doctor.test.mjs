@@ -1,7 +1,7 @@
 // The host doctor: what it reports about a machine, and the one state it refuses to bless.
 
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -32,6 +32,7 @@ test('Given the npm form and a marketplace registration, When OMP is inspected, 
   const root = await home();
   try {
     await mkdir(path.join(root, '.omp', 'plugins', 'node_modules', KIT), { recursive: true });
+    await mkdir(path.join(root, 'cache', 'x'), { recursive: true });
     await writeFile(path.join(root, '.omp', 'plugins', 'installed_plugins.json'), JSON.stringify({
       version: 2,
       plugins: { [`${KIT}@${KIT}`]: [{ scope: 'user', installPath: path.join(root, 'cache', 'x'), version: '1.2.3' }] },
@@ -40,6 +41,73 @@ test('Given the npm form and a marketplace registration, When OMP is inspected, 
     assert.equal(omp.mode, 'npm');
     assert.ok(omp.findings.some(finding => finding.code === 'duplicate-install-mode'));
     assert.match(omp.findings.find(finding => finding.code === 'duplicate-install-mode').message, /omp plugin uninstall/);
+  } finally {
+    await rm(root, REMOVE);
+  }
+});
+
+test('Given a marketplace package exposed through a runtime junction, When OMP is inspected, Then it is one marketplace installation', async () => {
+  const root = await home();
+  try {
+    const pluginRoot = path.join(root, '.omp', 'plugins');
+    const installed = path.join(pluginRoot, 'cache', 'kit');
+    await mkdir(installed, { recursive: true });
+    await mkdir(path.join(pluginRoot, 'node_modules'), { recursive: true });
+    await symlink(installed, path.join(pluginRoot, 'node_modules', KIT), process.platform === 'win32' ? 'junction' : 'dir');
+    await writeFile(path.join(pluginRoot, 'installed_plugins.json'), JSON.stringify({
+      version: 2,
+      plugins: { [`${KIT}@${KIT}`]: [
+        { scope: 'user', installPath: 123, version: '1.2.3' },
+        { scope: 'user', installPath: path.join(pluginRoot, 'other') },
+        { scope: 'user', installPath: installed },
+      ] },
+    }), 'utf8');
+    const omp = await inspectOmp({ home: root });
+    assert.equal(omp.installed, true);
+    assert.equal(omp.mode, 'marketplace');
+    assert.equal(omp.version, '1.2.3');
+    assert.equal(omp.findings.some(finding => finding.code === 'duplicate-install-mode'), false);
+  } finally {
+    await rm(root, REMOVE);
+  }
+});
+
+test('Given a runtime link and another distinct marketplace installation, When OMP is inspected, Then the conflict is reported in either order', async () => {
+  const root = await home();
+  try {
+    const pluginRoot = path.join(root, '.omp', 'plugins');
+    const linked = path.join(pluginRoot, 'cache', 'linked');
+    const other = path.join(pluginRoot, 'cache', 'other');
+    await mkdir(linked, { recursive: true });
+    await mkdir(other, { recursive: true });
+    await mkdir(path.join(pluginRoot, 'node_modules'), { recursive: true });
+    await symlink(linked, path.join(pluginRoot, 'node_modules', KIT), process.platform === 'win32' ? 'junction' : 'dir');
+    for (const paths of [[linked, other], [other, linked]]) {
+      await writeFile(path.join(pluginRoot, 'installed_plugins.json'), JSON.stringify({
+        plugins: { [`${KIT}@${KIT}`]: paths.map(installPath => ({ installPath })) },
+      }), 'utf8');
+      const omp = await inspectOmp({ home: root });
+      assert.equal(omp.mode, 'npm');
+      assert.equal(omp.findings.some(finding => finding.code === 'duplicate-install-mode'), true);
+    }
+  } finally {
+    await rm(root, REMOVE);
+  }
+});
+
+test('Given malformed marketplace records, When OMP is inspected, Then a possible duplicate is reported', async () => {
+  const root = await home();
+  try {
+    const pluginRoot = path.join(root, '.omp', 'plugins');
+    await mkdir(path.join(pluginRoot, 'node_modules', KIT), { recursive: true });
+    for (const records of [null, {}]) {
+      await writeFile(path.join(pluginRoot, 'installed_plugins.json'), JSON.stringify({
+        plugins: { [`${KIT}@${KIT}`]: records },
+      }), 'utf8');
+      const omp = await inspectOmp({ home: root });
+      assert.equal(omp.mode, 'npm');
+      assert.equal(omp.findings.some(finding => finding.code === 'duplicate-install-mode'), true);
+    }
   } finally {
     await rm(root, REMOVE);
   }
