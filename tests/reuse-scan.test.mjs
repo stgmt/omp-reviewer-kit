@@ -88,8 +88,8 @@ test('Given the same bytes scanned twice, When the cache is enabled, Then the se
         parses += 1;
         return import('@babel/parser');
       };
-      const first = await scanUnits({ snapshotDir: root, config: resolveReuseConfig({}), cache, loadParser });
-      const second = await scanUnits({ snapshotDir: root, config: resolveReuseConfig({}), cache, loadParser });
+      const first = await scanUnits({ snapshotDir: root, config: resolveReuseConfig({ maxScanMs: 600_000 }), cache, loadParser });
+      const second = await scanUnits({ snapshotDir: root, config: resolveReuseConfig({ maxScanMs: 600_000 }), cache, loadParser });
       assert.equal(parses, 1, 'the parser was loaded once for two scans');
       assert.equal(first.cacheHits, 0);
       assert.equal(second.cacheHits, 1);
@@ -113,8 +113,11 @@ test('Given unchanged Python bytes, When the snapshot is scanned twice, Then the
     const cacheRoot = await mkdtemp(path.join(os.tmpdir(), 'reuse-cache-'));
     try {
       const cache = createFileCache({ dir: cacheRoot });
-      const first = await scanUnits({ snapshotDir: root, config: resolveReuseConfig({}), cache });
-      const second = await scanUnits({ snapshotDir: root, config: resolveReuseConfig({}), cache });
+      // The subject here is the cache, not the scan budget: a machine under load must not turn this
+      // into a truncated scan that cannot record what it parsed.
+      const config = resolveReuseConfig({ maxScanMs: 600_000 });
+      const first = await scanUnits({ snapshotDir: root, config, cache });
+      const second = await scanUnits({ snapshotDir: root, config, cache });
       assert.equal(first.cacheHits, 0);
       assert.equal(second.cacheHits, 1);
       assert.deepEqual(second.units, first.units);
@@ -248,8 +251,9 @@ test('Given a functionless Python file, When the snapshot is scanned twice, Then
     const cacheRoot = await mkdtemp(path.join(os.tmpdir(), 'reuse-cache-'));
     try {
       const cache = createFileCache({ dir: cacheRoot });
-      const first = await scanUnits({ snapshotDir: root, config: resolveReuseConfig({}), cache });
-      const second = await scanUnits({ snapshotDir: root, config: resolveReuseConfig({}), cache });
+      const config = resolveReuseConfig({ maxScanMs: 600_000 });
+      const first = await scanUnits({ snapshotDir: root, config, cache });
+      const second = await scanUnits({ snapshotDir: root, config, cache });
       assert.deepEqual(first.units, []);
       assert.equal(second.cacheHits, 1, 'the parsed-but-empty file is cached instead of re-sent to the interpreter');
     } finally {
@@ -338,8 +342,9 @@ test('Given identical bytes at two paths, When the cache is asked, Then each pat
     const cacheRoot = await mkdtemp(path.join(os.tmpdir(), 'reuse-cache-'));
     try {
       const cache = createFileCache({ dir: cacheRoot });
-      const first = await scanUnits({ snapshotDir: root, config: resolveReuseConfig({}), cache });
-      const second = await scanUnits({ snapshotDir: root, config: resolveReuseConfig({}), cache });
+      const config = resolveReuseConfig({ maxScanMs: 600_000 });
+      const first = await scanUnits({ snapshotDir: root, config, cache });
+      const second = await scanUnits({ snapshotDir: root, config, cache });
       const paths = second.units.map(unit => unit.path).sort();
       assert.deepEqual(paths, ['src/new.mjs', 'src/old.mjs'], 'a cached unit keeps the path it was scanned from');
       assert.equal(second.cacheHits, 2, 'both files were answered from the cache');

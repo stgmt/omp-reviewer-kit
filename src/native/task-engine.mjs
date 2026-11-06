@@ -4,6 +4,7 @@
 // configuration; this module reads none of them and writes no model settings.
 
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { readReportEnvelope } from '../domain/report-envelope.mjs';
 
@@ -18,7 +19,19 @@ export const STRUCTURAL_OVERLAY = { 'task.structured': true };
  * instead of crashing the launcher. `importer` is the import seam: a failed module rejects the
  * whole load, so no partial engine is ever returned.
  */
-export async function loadOmpEngine(importer = specifier => import(specifier)) {
+export async function loadOmpEngine(importer = specifier => {
+  const runtime = process.env.OMP_REVIEW_KIT_RUNTIME_ROOT;
+  if (!runtime) return import(specifier);
+  // Bun's NODE_PATH lookup can select a different globally cached package for subpath imports.
+  // Resolve each entry from the provisioned package's parent and reject a path outside that package.
+  const entry = import.meta.resolve(specifier, path.join(runtime, 'package.json'));
+  const packageRoot = path.join(runtime, 'node_modules', '@oh-my-pi', 'pi-coding-agent');
+  const relative = path.relative(packageRoot, fileURLToPath(entry));
+  if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    throw new Error(`resolved OMP entry outside the pinned runtime: ${specifier}`);
+  }
+  return import(entry);
+}) {
   const [settings, registry, sdk, sessions, task, bus, agents] = await Promise.all([
     importer('@oh-my-pi/pi-coding-agent/config/settings'),
     importer('@oh-my-pi/pi-coding-agent/config/model-registry'),

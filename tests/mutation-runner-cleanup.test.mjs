@@ -49,7 +49,7 @@ test('Given the removal of a tree, When it is asked for, Then it retries the rem
     await removeTree(root);
     assert.equal(existsSync(root), false, 'the tree is gone');
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeTree(root);
   }
 });
 
@@ -69,7 +69,7 @@ test('Given a directory a live process still holds, When the gate removes it, Th
     assert.equal(existsSync(held), false, 'the removal succeeded once the holder was gone');
     child.kill('SIGKILL');
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeTree(root);
   }
 });
 
@@ -96,7 +96,7 @@ test('Given a calibration that dies after proving a selector, When --calibrate-s
     const catalog = JSON.parse(await readFile(selectorPath, 'utf8'));
     assert.deepEqual(catalog.mappings.m2.tests, ['fresh'], 'the proven selector survived the crash');
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeTree(root);
   }
 });
 
@@ -127,7 +127,7 @@ test('Given two proofs that finish together, When the calibration writes the cat
     const catalog = JSON.parse(await readFile(selectorPath, 'utf8'));
     for (const item of mutants) assert.deepEqual(catalog.mappings[item.id].tests, longNames(item.id), `${item.id} keeps its full selector`);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeTree(root);
   }
 });
 
@@ -150,7 +150,7 @@ test('Given a calibration whose stale selector is missing for a new mutant, When
     assert.deepEqual(catalog.mappings.m1.tests, ['fresh'], 'the proven selector is kept');
     assert.equal(catalog.mappings.m2, undefined, 'the unproven mutant gains no selector');
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeTree(root);
   }
 });
 
@@ -162,8 +162,8 @@ test('Given a test run with a passing file, When it finishes, Then its scratch d
     assert.equal(result.status, 0);
     assert.deepEqual(await readdir(stateRoot), [], 'no scratch directory is left behind');
   } finally {
-    await rm(root, { recursive: true, force: true });
-    await rm(stateRoot, { recursive: true, force: true });
+    await removeTree(root);
+    await removeTree(stateRoot);
   }
 });
 
@@ -175,8 +175,8 @@ test('Given a test run that exceeds its limit, When the child is terminated, The
     assert.equal(result.timedOut, true);
     assert.deepEqual(await readdir(stateRoot), [], 'no scratch directory is left behind');
   } finally {
-    await rm(root, { recursive: true, force: true });
-    await rm(stateRoot, { recursive: true, force: true });
+    await removeTree(root);
+    await removeTree(stateRoot);
   }
 });
 
@@ -192,8 +192,8 @@ test('Given Node older than 22, When a nested selector is requested, Then the ru
     assert.deepEqual(await readdir(stateRoot), [], 'no scratch directory is left behind');
   } finally {
     Object.defineProperty(process.versions, 'node', original);
-    await rm(root, { recursive: true, force: true });
-    await rm(stateRoot, { recursive: true, force: true });
+    await removeTree(root);
+    await removeTree(stateRoot);
   }
 });
 
@@ -213,8 +213,8 @@ test('Given a gate run, When it finishes, Then its worker pool directory is remo
       if (saved[key] === undefined) delete process.env[key];
       else process.env[key] = saved[key];
     }
-    await rm(root, { recursive: true, force: true });
-    await rm(scratch, { recursive: true, force: true });
+    await removeTree(root);
+    await removeTree(scratch);
   }
 });
 
@@ -233,7 +233,7 @@ test('Given a calibration, When the baseline and the mutated reference run, Then
     assert.deepEqual(calls.slice(0, 2).map((call) => call.timeoutMs), [FULL_SUITE_TIMEOUT_MS, FULL_SUITE_TIMEOUT_MS]);
     assert.ok(calls.slice(2).length > 0 && calls.slice(2).every((call) => call.names.length > 0 && call.timeoutMs === undefined));
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeTree(root);
   }
 });
 
@@ -245,7 +245,7 @@ test('Given a test file that fails on the pristine tree, When it is calibrated, 
     assert.equal(result.results[0].outcome, 'infrastructure_error');
     assert.match(result.results[0].detail, /Full-suite baseline is not green/);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeTree(root);
   }
 });
 
@@ -259,7 +259,7 @@ test('Given two mutants of one test file, When they are calibrated on two worker
     // One full-file baseline plus one full-file reference per mutant; the focused runs carry names.
     assert.equal(calls.filter((call) => call.names.length === 0).length, 3);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeTree(root);
   }
 });
 
@@ -318,7 +318,7 @@ test('Given a catalog write that fails, When the next proof is written, Then the
     assert.deepEqual(catalog.mappings.m1.tests, ['m1'], 'the first proof is in the catalog after the next write');
     assert.deepEqual(catalog.mappings.m2.tests, ['m2'], 'the second proof lands despite the failed write');
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeTree(root);
   }
 });
 
@@ -337,7 +337,7 @@ test('Given two mutants of a suite that is red on the pristine tree, When they a
     assert.equal(result.mappings.m2, undefined);
     assert.equal(calls.filter((call) => call.names.length === 0 && call.timeoutMs === FULL_SUITE_TIMEOUT_MS).length, 1, 'one full-file baseline run, shared by both workers');
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeTree(root);
   }
 });
 
@@ -385,7 +385,7 @@ test('Given a reference run that times out, When it is calibrated, Then the muta
     assert.equal(result.mappings.m1, undefined, 'a timeout proves nothing');
     assert.equal(calls.length, 2, 'only the baseline and the reference run: no focused run follows a timeout');
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeTree(root);
   }
 });
 
@@ -399,7 +399,7 @@ test('Given a reference run without a status, When it is calibrated, Then the mu
       assert.equal(result.results[0].detail, 'crashed');
       assert.equal(calls.length, 2, 'a run without a status proves no selector, even when it lists an assertion');
     } finally {
-      await rm(root, { recursive: true, force: true });
+      await removeTree(root);
     }
   }
 });
@@ -414,7 +414,7 @@ test('Given a reference run that fails without an assertion, When it is calibrat
     assert.match(result.results[0].detail, /ERR_MODULE_NOT_FOUND/, 'the detail carries the failure that proved nothing');
     assert.equal(calls.length, 2, 'no deciding assertion, so no selector is tried');
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeTree(root);
   }
 });
 
@@ -436,7 +436,7 @@ test('Given a recorded selector whose top-level run passes but whose ancestor-sc
     assert.deepEqual(result.mappings.m1, { testFile: 'tests/m.test.mjs', tests: ['keeps the value'], ancestors: ['fresh'], mutantHash: mutantIdentity(mutant), testHash: testFileHash(GATE_TEST_BODY) });
     assert.equal(calls.filter((call) => call.names.length === 0).length, 2, 'one baseline and one reference: the failed hint did not add a third full-file run');
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeTree(root);
   }
 });
 
@@ -455,7 +455,7 @@ test('Given a fresh selector whose top-level run passes but whose ancestor-scope
     assert.equal(result.results[0].outcome, 'selector_invalid');
     assert.equal(result.mappings.m1, undefined, 'a precise run that does not pass proves no selector');
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeTree(root);
   }
 });
 
@@ -477,7 +477,7 @@ test('Given a recorded selector that no longer runs any test, When it is calibra
     assert.deepEqual(calls[0].names, ['stale name'], 'the recorded selector was tried first');
     assert.equal(calls.filter((call) => call.names.length === 0).length, 2, 'the full-file baseline and exactly one reference run follow the hint');
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeTree(root);
   }
 });
 
@@ -492,7 +492,7 @@ test('Given a deciding test under a describe block, When it is calibrated, Then 
     const ordinary = await runMutationGate([mutant], { root, workers: 1, selectors: calibration.mappings, log: () => {} });
     assert.equal(ordinary.results[0].outcome, 'killed');
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeTree(root);
   }
 });
 
@@ -515,7 +515,7 @@ test('Given a catalog write that fails right after a proof, When the proof is re
     const lines = (await readFile(`${resultPath}.jsonl`, 'utf8')).trim().split('\n').map((line) => JSON.parse(line));
     assert.deepEqual(lines.map((line) => [line.id, line.outcome]), [['m1', 'killed']], 'the proof is in the result file even though its catalog write failed');
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeTree(root);
   }
 });
 
@@ -535,7 +535,7 @@ test('Given a recorded selector whose deciding test changed, When the gate runs 
     assert.match(result.results[0].detail, /recalibration required/);
     assert.equal(calls.length, 0, 'the stale selector never reaches a run');
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeTree(root);
   }
 });
 
@@ -554,7 +554,7 @@ test('Given a recorded selector that names another test file, When the gate runs
     assert.equal(result.results[0].outcome, 'selector_invalid');
     assert.equal(calls.length, 0, 'a selector for another file never reaches a run');
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeTree(root);
   }
 });
 
@@ -575,7 +575,7 @@ test('Given a recorded selector that fails on the pristine tree, When the ordina
     assert.equal(result.mappings.m1, undefined, 'a failing baseline proves no selector');
     assert.equal(calls.length, 1, 'only the pristine baseline runs: the mutated copy is never run with the recorded name');
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeTree(root);
   }
 });
 
@@ -594,7 +594,7 @@ test('Given two mutants of one nested test with the same recorded selector, When
     assert.deepEqual(result.results.map((record) => record.outcome), ['killed', 'killed']);
     assert.equal(calls.filter((call) => call.names.length && call.ancestors.length === 0).length, 1, 'only the first mutant runs the unscoped baseline; the second reuses its scope');
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeTree(root);
   }
 });
 
@@ -616,7 +616,7 @@ test('Given a recorded selector that still passes on the mutated copy, When it i
     assert.deepEqual(result.mappings.m1.tests, ['keeps the value'], 'the surviving hint never becomes the selector');
     assert.equal(calls.filter((call) => call.names.length === 0).length, 2, 'one baseline and one reference run follow the surviving hint');
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeTree(root);
   }
 });
 
@@ -632,7 +632,7 @@ test('Given a test child that does not close after termination, When the gate ru
     await assert.rejects(runMutationGate([mutant], { root, workers: 1, calibrate: true, log: () => {}, runTestImpl }), /did not close after termination/);
     assert.equal(existsSync(pool), true, 'a worker that may still hold handles keeps its pool directory for inspection');
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeTree(root);
     if (pool) await rm(pool, { recursive: true, force: true });
   }
 });

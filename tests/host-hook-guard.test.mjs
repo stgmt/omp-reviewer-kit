@@ -3,9 +3,11 @@
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { asksForHelp, commandOf, decideGuard, denyContract, isCommitCommand, stripShellComment, substitutions } from '../scripts/hook-guard.mjs';
 import { isMainModule } from '../src/infra/main-module.mjs';
 
@@ -38,7 +40,6 @@ test('Given a non-commit command, When the guard decides, Then it allows without
 test('Given a commit and a passing review, When the guard decides, Then it allows', () => {
   const decision = decideGuard({ command: 'git commit -m x', review: () => ({ status: 0 }) });
   assert.equal(decision.decision, 'allow');
-  assert.equal(decision.remark, 'review passed');
 });
 
 test('Given a commit and a blocking review, When the guard decides, Then it blocks and carries the reason', () => {
@@ -175,4 +176,65 @@ test('Given a commit that passes -h as a path after --, When it is classified, T
   assert.equal(isCommitCommand('git commit -- -h'), true);
   assert.equal(asksForHelp('git commit -- -h'), false);
   assert.equal(isCommitCommand('git commit --help -- -h'), false, 'a real help request before -- still wins');
+});
+
+test('Given nested repositories with only the inner index staged, When the guard reviews a target change, Then it blocks on the inner diff', t => {
+  const root = mkdtempSync(path.join(tmpdir(), 'guard-target-'));
+  t.after(() => rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }));
+  const parent = path.join(root, 'parent');
+  const nested = path.join(parent, 'nested repo');
+  const kit = fileURLToPath(new URL('..', import.meta.url));
+  mkdirSync(nested, { recursive: true });
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^GIT_/i.test(key)));
+  const git = (cwd, ...args) => {
+    const result = spawnSync('git', args, { cwd, env, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+  };
+  git(parent, 'init');
+  git(nested, 'init');
+  writeFileSync(path.join(nested, 'one.txt'), 'one');
+  writeFileSync(path.join(nested, 'two.txt'), 'two');
+  git(nested, 'add', 'one.txt', 'two.txt');
+  const guard = fileURLToPath(new URL('../scripts/hook-guard.mjs', import.meta.url));
+  const run = command => spawnSync(process.execPath, [guard], {
+    cwd: parent,
+    env: { ...env, OMP_REVIEW_KIT_ROOT: kit, OMP_REVIEW_KIT_MAX_DIFF: '1', OMP_REVIEW_KIT_RUNS_DIR: path.join(root, 'runs'), OMP_REVIEW_KIT_REPORTS_DIR: path.join(root, 'reports') },
+    input: JSON.stringify({ command }),
+    encoding: 'utf8',
+  });
+  assert.equal(run('git commit --no-verify -m x').status, 0, 'the original repository has no staged files');
+  for (const command of [
+    "git -C 'nested repo' commit --no-verify -m x",
+    "cd 'nested repo' && git commit --no-verify -m x",
+    "git -C . -C 'nested repo' commit --no-verify -m x",
+  ]) {
+    const result = run(command);
+    assert.equal(result.status, 1, command);
+    assert.equal(JSON.parse(result.stdout).deny, true, command);
+    assert.match(JSON.parse(result.stdout).reason, /diff too large/, command);
+  }
+});
+
+test('Given ambiguous target-changing shell forms, When a commit is recognized, Then the current directory is reviewed and the uncertainty is reported', () => {
+  const commands = [
+    'cd nested; git commit --no-verify -m x',
+    'git -C "$TARGET" commit -m x',
+    'git --git-dir=other/.git commit -m x',
+    'git -c core.worktree=other commit -m x',
+    'env GIT_DIR=other/.git git commit -m x',
+    '(cd nested && git commit -m x)',
+    'echo "$(git -C nested commit -m x)"',
+    'git commit -m x && git -C nested commit -m y',
+    'git commit -m x # comment\ncd nested && git commit -m y',
+  ];
+  for (const command of commands) {
+    let reviewed;
+    const decision = decideGuard({ command, cwd: process.cwd(), env: {}, review: cwd => { reviewed = cwd; return { status: 0 }; } });
+    assert.equal(decision.decision, 'allow', command);
+    assert.equal(reviewed, process.cwd(), command);
+    assert.match(decision.remark, /commit target could not be determined/, command);
+  }
+  const decision = decideGuard({ command: 'git commit -m x', env: { GIT_DIR: 'other/.git' }, review: () => ({ status: 0 }) });
+  assert.equal(decision.decision, 'allow');
+  assert.match(decision.remark, /commit target could not be determined/);
 });

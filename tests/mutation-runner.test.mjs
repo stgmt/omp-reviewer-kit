@@ -5,6 +5,10 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { runPool, classifyTestRun, captureTree, restoreTree, runTest, runMutationGate, findStaleMutants, mergeCalibration, mutantIdentity, testFileHash } from '../scripts/mutation-runner.mjs';
 
+// A timed-out child can still hold its files for a moment on Windows; a plain recursive removal is a
+// defect there, so every tree this suite deletes retries.
+const REMOVE = { recursive: true, force: true, maxRetries: 20, retryDelay: 250 };
+
 test('Given two mutants of one behavior, When calibrated with reusable workers, Then all IDs have reference and focused assertion proof', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'rk-gate-test-'));
   try {
@@ -25,7 +29,7 @@ test('Given two mutants of one behavior, When calibrated with reusable workers, 
     const stale = { ...result.mappings, 'value-2': { ...result.mappings['value-2'], mutantHash: 'stale' } };
     await assert.rejects(runMutationGate(mutants, { root, selectors: stale, log: () => {} }), /stale selector/);
     assert.equal(await readFile(path.join(root, 'src/value.mjs'), 'utf8'), 'export const value = 1;');
-  } finally { await rm(root, { recursive: true, force: true }); }
+  } finally { await rm(root, REMOVE); }
 });
 
 test('Given a recorded selector whose names still decide, When calibrated on an edited test file, Then the hint proves the kill without a full-suite reference', async () => {
@@ -45,7 +49,7 @@ test('Given a recorded selector whose names still decide, When calibrated on an 
     assert.deepEqual(result.mappings['value-9'].tests, ['value contract'], 'the recorded selector stays; the decoy never becomes evidence');
     assert.notEqual(result.mappings['value-9'].testHash, 'outdated', 'the mapping carries the hash of the edited test file');
     assert.equal(result.mappings['value-9'].mutantHash, mutantIdentity(mutant));
-  } finally { await rm(root, { recursive: true, force: true }); }
+  } finally { await rm(root, REMOVE); }
 });
 
 test('Given a recorded selector whose names no longer exist, When calibrated, Then the full-suite reference discovers the deciding assertion', async () => {
@@ -61,7 +65,7 @@ test('Given a recorded selector whose names no longer exist, When calibrated, Th
     assert.equal(result.passed, true, 'the failed hint falls back to the reference and the mutant is still killed');
     assert.deepEqual(result.results.map((record) => [record.id, record.outcome]), [['value-9', 'killed']]);
     assert.deepEqual(result.mappings['value-9'].tests, ['value contract'], 'the fallback reference re-discovers the deciding assertion');
-  } finally { await rm(root, { recursive: true, force: true }); }
+  } finally { await rm(root, REMOVE); }
 });
 
 test('Given missing, duplicate or escaping catalog entries, When admitted, Then the gate rejects them before copying', async () => {
@@ -87,17 +91,21 @@ test('Given an invalid import, When native tests execute, Then process failure i
     await writeFile(path.join(root, 'test.mjs'), "import './missing.mjs';");
     const result = await runTest(root, 'test.mjs');
     assert.notEqual(classifyTestRun(result), 'killed');
-  } finally { await rm(root, { recursive: true, force: true }); }
+  } finally { await rm(root, REMOVE); }
 });
 
 test('Given a hung test process, When timed out, Then it closes and timeout cannot count as a kill', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'rk-timeout-test-'));
   try {
     await writeFile(path.join(root, 'test.mjs'), "import {test} from 'node:test'; test('hung',async()=>{await new Promise(()=>{});}); setInterval(()=>{},1000);");
-    const result = await runTest(root, 'test.mjs', [], { timeoutMs: 300 });
+    // A child that survives termination is the failure this test names, so it is reported as one
+    // rather than escaping as an internal error the gate cannot read as a deciding assertion.
+    const result = await runTest(root, 'test.mjs', [], { timeoutMs: 300 }).catch(error => {
+      assert.fail(`the timed-out child did not close: ${error.message}`);
+    });
     assert.equal(result.timedOut, true);
     assert.equal(classifyTestRun(result), 'timeout');
-  } finally { await rm(root, { recursive: true, force: true }); }
+  } finally { await rm(root, REMOVE); }
 });
 
 test('Given parallel and exclusive jobs, When pooled, Then four workers overlap but exclusive jobs drain all work', async () => {
@@ -126,7 +134,7 @@ test('Given same leaf names in different suites, When selected by ancestry, Then
     assert.equal(classifyTestRun(result, ['same']), 'killed', JSON.stringify(result));
     assert.equal(result.events.filter((event) => ['test:pass', 'test:fail'].includes(event.type) && !event.suite && !event.skipped).length, 1);
     assert.deepEqual(result.events.find((event) => event.name === 'same' && !event.skipped).ancestors, ['owned']);
-  } finally { await rm(root, { recursive: true, force: true }); }
+  } finally { await rm(root, REMOVE); }
 });
 
 test('Given process and test evidence, When classified, Then only an expected assertion proves a kill', () => {
@@ -161,7 +169,7 @@ test('Given a dirty reusable tree, When restored, Then changes, deletions and ne
     await writeFile(path.join(root, 'src'), 'directory replaced by file');
     await assert.doesNotReject(() => restoreTree(root, baseline), 'type replacement must restore descendants');
     assert.deepEqual(await captureTree(root), baseline);
-  } finally { await rm(root, { recursive: true, force: true }); }
+  } finally { await rm(root, REMOVE); }
 });
 
 test('Given an inherited test context and persistent paths, When a job starts, Then native subprocess state is isolated', async () => {
@@ -179,7 +187,7 @@ test('Given an inherited test context and persistent paths, When a job starts, T
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
     }
-    await rm(root, { recursive: true, force: true });
+    await rm(root, REMOVE);
   }
 });
 
@@ -196,7 +204,7 @@ test('Given a native nested test, When selected precisely, Then reporter proves 
     assert.equal(classifyTestRun(result, ['contract']), 'killed');
     assert.ok(result.events.some((event) => event.name === 'contract' && event.causeCode === 'ERR_ASSERTION'));
     assert.ok(!result.events.some((event) => event.name === 'unrelated' && !event.skipped));
-  } finally { await rm(root, { recursive: true, force: true }); }
+  } finally { await rm(root, REMOVE); }
 });
 
 test('Given a selector catalog after an edit, When stale entries are looked up, Then only mutants with a missing, moved or outdated selector need calibration', async () => {
@@ -223,7 +231,7 @@ test('Given a selector catalog after an edit, When stale entries are looked up, 
     const stale = await findStaleMutants([fresh, moved, edited, changedTest, missing], mappings, root);
     assert.deepEqual(stale.map((m) => m.id), ['moved', 'edited', 'changed-test', 'missing']);
     assert.deepEqual((await findStaleMutants([mutant('emptied', 'tests/a.test.mjs')], mappings, root)).map((m) => m.id), ['emptied']);
-  } finally { await rm(root, { recursive: true, force: true }); }
+  } finally { await rm(root, REMOVE); }
 });
 
 test('Given a partial calibration, When merged, Then fresh selectors win, removed mutants are dropped and a mutant left without any selector is an error', () => {

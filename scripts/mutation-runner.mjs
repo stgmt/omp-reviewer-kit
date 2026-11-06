@@ -9,7 +9,7 @@ import { terminateProcessTree } from '../src/infra/process-tree.mjs';
 
 const reporter = new URL('./mutation-test-reporter.mjs', import.meta.url).href;
 export const DIRECTORIES_TO_COPY = ['src', 'scripts', 'agents', 'skills', 'tests', 'templates', '.omp-plugin', '.omp/review-kit', '.claude-plugin', 'claude-plugin', '.github', '.specs/native-task-review', '.codex-plugin', '.agents', 'opencode'];
-const FILES_TO_COPY = ['package.json', 'README.md', 'AGENTS.md', 'ROADMAP.md', 'CHANGELOG.md'];
+const FILES_TO_COPY = ['package.json', 'bun.lock', 'README.md', 'AGENTS.md', 'ROADMAP.md', 'CHANGELOG.md'];
 const exclusiveSuites = new Set(['execution-timeout', 'superseded-runs', 'run-signal-guard', 'review-run-records', 'omp-cli-reviewer-adapter', 'extension', 'run-tests-wrapper', 'claude-bridge', 'review-progress', 'target-heal', 'target-switches', 'status-latest-review', 'mutation-runner']);
 const catalogCheck = (event) => /mutation manifest:|mutant anchors|curated mutant/i.test(event.name);
 // Windows keeps transient handles on files that were just executed or written, so a plain removal fails with EBUSY.

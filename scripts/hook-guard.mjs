@@ -4,11 +4,11 @@
 //
 //   node scripts/hook-guard.mjs           # payload on stdin, JSON answer on stdout
 //
-// A payload shape the guard cannot read is an allow: the guard exists to add a review, never to break
-// a host whose payload changed. The one thing it never does is let a staged commit through without a
-// review once it has recognised the command.
+// A payload shape the guard cannot read is an allow. Once a commit is recognised, however, both its
+// repository and a passing review must be established before the guard authorizes it.
 
 import { spawnSync } from 'node:child_process';
+import { realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isGitCommitCommand } from '../src/domain/git-commit-command.mjs';
@@ -282,17 +282,91 @@ export function asksForHelp(segment) {
   const options = stop === -1 ? tokens : tokens.slice(0, stop);
   return options.includes('--help') || options.includes('-h');
 }
+/**
+ * Resolve literal shell forms without executing the command. Ambiguous forms retain the existing
+ * behavior: review the current directory, which may differ from the eventual commit target.
+ */
+export function commitReviewDirectory(command, cwd = process.cwd(), env = process.env) {
+  if (Object.keys(env).some(key => /^GIT_/i.test(key))) {
+    throw new Error('Git environment overrides are present; unset them and run the commit separately.');
+  }
+  const words = [];
+  let word = '';
+  let started = false;
+  let quote = null;
+  const push = () => { if (started) words.push(word); word = ''; started = false; };
+  for (let i = 0; i < command.length; i += 1) {
+    const c = command[i];
+    if (quote === "'") {
+      if (c === "'") quote = null;
+      else word += c;
+      continue;
+    }
+    if (quote === '"') {
+      if (c === '"') { quote = null; continue; }
+      if ('$`\\'.includes(c)) throw new Error('Shell expansion or escaping makes the commit target ambiguous.');
+      word += c;
+      continue;
+    }
+    if (c === "'" || c === '"') { quote = c; started = true; continue; }
+    if (c === '#' && !started) {
+      if (/[\r\n]/.test(command.slice(i))) throw new Error('A multiline shell comment makes the commit target ambiguous.');
+      break;
+    }
+    if (c === '&' && command[i + 1] === '&') { push(); words.push('&&'); i += 1; continue; }
+    if (/\s/.test(c) && c !== '\n' && c !== '\r') { push(); continue; }
+    if (';&|<>()\n\r$`\\*?[]{}~%!^'.includes(c)) {
+      throw new Error('Shell syntax makes the commit target ambiguous.');
+    }
+    word += c;
+    started = true;
+  }
+  if (quote) throw new Error('An unfinished shell quote makes the commit target ambiguous.');
+  push();
+  let directory = realpathSync(cwd);
+  let index = 0;
+  while (words[index] === 'cd') {
+    if (env.CDPATH || !words[index + 1] || words[index + 2] !== '&&') {
+      throw new Error('Cannot determine the directory changed by cd.');
+    }
+    directory = realpathSync(path.resolve(directory, words[index + 1]));
+    index += 3;
+  }
+  if (!/^git(?:\.exe)?$/i.test(words[index] ?? '')) {
+    throw new Error('Run the git commit directly, without shell wrappers or other commands.');
+  }
+  index += 1;
+  while (words[index] === '-C' || (words[index] ?? '').startsWith('-C')) {
+    const option = words[index++];
+    const target = option === '-C' ? words[index++] : option.slice(2);
+    if (target === undefined) throw new Error('Git -C needs a literal directory.');
+    if (target !== '') directory = realpathSync(path.resolve(directory, target));
+  }
+  if (words[index] !== 'commit' || words.slice(index + 1).includes('&&')) {
+    throw new Error('Run git commit separately; Git options and compound commands can change its target.');
+  }
+  return directory;
+}
+
 
 /**
  * What the guard answers. `block` carries the reason a host shows; `allow` carries nothing.
  *
- * @param {{ command: string|null, review: () => { status: number|null, stdout?: string, stderr?: string } }} input
+ * @param {{ command: string|null, review: (cwd: string) => { status: number|null, stdout?: string, stderr?: string }, cwd?: string, env?: object }} input
  * @returns {{ decision: 'allow'|'block', reason: string, remark: string }}
  */
-export function decideGuard({ command, review }) {
+export function decideGuard({ command, review, cwd = process.cwd(), env = process.env }) {
   if (!command || !isCommitCommand(command)) return { decision: 'allow', reason: '', remark: 'not a commit command' };
-  const result = review();
-  if (result.status === 0) return { decision: 'allow', reason: '', remark: 'review passed' };
+  let target;
+  let targetUncertain = false;
+  try {
+    target = commitReviewDirectory(command, cwd, env);
+  } catch {
+    target = cwd;
+    targetUncertain = true;
+  }
+  const result = review(target);
+  if (result.status === 0) return { decision: 'allow', reason: '', remark: targetUncertain ? 'review passed for the current directory; commit target could not be determined' : 'review passed' };
   const detail = String(result.stderr ?? '').trim() || String(result.stdout ?? '').trim();
   return {
     decision: 'block',
@@ -343,7 +417,7 @@ async function main() {
   const command = commandOf(payload);
   const decision = decideGuard({
     command,
-    review: () => spawnSync(process.execPath, [path.join(kitRoot, 'scripts', 'run-review.mjs')], { encoding: 'utf8', windowsHide: true }),
+    review: cwd => spawnSync(process.execPath, [path.join(kitRoot, 'scripts', 'run-review.mjs')], { cwd, encoding: 'utf8', windowsHide: true }),
   });
   process.stderr.write(`guard: ${decision.remark}\n`);
   process.stdout.write(`${JSON.stringify(denyContract(host, decision))}\n`);

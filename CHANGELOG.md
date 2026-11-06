@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-11-05
+
+### Fixed
+- The host doctor recognizes OMP's marketplace runtime link as one installation, while retaining the conflict warning for distinct installations and malformed registrations.
+- The OpenCode commit guard reads the command and working directory from the host's tool arguments, and starts the guard with Node even when the host is a compiled Bun executable.
+- The host commit guard reviews literal `git -C` and `cd directory &&` targets in their selected directory. Ambiguous commands still review the current directory, which may differ from the eventual commit target.
+- Fresh marketplace installs prepare their locked review dependencies in an atomic user cache outside the reviewed repository. The launcher rejects an installed OMP package with the wrong name or version, and the native host resolves the pinned library from the cache rather than a different globally cached version.
+- The Claude/OpenCode doctor warns when it cannot verify a library beside the plugin, instead of instructing a manual install that automatic runtime preparation no longer requires.
+- OpenCode now installs native agents and commands instead of copying incompatible OMP and Claude definitions. Read-only reviewers use a bounded Git inspection tool, and command dispatch uses the loaded plugin rather than a checkout-dependent path.
+- OpenCode installation records hashes for kit-owned files, preserves user edits on upgrade and removal, and reports conflicts or an unreadable manifest as failures before enabling the plugin.
+- The OpenCode installer selects the matching release tag, preventing the host's Git package cache from silently retaining an older version after an upgrade.
+- Git-installed packages include the OpenCode and Claude entry points, host manifests, and lockfile needed by fresh installations.
+
 ## [0.29.1] - 2026-11-05
 
 ### Fixed

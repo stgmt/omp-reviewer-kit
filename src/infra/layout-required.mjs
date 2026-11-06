@@ -12,7 +12,10 @@ export const CLAUDE_PLUGIN_MAX_BYTES = 100 * 1024;
 
 export const REQUIRED_FILES = [
   'src/infra/main-module.mjs',
+  'src/infra/ensure-review-runtime.mjs',
   'opencode/plugin.mjs',
+  'opencode/read-only-git.mjs',
+  'opencode/kit-tool.mjs',
   'scripts/hook-guard.mjs',
   'scripts/host-install.mjs',
   'scripts/host-doctor.mjs',
@@ -24,6 +27,7 @@ export const REQUIRED_FILES = [
   '.agents/plugins/marketplace.json',
 
   'package.json',
+  'bun.lock',
   '.omp-plugin/marketplace.json',
   '.claude-plugin/marketplace.json',
   ...CLAUDE_PLUGIN_FILES.map((file) => `claude-plugin/${file}`),

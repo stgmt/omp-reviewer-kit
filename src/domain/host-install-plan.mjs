@@ -3,11 +3,11 @@
 
 import path from 'node:path';
 
-/** The components the kit owns in an OpenCode config directory. */
+/** Components OpenCode discovers in the user's config directory. */
 export const OPENCODE_COMPONENTS = Object.freeze([
-  { from: 'agents', to: 'agents', pattern: '.md' },
+  { from: 'opencode/agents', to: 'agents', pattern: '.md' },
   { from: 'skills', to: 'skills', pattern: '/SKILL.md' },
-  { from: 'claude-plugin/commands', to: 'commands', pattern: '.md' },
+  { from: 'opencode/commands', to: 'commands', pattern: '.md' },
 ]);
 
 /** The package name this kit installs under. */
@@ -26,14 +26,36 @@ export function isKitPackageSpec(value) {
 }
 
 /**
- * The record the installer keeps of what it created. One constructor for the writer and the reader, so
- * a field added to the record is added once.
+ * The OpenCode plugin spec for one release. It names the release tag, because the host keys its Git
+ * package cache by the spec string: an unversioned spec keeps serving the bytes it fetched first.
  *
- * @param {{ version: string, files: string[] }} input
- * @returns {{ version: string, files: string[] }}
+ * @param {string} version
+ * @returns {string}
+ */
+export function opencodePluginEntry(version) {
+  return `omp-reviewer-kit@git+https://github.com/stgmt/omp-reviewer-kit.git#v${version}`;
+}
+
+/**
+ * Canonicalizes the install manifest. Hash-bearing entries let later installs and removals
+ * distinguish unchanged kit files from user edits; string entries are retained for legacy manifests.
+ *
+ * @param {{ version: string, files: Array<string|{path:string, sha256:string}> }} input
+ * @returns {{ version: string, files: Array<string|{path:string, sha256:string}> }}
  */
 export function installRecord({ version, files }) {
-  return { version: String(version), files: [...new Set((files ?? []).map(String))].sort() };
+  const byPath = new Map();
+  for (const file of files ?? []) {
+    if (typeof file === 'string') {
+      if (!byPath.has(file)) byPath.set(file, file);
+    } else if (file && typeof file.path === 'string' && /^[a-f0-9]{64}$/i.test(String(file.sha256 ?? ''))) {
+      byPath.set(file.path, { path: file.path, sha256: String(file.sha256).toLowerCase() });
+    }
+  }
+  return {
+    version: String(version),
+    files: [...byPath.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([, file]) => file),
+  };
 }
 
 /** The file the installer writes to remember what it copied. */
@@ -71,14 +93,14 @@ export function planHostInstall({ host, version, action, kitRoot, configDir, plu
   const blockers = findings.filter(finding => finding.code === 'duplicate-install-mode' || finding.code === 'config-unreadable');
   if (host === 'opencode') {
     const dir = configDir;
-    const entry = pluginEntry ?? 'omp-reviewer-kit@git+https://github.com/stgmt/omp-reviewer-kit.git';
+    const entry = pluginEntry ?? opencodePluginEntry(version);
     const base = { host, action, blocked: blockers.length > 0, blockers };
     if (action === 'remove') {
       return {
         ...base,
         steps: [
           { kind: 'write-config', detail: `remove ${entry} from the plugin array`, path: dir },
-          { kind: 'remove-tree', detail: 'remove the copied components listed in the install manifest', path: dir },
+          { kind: 'remove-tree', detail: 'remove only manifest-listed components whose current bytes still match their recorded ownership; preserve edited or conflicting files', path: dir },
           { kind: 'report', detail: 'the OpenCode package cache is left to OpenCode; it is keyed by the spec string' },
         ],
       };
@@ -86,8 +108,7 @@ export function planHostInstall({ host, version, action, kitRoot, configDir, plu
     return {
       ...base,
       steps: [
-        { kind: 'write-config', detail: `add ${entry} to the plugin array (JSONC preserved)`, path: dir },
-        { kind: 'copy-tree', detail: 'copy agents, skills and commands the kit owns', path: dir },
+        { kind: 'copy-tree', detail: 'copy native agents, skills and commands the kit owns', path: dir },
         { kind: 'report', detail: `installed version ${version} from ${kitRoot}` },
       ],
     };

@@ -155,7 +155,7 @@
       ],
       "ancestors": [],
       "mutantHash": "5fda9648b08d2c2f7b42bbc76b3d4abd82e742c6be8b3001245ffcc7dce4fba8",
-      "testHash": "aa8f78a9aa46aee27c63e72a3731abdf7d0b0a711320aca9c3b6f4e1bcd09ed4"
+      "testHash": "0605b7c1416790ab9d8808b5540924b024865aafafd242263f99ac6e5444eee8"
     },
     "anti-neuroslop-section-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -713,7 +713,7 @@
       ],
       "ancestors": [],
       "mutantHash": "430e165a43355f97673826a582745330ac75a7b53c4b9c0bb92d24e4ee5f0d62",
-      "testHash": "a9649b94d7f63823fa0718a8d3ec6bd994f8f29154868f71b73e8037a592848f"
+      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
     },
     "mutation-exclusive-lane-disabled": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -722,7 +722,7 @@
       ],
       "ancestors": [],
       "mutantHash": "b242bfd0e13e8a9e7842ddb380b2ea0eb0df8d339612fd03c7bb2c313917ac95",
-      "testHash": "a9649b94d7f63823fa0718a8d3ec6bd994f8f29154868f71b73e8037a592848f"
+      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
     },
     "mutation-timeout-counted-as-kill": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -731,7 +731,7 @@
       ],
       "ancestors": [],
       "mutantHash": "8e5a1c5148d62c2c1e37373d73a0bc43d26606efa53af684611a83184db4d362",
-      "testHash": "a9649b94d7f63823fa0718a8d3ec6bd994f8f29154868f71b73e8037a592848f"
+      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
     },
     "mutation-missing-summary-accepted": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -740,7 +740,7 @@
       ],
       "ancestors": [],
       "mutantHash": "39f020855996175c63d8274b295fccb78c8e0ae7fe7fe00f9f052dc5e87c4c6d",
-      "testHash": "a9649b94d7f63823fa0718a8d3ec6bd994f8f29154868f71b73e8037a592848f"
+      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
     },
     "mutation-assertion-proof-omitted": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -749,7 +749,7 @@
       ],
       "ancestors": [],
       "mutantHash": "9461f424804a5718dfb0f3fef66b6e2f2de70ff431449396a29898459905d796",
-      "testHash": "a9649b94d7f63823fa0718a8d3ec6bd994f8f29154868f71b73e8037a592848f"
+      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
     },
     "mutation-worker-file-not-restored": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -758,7 +758,7 @@
       ],
       "ancestors": [],
       "mutantHash": "e5b5fcdfe45bcfff98928e441617dd63872e7bc0f93e29183658af3cd6f816a9",
-      "testHash": "a9649b94d7f63823fa0718a8d3ec6bd994f8f29154868f71b73e8037a592848f"
+      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
     },
     "mutation-stale-selector-accepted": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -767,7 +767,7 @@
       ],
       "ancestors": [],
       "mutantHash": "bacdb060d41cbc04378f7646db230200fbda69126d6bc00e0bc3d34162c8e6d6",
-      "testHash": "a9649b94d7f63823fa0718a8d3ec6bd994f8f29154868f71b73e8037a592848f"
+      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
     },
     "mutation-duplicate-catalog-accepted": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -776,7 +776,7 @@
       ],
       "ancestors": [],
       "mutantHash": "2d8e45133b5b12aa77ab2fb64d7073a4b7f2d962ea547d3f803c73e58a26842b",
-      "testHash": "a9649b94d7f63823fa0718a8d3ec6bd994f8f29154868f71b73e8037a592848f"
+      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
     },
     "runner-version-compare-inverted": {
       "testFile": "tests/claude-bridge.test.mjs",
@@ -785,7 +785,7 @@
       ],
       "ancestors": [],
       "mutantHash": "5d1e56c6876b4144249466536e073bc7d2ece3f7e58510cb56dd2636392da51a",
-      "testHash": "7afbbcfc4bbf654dba7077b7e4aa303233a633f63946f3e148de0c16d49d4106"
+      "testHash": "522e96ed83f4dc6de7d6d18402dedb95758687de94d67d5ebfe4ccfb5c783de4"
     },
     "runner-version-unmarked-canonical-unprotected": {
       "testFile": "tests/claude-bridge.test.mjs",
@@ -794,7 +794,7 @@
       ],
       "ancestors": [],
       "mutantHash": "9731fdfb4f93b56fcb9fdd0d2fef823b8e45cece22e98de11fdb61a84b9d1271",
-      "testHash": "7afbbcfc4bbf654dba7077b7e4aa303233a633f63946f3e148de0c16d49d4106"
+      "testHash": "522e96ed83f4dc6de7d6d18402dedb95758687de94d67d5ebfe4ccfb5c783de4"
     },
     "installer-writes-newer-runner": {
       "testFile": "tests/claude-bridge.test.mjs",
@@ -803,7 +803,7 @@
       ],
       "ancestors": [],
       "mutantHash": "f96c0af3d1cf21df898d067e5930dc5553eb554dfc3fb7ecc43dfb4f8bbedea7",
-      "testHash": "7afbbcfc4bbf654dba7077b7e4aa303233a633f63946f3e148de0c16d49d4106"
+      "testHash": "522e96ed83f4dc6de7d6d18402dedb95758687de94d67d5ebfe4ccfb5c783de4"
     },
     "installer-newer-runner-not-current": {
       "testFile": "tests/claude-bridge.test.mjs",
@@ -812,7 +812,7 @@
       ],
       "ancestors": [],
       "mutantHash": "38e5d5f6f64abef64abd9d1a527792ffbf4795502facdf1c0c805533f109324e",
-      "testHash": "7afbbcfc4bbf654dba7077b7e4aa303233a633f63946f3e148de0c16d49d4106"
+      "testHash": "522e96ed83f4dc6de7d6d18402dedb95758687de94d67d5ebfe4ccfb5c783de4"
     },
     "sync-targets-rolls-back-newer": {
       "testFile": "tests/claude-bridge.test.mjs",
@@ -821,7 +821,7 @@
       ],
       "ancestors": [],
       "mutantHash": "beea492e097c80a124299c7a79cac7671ad08b786675b8f6224e88259683067a",
-      "testHash": "7afbbcfc4bbf654dba7077b7e4aa303233a633f63946f3e148de0c16d49d4106"
+      "testHash": "522e96ed83f4dc6de7d6d18402dedb95758687de94d67d5ebfe4ccfb5c783de4"
     },
     "bridge-install-without-confirmation": {
       "testFile": "tests/claude-bridge.test.mjs",
@@ -830,7 +830,7 @@
       ],
       "ancestors": [],
       "mutantHash": "c53e9704dbae1a035f9c8363a3c2c9ffa34e9b5f4e600a3a6ef46bee4c733f98",
-      "testHash": "7afbbcfc4bbf654dba7077b7e4aa303233a633f63946f3e148de0c16d49d4106"
+      "testHash": "522e96ed83f4dc6de7d6d18402dedb95758687de94d67d5ebfe4ccfb5c783de4"
     },
     "bridge-install-skips-presence-check": {
       "testFile": "tests/claude-bridge.test.mjs",
@@ -839,7 +839,7 @@
       ],
       "ancestors": [],
       "mutantHash": "4d1bc049ee6bec70a03d73f9b3afbd45c2215faa9cad9855bd087e812512bd82",
-      "testHash": "7afbbcfc4bbf654dba7077b7e4aa303233a633f63946f3e148de0c16d49d4106"
+      "testHash": "522e96ed83f4dc6de7d6d18402dedb95758687de94d67d5ebfe4ccfb5c783de4"
     },
     "bridge-plugin-outdated-ignored": {
       "testFile": "tests/claude-bridge.test.mjs",
@@ -848,7 +848,7 @@
       ],
       "ancestors": [],
       "mutantHash": "af6076c99ab8a3353685b2404cbd09ff229691378f761071c3e4554af90202ca",
-      "testHash": "7afbbcfc4bbf654dba7077b7e4aa303233a633f63946f3e148de0c16d49d4106"
+      "testHash": "522e96ed83f4dc6de7d6d18402dedb95758687de94d67d5ebfe4ccfb5c783de4"
     },
     "bridge-review-uses-plugin-runner": {
       "testFile": "tests/claude-bridge.test.mjs",
@@ -857,7 +857,7 @@
       ],
       "ancestors": [],
       "mutantHash": "ecfda2c082c9555eb298ec0913ff48c80a319a90e90f57cb68af19216a8bc4ba",
-      "testHash": "7afbbcfc4bbf654dba7077b7e4aa303233a633f63946f3e148de0c16d49d4106"
+      "testHash": "522e96ed83f4dc6de7d6d18402dedb95758687de94d67d5ebfe4ccfb5c783de4"
     },
     "bridge-session-never-silent": {
       "testFile": "tests/claude-bridge.test.mjs",
@@ -866,7 +866,7 @@
       ],
       "ancestors": [],
       "mutantHash": "8f7ede5e83ff115432a3a6b7708677aba2cb2349b46c2a351cae5222b01e9979",
-      "testHash": "7afbbcfc4bbf654dba7077b7e4aa303233a633f63946f3e148de0c16d49d4106"
+      "testHash": "522e96ed83f4dc6de7d6d18402dedb95758687de94d67d5ebfe4ccfb5c783de4"
     },
     "bridge-conflict-branch-silent": {
       "testFile": "tests/claude-bridge.test.mjs",
@@ -875,7 +875,7 @@
       ],
       "ancestors": [],
       "mutantHash": "b4317848c77d5f668d764039868d135d9d287429c4ad376ad6078a32d3c841ba",
-      "testHash": "7afbbcfc4bbf654dba7077b7e4aa303233a633f63946f3e148de0c16d49d4106"
+      "testHash": "522e96ed83f4dc6de7d6d18402dedb95758687de94d67d5ebfe4ccfb5c783de4"
     },
     "bridge-stale-branch-silent": {
       "testFile": "tests/claude-bridge.test.mjs",
@@ -884,7 +884,7 @@
       ],
       "ancestors": [],
       "mutantHash": "214f97767044aebcf009b31f88ef348a1a98f13c917744123653183f1e6ea2e2",
-      "testHash": "7afbbcfc4bbf654dba7077b7e4aa303233a633f63946f3e148de0c16d49d4106"
+      "testHash": "522e96ed83f4dc6de7d6d18402dedb95758687de94d67d5ebfe4ccfb5c783de4"
     },
     "bridge-review-fallback-wrong-runner": {
       "testFile": "tests/claude-bridge.test.mjs",
@@ -893,7 +893,7 @@
       ],
       "ancestors": [],
       "mutantHash": "b0d749de6e9c25a02a820441c27634a23671cde6aa53c44488576e1fb97ea7ff",
-      "testHash": "7afbbcfc4bbf654dba7077b7e4aa303233a633f63946f3e148de0c16d49d4106"
+      "testHash": "522e96ed83f4dc6de7d6d18402dedb95758687de94d67d5ebfe4ccfb5c783de4"
     },
     "bridge-doctor-newer-warning-dropped": {
       "testFile": "tests/claude-bridge.test.mjs",
@@ -902,7 +902,7 @@
       ],
       "ancestors": [],
       "mutantHash": "e446e32b576a4f4ca3c2ec7f3079eed239b2d2518594d266c49f517a9e973d2c",
-      "testHash": "7afbbcfc4bbf654dba7077b7e4aa303233a633f63946f3e148de0c16d49d4106"
+      "testHash": "522e96ed83f4dc6de7d6d18402dedb95758687de94d67d5ebfe4ccfb5c783de4"
     },
     "bridge-plugin-spec-override-ignored": {
       "testFile": "tests/claude-bridge.test.mjs",
@@ -911,7 +911,7 @@
       ],
       "ancestors": [],
       "mutantHash": "762df086685c6aa258092fb5fd1ced264374e167fe0557c2d1a3e96eb78addac",
-      "testHash": "7afbbcfc4bbf654dba7077b7e4aa303233a633f63946f3e148de0c16d49d4106"
+      "testHash": "522e96ed83f4dc6de7d6d18402dedb95758687de94d67d5ebfe4ccfb5c783de4"
     },
     "bridge-main-error-exits-ok": {
       "testFile": "tests/claude-bridge.test.mjs",
@@ -920,7 +920,7 @@
       ],
       "ancestors": [],
       "mutantHash": "7ff2c6cbe20cbb53ef79e45d829e151fb3d9776929cf82707a2b217eb17203e8",
-      "testHash": "7afbbcfc4bbf654dba7077b7e4aa303233a633f63946f3e148de0c16d49d4106"
+      "testHash": "522e96ed83f4dc6de7d6d18402dedb95758687de94d67d5ebfe4ccfb5c783de4"
     },
     "bridge-probe-accepts-blank-output": {
       "testFile": "tests/claude-bridge.test.mjs",
@@ -929,7 +929,7 @@
       ],
       "ancestors": [],
       "mutantHash": "de548c5251a773f658873ef6d79455619817fca449708c2f3f158633c6e80e28",
-      "testHash": "7afbbcfc4bbf654dba7077b7e4aa303233a633f63946f3e148de0c16d49d4106"
+      "testHash": "522e96ed83f4dc6de7d6d18402dedb95758687de94d67d5ebfe4ccfb5c783de4"
     },
     "bridge-plugin-name-unchecked": {
       "testFile": "tests/claude-bridge.test.mjs",
@@ -938,7 +938,7 @@
       ],
       "ancestors": [],
       "mutantHash": "c39920214ba603b5dc16c612e3feda8974293193e01f0175d747550976c02648",
-      "testHash": "7afbbcfc4bbf654dba7077b7e4aa303233a633f63946f3e148de0c16d49d4106"
+      "testHash": "522e96ed83f4dc6de7d6d18402dedb95758687de94d67d5ebfe4ccfb5c783de4"
     },
     "installer-nongit-runner-newer-dropped": {
       "testFile": "tests/claude-bridge.test.mjs",
@@ -947,7 +947,7 @@
       ],
       "ancestors": [],
       "mutantHash": "133b785e6553568c34e470e639f44a6aa298024cf66ff9186b49e6b96eb35d48",
-      "testHash": "7afbbcfc4bbf654dba7077b7e4aa303233a633f63946f3e148de0c16d49d4106"
+      "testHash": "522e96ed83f4dc6de7d6d18402dedb95758687de94d67d5ebfe4ccfb5c783de4"
     },
     "hook-budget-inflated": {
       "testFile": "tests/claude-bridge.test.mjs",
@@ -956,7 +956,7 @@
       ],
       "ancestors": [],
       "mutantHash": "7446f02858bc0f26d5461fafe8192d96302eb210a9b810772af54108e1fcfd98",
-      "testHash": "7afbbcfc4bbf654dba7077b7e4aa303233a633f63946f3e148de0c16d49d4106"
+      "testHash": "522e96ed83f4dc6de7d6d18402dedb95758687de94d67d5ebfe4ccfb5c783de4"
     },
     "bridge-list-timeout-exceeds-hook-budget": {
       "testFile": "tests/claude-bridge.test.mjs",
@@ -965,7 +965,7 @@
       ],
       "ancestors": [],
       "mutantHash": "617dc1aff31cd4c65f53e7b0b3463855729bcc48176f8b030e2390744be13dd5",
-      "testHash": "7afbbcfc4bbf654dba7077b7e4aa303233a633f63946f3e148de0c16d49d4106"
+      "testHash": "522e96ed83f4dc6de7d6d18402dedb95758687de94d67d5ebfe4ccfb5c783de4"
     },
     "heal-visits-skipped-targets": {
       "testFile": "tests/target-heal.test.mjs",
@@ -1151,7 +1151,7 @@
       ],
       "ancestors": [],
       "mutantHash": "cf72792207a9be0c0c180873fc7d71c19893e1a18966ff58d2e77ea5b3e846c0",
-      "testHash": "7afbbcfc4bbf654dba7077b7e4aa303233a633f63946f3e148de0c16d49d4106"
+      "testHash": "522e96ed83f4dc6de7d6d18402dedb95758687de94d67d5ebfe4ccfb5c783de4"
     },
     "claude-bridge-refresh-without-budget": {
       "testFile": "tests/claude-bridge.test.mjs",
@@ -1160,7 +1160,7 @@
       ],
       "ancestors": [],
       "mutantHash": "a7ade5e38aaf492577a13842259a21647adc28d3d33687e837de97ae8e82bb62",
-      "testHash": "7afbbcfc4bbf654dba7077b7e4aa303233a633f63946f3e148de0c16d49d4106"
+      "testHash": "522e96ed83f4dc6de7d6d18402dedb95758687de94d67d5ebfe4ccfb5c783de4"
     },
     "claude-bridge-refresh-error-fatal": {
       "testFile": "tests/claude-bridge.test.mjs",
@@ -1169,7 +1169,7 @@
       ],
       "ancestors": [],
       "mutantHash": "c875819aa4a3356dcf24b930b1b0f8e688abc390574907462bac847b68f36d9c",
-      "testHash": "7afbbcfc4bbf654dba7077b7e4aa303233a633f63946f3e148de0c16d49d4106"
+      "testHash": "522e96ed83f4dc6de7d6d18402dedb95758687de94d67d5ebfe4ccfb5c783de4"
     },
     "installer-foreign-hooks-block-live-hookspath": {
       "testFile": "tests/target-heal.test.mjs",
@@ -1214,7 +1214,7 @@
       ],
       "ancestors": [],
       "mutantHash": "ebc112b31a50f0f358ee62462adeb2063c6d458cd3657b5f637f1767449c81d7",
-      "testHash": "a9649b94d7f63823fa0718a8d3ec6bd994f8f29154868f71b73e8037a592848f"
+      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
     },
     "run-tests-test-marker-inherited": {
       "testFile": "tests/run-tests-wrapper.test.mjs",
@@ -1250,7 +1250,7 @@
       ],
       "ancestors": [],
       "mutantHash": "49bbfaa6843cc27093f2d9ec5e5bcaa35bb2ec340c0ccd4c7f3e1755fd855016",
-      "testHash": "7afbbcfc4bbf654dba7077b7e4aa303233a633f63946f3e148de0c16d49d4106"
+      "testHash": "522e96ed83f4dc6de7d6d18402dedb95758687de94d67d5ebfe4ccfb5c783de4"
     },
     "doctor-outside-kit-message-dropped": {
       "testFile": "tests/target-heal.test.mjs",
@@ -1319,7 +1319,7 @@
       ],
       "ancestors": [],
       "mutantHash": "d94d634e3deb83c3446721056d0c33f2e336de8f270d8e2252a289f2f7aaf265",
-      "testHash": "7afbbcfc4bbf654dba7077b7e4aa303233a633f63946f3e148de0c16d49d4106"
+      "testHash": "522e96ed83f4dc6de7d6d18402dedb95758687de94d67d5ebfe4ccfb5c783de4"
     },
     "guard-effective-hook-ignored": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -2165,7 +2165,7 @@
       ],
       "ancestors": [],
       "mutantHash": "5eba7ce6c41e8e962ac784083d5ca6e8372b66cca931e3f12f38d4cbc9efbea0",
-      "testHash": "a9649b94d7f63823fa0718a8d3ec6bd994f8f29154868f71b73e8037a592848f"
+      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
     },
     "cli-stale-moved-test-current": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -2174,7 +2174,7 @@
       ],
       "ancestors": [],
       "mutantHash": "7da508a3adc08f2e154dce203d2fb9eeb2036ce54497f53253c4cf56d6f7fea4",
-      "testHash": "a9649b94d7f63823fa0718a8d3ec6bd994f8f29154868f71b73e8037a592848f"
+      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
     },
     "cli-stale-edited-mutant-current": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -2183,7 +2183,7 @@
       ],
       "ancestors": [],
       "mutantHash": "847805ebde874edf56c51a57973d2a663216e21018efec7477ebc3c45cfffc48",
-      "testHash": "a9649b94d7f63823fa0718a8d3ec6bd994f8f29154868f71b73e8037a592848f"
+      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
     },
     "cli-stale-edited-test-current": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -2192,7 +2192,7 @@
       ],
       "ancestors": [],
       "mutantHash": "0bc66ae7bcc20e6468dbb028c5379cc16b087d6752943c86dbfeedb309548aaa",
-      "testHash": "a9649b94d7f63823fa0718a8d3ec6bd994f8f29154868f71b73e8037a592848f"
+      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
     },
     "cli-stale-hash-keeps-crlf": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -2201,7 +2201,7 @@
       ],
       "ancestors": [],
       "mutantHash": "a01fd5aadcddf4e4547b23f3d9f449a0235413762631dec5824d68fbc3f2ac64",
-      "testHash": "a9649b94d7f63823fa0718a8d3ec6bd994f8f29154868f71b73e8037a592848f"
+      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
     },
     "cli-merge-keeps-removed": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -2210,7 +2210,7 @@
       ],
       "ancestors": [],
       "mutantHash": "e0fa5248e67c4ec4e6fbf74d311b4fe78156a6006168c5f36f1b57c9f97b045c",
-      "testHash": "a9649b94d7f63823fa0718a8d3ec6bd994f8f29154868f71b73e8037a592848f"
+      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
     },
     "cli-merge-ignores-fresh": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -2219,7 +2219,7 @@
       ],
       "ancestors": [],
       "mutantHash": "7bfdc771cac2b23d7c791b1399c51da1b74403e94131d2325dbe46dfc9efcdbc",
-      "testHash": "a9649b94d7f63823fa0718a8d3ec6bd994f8f29154868f71b73e8037a592848f"
+      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
     },
     "cli-merge-drops-unfreshened": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -2228,7 +2228,7 @@
       ],
       "ancestors": [],
       "mutantHash": "3b60675eaefe39028e741d2829dd41f9e91612ab06b26053876cebad4b5bdf03",
-      "testHash": "a9649b94d7f63823fa0718a8d3ec6bd994f8f29154868f71b73e8037a592848f"
+      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
     },
     "cli-merge-incomplete-not-error": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -2237,7 +2237,7 @@
       ],
       "ancestors": [],
       "mutantHash": "76b4dad86fa0ba0bc60b2517aceb16650fd191f3636fce3794e9a0d3b958d691",
-      "testHash": "a9649b94d7f63823fa0718a8d3ec6bd994f8f29154868f71b73e8037a592848f"
+      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
     },
     "cli-merge-default-incomplete": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -2246,7 +2246,7 @@
       ],
       "ancestors": [],
       "mutantHash": "ebcddaa71822dec4cb9ad90695a27d1a92bef1a64058a659d52a3caef9a5dbf7",
-      "testHash": "a9649b94d7f63823fa0718a8d3ec6bd994f8f29154868f71b73e8037a592848f"
+      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
     },
     "cli-merge-missing-selector-written": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -2255,7 +2255,7 @@
       ],
       "ancestors": [],
       "mutantHash": "c7063bab53651cc9772049f41b6ab3e8caa63b762ff120fe2ce2cb66b4662a0b",
-      "testHash": "a9649b94d7f63823fa0718a8d3ec6bd994f8f29154868f71b73e8037a592848f"
+      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
     },
     "cli-result-lines-dropped": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -2282,7 +2282,7 @@
       ],
       "ancestors": [],
       "mutantHash": "266704804c25aff8d784e9b68874defbe92028a3d23005fc1dd3b9855bac2230",
-      "testHash": "a9649b94d7f63823fa0718a8d3ec6bd994f8f29154868f71b73e8037a592848f"
+      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
     },
     "cli-result-lines-not-truncated": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -2372,7 +2372,7 @@
       ],
       "ancestors": [],
       "mutantHash": "8a096122835cd5ba1878db6a426060b81dfc8574ffe4dc978266e1fd1753e6dc",
-      "testHash": "a9649b94d7f63823fa0718a8d3ec6bd994f8f29154868f71b73e8037a592848f"
+      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
     },
     "mutation-native-opt-in-env-inherited": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -2381,7 +2381,7 @@
       ],
       "ancestors": [],
       "mutantHash": "feb789abc9b299b7a2f4eea77dce349d03b074d5bbfe9310a239300d3df740ef",
-      "testHash": "a9649b94d7f63823fa0718a8d3ec6bd994f8f29154868f71b73e8037a592848f"
+      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
     },
     "native-verdict-two-markers-accepted": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2594,16 +2594,16 @@
       ],
       "ancestors": [],
       "mutantHash": "cfddc99f396535520a4dc4d36df4dd6c29c4067721f6e7df898722f180927074",
-      "testHash": "7474443e473b568f99d2a0bbde8d835df4cdcb2d860f8355509c43aa76ef0ed0"
+      "testHash": "3b4a3b235d62cefca50dffc18a9e9541997b10fdf2bf24e190de656c42645338"
     },
     "native-launcher-library-check-ignored": {
       "testFile": "tests/native-launcher.test.mjs",
       "tests": [
-        "Given the OMP library is not installed beside the launcher, When the launcher runs, Then it blocks naming the install command"
+        "Given the OMP library is missing and its runtime cannot be prepared, When the launcher runs, Then it blocks the review"
       ],
       "ancestors": [],
       "mutantHash": "87aa17171ea7b87881645b811ce28abab947aa81bcb2a9de03f7f2cf6382e2b7",
-      "testHash": "7474443e473b568f99d2a0bbde8d835df4cdcb2d860f8355509c43aa76ef0ed0"
+      "testHash": "3b4a3b235d62cefca50dffc18a9e9541997b10fdf2bf24e190de656c42645338"
     },
     "native-stub-missing-plugin-passes": {
       "testFile": "tests/runner-stub.test.mjs",
@@ -2619,20 +2619,20 @@
     "native-bridge-library-mismatch-accepted": {
       "testFile": "tests/claude-bridge.test.mjs",
       "tests": [
-        "libraryLines fails on a missing or differing library, warns on another omp, and passes when all match"
+        "library diagnostics distinguish an unverified runtime from a matching installed library"
       ],
       "ancestors": [],
-      "mutantHash": "51d5f18e8bb7711bf1a0b49ade59c17d6530b57711fd76c817dc55f10523c2ee",
-      "testHash": "7afbbcfc4bbf654dba7077b7e4aa303233a633f63946f3e148de0c16d49d4106"
+      "mutantHash": "200746ddc03e09e9527f0fbdddf10f4961ce53d610d0540f94739f1902a411d9",
+      "testHash": "522e96ed83f4dc6de7d6d18402dedb95758687de94d67d5ebfe4ccfb5c783de4"
     },
     "native-bridge-library-absence-accepted": {
       "testFile": "tests/claude-bridge.test.mjs",
       "tests": [
-        "libraryLines fails on a missing or differing library, warns on another omp, and passes when all match"
+        "library diagnostics distinguish an unverified runtime from a matching installed library"
       ],
       "ancestors": [],
-      "mutantHash": "762d43a463850c4f8daf055ca4a150f3f61559dd4f20bc9f5e62a177eea75960",
-      "testHash": "7afbbcfc4bbf654dba7077b7e4aa303233a633f63946f3e148de0c16d49d4106"
+      "mutantHash": "0b9508c1a3a42eef7c3a6e4f817adc0f579025a3b8217715ac23cd53bd0a2de4",
+      "testHash": "522e96ed83f4dc6de7d6d18402dedb95758687de94d67d5ebfe4ccfb5c783de4"
     },
     "native-verdict-reviewer-exit-ignored": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -3093,7 +3093,7 @@
       ],
       "ancestors": [],
       "mutantHash": "4590875a49cdd6e36a536b788392f1cfbc4d72a433264a9966ab84e42b05959d",
-      "testHash": "52ff77d9f6708417ee792fea813aa79e4fc4592c05ff9e509aa017be36ddf52a"
+      "testHash": "5529d8924ebf3fb40a93b2eadce778a8c0a7f773a4f1367722eed19a558a51e1"
     },
     "layout-required-diff-budget-missing": {
       "testFile": "tests/layout-required.test.mjs",
@@ -3102,7 +3102,7 @@
       ],
       "ancestors": [],
       "mutantHash": "5e5e868d9845a794b57762550c1e862638c5334c178ba1196f780c2a6fe92501",
-      "testHash": "52ff77d9f6708417ee792fea813aa79e4fc4592c05ff9e509aa017be36ddf52a"
+      "testHash": "5529d8924ebf3fb40a93b2eadce778a8c0a7f773a4f1367722eed19a558a51e1"
     },
     "maintainability-signal-kill-treated-as-timeout": {
       "testFile": "tests/maintainability-extract.test.mjs",
@@ -3246,7 +3246,7 @@
       ],
       "ancestors": [],
       "mutantHash": "58fae5caef773915f05c2458e526a9dcb6666277e207d1f264dc34f0320987d0",
-      "testHash": "52ff77d9f6708417ee792fea813aa79e4fc4592c05ff9e509aa017be36ddf52a"
+      "testHash": "5529d8924ebf3fb40a93b2eadce778a8c0a7f773a4f1367722eed19a558a51e1"
     },
     "layout-required-registration-record-missing": {
       "testFile": "tests/layout-required.test.mjs",
@@ -3255,7 +3255,7 @@
       ],
       "ancestors": [],
       "mutantHash": "71704520fb9262eaf4f21d8b57dbee31120954f07b9c46a71130f17646d72a9e",
-      "testHash": "52ff77d9f6708417ee792fea813aa79e4fc4592c05ff9e509aa017be36ddf52a"
+      "testHash": "5529d8924ebf3fb40a93b2eadce778a8c0a7f773a4f1367722eed19a558a51e1"
     },
     "catalog-anchor-not-in-source": {
       "testFile": "tests/mutation-catalog.test.mjs",
@@ -3363,7 +3363,7 @@
       ],
       "ancestors": [],
       "mutantHash": "2a29c6b810e500ab14cd08f061d9e189e98f0d88faee387df3fe2ca3175aea1e",
-      "testHash": "aa90cd941b69cb074c189529ac097c00121aa80a72c920ae132bcd457e88d440"
+      "testHash": "5f563df283b96c4459b81ed64327e9f9aaa14d8f82102ad7d06b2641bd3168ac"
     },
     "reuse-test-paths-scanned": {
       "testFile": "tests/reuse-scan.test.mjs",
@@ -3372,7 +3372,7 @@
       ],
       "ancestors": [],
       "mutantHash": "f82943855e5090e71c21f783e7f11b83bb9bd4350b7ab2b089bbd651d7d2f0ce",
-      "testHash": "aa90cd941b69cb074c189529ac097c00121aa80a72c920ae132bcd457e88d440"
+      "testHash": "5f563df283b96c4459b81ed64327e9f9aaa14d8f82102ad7d06b2641bd3168ac"
     },
     "reuse-policy-off-ignored": {
       "testFile": "tests/reuse-stage.test.mjs",
@@ -3408,7 +3408,7 @@
       ],
       "ancestors": [],
       "mutantHash": "4260764b365b90a4b95f12e0387f5c39f9a6155efba2f9d829c6d9ab4cbad2f5",
-      "testHash": "aa90cd941b69cb074c189529ac097c00121aa80a72c920ae132bcd457e88d440"
+      "testHash": "5f563df283b96c4459b81ed64327e9f9aaa14d8f82102ad7d06b2641bd3168ac"
     },
     "reuse-boilerplate-cutoff-widened": {
       "testFile": "tests/reuse-index.test.mjs",
@@ -3444,7 +3444,7 @@
       ],
       "ancestors": [],
       "mutantHash": "48d556cac552de02ab41cfb2cf7e99c689453b908d8026bd232e9355ddde573a",
-      "testHash": "aa90cd941b69cb074c189529ac097c00121aa80a72c920ae132bcd457e88d440"
+      "testHash": "5f563df283b96c4459b81ed64327e9f9aaa14d8f82102ad7d06b2641bd3168ac"
     },
     "reuse-hint-name-unsanitized": {
       "testFile": "tests/reuse-stage.test.mjs",
@@ -3471,7 +3471,7 @@
       ],
       "ancestors": [],
       "mutantHash": "7fa0a3b6c44e0c1567a2a2deed50d5bfdf21ee409e60e5da1c88ba0ab95e4c65",
-      "testHash": "aa90cd941b69cb074c189529ac097c00121aa80a72c920ae132bcd457e88d440"
+      "testHash": "5f563df283b96c4459b81ed64327e9f9aaa14d8f82102ad7d06b2641bd3168ac"
     },
     "reuse-cache-malformed-units-accepted": {
       "testFile": "tests/reuse-scan.test.mjs",
@@ -3480,7 +3480,7 @@
       ],
       "ancestors": [],
       "mutantHash": "c13bb781b2c64c2875cdfa05846b1803c3488f2d2c1eda18f303280ffc52bdc9",
-      "testHash": "aa90cd941b69cb074c189529ac097c00121aa80a72c920ae132bcd457e88d440"
+      "testHash": "5f563df283b96c4459b81ed64327e9f9aaa14d8f82102ad7d06b2641bd3168ac"
     },
     "reuse-analysis-failure-thrown": {
       "testFile": "tests/reuse-stage.test.mjs",
@@ -3498,7 +3498,7 @@
       ],
       "ancestors": [],
       "mutantHash": "5cbf93617bdaabce27a8a3c05304507a8430dd0a7ed1cf0db16a78b7ca19691b",
-      "testHash": "aa90cd941b69cb074c189529ac097c00121aa80a72c920ae132bcd457e88d440"
+      "testHash": "5f563df283b96c4459b81ed64327e9f9aaa14d8f82102ad7d06b2641bd3168ac"
     },
     "reuse-pair-identity-by-line": {
       "testFile": "tests/reuse-index.test.mjs",
@@ -3543,7 +3543,7 @@
       ],
       "ancestors": [],
       "mutantHash": "6c78893497d529d7d3afaf447c19ea721237f90cddab119ee5dcb325d7e80f0b",
-      "testHash": "aa90cd941b69cb074c189529ac097c00121aa80a72c920ae132bcd457e88d440"
+      "testHash": "5f563df283b96c4459b81ed64327e9f9aaa14d8f82102ad7d06b2641bd3168ac"
     },
     "analysis-header-diffhash-dropped": {
       "testFile": "tests/analysis-header.test.mjs",
@@ -3561,7 +3561,7 @@
       ],
       "ancestors": [],
       "mutantHash": "94e2910125f86d3e5c8a1cda4413d35801f5d598dd825f134fe884cac10348e3",
-      "testHash": "aa90cd941b69cb074c189529ac097c00121aa80a72c920ae132bcd457e88d440"
+      "testHash": "5f563df283b96c4459b81ed64327e9f9aaa14d8f82102ad7d06b2641bd3168ac"
     },
     "policy-env-fallback-ignored": {
       "testFile": "tests/policy-env.test.mjs",
@@ -3597,7 +3597,7 @@
       ],
       "ancestors": [],
       "mutantHash": "094c6b5a0a42fcb437562f5d11432842bc043e2a33767ab450b161fcf7a476c9",
-      "testHash": "aa90cd941b69cb074c189529ac097c00121aa80a72c920ae132bcd457e88d440"
+      "testHash": "5f563df283b96c4459b81ed64327e9f9aaa14d8f82102ad7d06b2641bd3168ac"
     },
     "measure-diagnostic-names-other-path": {
       "testFile": "tests/measure-reuse-index.test.mjs",
@@ -3632,8 +3632,8 @@
         "Given the OMP library is hoisted above the kit folder, When the launcher looks for it, Then it accepts the resolvable install"
       ],
       "ancestors": [],
-      "mutantHash": "1b9482b79404b46689396ee7e311c1dccbb55c206fa91ea2c3b33f840a37f7af",
-      "testHash": "7474443e473b568f99d2a0bbde8d835df4cdcb2d860f8355509c43aa76ef0ed0"
+      "mutantHash": "b272139d5e427e1f962064043638e290098968f6e94f352fe230882fcafa9046",
+      "testHash": "3b4a3b235d62cefca50dffc18a9e9541997b10fdf2bf24e190de656c42645338"
     },
     "contract-probe-cap-removed": {
       "testFile": "tests/contract-stage.test.mjs",
@@ -3804,7 +3804,7 @@
       ],
       "ancestors": [],
       "mutantHash": "ce3b822b417f8ea12223d3232b294c825464b922890bf13260b9aee50eb6d737",
-      "testHash": "7474443e473b568f99d2a0bbde8d835df4cdcb2d860f8355509c43aa76ef0ed0"
+      "testHash": "3b4a3b235d62cefca50dffc18a9e9541997b10fdf2bf24e190de656c42645338"
     },
     "layout-contract-probe-not-required": {
       "testFile": "tests/layout-required.test.mjs",
@@ -3813,7 +3813,7 @@
       ],
       "ancestors": [],
       "mutantHash": "d8ac2c0f6a47767eeea36b63b92299d874ecb164e3e246c3ac59e1eaf8c37a13",
-      "testHash": "52ff77d9f6708417ee792fea813aa79e4fc4592c05ff9e509aa017be36ddf52a"
+      "testHash": "5529d8924ebf3fb40a93b2eadce778a8c0a7f773a4f1367722eed19a558a51e1"
     },
     "contract-oversized-module-skipped-silently": {
       "testFile": "tests/contract-stage.test.mjs",
@@ -3975,7 +3975,7 @@
       ],
       "ancestors": [],
       "mutantHash": "2e51b4fdb7e434170599bfed9dc915cb1ee9491f584c9850b86e4768fa8d4d4a",
-      "testHash": "52ff77d9f6708417ee792fea813aa79e4fc4592c05ff9e509aa017be36ddf52a"
+      "testHash": "5529d8924ebf3fb40a93b2eadce778a8c0a7f773a4f1367722eed19a558a51e1"
     },
     "stamp-hook-strips-body-markers": {
       "testFile": "tests/hook-ownership.test.mjs",
@@ -4037,8 +4037,8 @@
         "Given a review that crashed, When the guard decides, Then it blocks rather than letting the commit through"
       ],
       "ancestors": [],
-      "mutantHash": "3a13d796bd3c14d9b5f26c43e08b02cd1ffb5841a522c68b3b099fb0a261fb9d",
-      "testHash": "1eeea23e7796f005e8a2e2ed1b072ad9aad6995f68f8d36c75772f2d93db856d"
+      "mutantHash": "161da4ea59f5d419a2d75479cf7c2efe861439807cdc6420d7f0d78114bb4833",
+      "testHash": "28d764779c9130956a7ca2a990b00b383026e229d90f6f3cd0e65642c3d509fb"
     },
     "host-doctor-duplicate-mode-ignored": {
       "testFile": "tests/host-doctor.test.mjs",
@@ -4047,7 +4047,7 @@
       ],
       "ancestors": [],
       "mutantHash": "07c791b9b703b9c94d886abbfd8531b48c5d3f35e7e721fc3f156af7f8feb959",
-      "testHash": "80d9a84dc312776e1b94813bebe92b9584f08aafe5e158cc80121ac62cd82e20"
+      "testHash": "0f792f00b2e986290019887005a69954dd38d7ea48a2d52cb623f59c7bcaafdd"
     },
     "hook-guard-main-check-encoded": {
       "testFile": "tests/host-hook-guard.test.mjs",
@@ -4056,7 +4056,7 @@
       ],
       "ancestors": [],
       "mutantHash": "24b194281ba9e13de17a7df917867c3df8c1187909b1f7d450b08a2e231d5628",
-      "testHash": "1eeea23e7796f005e8a2e2ed1b072ad9aad6995f68f8d36c75772f2d93db856d"
+      "testHash": "28d764779c9130956a7ca2a990b00b383026e229d90f6f3cd0e65642c3d509fb"
     },
     "codex-hook-contract-not-selected": {
       "testFile": "tests/host-delivery-cli.test.mjs",
@@ -4065,7 +4065,7 @@
       ],
       "ancestors": [],
       "mutantHash": "24f675ffef8e6a104158007eb472dd80312ca421c8546bf233458bbe75f0327f",
-      "testHash": "3f18dabb3d464bde20fe154ba87d436c6cd831992b84ba5e340be588a0510d32"
+      "testHash": "965ebcfddfd387ac0f4033344a26888668e80cac296999dc148d411ba064f6fc"
     },
     "nonzero-status-returns-allow": {
       "testFile": "tests/host-delivery-cli.test.mjs",
@@ -4074,7 +4074,7 @@
       ],
       "ancestors": [],
       "mutantHash": "8bf12dc8afb49dff774fc39a60ad9b141d9d267af71e60cb98c4402481e65892",
-      "testHash": "3f18dabb3d464bde20fe154ba87d436c6cd831992b84ba5e340be588a0510d32"
+      "testHash": "965ebcfddfd387ac0f4033344a26888668e80cac296999dc148d411ba064f6fc"
     },
     "blocked-opencode-decision-not-thrown": {
       "testFile": "tests/host-delivery-cli.test.mjs",
@@ -4083,16 +4083,16 @@
       ],
       "ancestors": [],
       "mutantHash": "d82b9d6a7cd9d14da8a9383beb53cb7b8a895f8d205dcbfea7ed8640f3ff536a",
-      "testHash": "3f18dabb3d464bde20fe154ba87d436c6cd831992b84ba5e340be588a0510d32"
+      "testHash": "965ebcfddfd387ac0f4033344a26888668e80cac296999dc148d411ba064f6fc"
     },
     "host-install-flat-files-skipped": {
-      "testFile": "tests/host-delivery-cli.test.mjs",
+      "testFile": "tests/host-install-plan.test.mjs",
       "tests": [
-        "Given a user file with the same name, When the installer copies components, Then the user file is neither overwritten nor recorded"
+        "Given a legacy install manifest, Then unchanged old OpenCode copies upgrade to native assets"
       ],
       "ancestors": [],
-      "mutantHash": "8eba3e23ea9da8069dd4be4e8adeacc37032a83805b1b603768b896c690f451b",
-      "testHash": "3f18dabb3d464bde20fe154ba87d436c6cd831992b84ba5e340be588a0510d32"
+      "mutantHash": "eead5162f7cd0fb1751b064b39161abda33f0564670c4aa1716d6bca7c398cc5",
+      "testHash": "fe055b37c0ad64637986d222cf243a18b3ecc55c51029123cf2e8ce6e4ce5218"
     },
     "layout-stale-manifest-throw-removed": {
       "testFile": "tests/host-delivery-cli.test.mjs",
@@ -4101,7 +4101,7 @@
       ],
       "ancestors": [],
       "mutantHash": "917e944f6211d5f3ffada684cb7902d1c998aedada3f717d9d606a8520886a08",
-      "testHash": "3f18dabb3d464bde20fe154ba87d436c6cd831992b84ba5e340be588a0510d32"
+      "testHash": "965ebcfddfd387ac0f4033344a26888668e80cac296999dc148d411ba064f6fc"
     },
     "layout-host-manifest-call-removed": {
       "testFile": "tests/host-delivery-cli.test.mjs",
@@ -4110,7 +4110,7 @@
       ],
       "ancestors": [],
       "mutantHash": "31920aa25faf5c00ebc06a9b680860f96e148be4331b3f6eff5798cac5ed4ab0",
-      "testHash": "3f18dabb3d464bde20fe154ba87d436c6cd831992b84ba5e340be588a0510d32"
+      "testHash": "965ebcfddfd387ac0f4033344a26888668e80cac296999dc148d411ba064f6fc"
     },
     "host-install-record-overwritten": {
       "testFile": "tests/host-delivery-cli.test.mjs",
@@ -4118,8 +4118,8 @@
         "Given two applies to the same config, When the kit is removed afterwards, Then every component the first apply copied is deleted"
       ],
       "ancestors": [],
-      "mutantHash": "303e5c70ab507ea51888246225de405effea07f0470f20d8b3f7bde5667ab047",
-      "testHash": "3f18dabb3d464bde20fe154ba87d436c6cd831992b84ba5e340be588a0510d32"
+      "mutantHash": "10a49d7055c4deca791ea0e68c7d8b76be7b7be458398d48aacb86bb364f2e2e",
+      "testHash": "965ebcfddfd387ac0f4033344a26888668e80cac296999dc148d411ba064f6fc"
     },
     "host-doctor-sibling-counted": {
       "testFile": "tests/host-delivery-cli.test.mjs",
@@ -4128,7 +4128,7 @@
       ],
       "ancestors": [],
       "mutantHash": "bdf882431d276e5a05c050ad01a6c088d8920e1a855f3f9f13fd7c36ae676800",
-      "testHash": "3f18dabb3d464bde20fe154ba87d436c6cd831992b84ba5e340be588a0510d32"
+      "testHash": "965ebcfddfd387ac0f4033344a26888668e80cac296999dc148d411ba064f6fc"
     },
     "host-doctor-commented-toml-counted": {
       "testFile": "tests/host-doctor.test.mjs",
@@ -4137,7 +4137,7 @@
       ],
       "ancestors": [],
       "mutantHash": "d6788a2c2f6d243d2238c1632381d4db6d640d56be39ca76b904dc3423058481",
-      "testHash": "80d9a84dc312776e1b94813bebe92b9584f08aafe5e158cc80121ac62cd82e20"
+      "testHash": "0f792f00b2e986290019887005a69954dd38d7ea48a2d52cb623f59c7bcaafdd"
     },
     "hook-guard-escape-unaware": {
       "testFile": "tests/host-hook-guard.test.mjs",
@@ -4146,7 +4146,7 @@
       ],
       "ancestors": [],
       "mutantHash": "019194b81eb18ab8acb94fa051bd14274f0d7b2044fde21c1810dd0316c8b7e4",
-      "testHash": "1eeea23e7796f005e8a2e2ed1b072ad9aad6995f68f8d36c75772f2d93db856d"
+      "testHash": "28d764779c9130956a7ca2a990b00b383026e229d90f6f3cd0e65642c3d509fb"
     },
     "plugin-array-comment-brackets-counted": {
       "testFile": "tests/host-install-plan.test.mjs",
@@ -4155,7 +4155,7 @@
       ],
       "ancestors": [],
       "mutantHash": "9cd2626ba7c9b47e86b39afeeddd1e003863539075f9491c3378f5a69a05eb4a",
-      "testHash": "7eb5df328425a5b3c351673b6e5c252f347cc479e926a8e02b4c05dd3727b10e"
+      "testHash": "fe055b37c0ad64637986d222cf243a18b3ecc55c51029123cf2e8ce6e4ce5218"
     },
     "plugin-writer-comment-brackets-counted": {
       "testFile": "tests/host-install-plan.test.mjs",
@@ -4164,7 +4164,7 @@
       ],
       "ancestors": [],
       "mutantHash": "f650149ca465c2709d9f33931ab720a24d3b77abe11b04cdd10ca6bbc67b50e9",
-      "testHash": "7eb5df328425a5b3c351673b6e5c252f347cc479e926a8e02b4c05dd3727b10e"
+      "testHash": "fe055b37c0ad64637986d222cf243a18b3ecc55c51029123cf2e8ce6e4ce5218"
     },
     "plugin-tuple-options-flattened": {
       "testFile": "tests/host-install-plan.test.mjs",
@@ -4173,7 +4173,7 @@
       ],
       "ancestors": [],
       "mutantHash": "d2625c8525c5404b5c5ac86beba08fa8096871a2c56ddf48263270b403158f63",
-      "testHash": "7eb5df328425a5b3c351673b6e5c252f347cc479e926a8e02b4c05dd3727b10e"
+      "testHash": "fe055b37c0ad64637986d222cf243a18b3ecc55c51029123cf2e8ce6e4ce5218"
     },
     "host-doctor-json-conflict-healthy": {
       "testFile": "tests/host-doctor.test.mjs",
@@ -4182,7 +4182,7 @@
       ],
       "ancestors": [],
       "mutantHash": "214ca271a9574b392820f90772787e7cb22c5da115332d7f56161735bdce5a34",
-      "testHash": "80d9a84dc312776e1b94813bebe92b9584f08aafe5e158cc80121ac62cd82e20"
+      "testHash": "0f792f00b2e986290019887005a69954dd38d7ea48a2d52cb623f59c7bcaafdd"
     },
     "hook-guard-shell-comment-help": {
       "testFile": "tests/host-hook-guard.test.mjs",
@@ -4191,7 +4191,7 @@
       ],
       "ancestors": [],
       "mutantHash": "d6b2faf7230fcf3a0f603b51fe24b0fd67377e377d0e1976787c45ca0ef8f93e",
-      "testHash": "1eeea23e7796f005e8a2e2ed1b072ad9aad6995f68f8d36c75772f2d93db856d"
+      "testHash": "28d764779c9130956a7ca2a990b00b383026e229d90f6f3cd0e65642c3d509fb"
     },
     "mutation-copy-roots-host-dirs-dropped": {
       "testFile": "tests/host-delivery-cli.test.mjs",
@@ -4200,7 +4200,7 @@
       ],
       "ancestors": [],
       "mutantHash": "c2a5669076cddc8f697e143ba5ef83422d61bca0cda23da2dac863600e9da7e0",
-      "testHash": "3f18dabb3d464bde20fe154ba87d436c6cd831992b84ba5e340be588a0510d32"
+      "testHash": "965ebcfddfd387ac0f4033344a26888668e80cac296999dc148d411ba064f6fc"
     },
     "plugin-writer-comment-example-selected": {
       "testFile": "tests/host-install-plan.test.mjs",
@@ -4209,7 +4209,7 @@
       ],
       "ancestors": [],
       "mutantHash": "2c999d3f4d8848b03b0a7306c89b7f1c01457e2b50e3eba2f12d20064182acda",
-      "testHash": "7eb5df328425a5b3c351673b6e5c252f347cc479e926a8e02b4c05dd3727b10e"
+      "testHash": "fe055b37c0ad64637986d222cf243a18b3ecc55c51029123cf2e8ce6e4ce5218"
     },
     "hook-guard-subshell-not-unwrapped": {
       "testFile": "tests/host-hook-guard.test.mjs",
@@ -4218,7 +4218,7 @@
       ],
       "ancestors": [],
       "mutantHash": "f70c1d1fade686541e4005c50d9bead59506e11a04f3f3c35c3f6b307bfb9eff",
-      "testHash": "1eeea23e7796f005e8a2e2ed1b072ad9aad6995f68f8d36c75772f2d93db856d"
+      "testHash": "28d764779c9130956a7ca2a990b00b383026e229d90f6f3cd0e65642c3d509fb"
     },
     "host-install-remove-creates-config": {
       "testFile": "tests/host-delivery-cli.test.mjs",
@@ -4227,7 +4227,7 @@
       ],
       "ancestors": [],
       "mutantHash": "2fdfa3199e72c47ab5ce4d8e3b2a8bdd4d6af02cb688c020c4d661dced7b8f94",
-      "testHash": "3f18dabb3d464bde20fe154ba87d436c6cd831992b84ba5e340be588a0510d32"
+      "testHash": "965ebcfddfd387ac0f4033344a26888668e80cac296999dc148d411ba064f6fc"
     },
     "host-install-remove-creates-config-dup": {
       "testFile": "tests/host-delivery-cli.test.mjs",
@@ -4236,7 +4236,7 @@
       ],
       "ancestors": [],
       "mutantHash": "de3a6acfb51ce01d575f52bfa0424fa3d558cc635aa49694cbcb1308f501108f",
-      "testHash": "3f18dabb3d464bde20fe154ba87d436c6cd831992b84ba5e340be588a0510d32"
+      "testHash": "965ebcfddfd387ac0f4033344a26888668e80cac296999dc148d411ba064f6fc"
     },
     "installer-overwrites-broken-config": {
       "testFile": "tests/host-delivery-cli.test.mjs",
@@ -4245,7 +4245,7 @@
       ],
       "ancestors": [],
       "mutantHash": "41333cf4cb783c39db90da984c0d30b01a0b035a0bdf034c881f716a8eee9a71",
-      "testHash": "3f18dabb3d464bde20fe154ba87d436c6cd831992b84ba5e340be588a0510d32"
+      "testHash": "965ebcfddfd387ac0f4033344a26888668e80cac296999dc148d411ba064f6fc"
     },
     "hook-guard-pathspec-help-bypass": {
       "testFile": "tests/host-hook-guard.test.mjs",
@@ -4254,7 +4254,7 @@
       ],
       "ancestors": [],
       "mutantHash": "244867a9f8e2826f2152893335a363c590c0e289d1b2f4fe4bdef7209142deba",
-      "testHash": "1eeea23e7796f005e8a2e2ed1b072ad9aad6995f68f8d36c75772f2d93db856d"
+      "testHash": "28d764779c9130956a7ca2a990b00b383026e229d90f6f3cd0e65642c3d509fb"
     },
     "install-record-unsorted-duplicates": {
       "testFile": "tests/host-install-plan.test.mjs",
@@ -4262,8 +4262,181 @@
         "Given a version and files, When the install record is built, Then it is deduplicated and sorted"
       ],
       "ancestors": [],
-      "mutantHash": "b7a4c0e79b07365f4488ed7e1f1c2e371afec357ed46bf199d34794bb63c5f77",
-      "testHash": "7eb5df328425a5b3c351673b6e5c252f347cc479e926a8e02b4c05dd3727b10e"
+      "mutantHash": "3569108188a50033bab4d00498a6146b01f79b04ccf9d3d81df2429d857c3f2e",
+      "testHash": "fe055b37c0ad64637986d222cf243a18b3ecc55c51029123cf2e8ce6e4ce5218"
+    },
+    "opencode-hook-ignores-tool-workdir": {
+      "testFile": "tests/opencode-project-directory.test.mjs",
+      "tests": [
+        "Given a shell command specifies a workdir, When it reviews a commit, Then it reviews that directory"
+      ],
+      "ancestors": [],
+      "mutantHash": "f1c9c61dc9f673d5d2a23fb75597a2d26c272d2c58247441283d5c1bf1feb1ef",
+      "testHash": "74f31435d8de40b1e8d20fa73ca30132ede1b2dbdfc1f1e818101e790bab9ec4"
+    },
+    "host-doctor-distinct-install-hidden": {
+      "testFile": "tests/host-doctor.test.mjs",
+      "tests": [
+        "Given a runtime link and another distinct marketplace installation, When OMP is inspected, Then the conflict is reported in either order"
+      ],
+      "ancestors": [],
+      "mutantHash": "3fd46168df4ac0ff36a0873e6ffa4fc8d4deb235671cd0c4f71f0132d275838d",
+      "testHash": "0f792f00b2e986290019887005a69954dd38d7ea48a2d52cb623f59c7bcaafdd"
+    },
+    "linked-launcher-does-not-run": {
+      "testFile": "tests/linked-installation.test.mjs",
+      "tests": [
+        "Given the plugin is linked and Bun cannot start, When the Codex guard sees a commit, Then it denies the command"
+      ],
+      "ancestors": [],
+      "mutantHash": "759e0ce74bccdc77bfe1e87b6b0c40374eb175879966b69fc907e3ecbabd08af",
+      "testHash": "5419faa60401e588b1677438da9a143bed831507618777ce7071f5fe4f20ea6d"
+    },
+    "opencode-hook-ignores-host-args": {
+      "testFile": "tests/host-delivery-cli.test.mjs",
+      "tests": [
+        "Given the registered OpenCode hook, When a commit is blocked, Then the hook rejects with the reason, and a passing review resolves"
+      ],
+      "ancestors": [],
+      "mutantHash": "92b8aadfc7c063487d55eb130f7477ee7cfffb7cc83d31969795e142d5a07a42",
+      "testHash": "965ebcfddfd387ac0f4033344a26888668e80cac296999dc148d411ba064f6fc"
+    },
+    "opencode-hook-wrong-directory": {
+      "testFile": "tests/opencode-project-directory.test.mjs",
+      "tests": [
+        "Given OpenCode opens another project, When it reviews a commit, Then it uses that project"
+      ],
+      "ancestors": [],
+      "mutantHash": "ed228d1495c37a62c4fc6aed2d4a0c93a0eab09e0500f5a175157251687b7748",
+      "testHash": "74f31435d8de40b1e8d20fa73ca30132ede1b2dbdfc1f1e818101e790bab9ec4"
+    },
+    "native-launcher-wrong-name-accepted": {
+      "testFile": "tests/native-launcher.test.mjs",
+      "tests": [
+        "Given an installed library with the wrong identity or version, When the locked runtime cannot be prepared, Then the review blocks"
+      ],
+      "ancestors": [],
+      "mutantHash": "264c94d469ad032be3220bf138b38babf4318390ca2696f821d23a1e354cd15e",
+      "testHash": "3b4a3b235d62cefca50dffc18a9e9541997b10fdf2bf24e190de656c42645338"
+    },
+    "native-launcher-wrong-version-accepted": {
+      "testFile": "tests/native-launcher.test.mjs",
+      "tests": [
+        "Given an installed library with the wrong identity or version, When the locked runtime cannot be prepared, Then the review blocks"
+      ],
+      "ancestors": [],
+      "mutantHash": "e48018003733fa8e1b519289ab61bba2c48b19c1203a17051e5d05dbcedb56a7",
+      "testHash": "3b4a3b235d62cefca50dffc18a9e9541997b10fdf2bf24e190de656c42645338"
+    },
+    "native-bridge-library-wrong-name-accepted": {
+      "testFile": "tests/claude-bridge.test.mjs",
+      "tests": [
+        "library diagnostics distinguish an unverified runtime from a matching installed library"
+      ],
+      "ancestors": [],
+      "mutantHash": "380856708b427ca721c53ef4ae1cd271e472658714bff41aace56dacd4225ea1",
+      "testHash": "522e96ed83f4dc6de7d6d18402dedb95758687de94d67d5ebfe4ccfb5c783de4"
+    },
+    "opencode-install-release-tag-omitted": {
+      "testFile": "tests/host-install-plan.test.mjs",
+      "tests": [
+        "Given an old OpenCode install, When the kit is upgraded, Then each release selects its own package without changing other plugins"
+      ],
+      "ancestors": [],
+      "mutantHash": "2dd47155ded6691d176aadf9b613e07e8b26a664f5a54218409b5ccc9b60cbbd",
+      "testHash": "fe055b37c0ad64637986d222cf243a18b3ecc55c51029123cf2e8ce6e4ce5218"
+    },
+    "opencode-install-created-files-not-tracked": {
+      "testFile": "tests/host-install-plan.test.mjs",
+      "tests": [
+        "Given a manifest that cannot be written, When the install fails, Then the files it created are removed and the plugin stays disabled"
+      ],
+      "ancestors": [],
+      "mutantHash": "b54d68a993a85d54c70899a0babff0bbadf7a27f02c16b2117670187c4e8926a",
+      "testHash": "fe055b37c0ad64637986d222cf243a18b3ecc55c51029123cf2e8ce6e4ce5218"
+    },
+    "opencode-install-rollback-skipped": {
+      "testFile": "tests/host-install-plan.test.mjs",
+      "tests": [
+        "Given a manifest that cannot be written, When the install fails, Then the files it created are removed and the plugin stays disabled"
+      ],
+      "ancestors": [],
+      "mutantHash": "a34529cae11f8b9791f58b63131d01f25268e54e791bfbcbf345058ef75b93c0",
+      "testHash": "fe055b37c0ad64637986d222cf243a18b3ecc55c51029123cf2e8ce6e4ce5218"
+    },
+    "opencode-plugin-review-git-unregistered": {
+      "testFile": "tests/opencode-plugin.test.mjs",
+      "tests": [
+        "Given OpenCode starts the plugin, When the server is created, Then both advertised tools are callable and declare their arguments"
+      ],
+      "ancestors": [],
+      "mutantHash": "43ebe8293481d964cb546cd5477b35cdf33b0604719031ea980191d6226f3bc4",
+      "testHash": "f8de7f90ab525e0c8f4845eb0449940a61ca48806a9d35ddc17f49bd82911a85"
+    },
+    "package-zod-pin-changed": {
+      "testFile": "tests/package-contents.test.mjs",
+      "tests": [
+        "Given the lockfile, When its Zod entries are read, Then the workspace pin and the resolved package match the manifest"
+      ],
+      "ancestors": [],
+      "mutantHash": "8b5e6c74580805d520e40bafe797620a70aeafaedf87b57389dbee2d93d5a5a9",
+      "testHash": "d6235ec23a220fc4270a592223be7654a9264763ac49fc5f9a5bbdbe637c86fd"
+    },
+    "package-files-opencode-dropped": {
+      "testFile": "tests/package-contents.test.mjs",
+      "tests": [
+        "Given the package is packed, When its file list is read, Then every host entry point and the lockfile are included"
+      ],
+      "ancestors": [],
+      "mutantHash": "ae6eda66569b3bddd1ca64db4b53dd00470a08990c844dbdd03424566df72f33",
+      "testHash": "d6235ec23a220fc4270a592223be7654a9264763ac49fc5f9a5bbdbe637c86fd"
+    },
+    "opencode-git-timeout-removed": {
+      "testFile": "tests/opencode-read-only-git.test.mjs",
+      "tests": [
+        "reports an already-aborted call and a non-repository directory explicitly"
+      ],
+      "ancestors": [
+        "OpenCode read-only Git tool"
+      ],
+      "mutantHash": "1c1c3c7e44a0ea7ec99d8e7b83fcf16faa5c0e142124da1218c85287741ca2d7",
+      "testHash": "ddafcca05ab5803ce87a2122ffc6bda619656346f358022c56a3ac8da8f2a6ae"
+    },
+    "kit-tool-apply-flag-dropped": {
+      "testFile": "tests/opencode-kit-tool.test.mjs",
+      "tests": [
+        "Given each OpenCode command, When it is dispatched, Then it runs the documented script and arguments"
+      ],
+      "ancestors": [],
+      "mutantHash": "3668d87953f69db71096222838ec2bcbf62d00526660114ea61808238f437929",
+      "testHash": "780c83ae4a1ea00e15a2899fad9a295e4c2f814fa276ab6e1c453936cf1a8e41"
+    },
+    "kit-tool-truncation-accepted": {
+      "testFile": "tests/opencode-kit-tool.test.mjs",
+      "tests": [
+        "Given a command that prints more than the limit, When it finishes successfully, Then the tool rejects instead of returning a partial answer"
+      ],
+      "ancestors": [],
+      "mutantHash": "1a9fc2509aaa0957fe2ff3ca0ed59037b1d0f352c9f0035a8eed804875b77535",
+      "testHash": "780c83ae4a1ea00e15a2899fad9a295e4c2f814fa276ab6e1c453936cf1a8e41"
+    },
+    "opencode-install-replaced-file-not-restored": {
+      "testFile": "tests/host-install-plan.test.mjs",
+      "tests": [
+        "Given an installed release, When an upgrade cannot record ownership, Then the replaced asset gets its previous bytes back and a retry proceeds"
+      ],
+      "ancestors": [],
+      "mutantHash": "cad05cecd7ebc601f731ebfa9be9ad64858c39fcf05849d04419a2f8d593bf89",
+      "testHash": "fe055b37c0ad64637986d222cf243a18b3ecc55c51029123cf2e8ce6e4ce5218"
+    },
+    "process-tree-win32-kill-escalation-skipped": {
+      "testFile": "tests/process-tree.test.mjs",
+      "tests": [
+        "Given a child that survives taskkill, When its tree is terminated on Windows, Then it is killed directly instead of being left running"
+      ],
+      "ancestors": [],
+      "mutantHash": "544aa4ef7f5eaa4431a488ad00695a98c538558fd7b81ba8429a87c6b33ef030",
+      "testHash": "544f1fbe1aa449011f460c96384c0525c4729b1ec451458ef7f6f279105539fc"
     }
   }
 }

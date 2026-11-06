@@ -3,6 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { EventEmitter } from 'node:events';
 import { terminateProcessTree } from '../src/infra/process-tree.mjs';
 
 const POSIX = process.platform !== 'win32';
@@ -69,6 +70,26 @@ test('Given a child that ignores SIGTERM, When its tree is terminated, Then it e
   await terminateProcessTree(proc);
   await exited(proc);
   assert.equal(proc.signalCode, 'SIGKILL', 'SIGTERM is ignored, so only the escalation ends the child');
+});
+
+test('Given a child that survives taskkill, When its tree is terminated on Windows, Then it is killed directly instead of being left running', async () => {
+  const child = new EventEmitter();
+  child.pid = 4321;
+  child.exitCode = null;
+  child.signalCode = null;
+  const killed = [];
+  child.kill = signal => {
+    killed.push(signal);
+    child.exitCode = 1;
+  };
+  // taskkill reports that it ran, but the child is still alive: exactly the case the escalation covers.
+  const killer = new EventEmitter();
+  const spawnImpl = () => {
+    setImmediate(() => killer.emit('close', 0));
+    return killer;
+  };
+  await terminateProcessTree(child, { spawnImpl, platform: 'win32' });
+  assert.deepEqual(killed, ['SIGKILL'], 'a child that taskkill did not end is killed directly');
 });
 
 test('Given a child that has already exited, When its tree is terminated, Then only SIGTERM is sent and no escalation follows', { skip: POSIX ? false : 'POSIX signals only', timeout: TIMEOUT_MS }, async t => {
