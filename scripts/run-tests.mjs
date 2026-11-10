@@ -12,6 +12,8 @@ const env = {
   OMP_REVIEW_KIT_RUNS_DIR: runsDir,
   OMP_REVIEW_KIT_TARGETS: path.join(runsDir, 'review-kit-targets.json'),
   OMP_REVIEW_KIT_REPORTS_DIR: path.join(runsDir, 'reports'),
+  // The journal is a real user directory by default; a test run must never write into it.
+  OMP_REVIEW_KIT_JOURNAL_DIR: path.join(runsDir, 'journal'),
 };
 // Set by an outer test run; a runner that inherits it exits 0 even when a test fails.
 delete env.NODE_TEST_CONTEXT;

@@ -48,12 +48,13 @@ test('Given the maintainability agent, When its instructions are read, Then it i
   assert.match(agentText, /never recount them/);
 });
 
-test('Given the orchestrator, When its definition is read, Then the maintainability stage is spawned, reported and part of the blocking rules', async () => {
-  const orchestrator = await readFile('agents/reviewer-kit.md', 'utf8');
-  assert.match(orchestrator, /^spawns: .*review-maintainability.*$/m);
-  assert.match(orchestrator, /^### Maintainability$/m);
-  assert.match(orchestrator, /Stage 2b: Maintainability Review/);
-  assert.match(orchestrator, /a maintainability candidate carries a confirmed decision, a non-empty `stated_cost`, priority `P2` and `forwarding_only: false`/);
+test('Given the synthesizer, When its definition is read, Then it reports the maintainability stage and never spawns one', async () => {
+  const synthesizer = await readFile('agents/reviewer-kit.md', 'utf8');
+  // The host runs the stages; the agent writes the report from their results and must not re-run one.
+  assert.doesNotMatch(synthesizer, /^spawns: /m);
+  assert.match(synthesizer, /You do not spawn subagents and you do not re-run a stage/);
+  assert.match(synthesizer, /^### Maintainability$/m);
+  assert.match(synthesizer, /a maintainability candidate carries a confirmed decision, a non-empty `stated_cost`, priority `P2` and `forwarding_only: false`/);
 });
 
 test('Given the shipped plugin, When the layout list is read, Then every maintainability file is required to exist', async () => {

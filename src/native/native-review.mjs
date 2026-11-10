@@ -1,10 +1,13 @@
 // One staged review from start to verdict: snapshot, native task, evidence, verdict.
 // Every step is deterministic except the single native task, which OMP runs.
 
+import path from 'node:path';
+
 import { stageCounts } from '../domain/review-run-summary.mjs';
 import { removeSnapshot, materializeStagedSnapshot } from './snapshot.mjs';
-import { buildAssignment } from './assignment.mjs';
-import { fallbackOf, provenanceOf, reviewerTranscript, reviewerYield, runReviewerTask } from './task-engine.mjs';
+import { createStageRunner, evidenceFromResult, fallbackOf, provenanceOf, reviewerTranscript, reviewerYield } from './task-engine.mjs';
+import { hunterTask, maintainabilityTask, scoutTask, synthesisTask, verifierTask } from './stage-tasks.mjs';
+import { hunterBudget, runStagePipeline } from './stage-pipeline.mjs';
 import { readFallbackEvidence } from './fallback-evidence.mjs';
 import { BUDGET_REASONS, assessDiff, readDiffBudget } from '../domain/diff-budget.mjs';
 import { classifyFilePath } from '../domain/file-class.mjs';
@@ -14,7 +17,27 @@ import { runMaintainabilityAnalysis } from './maintainability/analyze.mjs';
 import { runReuseAnalysis } from './reuse/analyze.mjs';
 import { runContractAnalysis } from './contract/analyze.mjs';
 import { renderReuseLines } from './reuse/report.mjs';
-import { evaluateReview } from './verdict.mjs';
+import { HUNTER_AGENT, MAINTAINABILITY_AGENT, SCOUT_AGENT, VERIFIER_AGENT, evaluateReview } from './verdict.mjs';
+import {
+  HUNTER_STAGE,
+  JOURNAL_SCHEMA,
+  MAINTAINABILITY_STAGE,
+  SCOUT_STAGE,
+  STAGE_SCHEMA,
+  VERIFIER_STAGE,
+  configFingerprint,
+  resolveJournalPolicy,
+  reviewKey,
+  stageId,
+  verdictReusable,
+} from '../domain/review-journal.mjs';
+import { journalRootDir, pruneJournals, readJournal, readStageEntry, writeJournal, writeStageEntry } from '../infra/review-journal-store.mjs';
+import { readIndexTreeOid, stagedIgnoredPaths } from '../infra/git-index-identity.mjs';
+import { readAgentsDigest, readKitVersion } from '../infra/kit-fingerprint.mjs';
+import { repoIdentity } from '../infra/repo-identity.mjs';
+import { resolveConfig as resolveMaintainabilityConfig, resolvePolicy as resolveMaintainabilityPolicy } from './maintainability/config.mjs';
+import { resolveReusePolicy } from './reuse/config.mjs';
+import { contractPolicy } from './contract/analyze.mjs';
 
 const clock = () => Date.now();
 
@@ -26,7 +49,8 @@ const clock = () => Date.now();
  *   env?: NodeJS.ProcessEnv,
  *   onProgress?: (line: string) => void,
  *   onEvent?: (event: object) => void,
- *   runTask?: typeof runReviewerTask,
+ *   stageRunner?: { run: (agent: string, name: string, task: string) => Promise<{ result: object|undefined, evidence: object }> } | null,
+ *   runTask?: ((input: { assignment: string }) => Promise<{ reviewer?: object, stages?: object[] }>) | null,
  *   now?: () => number,
  * }} input
  * @returns {Promise<
@@ -54,7 +78,8 @@ export async function runNativeReview({
   env = process.env,
   onProgress = () => {},
   onEvent = () => {},
-  runTask = runReviewerTask,
+  stageRunner = null,
+  runTask = null,
   runContract = runContractAnalysis,
   now = clock,
   analysisConfig = undefined,
@@ -87,6 +112,45 @@ export async function runNativeReview({
         error: budgetConfig.error,
       };
     if (budget.refused) return { staged: true, refused: budget };
+    // The identity of this exact staged state: the index tree, the diff, and the kit that asks the
+    // question. A stored verdict for this key answers the review without running it; a different
+    // tree (including staged junk that an ignore rule would have kept out) never reuses one.
+    const journalPolicy = resolveJournalPolicy(env);
+    const journalRoot = journalRootDir({ env });
+    const ignoredStagedPaths = await stagedIgnoredPaths(repo, changedPaths);
+    if (ignoredStagedPaths.length > 0) {
+      onProgress(`review: staged paths ignored by .gitignore: ${ignoredStagedPaths.join(', ')}`);
+    }
+    const identity = {
+      repoIdentity: repoIdentity(repo),
+      treeOid: await readIndexTreeOid(repo),
+      diffHash,
+      kitVersion: await readKitVersion(kitRoot),
+      agentsDigest: await readAgentsDigest(kitRoot),
+      configFingerprint: configFingerprint({
+        profile,
+        lanes,
+        maintainabilityPolicy: resolveMaintainabilityPolicy(env),
+        reusePolicy: resolveReusePolicy(env),
+        contractPolicy: contractPolicy(env),
+        reuseMaxLines,
+        maintainabilityConfig: analysisConfig ?? resolveMaintainabilityConfig(),
+      }),
+    };
+    const key = reviewKey(identity);
+    const journal = { key, treeOid: identity.treeOid, hit: false, policy: journalPolicy };
+    if (journalPolicy === 'off') {
+      onProgress('review: journal off (OMP_REVIEW_KIT_JOURNAL=off)');
+    } else if (key === null) {
+      onProgress('review: journal unavailable (no index tree; reuse disabled)');
+    } else {
+      const stored = await readJournal(journalRoot, key);
+      if (verdictReusable(stored, { key })) {
+        onProgress(`review: journal hit ${key.slice(0, 12)} (${stored.verdict.verdict}, ${stored.finishedAt ?? 'unknown'})`);
+        return reusedResult({ record: stored, journal: { ...journal, hit: true }, ignoredStagedPaths, startedMs, now });
+      }
+      onProgress(`review: journal miss ${key.slice(0, 12)}`);
+    }
     onProgress(`review: ${changedPaths.length} staged path(s), profile ${profile}, lanes ${lanes.join(', ')}`);
     const context = { snapshot: { dir, changedPaths, diffHash }, repo, profile, lanes };
     const analysisStarted = now();
@@ -135,7 +199,7 @@ export async function runNativeReview({
       unparsedFiles: contractAnalysis.unparsedFiles ?? [],
     };
     onProgress(`review: contract ${contract.status} (${contract.probed} pair(s), policy ${contract.policy})`);
-    const assignment = buildAssignment({
+    const assignmentInput = {
       context,
       contract,
       reuse: reuse.skipped
@@ -160,9 +224,42 @@ export async function runNativeReview({
           candidates: maintainability.groups,
           truncated: maintainability.truncated,
         },
-    });
+    };
     const taskStarted = now();
-    const { reviewer, stages } = await runTask({ cwd: repo, kitRoot, assignment, onProgress, onEvent });
+    // The host runs the stages, so the host decides what is reused: a stage with a valid journal
+    // entry for this exact key is not run again, and the run continues from the first missing one.
+    const stageJournal = journal.key !== null && journalPolicy !== 'off'
+      ? {
+        key: journal.key,
+        read: id => readStageEntry(journalRoot, journal.key, id),
+        write: (id, evidence) => writeStageEntry(journalRoot, journal.key, id, {
+          schema: STAGE_SCHEMA,
+          key: journal.key,
+          stageId: id,
+          agent: evidence.agent ?? null,
+          lane: evidence.lane ?? null,
+          exitCode: evidence.exitCode ?? null,
+          aborted: evidence.aborted === true,
+          structuredStatus: evidence.structuredStatus ?? null,
+          createdAt: new Date().toISOString(),
+          evidence,
+        }),
+      }
+      : null;
+    const runner = stageRunner ?? (runTask ? wholeRunAdapter(runTask) : await createStageRunner({ cwd: repo, kitRoot, onProgress, onEvent }));
+    const steps = planSteps({ assignmentInput, dir, profile, lanes, maintainability, analysis });
+    const { stages, evidence: stageEvidenceById } = await runStagePipeline({ runner, steps, journal: stageJournal, onProgress });
+    const hunters = laneResults(lanes, stageEvidenceById);
+    const synthesis = await runner.run('reviewer-kit', 'Synthesis', synthesisTask({
+      input: assignmentInput,
+      scout: stageEvidenceById.get(SCOUT_STAGE)?.data ?? null,
+      hunters,
+      maintainability: stageEvidenceById.get(MAINTAINABILITY_STAGE)?.data ?? null,
+      verifier: stageEvidenceById.get(VERIFIER_STAGE)?.data ?? null,
+      profile,
+      lanes,
+    }));
+    const reviewer = synthesis.result;
     const nativeTaskMs = now() - taskStarted;
     const evidence = await readFallbackEvidence(reviewerTranscript(reviewer));
     const fallback = { ...fallbackOf(reviewer), chainLength: evidence?.chainLength ?? null, error: evidence?.errors[0] ?? null };
@@ -194,6 +291,57 @@ export async function runNativeReview({
     });
     const verdictMs = now() - verdictStarted;
     const finishedMs = now();
+    const stageSummaries = stages.map(stage => ({
+      agent: stage.agent,
+      lane: stage.lane ?? null,
+      exitCode: stage.exitCode,
+      aborted: stage.aborted,
+      structuredStatus: stage.structuredStatus,
+      role: stage.role,
+      model: stage.model,
+      durationMs: stage.durationMs ?? null,
+      tokens: stage.tokens ?? null,
+      requests: stage.requests ?? null,
+      contextTokens: stage.contextTokens ?? null,
+      counts: stageCounts(stage.data),
+    }));
+    // The journal is written after the verdict and before the caller sees it: a killed run keeps the
+    // stages it finished, and a finished review answers the next identical tree in milliseconds.
+    // Every write here is fail-open — a journal that cannot be stored costs reuse, never a verdict.
+    if (journal.key !== null && journalPolicy !== 'off') {
+      await writeJournal(journalRoot, journal.key, {
+        schema: JOURNAL_SCHEMA,
+        key: journal.key,
+        identity,
+        state: 'done',
+        startedAt: new Date(startedMs).toISOString(),
+        finishedAt: new Date(finishedMs).toISOString(),
+        durationMs: finishedMs - startedMs,
+        profile,
+        lanes,
+        diffHash,
+        patchBytes,
+        changedPaths,
+        budget: { paths: budget.paths, bytes: budget.bytes, maxPaths: budget.maxPaths, maxBytes: budget.maxBytes },
+        ignoredStagedPaths,
+        verdict,
+        text: reviewerView?.text ?? '',
+        provenance: reviewer ? provenanceOf(reviewer) : { role: null, model: null },
+        fallback,
+        reviewer: {
+          durationMs: reviewer?.durationMs ?? null,
+          tokens: reviewer?.tokens ?? null,
+          requests: reviewer?.requests ?? null,
+          contextTokens: reviewer?.contextTokens ?? null,
+          sessionFile: reviewerTranscript(reviewer),
+          fallbackApplied: fallback.applied,
+        },
+        stages: stageSummaries,
+        maintainability,
+        contract,
+      });
+      pruneJournals(journalRoot).catch(() => {});
+    }
     return {
       staged: true,
       diffHash,
@@ -205,19 +353,9 @@ export async function runNativeReview({
       fileClasses,
       provenance: reviewer ? provenanceOf(reviewer) : { role: null, model: null },
       fallback,
-      stages: stages.map(stage => ({
-        agent: stage.agent,
-        exitCode: stage.exitCode,
-        aborted: stage.aborted,
-        structuredStatus: stage.structuredStatus,
-        role: stage.role,
-        model: stage.model,
-        durationMs: stage.durationMs ?? null,
-        tokens: stage.tokens ?? null,
-        requests: stage.requests ?? null,
-        contextTokens: stage.contextTokens ?? null,
-        counts: stageCounts(stage.data),
-      })),
+      stages: stageSummaries,
+      journal,
+      ignoredStagedPaths,
       text: reviewerView?.text ?? '',
       verdict,
       maintainability,
@@ -240,6 +378,168 @@ export async function runNativeReview({
   } finally {
     await removeSnapshot(snapshot.dir);
   }
+}
+
+/**
+ * A whole-run runner adapted to the stage pipeline: the single-call seam that tests and embedders
+ * inject. It runs once, then replays the stages it reported for each agent the pipeline asks for; a
+ * stage the runner never reported is a failed stage, which is exactly what the verdict must see.
+ * Production injects no runner and gets the real per-stage session.
+ *
+ * @param {(input: { assignment: string }) => Promise<{ reviewer?: object, stages?: object[] }>} runWhole
+ * @returns {{ run: (agent: string, name: string, task: string) => Promise<{ result?: object, evidence: object }> }}
+ */
+function wholeRunAdapter(runWhole) {
+  let pending = null;
+  const call = task => {
+    if (!pending) pending = Promise.resolve(runWhole({ assignment: task }));
+    return pending;
+  };
+  return {
+    async run(agent, name, task) {
+      const outcome = await call(task);
+      if (agent === 'reviewer-kit') {
+        const reviewer = outcome?.reviewer;
+        return { result: reviewer, evidence: evidenceFromResult(reviewer) };
+      }
+      const evidence = (outcome?.stages ?? []).find(stage => stage.agent === agent)
+        ?? { agent, lane: null, exitCode: 1, aborted: false, structuredStatus: null, data: null };
+      return { evidence };
+    },
+  };
+}
+
+/**
+ * The stage plan of one review: scout, one hunter per lane, the maintainability stage when the
+ * deterministic analysis planned it, and the verifier — always for `full`, and for `spec-docs` only
+ * when a hunter emitted a candidate.
+ *
+ * @param {{
+ *   assignmentInput: object,
+ *   dir: string,
+ *   profile: 'full'|'spec-docs',
+ *   lanes: string[],
+ *   maintainability: { planned: boolean, policy: string, groups: number },
+ *   analysis: { analysisPath?: string|null },
+ * }} input
+ * @returns {Array<object>}
+ */
+function planSteps({ assignmentInput, dir, profile, lanes, maintainability, analysis }) {
+  const snapshotPaths = assignmentInput.context.snapshot.changedPaths;
+  const steps = [
+    { id: SCOUT_STAGE, agent: SCOUT_AGENT, name: 'ContextScout', task: scoutTask(assignmentInput) },
+  ];
+  for (const lane of lanes) {
+    steps.push({
+      id: stageId(HUNTER_STAGE, lane),
+      agent: HUNTER_AGENT,
+      name: `RiskHunter-${lane}`,
+      task: evidence => hunterTask({
+        input: assignmentInput,
+        scout: evidence.get(SCOUT_STAGE)?.data ?? null,
+        lane,
+        budget: hunterBudget({
+          changedPaths: snapshotPaths.length,
+          consumers: (evidence.get(SCOUT_STAGE)?.data?.relevant_consumers ?? []).length,
+        }),
+      }),
+    });
+  }
+  if (maintainability.planned) {
+    steps.push({
+      id: MAINTAINABILITY_STAGE,
+      agent: MAINTAINABILITY_AGENT,
+      name: 'Maintainability',
+      task: maintainabilityTask({
+        snapshotDir: dir,
+        candidatePath: analysis.analysisPath ?? path.join(dir, '.review', 'maintainability.json'),
+        policy: maintainability.policy,
+        profile,
+        budget: Math.max(4, 2 * maintainability.groups),
+      }),
+    });
+  }
+  steps.push({
+    id: VERIFIER_STAGE,
+    agent: VERIFIER_AGENT,
+    name: 'FindingVerifier',
+    when: evidence => profile === 'full'
+      || laneResults(lanes, evidence).some(result => (result.data?.candidates ?? []).length > 0),
+    task: evidence => verifierTask({
+      input: assignmentInput,
+      scout: evidence.get(SCOUT_STAGE)?.data ?? null,
+      hunters: laneResults(lanes, evidence),
+      coverageGaps: laneResults(lanes, evidence)
+        .flatMap(result => (Array.isArray(result.data?.coverage_gaps) ? result.data.coverage_gaps : [])),
+      profile,
+    }),
+  });
+  return steps;
+}
+
+/**
+ * One entry per planned hunter lane, with whatever that lane reported.
+ *
+ * @param {string[]} lanes
+ * @param {Map<string, object>} evidence
+ * @returns {Array<{ lane: string, data: object|null }>}
+ */
+function laneResults(lanes, evidence) {
+  return (Array.isArray(lanes) ? lanes : []).map(lane => ({
+    lane,
+    data: evidence.get(stageId(HUNTER_STAGE, lane))?.data ?? null,
+  }));
+}
+
+/**
+ * The result of a review that a stored journal answered. It carries the same shape the host and the
+ * report writer read from a fresh run; every timing is zero because nothing ran, and the report text
+ * is the one the original review produced for these exact bytes.
+ *
+ * @param {{
+ *   record: object,
+ *   journal: { key: string|null, treeOid: string|null, hit: boolean, policy: string },
+ *   ignoredStagedPaths: string[],
+ *   startedMs: number,
+ *   now: () => number,
+ * }} input
+ */
+function reusedResult({ record, journal, ignoredStagedPaths, startedMs, now }) {
+  const finishedMs = now();
+  const reviewer = record?.reviewer ?? {};
+  return {
+    staged: true,
+    diffHash: record?.diffHash ?? null,
+    profile: record?.profile ?? null,
+    lanes: Array.isArray(record?.lanes) ? record.lanes : [],
+    changedPaths: Array.isArray(record?.changedPaths) ? record.changedPaths : [],
+    patchBytes: record?.patchBytes ?? null,
+    budget: record?.budget ?? null,
+    fileClasses: [],
+    provenance: record?.provenance ?? { role: null, model: null },
+    fallback: record?.fallback ?? { applied: false, requested: null, chainLength: null, error: null },
+    stages: Array.isArray(record?.stages) ? record.stages : [],
+    journal,
+    ignoredStagedPaths: Array.isArray(ignoredStagedPaths) ? ignoredStagedPaths : [],
+    text: typeof record?.text === 'string' ? record.text : '',
+    verdict: record?.verdict ?? { pass: false, verdict: 'BLOCK', reasons: ['journal verdict missing'] },
+    maintainability: record?.maintainability ?? null,
+    contract: record?.contract ?? null,
+    runSummary: {
+      startedAt: new Date(startedMs).toISOString(),
+      finishedAt: new Date(finishedMs).toISOString(),
+      durationMs: finishedMs - startedMs,
+      reviewer: {
+        durationMs: reviewer.durationMs ?? null,
+        tokens: reviewer.tokens ?? null,
+        requests: reviewer.requests ?? null,
+        contextTokens: reviewer.contextTokens ?? null,
+        sessionFile: reviewer.sessionFile ?? null,
+        fallbackApplied: reviewer.fallbackApplied === true,
+      },
+      timings: { snapshotMs: 0, maintainabilityMs: 0, contractMs: 0, nativeTaskMs: 0, verdictMs: 0 },
+    },
+  };
 }
 
 /**

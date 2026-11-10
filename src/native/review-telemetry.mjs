@@ -117,6 +117,10 @@ export function buildRunRecord({ runId, record, result, reportPath = null, repor
     diffHash: result?.diffHash ?? null,
     changedPaths: Array.isArray(result?.changedPaths) ? result.changedPaths.length : null,
     reportPath,
+    journalKey: result?.journal?.key ?? null,
+    treeOid: result?.journal?.treeOid ?? null,
+    journalHit: result?.journal?.hit === true,
+    ignoredStagedPaths: Array.isArray(result?.ignoredStagedPaths) ? result.ignoredStagedPaths : [],
     reviewer: {
       role: result?.provenance?.role ?? null,
       model: result?.provenance?.model ?? null,

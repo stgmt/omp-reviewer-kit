@@ -55,6 +55,38 @@ Verification: the offline verdict, snapshot and review suites pin the new filter
 
 The commits that land this change and the 0.23.0 release bump were made with `--no-verify` at the owner's explicit request. The hook could not review them: OMP resolved the reviewer to `anthropic/claude-haiku-5-5`, and every configured fallback is an Anthropic model, while the provider returned `403 permission_error: OAuth authentication is currently not allowed for this organization`. The 2026-10-27 07:07, 07:08 and 20:32 runs and the 2026-10-28 10:56 run all failed this way before any agent content ran. The change is therefore verified offline only.
 
+## 2026-11-10 — host-driven stages and the review journal (variant 1)
+
+Owner approval: «делай вариант 1» for the journal and host-driven stages, then «1 обход. 2 комить пуш доставляй релиз в гитхаб и везде на пк» for the spec-file bypass, the commit and the release.
+
+Design as implemented: `src/native/native-review.mjs` computes the review key, reads the journal, then runs the stage plan from `src/native/stage-pipeline.mjs` through `createStageRunner` (`src/native/task-engine.mjs`): scout, one hunter per lane, the maintainability stage when planned, the verifier, then one synthesis task with `agent: reviewer-kit`. `agents/reviewer-kit.md` is now the synthesizer only — no `spawns`, no `task` tool. The journal lives under `<home>/.omp/review-kit-journal/<key>/` (`src/infra/review-journal-store.mjs`); the key is in NR-09.
+
+Verified locally on 2026-11-10:
+
+| Check | Result |
+|---|---|
+| `npm test` | 1013 tests, 1003 pass, 0 fail |
+| `npm run check` | layout ok, 105 files verified |
+| Mutation selectors touched by this change | re-proved with focused gate runs (`[KILLED]`): 3 anchors changed by the verdict/stage-evidence edits, 8 decided by the rewritten layout test, 1 by the test-runner journal isolation |
+| Live resume (`E:/tmp/review-probe`, 5 staged paths) | run killed on the hunter; rerun logged `stage review-context-scout reused (journal)` and continued at the hunter |
+| Live full cycle (`E:/tmp/review-cycle`, 1 executable path) | scout 50s/82k, hunter 59s/54k, verifier 2m42s/61k, synthesis → BLOCK, record `blocked 5m55s` |
+| Live reuse of that verdict | same staged bytes: `journal hit`, `blocked 194ms`, same report text, no model call |
+| Changed index tree | staging one more file produced `journal miss` with a new key and a full run |
+| Junk in the index | `git add -f debug.log` under `*.log` changed `git write-tree` and `stagedIgnoredPaths` named the path |
+| Lane persistence (the false-block fix) | journal stage entry carries `lane: correctness`; run records now carry `journalKey`, `treeOid`, `journalHit`, `ignoredStagedPaths` |
+
+### Review round on this tree (0.31.0)
+
+The hook reviewed the release diff through the new host-driven pipeline (39 staged paths, 43m51s: scout 2m02s/305k, hunter 26m43s/350k, maintainability 11m24s/1354k, verifier 2m46s/207k, synthesis 53s/108k) and BLOCKed with two P2 findings and one blocking coverage gap. All three are fixed in the same release:
+
+1. `pruneJournals` removed any directory under the journal root, so a shared `OMP_REVIEW_KIT_JOURNAL_DIR` could lose unrelated data. It now prunes only directories whose `journal.json` parses with this kit's schema, and a test pins that a foreign folder survives.
+2. `configFingerprint` ignored the maintainability analysis configuration, so a verdict decided under looser thresholds could answer a review run under tighter ones. The resolved analysis config is now part of the key, with a test that a threshold change and an insertion-order change behave differently.
+3. The stage order of the real host plan had no test. `tests/native-stage-order.test.mjs` records the runner calls of a real `runNativeReview` and pins `scout → hunter → maintainability → verifier → synthesis` for `full`, and the verifier condition for `spec-docs` with and without a candidate.
+
+Scout quality note: the stage listed two paths that do not exist (`src/native/native-review-analysis.mjs`, `src/native/native-review-telemetry.mjs`); the verifier did not challenge the list. The finding set itself was correct.
+
+Boundaries: the mutation gate was not run over the whole catalog on this tree (only the stale selectors were re-proved); the review hook had not yet run on this diff at the time of writing; `ACCEPTANCE_CRITERIA.md` still describes the fork-era matrix.
+
 ## Documents
 
 - `REQUIREMENTS.md` remains the binding requirement. Its wording was written for an OMP-owned entry point; see the owner decision above.

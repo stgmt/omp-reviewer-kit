@@ -63,6 +63,19 @@ function hasText(value) {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
+/**
+ * A lane identifier folded for comparison: trimmed and lower-cased. Anything that is not a string
+ * names no lane, which is different from naming an unexpected one.
+ *
+ * @param {unknown} value
+ * @returns {string|null}
+ */
+function normalizeLane(value) {
+  if (typeof value !== 'string') return null;
+  const lane = value.trim().toLowerCase();
+  return lane.length > 0 ? lane : null;
+}
+
 function classIndex(fileClasses) {
   const index = new Map();
   for (const entry of Array.isArray(fileClasses) ? fileClasses : []) {
@@ -128,10 +141,15 @@ export function evaluateReview({ reviewer, stages, profile, lanes, fileClasses =
   if (scouts.length < 1) reasons.push(`no completed stage evidence for ${SCOUT_AGENT}`);
 
   const hunters = completed(HUNTER_AGENT);
-  const coveredLanes = new Set(hunters.map(stage => stage.data?.lane));
-  const missingLanes = lanes.filter(lane => !coveredLanes.has(lane));
+  // A lane is an identifier, not a sentence: case and surrounding spaces must not decide whether a
+  // hunter that ran counts as evidence. A stage that reported no lane at all still cannot satisfy a
+  // planned lane, and the reason then names what did arrive so the next occurrence is diagnosable.
+  const coveredLanes = new Set(hunters.map(stage => normalizeLane(stage.data?.lane)).filter(lane => lane !== null));
+  const observedLanes = [...coveredLanes].sort();
+  const missingLanes = lanes.filter(lane => !coveredLanes.has(normalizeLane(lane)));
   if (missingLanes.length > 0) {
-    reasons.push(`no completed ${HUNTER_AGENT} task for planned lane(s): ${missingLanes.join(', ')}`);
+    const observed = observedLanes.length > 0 ? ` (observed: ${observedLanes.join(', ')})` : ' (observed: none)';
+    reasons.push(`no completed ${HUNTER_AGENT} task for planned lane(s): ${missingLanes.join(', ')}${observed}`);
   }
 
   const verifiers = completed(VERIFIER_AGENT);

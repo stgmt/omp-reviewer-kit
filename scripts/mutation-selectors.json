@@ -55,7 +55,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "3b8b9f13183f712947d9958a05016511c9185fc239e9f7c3af718470e0abef6b",
-      "testHash": "dafa5b95ee2753a04197bc5d9454a30ec1295cadabee3b7c4fd18cdb1675543a"
+      "testHash": "aaaa6a9758684238b0f233bdceba0f8cb5716b1c2e81e83dc34873798b4da611"
     },
     "anti-parasitic-both-to-either": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -66,7 +66,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "b8607c1dd6f7ba93c3e0b7431e95eb44980c25c7b9974dd0fc887acbf309bb74",
-      "testHash": "dafa5b95ee2753a04197bc5d9454a30ec1295cadabee3b7c4fd18cdb1675543a"
+      "testHash": "aaaa6a9758684238b0f233bdceba0f8cb5716b1c2e81e83dc34873798b4da611"
     },
     "anti-parasitic-port-protection-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -77,7 +77,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "7cb2ae5cc876247bae2a345f17644a022a04d18c3ed82d839556f279b8e7e2e7",
-      "testHash": "dafa5b95ee2753a04197bc5d9454a30ec1295cadabee3b7c4fd18cdb1675543a"
+      "testHash": "aaaa6a9758684238b0f233bdceba0f8cb5716b1c2e81e83dc34873798b4da611"
     },
     "multi-stage-snapshot-boundary-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -88,7 +88,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "db7a8493b32121111624ef1add91a1b21b8c908d6e5da232df1a148e0af79373",
-      "testHash": "dafa5b95ee2753a04197bc5d9454a30ec1295cadabee3b7c4fd18cdb1675543a"
+      "testHash": "aaaa6a9758684238b0f233bdceba0f8cb5716b1c2e81e83dc34873798b4da611"
     },
     "multi-stage-yagni-boundary-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -99,7 +99,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "465a5de25c5a83dda3e244302a6b7eab09c0169bb39c82b5688b001fb8d5560c",
-      "testHash": "dafa5b95ee2753a04197bc5d9454a30ec1295cadabee3b7c4fd18cdb1675543a"
+      "testHash": "aaaa6a9758684238b0f233bdceba0f8cb5716b1c2e81e83dc34873798b4da611"
     },
     "sync-hook-newer-overwritten": {
       "testFile": "tests/sync-targets.test.mjs",
@@ -166,7 +166,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "ec31109e99d1fdb90e4b481cab9c38734f3857a530dd4a68f4327ef171a166d5",
-      "testHash": "dafa5b95ee2753a04197bc5d9454a30ec1295cadabee3b7c4fd18cdb1675543a"
+      "testHash": "aaaa6a9758684238b0f233bdceba0f8cb5716b1c2e81e83dc34873798b4da611"
     },
     "hunter-red-proof-field-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -177,7 +177,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "61f3ac262a7e6643d183a03c1ffd0e7ebebf3d58d8cbaacaf70427b43ac14e8e",
-      "testHash": "dafa5b95ee2753a04197bc5d9454a30ec1295cadabee3b7c4fd18cdb1675543a"
+      "testHash": "aaaa6a9758684238b0f233bdceba0f8cb5716b1c2e81e83dc34873798b4da611"
     },
     "verifier-triage-field-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -188,7 +188,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "e6356f58a6e2d47ec64b32c1f6f7664d120a06d1b1d697a3dac8517b2c7b5ea5",
-      "testHash": "dafa5b95ee2753a04197bc5d9454a30ec1295cadabee3b7c4fd18cdb1675543a"
+      "testHash": "aaaa6a9758684238b0f233bdceba0f8cb5716b1c2e81e83dc34873798b4da611"
     },
     "modular-suspicion-assert-delta": {
       "testFile": "tests/suspicion-map.test.mjs",
@@ -1231,7 +1231,7 @@
         "Given a registry override in the outer environment, When the test wrapper runs a suite, Then the suite gets a throwaway target registry, never the user registry"
       ],
       "ancestors": [],
-      "mutantHash": "05edda853440b6d4e89ab41bcd8d0a6f496a7f5b7fb9e5ea01ecee6e5ee03879",
+      "mutantHash": "9e68574797d2dbf1072bf11cd2d35600acc868fd64c94efa9a3e58230d9d9ca2",
       "testHash": "9ef4b70ecb73608f1053d6b04360c2fddabf9d3682418881b112adc2c99c8b6c"
     },
     "package-test-script-unwrapped": {
@@ -2667,7 +2667,7 @@
         "Given a planned lane with no completed hunter, When evaluated, Then it blocks and names the lane"
       ],
       "ancestors": [],
-      "mutantHash": "477cfb1613fdf60dada9265988fdc00fd6d52e338fc2ed1f92f09e2363ee20cb",
+      "mutantHash": "899570b921925794144707ca7f8a513ce3f31a6cc39ce0fc4f29525d5da82373",
       "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
     },
     "commit-command-attached-value-letters-read": {
@@ -2921,7 +2921,7 @@
         "Given a nested stage that aborted, When its evidence is read, Then the aborted flag is kept"
       ],
       "ancestors": [],
-      "mutantHash": "eca43d059e93c145864558524cec0bbbc43f37597e28ea5bf875b33cb6206ac5",
+      "mutantHash": "b6c7c1fc1363b9a572af02e8653a073bf88e8d83f1c75e9404032b4b8cc0b72f",
       "testHash": "7602fc7ada16124dead389798e903b57509cf98c316ce328086f3ce9c89f0359"
     },
     "native-stage-structure-erased": {
@@ -2930,7 +2930,7 @@
         "Given a nested stage with no structured result, When its evidence is read, Then the structured status is null"
       ],
       "ancestors": [],
-      "mutantHash": "1a6c159048f10f332e30f0b5177c4f78b4573ba14576f6ba5a64364ba1145be0",
+      "mutantHash": "df1c29cd3654819a0ac7245353b941b6900405a005331cd03b6ced22098da1d4",
       "testHash": "7602fc7ada16124dead389798e903b57509cf98c316ce328086f3ce9c89f0359"
     },
     "native-snapshot-file-classes-dropped": {

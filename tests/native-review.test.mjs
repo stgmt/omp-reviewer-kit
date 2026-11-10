@@ -131,9 +131,9 @@ test('Given the reviewer passes with every stage completed, When the review runs
     assert.deepEqual(result.fallback, { applied: false, requested: null, chainLength: null, error: null });
     const timing = { durationMs: null, tokens: null, requests: null, contextTokens: null };
     assert.deepEqual(result.stages, [
-      { agent: 'review-context-scout', exitCode: 0, aborted: false, structuredStatus: 'valid', role: 'task', model: 'm', ...timing, counts: {} },
-      { agent: 'review-risk-hunter', exitCode: 0, aborted: false, structuredStatus: 'valid', role: 'task', model: 'm', ...timing, counts: {} },
-      { agent: 'review-finding-verifier', exitCode: 0, aborted: false, structuredStatus: 'valid', role: 'task', model: 'm', ...timing, counts: { confirmed_coverage_gaps: 0, confirmed_findings: 0 } },
+      { agent: 'review-context-scout', lane: null, exitCode: 0, aborted: false, structuredStatus: 'valid', role: 'task', model: 'm', ...timing, counts: {} },
+      { agent: 'review-risk-hunter', lane: null, exitCode: 0, aborted: false, structuredStatus: 'valid', role: 'task', model: 'm', ...timing, counts: {} },
+      { agent: 'review-finding-verifier', lane: null, exitCode: 0, aborted: false, structuredStatus: 'valid', role: 'task', model: 'm', ...timing, counts: { confirmed_coverage_gaps: 0, confirmed_findings: 0 } },
     ]);
     assert.equal(result.text, PASS_REPORT);
     assert.deepEqual(result.fileClasses, [{ path: 'feature.mjs', fileClass: 'executable' }]);

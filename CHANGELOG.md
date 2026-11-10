@@ -5,7 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.31.0] - 2026-11-10
+
+### Added
+- A review journal outside every repository (`<home>/.omp/review-kit-journal`, `OMP_REVIEW_KIT_JOURNAL_DIR`). The key is the repository identity, the index tree, the diff hash, the kit version, an agent-prompt digest and the stage configuration, so a staged ignored file cannot reuse an older verdict.
+- A finished verdict for the same key answers the next review without calling the model, and the stored report is replayed with the original provenance.
+- The host runs the stages itself: scout, one hunter per lane, the maintainability stage and the verifier are separate native tasks, and the `reviewer-kit` agent is the synthesizer. A stage result is journaled the moment it exists, so a review killed by the caller's timeout continues from the first stage without a valid entry instead of starting over.
+- The hook log names journal reuse (`review: stage <id> reused (journal)`, `review: journal hit|miss <key>`), the run record carries the journal key, the index tree and the reused paths, and the report names the journal state and any staged path the repository's ignore rules would ignore.
+
+### Fixed
+- A hunter that completed with a valid structured result but a lane spelled with different case or spaces no longer blocks with `no completed review-risk-hunter task`; the reason now names the lanes that did arrive, and the run record persists the lane the verdict saw.
+- Test runs no longer write into the user's journal directory.
 
 ## [0.30.0] - 2026-11-05
 
