@@ -16,7 +16,7 @@ Native Oh My Pi plugin for multi-stage, evidence-first code review of staged Git
 
 ## What It Does
 
-`omp-reviewer-kit` provides a fail-closed Git pre-commit hook. The review is a 4-stage hierarchy of specialized OMP agents, run through OMP's native task system:
+`omp-reviewer-kit` provides a fail-closed Git pre-commit hook. The review runs four stages, one native OMP task per stage, driven by the kit host: the host decides what runs, what is reused from the journal, and in which order. OMP still resolves every model.
 
 ```
 Staged Diff (git diff --cached --binary --no-ext-diff --)
@@ -38,9 +38,9 @@ Staged Diff (git diff --cached --binary --no-ext-diff --)
   - Checks upstream protections, caller constraints and reachability; confirms or rejects each candidate.
                     │
                     ▼
-[Stage 4: Orchestrator Synthesis] (reviewer-kit)
-  - Synthesizes coverage, confirmed findings and rejected summaries, then writes the report.
-  - Ends the report with the verdict marker.
+[Stage 4: Synthesis] (reviewer-kit)
+  - Reads the stage results the host supplies; writes coverage, confirmed findings and rejected summaries.
+  - Ends the report with the verdict marker. It spawns nothing and re-runs nothing.
 ```
 
 The hook lets the commit proceed only when the native host exits 0 and prints `review: PASS`. The reviewer's report must also end with exactly one solitary `REVIEW_RESULT=PASS` line. Any confirmed finding, a blocking coverage gap when the scout reports a runnable test harness, a missing or failed stage, an aborted task, a malformed marker, or an infrastructure error blocks the commit (exit 1). The review has no wall-clock cap.
@@ -52,6 +52,14 @@ A coverage gap blocks only when it carries `severity: "blocking"` with a concret
 - **`full` profile** (the diff contains executable code or tests): the complete 4-stage pipeline with test coverage mapping. Stage 2 runs the `correctness` lane by default; `OMP_REVIEW_KIT_LANES=correctness,security` adds the security lane.
 - **`spec-docs` profile** (only documentation, specifications, agent or skill prompts, or configuration): a reduced review focused on the `content-risk` lane.
 - `OMP_REVIEW_KIT_LANES` is a comma-separated allowlist over `correctness`, `security` and `content-risk`. An unknown token fails the review closed.
+
+### Journal: reuse and resume
+
+Every review is journaled under `<home>/.omp/review-kit-journal/<key>/` (`OMP_REVIEW_KIT_JOURNAL_DIR` overrides). The key is the repository identity, the index tree (`git write-tree`), the diff hash, the kit version, a digest of `agents/*.md`, and the stage configuration. A staged ignored file changes the tree, so junk cannot hide behind an older verdict.
+
+- A finished verdict for the same key answers the next review in milliseconds: the model is not called and the stored report is reused.
+- Each finished stage is written the moment it exists. A review killed by the caller's timeout continues from the first stage without a valid entry instead of starting over; the hook log says `review: stage <id> reused (journal)`.
+- `OMP_REVIEW_KIT_JOURNAL=off` disables both. The journal never decides a verdict by itself: it replays what a review of these exact bytes already decided.
 
 ## Standard Installation (Recommended)
 
@@ -215,6 +223,8 @@ Node 18 and 20 are no longer in CI, because the suite now loads the Bun library.
 | Variable | Effect |
 |---|---|
 | `OMP_REVIEW_KIT_BUN` | The Bun executable used by the launcher (default `bun`). |
+| `OMP_REVIEW_KIT_JOURNAL` | `off` disables verdict reuse and stage resume; any other value keeps the default `read-write`. |
+| `OMP_REVIEW_KIT_JOURNAL_DIR` | Where journals live (default `<home>/.omp/review-kit-journal`). |
 | `OMP_REVIEW_KIT_OMP` | The OMP executable used by the installer and the Claude shell (default `omp`). |
 | `OMP_REVIEW_KIT_PLUGIN_DIR` | The installed plugin directory the vendored stub runs. |
 | `OMP_REVIEW_KIT_PLUGIN_SPEC` | The plugin specifier the Claude shell installs (default `github:stgmt/omp-reviewer-kit#v<version>`). |

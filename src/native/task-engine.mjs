@@ -53,19 +53,13 @@ export async function loadOmpEngine(importer = specifier => {
 }
 
 /**
- * Runs `reviewer-kit` through the native TaskTool and returns the native evidence.
+ * The OMP session the review's native tasks run in: one kit extension root, no UI, no MCP, and the
+ * structural overlay that requires a child to finish with a `yield`.
  *
- * @param {{
- *   cwd: string,
- *   kitRoot: string,
- *   assignment: string,
- *   onProgress?: (line: string) => void,
- *   onEvent?: (event: object) => void,
- *   loadEngine?: typeof loadOmpEngine,
- * }} input
- * @returns {Promise<{ reviewer: object|undefined, stages: object[], sessionFile: string }>}
+ * @param {{ cwd: string, kitRoot: string, loadEngine?: typeof loadOmpEngine }} input
+ * @returns {Promise<{ tool: object, sessionFile: string }>}
  */
-export async function runReviewerTask({ cwd, kitRoot, assignment, onProgress = () => {}, onEvent = () => {}, loadEngine = loadOmpEngine }) {
+export async function createReviewSession({ cwd, kitRoot, loadEngine = loadOmpEngine }) {
   const omp = await loadEngine();
   const base = await omp.Settings.init({ cwd });
   const authStorage = await omp.discoverAuthStorage(undefined, { settings: base });
@@ -106,20 +100,59 @@ export async function runReviewerTask({ cwd, kitRoot, assignment, onProgress = (
   };
 
   const tool = await omp.TaskTool.create(session);
-  const run = await tool.execute('reviewer-kit-review', { agent: 'reviewer-kit', name: 'Review', task: assignment }, undefined, update => {
-    onProgress(describeUpdate(update));
-    for (const event of progressEvents(update)) emit(event);
-  });
+  return { tool, sessionFile };
+}
 
-  function emit(event) {
+/**
+ * Runs one native task of the review in a session the host owns. The pipeline calls this once per
+ * stage, so the host decides what runs and what is reused; OMP still resolves the model.
+ *
+ * @param {{
+ *   cwd: string, kitRoot: string,
+ *   onProgress?: (line: string) => void, onEvent?: (event: object) => void,
+ *   loadEngine?: typeof loadOmpEngine,
+ * }} input
+ * @returns {Promise<{ sessionFile: string, run: (agent: string, name: string, task: string) => Promise<{ result: object|undefined, evidence: object }> }>}
+ */
+export async function createStageRunner({ cwd, kitRoot, onProgress = () => {}, onEvent = () => {}, loadEngine = loadOmpEngine }) {
+  const { tool, sessionFile } = await createReviewSession({ cwd, kitRoot, loadEngine });
+  const emit = event => {
     try {
       onEvent(event);
     } catch {
       // The observer is fail-open: a broken sink never interrupts the review.
     }
-  }
-  const reviewer = reviewerFromRun(run);
-  return { reviewer, stages: stageEvidence(reviewer), sessionFile };
+  };
+  return {
+    sessionFile,
+    async run(agent, name, task) {
+      const run = await tool.execute(`review-${agent}-${name}`, { agent, name, task }, undefined, update => {
+        onProgress(describeUpdate(update));
+        for (const event of progressEvents(update)) emit(event);
+      });
+      const result = run?.details?.results?.[0];
+      return { result, evidence: evidenceFromResult(result) };
+    },
+  };
+}
+
+/**
+ * Runs `reviewer-kit` through the native TaskTool and returns the native evidence.
+ *
+ * @param {{
+ *   cwd: string,
+ *   kitRoot: string,
+ *   assignment: string,
+ *   onProgress?: (line: string) => void,
+ *   onEvent?: (event: object) => void,
+ *   loadEngine?: typeof loadOmpEngine,
+ * }} input
+ * @returns {Promise<{ reviewer: object|undefined, stages: object[], sessionFile: string }>}
+ */
+export async function runReviewerTask({ cwd, kitRoot, assignment, onProgress = () => {}, onEvent = () => {}, loadEngine = loadOmpEngine }) {
+  const runner = await createStageRunner({ cwd, kitRoot, onProgress, onEvent, loadEngine });
+  const { result } = await runner.run('reviewer-kit', 'Review', assignment);
+  return { reviewer: result, stages: stageEvidence(result), sessionFile: runner.sessionFile };
 }
 
 /**
@@ -161,20 +194,35 @@ export function reviewerYield(reviewer) {
  */
 export function stageEvidence(reviewer) {
   return (reviewer?.extractedToolData?.task ?? []).flatMap(call =>
-    (call.results ?? []).map(result => ({
-      agent: result.agent ?? null,
-      exitCode: result.exitCode ?? null,
-      aborted: result.aborted === true,
-      structuredStatus: result.structuredOutput?.status ?? null,
-      data: result.structuredOutput?.data ?? null,
-      role: result.modelRole ?? null,
-      model: result.resolvedModel ?? null,
-      durationMs: result.durationMs ?? null,
-      tokens: result.tokens ?? null,
-      requests: result.requests ?? null,
-      contextTokens: result.contextTokens ?? null,
-    })),
+    (call.results ?? []).map(result => evidenceFromResult(result)),
   );
+}
+
+/**
+ * The evidence of one native task result: who ran, whether it completed with a valid structured
+ * result, what it reported and what it cost. One shape for the single-call path and the host-driven
+ * pipeline, so the verdict reads the same thing either way.
+ *
+ * @param {object|undefined} result
+ * @returns {object}
+ */
+export function evidenceFromResult(result) {
+  return {
+    agent: result?.agent ?? null,
+    // The lane is what the verdict matches a hunter against; it comes from the child's own
+    // structured payload, and it is persisted so a record can show what the verdict saw.
+    lane: result?.structuredOutput?.data?.lane ?? null,
+    exitCode: result?.exitCode ?? null,
+    aborted: result?.aborted === true,
+    structuredStatus: result?.structuredOutput?.status ?? null,
+    data: result?.structuredOutput?.data ?? null,
+    role: result?.modelRole ?? null,
+    model: result?.resolvedModel ?? null,
+    durationMs: result?.durationMs ?? null,
+    tokens: result?.tokens ?? null,
+    requests: result?.requests ?? null,
+    contextTokens: result?.contextTokens ?? null,
+  };
 }
 
 /**

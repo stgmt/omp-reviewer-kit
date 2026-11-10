@@ -138,6 +138,10 @@ export function normalizeRunRecord(record) {
     changedPaths: finiteOrNull(source.changedPaths),
     reportPath: textOrNull(source.reportPath, 400),
     runnerPid: finiteOrNull(source.runnerPid),
+    journalKey: textOrNull(source.journalKey, 128),
+    treeOid: textOrNull(source.treeOid, 128),
+    journalHit: source.journalHit === true,
+    ignoredStagedPaths: stringList(source.ignoredStagedPaths).slice(0, 50),
     reviewer: {
       role: textOrNull(reviewer.role),
       model: textOrNull(reviewer.model),

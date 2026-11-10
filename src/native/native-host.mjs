@@ -168,6 +168,10 @@ async function saveReport(repo, result, env) {
     `- Reviewer role/model (OMP resolved): ${result.provenance.role ?? 'none'} / ${result.provenance.model ?? 'none'}`,
     ...fallbackLines(result.fallback),
     `- Staged paths: ${result.changedPaths.length}`,
+    `- Journal: ${result.journal?.hit ? 'hit' : 'miss'} ${result.journal?.key ?? 'unavailable'}`,
+    ...(Array.isArray(result.ignoredStagedPaths) && result.ignoredStagedPaths.length > 0
+      ? [`- Staged paths ignored by .gitignore: ${result.ignoredStagedPaths.join(', ')}`]
+      : []),
     '',
     '## Run',
     '',

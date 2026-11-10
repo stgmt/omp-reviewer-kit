@@ -183,7 +183,7 @@ test('Given a stub engine, When the reviewer task runs, Then it calls the native
     onProgress: line => progress.push(line),
     loadEngine: async () => stub,
   });
-  assert.deepEqual(calls.execute, { id: 'reviewer-kit-review', params: { agent: 'reviewer-kit', name: 'Review', task: 'ASSIGNMENT' } });
+  assert.deepEqual(calls.execute, { id: 'review-reviewer-kit-Review', params: { agent: 'reviewer-kit', name: 'Review', task: 'ASSIGNMENT' } });
   assert.deepEqual(calls.session.effectiveExtensionRoots(), { explicit: [kitRoot], mode: 'explicit-only', configured: [], configuredLevel: 'user' });
   assert.deepEqual(calls.session.settings, { overlayed: STRUCTURAL_OVERLAY });
   assert.equal(result.reviewer, reviewer);

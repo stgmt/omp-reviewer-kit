@@ -76,21 +76,18 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.doesNotMatch(hookTemplate, /(^|\s)git(?:\s|$)/m);
   });
 
-  it('reviewer-kit is configured as a blocking orchestrator with exact specialist spawns', () => {
+  it('reviewer-kit is a blocking synthesizer: no spawns, no task tool, read-only tools only', () => {
     const fm = parseFrontmatter(reviewerKitAgent);
     assert.equal(fm.name, 'reviewer-kit');
     assert.equal(fm.model, '@task', 'review agents use the OMP task model role');
     assert.equal(fm.blocking, 'true');
 
-    // Tool list contains task for orchestration, but no mutation tools
+    // The host runs the stages; the agent writes the report and must not spawn or mutate anything.
+    assert.equal(fm.spawns, undefined, 'the synthesizer spawns no specialist');
     const tools = fm.tools.split(',').map(t => t.trim());
-    assert.ok(tools.includes('task'));
+    assert.ok(!tools.includes('task'));
     assert.ok(!tools.includes('edit'));
     assert.ok(!tools.includes('write'));
-
-    // Spawns allowlist strictly limits children to the four specialist agents
-    const spawns = fm.spawns.split(',').map(s => s.trim());
-    assert.deepEqual(spawns.sort(), ['review-context-scout', 'review-finding-verifier', 'review-maintainability', 'review-risk-hunter'].sort());
 
     // Autoloads both review methodology and protocol skills
     assert.ok(Array.isArray(fm.autoloadSkills));
@@ -98,11 +95,18 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.ok(fm.autoloadSkills.includes('multi-stage-review'));
   });
 
-  it('reviewer-kit body enforces 4-stage ordering, report sections, and solitary marker', () => {
-    assert.match(reviewerKitAgent, /Stage 1: Context Scout/);
-    assert.match(reviewerKitAgent, /Stage 2: Parallel Risk Hunting/);
-    assert.match(reviewerKitAgent, /Stage 3: Adversarial Verification/);
-    assert.match(reviewerKitAgent, /Stage 4: Orchestrator Synthesis/);
+  it('reviewer-kit body pins the report sections and the solitary marker; the stage order lives in the host pipeline', async () => {
+    // The order is code, not prose: the host runs scout, hunters, maintainability, verifier.
+    const { planStages } = await import('../src/domain/review-journal.mjs');
+    assert.deepEqual(planStages({ lanes: ['correctness'], maintainabilityPlanned: true }), [
+      'review-context-scout',
+      'review-risk-hunter:correctness',
+      'review-maintainability',
+    ]);
+    const nativeReview = await readFile('src/native/native-review.mjs', 'utf8');
+    assert.match(nativeReview, /planSteps\(/);
+    assert.match(nativeReview, /VERIFIER_STAGE/);
+    assert.doesNotMatch(reviewerKitAgent, /Stage 1: Context Scout/);
 
     assert.match(reviewerKitAgent, /### Review coverage/);
     assert.match(reviewerKitAgent, /### Confirmed findings/);
@@ -145,18 +149,13 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
 
     assert.match(reviewerKitAgent, /REVIEW_RESULT=PASS/);
     assert.match(reviewerKitAgent, /REVIEW_RESULT=BLOCK/);
-    assert.equal((reviewerKitAgent.match(/Stage [1-4]:/g) ?? []).length, 4);
-    assert.equal((reviewerKitAgent.match(/agent `review-risk-hunter`/g) ?? []).length, 1);
-    assert.match(reviewerKitAgent, /Risk lanes for this diff/);
-    assert.match(reviewerKitAgent, /OMP owns the active model roles, agent overrides and fallback chains/);
-    assert.match(reviewerKitAgent, /omit `model`, `outputSchema`, `schemaMode`, and `isolated`/);
+    assert.doesNotMatch(reviewerKitAgent, /Stage [1-4]:/);
     assert.match(reviewerKitAgent, /staged snapshot/i);
-    assert.match(reviewerKitAgent, /test evidence/i);
-    assert.match(reviewerKitAgent, /YAGNI|unnecessary/i);
+    assert.match(reviewerKitAgent, /stage results/i);
     assert.doesNotMatch(reviewerKitAgent, /Pass that exact `model` selector/);
   });
 
-  it('review-profile contract: spec-docs reduced path is pinned across skill, orchestrator, and specialists', () => {
+  it('review-profile contract: spec-docs reduced path is pinned across skill, host plan, and specialists', async () => {
     // SKILL is the single source of truth for the profile.
     assert.match(multiStageSkill, /Review profiles/);
     assert.match(multiStageSkill, /spec-docs/);
@@ -164,12 +163,12 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(multiStageSkill, /file-classes\.json/);
     assert.match(multiStageSkill, /file-classes@1/);
     assert.match(multiStageSkill, /MUST NOT run the correctness lane/);
-    // Orchestrator reads the profile line and branches Stage 2 to a single content-risk task.
-    assert.match(reviewerKitAgent, /Review profile for this diff:/);
-    assert.match(reviewerKitAgent, /spec-docs/);
-    assert.match(reviewerKitAgent, /content-risk/);
-    assert.match(reviewerKitAgent, /file-classes\.json/);
-    assert.match(reviewerKitAgent, /never enumerate or verify coverage gaps/);
+    // The host branches: the verifier is planned for `full` always, and for `spec-docs` only when a
+    // hunter emitted a candidate. The synthesizer only reports what the stages produced.
+    const nativeReview = await readFile('src/native/native-review.mjs', 'utf8');
+    assert.match(nativeReview, /profile === 'full'/);
+    assert.match(nativeReview, /laneResults\(lanes, evidence\)/);
+    assert.match(reviewerKitAgent, /stage results/i);
     // Hunter accepts the third lane; schema enum must cover all three.
     assert.match(hunterAgent, /lane: "content-risk"/);
     assert.match(hunterAgent, /"correctness \| security \| content-risk"/);
@@ -230,10 +229,10 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(realitySkill, /A gap blocks only when it states a concrete, reachable failure or cost/);
   });
 
-  it('dispatcher dispatches without reading files and passes skill names downstream', () => {
-    assert.match(reviewerKitAgent, /without reading any files yourself/);
-    assert.match(reviewerKitAgent, /pass those names to the scout in its task text/);
-    assert.match(reviewerKitAgent, /Forward the same project skill names given to the scout/);
+  it('the host dispatches and the synthesizer never spawns; specialists read the skills named to them', async () => {
+    assert.match(reviewerKitAgent, /You do not spawn subagents and you do not re-run a stage/);
+    const pipeline = await readFile('src/native/stage-pipeline.mjs', 'utf8');
+    assert.match(pipeline, /runner\.run\(step\.agent, step\.name, task\)/);
     assert.match(scoutAgent, /read those skill files first/);
     assert.match(hunterAgent, /read those skill files before hunting/);
   });
