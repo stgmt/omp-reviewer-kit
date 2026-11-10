@@ -6,11 +6,10 @@
 
 ## Binding requirement: model ownership
 
-- `.specs/native-task-review/REQUIREMENTS.md` is binding. `ACCEPTANCE_CRITERIA.md` lists the test matrix; `STATUS.md` records what is verified and what is not. Read them before changing the review entry point.
 - The review enters the native `TaskTool` once per stage, and once more with `agent: reviewer-kit` for synthesis. Models, roles, effort, agent overrides, credentials and fallback belong to OMP and the owner's `~/.omp/agent/config.yml`.
 - Do not add a model dispatcher, a model preflight, a task-to-default chain overlay, a `--model` pin, a provider walk, or a whole-review model retry. Do not edit `~/.omp/agent/config.yml`.
 - Legacy CLI behavior (`omp -p --model @task`) is not compliance and must not return as a fallback.
-- The OMP fork is removed. The approved option 2 is implemented as a kit host (`src/native/task-engine.mjs`) that calls the pinned library's exported `TaskTool`, with no OMP source patch. `STATUS.md` states what that does and does not establish.
+- The OMP fork is removed. The approved option 2 is implemented as a kit host (`src/native/task-engine.mjs`) that calls the pinned library's exported `TaskTool`, with no OMP source patch.
 
 ## Architecture & Data Flow
 
@@ -59,7 +58,6 @@
 - `templates/`: `githooks/pre-commit` and `review-kit/run-review.mjs`.
 - `claude-plugin/`: the Claude Code shell (see Architecture).
 - `tests/`: flat `node:test` suites (`*.test.mjs`).
-- `.specs/native-task-review/`: requirements, acceptance criteria, the variants document (`PLAN.md`), the status record (`STATUS.md`), and `MUTATION_RETIREMENT.json`.
 - `audit-reports/`: architecture notes and historical incident reports. Run records are not kept in the repository.
 
 ## Development Commands
@@ -104,7 +102,6 @@ There is no build, lint, format or typecheck command. Run `npm test`, `npm run t
 - `templates/review-kit/run-review.mjs`: the vendored stub.
 - `agents/reviewer-kit.md`: orchestrator and final verdict synthesis.
 - `skills/multi-stage-review/SKILL.md`, `skills/reality-first-review/SKILL.md`: review protocol and methodology.
-- `.specs/native-task-review/REQUIREMENTS.md`, `STATUS.md`: binding requirement and verification record.
 - `scripts/run-mutation-tests.mjs`, `scripts/mutation-selectors.json`: mutation catalog and selectors.
 - `.github/workflows/ci.yml`, `.github/workflows/release.yml`: CI and the release workflow.
 - `CHANGELOG.md`, `ROADMAP.md`: release history and direction.

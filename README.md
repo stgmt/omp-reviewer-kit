@@ -222,7 +222,7 @@ Node 18 and 20 are no longer in CI, because the suite now loads the Bun library.
 
 | Variable | Effect |
 |---|---|
-| `OMP_REVIEW_KIT_BUN` | The Bun executable used by the launcher (default `bun`). |
+| `OMP_REVIEW_KIT_BUN` | Explicit Bun executable used by the launcher. Otherwise it searches `PATH`, then on Windows tries `%USERPROFILE%\.bun\bin\bun.exe` if Bun is not found. |
 | `OMP_REVIEW_KIT_JOURNAL` | `off` disables verdict reuse and stage resume; any other value keeps the default `read-write`. |
 | `OMP_REVIEW_KIT_JOURNAL_DIR` | Where journals live (default `<home>/.omp/review-kit-journal`). |
 | `OMP_REVIEW_KIT_OMP` | The OMP executable used by the installer and the Claude shell (default `omp`). |

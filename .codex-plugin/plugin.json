@@ -1,6 +1,6 @@
 {
   "name": "omp-reviewer-kit",
-  "version": "0.31.0",
+  "version": "0.31.1",
   "description": "Evidence-first multi-stage review system and Git pre-commit hook for OMP, Claude Code, Codex and OpenCode.",
   "skills": "./skills",
   "hooks": "./.codex-plugin/hooks.json",

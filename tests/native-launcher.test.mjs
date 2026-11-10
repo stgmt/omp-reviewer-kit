@@ -59,6 +59,32 @@ async function launcherRoot() {
   return root;
 }
 
+test('Given Bun is outside PATH in the standard Windows location, the launcher runs the review host and respects an explicit override', { skip: process.platform !== 'win32' }, async t => {
+  const root = await launcherRoot();
+  t.after(() => rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }));
+  const bin = path.join(root, '.bun', 'bin');
+  await mkdir(bin, { recursive: true });
+  await copyFile(process.execPath, path.join(bin, 'bun.exe'));
+  await mkdir(path.join(root, 'src', 'native'), { recursive: true });
+  await writeFile(path.join(root, 'src', 'native', 'native-host.mjs'), "console.error('review host reached'); process.exit(7);\n");
+  const env = { ...process.env, USERPROFILE: root };
+  for (const key of Object.keys(env)) {
+    if (key.toLowerCase() === 'path') delete env[key];
+  }
+  env.Path = path.join(process.env.SystemRoot, 'System32');
+  delete env.OMP_REVIEW_KIT_BUN;
+  const args = [path.join(root, 'scripts', 'run-review.mjs'), root];
+  const found = spawnSync(process.execPath, args, { cwd: root, encoding: 'utf8', env, windowsHide: true });
+  assert.equal(found.status, 7, found.stderr);
+  assert.match(found.stderr, /review host reached/);
+  const overridden = spawnSync(process.execPath, args, {
+    cwd: root, encoding: 'utf8', env: { ...env, OMP_REVIEW_KIT_BUN: path.join(root, 'missing-bun.exe') }, windowsHide: true,
+  });
+  assert.equal(overridden.status, 1);
+  assert.match(overridden.stderr, /review: BLOCK \(bun is required/);
+  assert.doesNotMatch(overridden.stderr, /review host reached/);
+});
+
 test('Given an installed library with the wrong identity or version, When the locked runtime cannot be prepared, Then the review blocks', async t => {
   const root = await launcherRoot();
   t.after(() => rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }));

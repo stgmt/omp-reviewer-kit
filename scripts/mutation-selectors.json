@@ -2594,7 +2594,7 @@
       ],
       "ancestors": [],
       "mutantHash": "cfddc99f396535520a4dc4d36df4dd6c29c4067721f6e7df898722f180927074",
-      "testHash": "3b4a3b235d62cefca50dffc18a9e9541997b10fdf2bf24e190de656c42645338"
+      "testHash": "1ed02533fab039e7375e12abe532218c9b95c39283b68a4b153d88daea6df898"
     },
     "native-launcher-library-check-ignored": {
       "testFile": "tests/native-launcher.test.mjs",
@@ -2603,7 +2603,7 @@
       ],
       "ancestors": [],
       "mutantHash": "87aa17171ea7b87881645b811ce28abab947aa81bcb2a9de03f7f2cf6382e2b7",
-      "testHash": "3b4a3b235d62cefca50dffc18a9e9541997b10fdf2bf24e190de656c42645338"
+      "testHash": "1ed02533fab039e7375e12abe532218c9b95c39283b68a4b153d88daea6df898"
     },
     "native-stub-missing-plugin-passes": {
       "testFile": "tests/runner-stub.test.mjs",
@@ -3633,7 +3633,7 @@
       ],
       "ancestors": [],
       "mutantHash": "b272139d5e427e1f962064043638e290098968f6e94f352fe230882fcafa9046",
-      "testHash": "3b4a3b235d62cefca50dffc18a9e9541997b10fdf2bf24e190de656c42645338"
+      "testHash": "1ed02533fab039e7375e12abe532218c9b95c39283b68a4b153d88daea6df898"
     },
     "contract-probe-cap-removed": {
       "testFile": "tests/contract-stage.test.mjs",
@@ -3804,7 +3804,7 @@
       ],
       "ancestors": [],
       "mutantHash": "ce3b822b417f8ea12223d3232b294c825464b922890bf13260b9aee50eb6d737",
-      "testHash": "3b4a3b235d62cefca50dffc18a9e9541997b10fdf2bf24e190de656c42645338"
+      "testHash": "1ed02533fab039e7375e12abe532218c9b95c39283b68a4b153d88daea6df898"
     },
     "layout-contract-probe-not-required": {
       "testFile": "tests/layout-required.test.mjs",
@@ -4317,7 +4317,7 @@
       ],
       "ancestors": [],
       "mutantHash": "264c94d469ad032be3220bf138b38babf4318390ca2696f821d23a1e354cd15e",
-      "testHash": "3b4a3b235d62cefca50dffc18a9e9541997b10fdf2bf24e190de656c42645338"
+      "testHash": "1ed02533fab039e7375e12abe532218c9b95c39283b68a4b153d88daea6df898"
     },
     "native-launcher-wrong-version-accepted": {
       "testFile": "tests/native-launcher.test.mjs",
@@ -4326,7 +4326,7 @@
       ],
       "ancestors": [],
       "mutantHash": "e48018003733fa8e1b519289ab61bba2c48b19c1203a17051e5d05dbcedb56a7",
-      "testHash": "3b4a3b235d62cefca50dffc18a9e9541997b10fdf2bf24e190de656c42645338"
+      "testHash": "1ed02533fab039e7375e12abe532218c9b95c39283b68a4b153d88daea6df898"
     },
     "native-bridge-library-wrong-name-accepted": {
       "testFile": "tests/claude-bridge.test.mjs",
