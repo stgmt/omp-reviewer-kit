@@ -1,4 +1,4 @@
-// omp-reviewer-kit runner v0.31.0
+// omp-reviewer-kit runner v0.31.1
 // omp-reviewer-kit runner: the Node launcher of the native review. The review runs under Bun in
 // src/native/native-host.mjs because OMP's library is a Bun package. The launcher checks Bun and
 // prepares the pinned library outside the repository when a host install does not include it.
@@ -20,7 +20,6 @@ const host = path.join(kitRoot, 'src', 'native', 'native-host.mjs');
 const LIBRARY_NAME = '@oh-my-pi/pi-coding-agent';
 const LIBRARY_ENTRY = '@oh-my-pi/pi-coding-agent/sdk';
 const LIBRARY_SUFFIX = path.join('node_modules', '@oh-my-pi', 'pi-coding-agent', 'package.json');
-const bun = process.env.OMP_REVIEW_KIT_BUN || 'bun';
 
 /**
  * Finds an installed OMP library matching the plugin's exact dependency pin. The kit's own
@@ -94,7 +93,13 @@ function block(message) {
 }
 
 function main(argv) {
-  const probe = spawnSync(bun, ['--version'], { encoding: 'utf8', windowsHide: true });
+  let bun = process.env.OMP_REVIEW_KIT_BUN || 'bun';
+  let probe = spawnSync(bun, ['--version'], { encoding: 'utf8', windowsHide: true });
+  if (!process.env.OMP_REVIEW_KIT_BUN && process.platform === 'win32' &&
+      probe.error?.code === 'ENOENT' && process.env.USERPROFILE) {
+    bun = path.join(process.env.USERPROFILE, '.bun', 'bin', 'bun.exe');
+    probe = spawnSync(bun, ['--version'], { encoding: 'utf8', windowsHide: true });
+  }
   if (probe.error || probe.status !== 0) {
     return block(`bun is required for the native review (set OMP_REVIEW_KIT_BUN or install https://bun.sh): ${probe.error?.message ?? `exit ${probe.status}`}`);
   }
