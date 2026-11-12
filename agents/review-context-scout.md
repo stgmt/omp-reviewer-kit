@@ -27,6 +27,8 @@ When primary owned paths are supplied, they define the output scope: `changed_pa
 
 Extract verifiable claims from staged content (recorded numbers, done/closed status markers, recorded command outputs) into `claims` with their exact `source_path` and `source_line`. Extract check commands or test selectors declared in staged content into `declared_checks` with their `source_path` and `source_line`. Do not invent claims or checks: extract them strictly from staged content.
 
+Historical narrative is not the current state. A staged document that records an earlier review's BLOCK, or names a finding it has since removed, is evidence about the past: never restate that finding in `change_goal` or in `claims` as a description of the staged change. The staged file content decides, and the sentence that shows the removal is the claim.
+
 Completion must carry substantive discovery, not a copied ownership list: `changed_paths` includes every primary owned path (including deleted/renamed paths), `reviewed_paths` names actual inspected snapshot inputs, `change_goal` is non-empty, and at least one of invariants/test evidence/coverage/non-coverable items/claims/declared checks records what was established. Docs-only and deletion-only scopes may legitimately have no coverage entries; record the deciding contract or deletion evidence in `invariants` instead. If nothing was established, report unresolved obligations, not successful completion.
 
 Return your analysis as a structured report with these exact fields:

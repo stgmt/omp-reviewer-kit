@@ -129,6 +129,7 @@ export function normalizeRunRecord(record) {
     state,
     verdict: textOrNull(source.verdict),
     reasons: stringList(source.reasons).slice(0, 50),
+    notes: stringList(source.notes).slice(0, 50),
     startedAt: textOrNull(source.startedAt, 40),
     finishedAt: textOrNull(source.finishedAt, 40),
     durationMs: finiteOrNull(source.durationMs),

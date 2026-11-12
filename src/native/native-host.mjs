@@ -99,7 +99,10 @@ export async function main(argv, { env = process.env, stderr = process.stderr, s
     const reportMs = Date.now() - reportStarted;
     await observe(() => run.complete({ result, reportPath, reportMs }));
     stdout.write(result.text ? `${result.text}\n` : '');
+    // The verdict line stays byte-identical for every consumer that parses it (`^review: PASS$`,
+    // `^review: BLOCK`); a note is an observation of the run and gets its own line.
     log(verdict.pass ? 'review: PASS' : `review: BLOCK (${verdict.reasons.join('; ')})`);
+    for (const note of Array.isArray(verdict.notes) ? verdict.notes : []) log(`review: note ${note}`);
     log(`review: report ${reportPath}`);
     // In context on purpose: the tempting mistake after a BLOCK is to recalibrate an expensive
     // mutation gate for a diff that is about to change again. The gate belongs after the PASS.
@@ -184,6 +187,9 @@ async function saveReport(repo, result, env) {
     '## Verdict reasons',
     '',
     ...(result.verdict.reasons.length > 0 ? result.verdict.reasons.map(reason => `- ${reason}`) : ['- none']),
+    ...(Array.isArray(result.verdict.notes) && result.verdict.notes.length > 0
+      ? ['', '### Notes on the verdict', '', ...result.verdict.notes.map(note => `- ${note}`)]
+      : []),
     '',
     '## Reviewer report',
     '',

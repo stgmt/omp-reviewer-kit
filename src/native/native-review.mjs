@@ -6,7 +6,7 @@ import path from 'node:path';
 import { stageCounts } from '../domain/review-run-summary.mjs';
 import { removeSnapshot, materializeStagedSnapshot } from './snapshot.mjs';
 import { createStageRunner, evidenceFromResult, fallbackOf, provenanceOf, reviewerTranscript, reviewerYield } from './task-engine.mjs';
-import { hunterTask, maintainabilityTask, scoutTask, synthesisTask, verifierTask } from './stage-tasks.mjs';
+import { hunterTask, maintainabilityTask, recheckTask, scoutTask, synthesisTask, verifierTask } from './stage-tasks.mjs';
 import { hunterBudget, runStagePipeline } from './stage-pipeline.mjs';
 import { readFallbackEvidence } from './fallback-evidence.mjs';
 import { BUDGET_REASONS, assessDiff, readDiffBudget } from '../domain/diff-budget.mjs';
@@ -17,7 +17,7 @@ import { runMaintainabilityAnalysis } from './maintainability/analyze.mjs';
 import { runReuseAnalysis } from './reuse/analyze.mjs';
 import { runContractAnalysis } from './contract/analyze.mjs';
 import { renderReuseLines } from './reuse/report.mjs';
-import { HUNTER_AGENT, MAINTAINABILITY_AGENT, SCOUT_AGENT, VERIFIER_AGENT, evaluateReview } from './verdict.mjs';
+import { HUNTER_AGENT, MAINTAINABILITY_AGENT, SCOUT_AGENT, VERIFIER_AGENT, evaluateReview, reportFindings, stageCompleted } from './verdict.mjs';
 import {
   HUNTER_STAGE,
   JOURNAL_SCHEMA,
@@ -273,10 +273,9 @@ export async function runNativeReview({
       yieldPayload: yielded?.observed ?? null,
     };
     const maintainabilityCentralization = await centralizationGroups({ analysis: analysis.analysis ?? analysis, snapshotDir: dir });
-    const verdictStarted = now();
-    const verdict = evaluateReview({
+    const decide = (stagesSoFar, recheck) => evaluateReview({
       reviewer: reviewerView,
-      stages,
+      stages: stagesSoFar,
       profile,
       lanes,
       fileClasses,
@@ -288,8 +287,55 @@ export async function runNativeReview({
         planned: maintainability.planned,
       },
       contract,
+      recheck,
     });
-    const verdictMs = now() - verdictStarted;
+    const verdictStarted = now();
+    let verdict = decide(stages, null);
+    let verdictMs = now() - verdictStarted;
+    // The synthesis may only propose a finding. When it blocks with claims no stage confirmed, the
+    // claims are settled by calling them against the snapshot, never by trusting or ignoring them.
+    if (verdict.recheckNeeded) {
+      const claims = reportFindings(reviewerView?.text).items;
+      onProgress(`review: re-verifying ${claims.length} finding(s) the report raised; no stage confirmed them`);
+      const outcome = await runner.run(VERIFIER_AGENT, 'FindingRecheck', recheckTask({ snapshotDir: dir, findings: claims }));
+      const recheckStage = outcome?.evidence ?? null;
+      if (recheckStage) stages.push({ ...recheckStage, recheck: true });
+      const completed = recheckStage ? stageCompleted(recheckStage) : false;
+      const list = value => (Array.isArray(value) ? value.length : 0);
+      // Only a confirmed finding makes the recheck "confirmed". A coverage gap blocks through the
+      // stage evidence under the PASS gate's own rules (severity, impact, file class, harness), and
+      // an advisory gap never blocks; counting gaps here would turn a rejected finding into a block.
+      const decisions = Array.isArray(recheckStage?.data?.decisions) ? recheckStage.data.decisions : [];
+      const confirming = new Set(['confirmed', 'still_present']);
+      const rejecting = new Set(['rejected', 'fixed']);
+      // A decision answers a claim by its number: the recheck task labels the claims `report-1` …
+      // `report-N`, so a duplicate or an out-of-range id cannot stand in for an unexamined claim.
+      const answered = new Map();
+      for (const decision of decisions) {
+        const match = /^(?:report[-_ ]?)?(\d+)$/i.exec(String(decision?.candidate_id ?? '').trim());
+        if (!match) continue;
+        const index = Number(match[1]);
+        if (!Number.isInteger(index) || index < 1 || index > claims.length || answered.has(index)) continue;
+        answered.set(index, String(decision?.disposition ?? ''));
+      }
+      const dispositions = [...answered.values()];
+      const confirmedByClaim = dispositions.filter(disposition => confirming.has(disposition)).length;
+      const rejectedByClaim = dispositions.filter(disposition => rejecting.has(disposition)).length;
+      // One claim has one record: a confirmed claim may arrive as a confirmed finding or as a
+      // confirming disposition, so the answer is the larger count, never their sum.
+      const confirmed = Math.max(list(recheckStage?.data?.confirmed_findings), confirmedByClaim);
+      // Silence is not a rejection: the pass needs a decisive disposition for every numbered claim.
+      // A claim the verifier could not reach (not_proven, a missing entry, a duplicate id, a
+      // truncated answer) leaves the block standing exactly as it did before the recheck.
+      const settled = confirmedByClaim + rejectedByClaim === claims.length;
+      const secondStarted = now();
+      verdict = decide(stages, {
+        verdict: !completed ? 'failed' : confirmed > 0 ? 'confirmed' : settled ? 'rejected' : 'unsettled',
+        findings: claims.length,
+        confirmed,
+      });
+      verdictMs += now() - secondStarted;
+    }
     const finishedMs = now();
     const stageSummaries = stages.map(stage => ({
       agent: stage.agent,
@@ -402,6 +448,9 @@ function wholeRunAdapter(runWhole) {
         const reviewer = outcome?.reviewer;
         return { result: reviewer, evidence: evidenceFromResult(reviewer) };
       }
+      // A whole-run seam runs once; it cannot perform a second pass over the report's claims. Say so
+      // instead of replaying the original verifier result as if it had seen those claims.
+      if (name === 'FindingRecheck') return { evidence: null };
       const evidence = (outcome?.stages ?? []).find(stage => stage.agent === agent)
         ?? { agent, lane: null, exitCode: 1, aborted: false, structuredStatus: null, data: null };
       return { evidence };
