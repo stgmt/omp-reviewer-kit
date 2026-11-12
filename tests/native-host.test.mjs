@@ -16,7 +16,7 @@ function sink() {
   return { write: text => written.push(text), text: () => written.join('') };
 }
 
-function reviewed({ pass, reasons = [], text, fallback = { applied: true, requested: 'requested-model', chainLength: 5, error: null } }) {
+function reviewed({ pass, reasons = [], notes = [], text, fallback = { applied: true, requested: 'requested-model', chainLength: 5, error: null } }) {
   return {
     staged: true,
     diffHash: DIFF_HASH,
@@ -27,7 +27,7 @@ function reviewed({ pass, reasons = [], text, fallback = { applied: true, reques
     fallback,
     stages: [{ agent: 'review-context-scout', exitCode: 0, aborted: false, structuredStatus: 'valid', role: 'task', model: 'resolved-model' }],
     text,
-    verdict: { pass, verdict: pass ? 'PASS' : 'BLOCK', reasons },
+    verdict: { pass, verdict: pass ? 'PASS' : 'BLOCK', reasons, notes },
   };
 }
 
@@ -388,5 +388,42 @@ test('Given the diff is within budget, When the host runs, Then one line names t
     });
     assert.equal(code, 0);
     assert.match(stderr.text(), /^review: diff 23 paths, 210\.0 KB \(budget 40 paths, 1\.5 MB\)$/m);
+  });
+});
+
+test('Given a pass whose verdict carries a note, When the host runs, Then the verdict line stays exact and the note is its own line', async () => {
+  await withTempDirs(async ({ repo, reports, runs }) => {
+    const stderr = sink();
+    const note = 're-verification rejected 1 finding(s) the report raised; the stages confirmed none';
+    const code = await main([repo], {
+      env: { OMP_REVIEW_KIT_REPORTS_DIR: reports, OMP_REVIEW_KIT_RUNS_DIR: runs },
+      stderr,
+      stdout: sink(),
+      runReview: async () => reviewed({ pass: true, notes: [note], text: '## Review\n\nREVIEW_RESULT=BLOCK' }),
+    });
+    assert.equal(code, 0);
+    assert.match(stderr.text(), /^review: PASS$/m, 'a consumer of the exact line still sees it');
+    assert.doesNotMatch(stderr.text(), /^review: PASS \(/m, 'no note is folded into the verdict line');
+    assert.match(stderr.text(), /^review: note re-verification rejected 1 finding\(s\) the report raised; the stages confirmed none$/m);
+  });
+});
+
+test('Given a block whose verdict carries a note, When the host runs, Then the note does not change the reason line', async () => {
+  await withTempDirs(async ({ repo, reports, runs }) => {
+    const stderr = sink();
+    const code = await main([repo], {
+      env: { OMP_REVIEW_KIT_REPORTS_DIR: reports, OMP_REVIEW_KIT_RUNS_DIR: runs },
+      stderr,
+      stdout: sink(),
+      runReview: async () => reviewed({
+        pass: false,
+        reasons: ['reviewer verdict BLOCK'],
+        notes: ['re-verification confirmed 1 finding(s) the report raised'],
+        text: '## Review\n\nREVIEW_RESULT=BLOCK',
+      }),
+    });
+    assert.equal(code, 1);
+    assert.match(stderr.text(), /^review: BLOCK \(reviewer verdict BLOCK\)$/m);
+    assert.match(stderr.text(), /^review: note re-verification confirmed 1 finding\(s\) the report raised$/m);
   });
 });

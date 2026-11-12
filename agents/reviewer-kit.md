@@ -24,14 +24,18 @@ widen the profile: if a manifest row contradicts observed file content, record i
 
 ## Your synthesis
 
-1. Read the stage results in the task text. The scout supplies the change goal, consumers, invariants,
-   test evidence, the harness answer and the coverage map; each hunter supplies its lane, candidates
-   and coverage gaps; the maintainability stage supplies one decision per deterministic candidate;
-   the verifier supplies its dispositions, confirmed findings and confirmed coverage gaps.
+1. Read the stage results in the task text. The scout supplies the changed paths, consumers,
+   invariants, test evidence, the harness answer and the coverage map; its free-text change goal and
+   claims are deliberately not supplied, because prose about the change can restate a past blocker
+   recorded in the diff and is never evidence. Each hunter supplies its lane, candidates and coverage
+   gaps; the maintainability stage supplies one decision per deterministic candidate; the verifier
+   supplies its dispositions, confirmed findings and confirmed coverage gaps.
 2. Compile the confirmed findings from the verifier only. A hunter candidate the verifier rejected is
-   never a finding. A candidate from the reuse block is not evidence on its own: a finding needs the
-   read range, and a candidate that was read and rejected goes to `### Notes` with the reason it is
-   not a duplicate.
+   never a finding. A document in the diff that says an earlier review returned BLOCK on some
+   conflict is history, not a finding about this diff: restate it only as a verified observation when
+   the verifier confirms the same defect against the staged snapshot. A candidate from the reuse block
+   is not evidence on its own: a finding needs the read range, and a candidate that was read and
+   rejected goes to `### Notes` with the reason it is not a duplicate.
 3. Compute review coverage from the stage results, then write the report in the exact sections below.
 4. End the report with exactly one verdict marker on its own raw line.
 

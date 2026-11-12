@@ -110,6 +110,7 @@ export function buildRunRecord({ runId, record, result, reportPath = null, repor
     state,
     verdict: result?.verdict?.verdict ?? (result?.refused ? 'REFUSED' : null),
     reasons: result?.refused ? [refusalReason(result.refused)] : result?.verdict?.reasons ?? [],
+    notes: result?.refused ? [] : result?.verdict?.notes ?? [],
     finishedAt,
     durationMs,
     profile: result?.profile ?? null,

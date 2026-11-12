@@ -324,3 +324,259 @@ test('Given a diff within the budget, When the review runs, Then the budget is r
     await rm(parent, { recursive: true, force: true });
   }
 });
+
+test('Given a synthesis BLOCK whose finding no stage confirmed and a re-verification that rejects it, When the review runs, Then one more verifier stage runs and the review passes with the note', async () => {
+  const repo = await stagedRepo();
+  const parent = await mkdtemp(path.join(tmpdir(), 'native-review-parent-'));
+  const calls = [];
+  const blockReport = '### Confirmed findings\n- **R1 (blocking)**: a conflict no stage found\n\nREVIEW_RESULT=BLOCK';
+  const stageRunner = {
+    async run(agent, name, task) {
+      calls.push({ name, task });
+      if (name === 'ContextScout') return { evidence: completed('review-context-scout', { test_harness: 'present', changed_paths: ['feature.mjs'], relevant_consumers: [] }) };
+      if (name.startsWith('RiskHunter')) return { evidence: completed('review-risk-hunter', { lane: 'correctness', candidates: [], coverage_gaps: [] }) };
+      if (name === 'FindingVerifier') return { evidence: completed('review-finding-verifier', { lane: 'correctness', confirmed_findings: [], confirmed_coverage_gaps: [] }) };
+      if (name === 'FindingRecheck') return { evidence: completed('review-finding-verifier', { lane: 'correctness', decisions: [{ candidate_id: 'report-1', disposition: 'rejected', triage: 'stale_record', reason: 'the snapshot shows no conflict', evidence: 'feature.mjs:1' }], confirmed_findings: [], confirmed_coverage_gaps: [], rejected_coverage_gaps: [] }) };
+      if (name === 'Synthesis') return { result: reviewerWithYield(blockReport), evidence: completed('reviewer-kit', {}) };
+      return { evidence: completed(agent, {}) };
+    },
+  };
+  try {
+    const result = await runNativeReview({ repo, kitRoot: repo, parentDir: parent, env: {}, stageRunner });
+    const recheck = calls.find(call => call.name === 'FindingRecheck');
+    assert.ok(recheck, 'the report finding must be settled by a verifier pass');
+    assert.match(recheck.task, /1\. R1 \(blocking\): a conflict no stage found/);
+    assert.equal(result.verdict.pass, true);
+    assert.equal(result.verdict.verdict, 'PASS');
+    assert.deepEqual(result.verdict.reasons, []);
+    assert.deepEqual(result.verdict.notes, ['re-verification rejected 1 finding(s) the report raised; the stages confirmed none']);
+    assert.equal(result.text, blockReport, 'the report text is preserved verbatim');
+    const verifierRows = result.stages.filter(stage => stage.agent === 'review-finding-verifier');
+    assert.equal(verifierRows.length, 2);
+    assert.deepEqual(await snapshotsLeft(parent), []);
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test('Given a re-verification that rejects the reported finding and confirms only an advisory gap, When the review runs, Then the evidence passes', async () => {
+  const repo = await stagedRepo();
+  const parent = await mkdtemp(path.join(tmpdir(), 'native-review-parent-'));
+  const blockReport = '### Confirmed findings\n- **R1 (blocking)**: a conflict no stage found\n\nREVIEW_RESULT=BLOCK';
+  const stageRunner = {
+    async run(agent, name) {
+      if (name === 'ContextScout') return { evidence: completed('review-context-scout', { test_harness: 'present', changed_paths: ['feature.mjs'], relevant_consumers: [] }) };
+      if (name.startsWith('RiskHunter')) return { evidence: completed('review-risk-hunter', { lane: 'correctness', candidates: [], coverage_gaps: [] }) };
+      if (name === 'FindingVerifier') return { evidence: completed('review-finding-verifier', { lane: 'correctness', confirmed_findings: [], confirmed_coverage_gaps: [] }) };
+      if (name === 'FindingRecheck') {
+        return {
+          evidence: completed('review-finding-verifier', {
+            lane: 'correctness',
+            decisions: [{ candidate_id: 'report-1', disposition: 'rejected', triage: 'stale_record', reason: 'the snapshot shows no conflict', evidence: 'feature.mjs:1' }],
+            confirmed_findings: [],
+            confirmed_coverage_gaps: [{ coverage_id: 'c1', file_path: 'feature.mjs', severity: 'advisory', impact: 'a cost, not a defect' }],
+          }),
+        };
+      }
+      if (name === 'Synthesis') return { result: reviewerWithYield(blockReport), evidence: completed('reviewer-kit', {}) };
+      return { evidence: completed(agent, {}) };
+    },
+  };
+  try {
+    const result = await runNativeReview({ repo, kitRoot: repo, parentDir: parent, env: {}, stageRunner });
+    assert.equal(result.verdict.pass, true, 'an advisory gap must not turn a rejected finding into a block');
+    assert.deepEqual(result.verdict.reasons, []);
+    assert.deepEqual(result.verdict.notes, ['re-verification rejected 1 finding(s) the report raised; the stages confirmed none']);
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test('Given a re-verification that records the confirmed claim only as a disposition, When the review runs, Then the block stands', async () => {
+  const repo = await stagedRepo();
+  const parent = await mkdtemp(path.join(tmpdir(), 'native-review-parent-'));
+  const blockReport = '### Confirmed findings\n- **R1 (blocking)**: a real conflict\n\nREVIEW_RESULT=BLOCK';
+  const stageRunner = {
+    async run(agent, name) {
+      if (name === 'ContextScout') return { evidence: completed('review-context-scout', { test_harness: 'present', changed_paths: ['feature.mjs'], relevant_consumers: [] }) };
+      if (name.startsWith('RiskHunter')) return { evidence: completed('review-risk-hunter', { lane: 'correctness', candidates: [], coverage_gaps: [] }) };
+      if (name === 'FindingVerifier') return { evidence: completed('review-finding-verifier', { lane: 'correctness', confirmed_findings: [], confirmed_coverage_gaps: [] }) };
+      if (name === 'FindingRecheck') {
+        return {
+          evidence: completed('review-finding-verifier', {
+            lane: 'correctness',
+            decisions: [{ candidate_id: 'report-1', disposition: 'confirmed', triage: 'lie', reason: 'the snapshot shows it', evidence: 'feature.mjs:1' }],
+            confirmed_findings: [],
+            confirmed_coverage_gaps: [],
+          }),
+        };
+      }
+      if (name === 'Synthesis') return { result: reviewerWithYield(blockReport), evidence: completed('reviewer-kit', {}) };
+      return { evidence: completed(agent, {}) };
+    },
+  };
+  try {
+    const result = await runNativeReview({ repo, kitRoot: repo, parentDir: parent, env: {}, stageRunner });
+    assert.equal(result.verdict.pass, false, 'a confirmed disposition must keep the block');
+    assert.match(result.verdict.reasons.join(' '), /re-verification confirmed 1 finding\(s\)/);
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test('Given a re-verification that answers none of the claims, When the review runs, Then silence does not become a rejection', async () => {
+  const repo = await stagedRepo();
+  const parent = await mkdtemp(path.join(tmpdir(), 'native-review-parent-'));
+  const blockReport = '### Confirmed findings\n- **R1 (blocking)**: a conflict\n\nREVIEW_RESULT=BLOCK';
+  const stageRunner = {
+    async run(agent, name) {
+      if (name === 'ContextScout') return { evidence: completed('review-context-scout', { test_harness: 'present', changed_paths: ['feature.mjs'], relevant_consumers: [] }) };
+      if (name.startsWith('RiskHunter')) return { evidence: completed('review-risk-hunter', { lane: 'correctness', candidates: [], coverage_gaps: [] }) };
+      if (name === 'FindingVerifier') return { evidence: completed('review-finding-verifier', { lane: 'correctness', confirmed_findings: [], confirmed_coverage_gaps: [] }) };
+      if (name === 'FindingRecheck') return { evidence: completed('review-finding-verifier', { lane: 'correctness', decisions: [], confirmed_findings: [], confirmed_coverage_gaps: [] }) };
+      if (name === 'Synthesis') return { result: reviewerWithYield(blockReport), evidence: completed('reviewer-kit', {}) };
+      return { evidence: completed(agent, {}) };
+    },
+  };
+  try {
+    const result = await runNativeReview({ repo, kitRoot: repo, parentDir: parent, env: {}, stageRunner });
+    assert.equal(result.verdict.pass, false);
+    assert.match(result.verdict.reasons.join(' '), /re-verification left the finding\(s\) the report raised unproven/);
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test('Given a re-verification that could not prove the claim, When the review runs, Then the block stands', async () => {
+  const repo = await stagedRepo();
+  const parent = await mkdtemp(path.join(tmpdir(), 'native-review-parent-'));
+  const blockReport = '### Confirmed findings\n- **R1 (blocking)**: a conflict\n\nREVIEW_RESULT=BLOCK';
+  const stageRunner = {
+    async run(agent, name) {
+      if (name === 'ContextScout') return { evidence: completed('review-context-scout', { test_harness: 'present', changed_paths: ['feature.mjs'], relevant_consumers: [] }) };
+      if (name.startsWith('RiskHunter')) return { evidence: completed('review-risk-hunter', { lane: 'correctness', candidates: [], coverage_gaps: [] }) };
+      if (name === 'FindingVerifier') return { evidence: completed('review-finding-verifier', { lane: 'correctness', confirmed_findings: [], confirmed_coverage_gaps: [] }) };
+      if (name === 'FindingRecheck') {
+        return {
+          evidence: completed('review-finding-verifier', {
+            lane: 'correctness',
+            decisions: [{ candidate_id: 'report-1', disposition: 'not_proven', triage: 'not_applicable', reason: 'the budget did not reach the deciding caller', evidence: '' }],
+            confirmed_findings: [],
+            confirmed_coverage_gaps: [],
+          }),
+        };
+      }
+      if (name === 'Synthesis') return { result: reviewerWithYield(blockReport), evidence: completed('reviewer-kit', {}) };
+      return { evidence: completed(agent, {}) };
+    },
+  };
+  try {
+    const result = await runNativeReview({ repo, kitRoot: repo, parentDir: parent, env: {}, stageRunner });
+    assert.equal(result.verdict.pass, false);
+    assert.match(result.verdict.reasons.join(' '), /unproven/);
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test('Given the whole-run seam and a BLOCK report whose finding no stage confirmed, When the review runs, Then the seam cannot fake a recheck and the block stands', async () => {
+  const repo = await stagedRepo();
+  const parent = await mkdtemp(path.join(tmpdir(), 'native-review-parent-'));
+  const blockReport = '### Confirmed findings\n- **R1 (blocking)**: a conflict no stage found\n\nREVIEW_RESULT=BLOCK';
+  try {
+    const result = await runNativeReview({
+      repo,
+      kitRoot: repo,
+      parentDir: parent,
+      env: {},
+      runTask: async () => ({ reviewer: reviewerWithYield(blockReport), stages: completeStages }),
+    });
+    assert.equal(result.verdict.pass, false, 'a single-call seam must not replay the original verifier as the recheck');
+    assert.match(result.verdict.reasons.join(' '), /re-verification did not settle the finding\(s\) the report raised/);
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test('Given two claims and a recheck that answers only the first twice, When the review runs, Then the second claim keeps the block', async () => {
+  const repo = await stagedRepo();
+  const parent = await mkdtemp(path.join(tmpdir(), 'native-review-parent-'));
+  const blockReport = '### Confirmed findings\n- **R1**: first claim\n- **R2**: second claim\n\nREVIEW_RESULT=BLOCK';
+  const recheckDecisions = [
+    { candidate_id: 'report-1', disposition: 'rejected', triage: 'stale_record', reason: 'snapshot shows no conflict', evidence: 'feature.mjs:1' },
+    { candidate_id: 'report-1', disposition: 'rejected', triage: 'stale_record', reason: 'snapshot shows no conflict', evidence: 'feature.mjs:1' },
+  ];
+  const stageRunner = {
+    async run(agent, name) {
+      if (name === 'ContextScout') return { evidence: completed('review-context-scout', { test_harness: 'present', changed_paths: ['feature.mjs'], relevant_consumers: [] }) };
+      if (name.startsWith('RiskHunter')) return { evidence: completed('review-risk-hunter', { lane: 'correctness', candidates: [], coverage_gaps: [] }) };
+      if (name === 'FindingVerifier') return { evidence: completed('review-finding-verifier', { lane: 'correctness', confirmed_findings: [], confirmed_coverage_gaps: [] }) };
+      if (name === 'FindingRecheck') return { evidence: completed('review-finding-verifier', { lane: 'correctness', decisions: recheckDecisions, confirmed_findings: [], confirmed_coverage_gaps: [] }) };
+      if (name === 'Synthesis') return { result: reviewerWithYield(blockReport), evidence: completed('reviewer-kit', {}) };
+      return { evidence: completed(agent, {}) };
+    },
+  };
+  try {
+    const result = await runNativeReview({ repo, kitRoot: repo, parentDir: parent, env: {}, stageRunner });
+    assert.equal(result.verdict.pass, false, 'a duplicate decision cannot stand in for an unexamined claim');
+    assert.match(result.verdict.reasons.join(' '), /unproven/);
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test('Given two claims and a recheck that rejects both by number, When the review runs, Then the evidence passes with both recorded', async () => {
+  const repo = await stagedRepo();
+  const parent = await mkdtemp(path.join(tmpdir(), 'native-review-parent-'));
+  const blockReport = '### Confirmed findings\n- **R1**: first claim\n- **R2**: second claim\n\nREVIEW_RESULT=BLOCK';
+  const decisions = [1, 2].map(index => ({ candidate_id: `report-${index}`, disposition: 'rejected', triage: 'stale_record', reason: 'snapshot shows no conflict', evidence: 'feature.mjs:1' }));
+  const stageRunner = {
+    async run(agent, name) {
+      if (name === 'ContextScout') return { evidence: completed('review-context-scout', { test_harness: 'present', changed_paths: ['feature.mjs'], relevant_consumers: [] }) };
+      if (name.startsWith('RiskHunter')) return { evidence: completed('review-risk-hunter', { lane: 'correctness', candidates: [], coverage_gaps: [] }) };
+      if (name === 'FindingVerifier') return { evidence: completed('review-finding-verifier', { lane: 'correctness', confirmed_findings: [], confirmed_coverage_gaps: [] }) };
+      if (name === 'FindingRecheck') return { evidence: completed('review-finding-verifier', { lane: 'correctness', decisions, confirmed_findings: [], confirmed_coverage_gaps: [] }) };
+      if (name === 'Synthesis') return { result: reviewerWithYield(blockReport), evidence: completed('reviewer-kit', {}) };
+      return { evidence: completed(agent, {}) };
+    },
+  };
+  try {
+    const result = await runNativeReview({ repo, kitRoot: repo, parentDir: parent, env: {}, stageRunner });
+    assert.equal(result.verdict.pass, true);
+    assert.deepEqual(result.verdict.notes, ['re-verification rejected 2 finding(s) the report raised; the stages confirmed none']);
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test('Given a recheck that answers with still_present, When the review runs, Then the block is stage-confirmed', async () => {
+  const repo = await stagedRepo();
+  const parent = await mkdtemp(path.join(tmpdir(), 'native-review-parent-'));
+  const blockReport = '### Confirmed findings\n- **R1 (blocking)**: a real conflict\n\nREVIEW_RESULT=BLOCK';
+  const stageRunner = {
+    async run(agent, name) {
+      if (name === 'ContextScout') return { evidence: completed('review-context-scout', { test_harness: 'present', changed_paths: ['feature.mjs'], relevant_consumers: [] }) };
+      if (name.startsWith('RiskHunter')) return { evidence: completed('review-risk-hunter', { lane: 'correctness', candidates: [], coverage_gaps: [] }) };
+      if (name === 'FindingVerifier') return { evidence: completed('review-finding-verifier', { lane: 'correctness', confirmed_findings: [], confirmed_coverage_gaps: [] }) };
+      if (name === 'FindingRecheck') return { evidence: completed('review-finding-verifier', { lane: 'correctness', decisions: [{ candidate_id: 'report-1', disposition: 'still_present', triage: 'lie', reason: 'the snapshot shows it', evidence: 'feature.mjs:1' }], confirmed_findings: [], confirmed_coverage_gaps: [] }) };
+      if (name === 'Synthesis') return { result: reviewerWithYield(blockReport), evidence: completed('reviewer-kit', {}) };
+      return { evidence: completed(agent, {}) };
+    },
+  };
+  try {
+    const result = await runNativeReview({ repo, kitRoot: repo, parentDir: parent, env: {}, stageRunner });
+    assert.equal(result.verdict.pass, false);
+    assert.match(result.verdict.reasons.join(' '), /re-verification confirmed 1 finding\(s\)/);
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+    await rm(parent, { recursive: true, force: true });
+  }
+});

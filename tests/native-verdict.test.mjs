@@ -1,7 +1,7 @@
 // Given/When/Then over the native verdict rule. Pure: no OMP, no model, no Git.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { evaluateReview, readVerdictMarker } from '../src/native/verdict.mjs';
+import { evaluateReview, readVerdictMarker, reportFindings } from '../src/native/verdict.mjs';
 
 const done = (agent, data = {}) => ({
   agent,
@@ -27,10 +27,131 @@ test('Given one PASS marker as the last line and every stage completed, When eva
   assert.deepEqual(result.reasons, []);
 });
 
-test('Given a BLOCK marker, When evaluated, Then the review blocks with the reviewer verdict as the reason', () => {
+test('Given a BLOCK marker and no stage confirmation, When evaluated, Then the review blocks naming the missing confirmation', () => {
   const result = evaluateReview({ reviewer: reviewerPass('## Review\n\nREVIEW_RESULT=BLOCK'), stages: everyStage, ...FULL });
   assert.equal(result.pass, false);
+  assert.deepEqual(result.reasons, ['reviewer verdict BLOCK without stage confirmation']);
+});
+
+test('Given a BLOCK marker and a verifier-confirmed finding, When evaluated, Then the block keeps the reviewer verdict as its reason', () => {
+  const stages = [everyStage[0], everyStage[1], done('review-finding-verifier', { lane: 'correctness', confirmed_findings: [{ finding_id: 'R1' }], confirmed_coverage_gaps: [] })];
+  const result = evaluateReview({ reviewer: reviewerPass('## Review\n\nREVIEW_RESULT=BLOCK'), stages, ...FULL });
+  assert.equal(result.pass, false);
   assert.deepEqual(result.reasons, ['reviewer verdict BLOCK']);
+});
+
+test('Given a BLOCK with no stage confirmation and a report that lists a finding, When evaluated, Then the reason names the unconfirmed finding', () => {
+  const text = '### Confirmed findings\n- **R1 (blocking)**: a conflict that no stage confirmed\n\n### Notes\nNone\n\nREVIEW_RESULT=BLOCK';
+  const result = evaluateReview({ reviewer: reviewerPass(text), stages: everyStage, ...FULL });
+  assert.equal(result.pass, false);
+  assert.deepEqual(result.reasons, [
+    'reviewer verdict BLOCK without stage confirmation',
+    'report lists 1 confirmed finding(s) that no stage confirmed',
+  ]);
+});
+
+test('Given a BLOCK with no stage confirmation and an empty findings list, When evaluated, Then no finding is counted', () => {
+  const text = '### Confirmed findings\n- None.\n\nREVIEW_RESULT=BLOCK';
+  const result = evaluateReview({ reviewer: reviewerPass(text), stages: everyStage, ...FULL });
+  assert.equal(result.pass, false);
+  assert.deepEqual(result.reasons, ['reviewer verdict BLOCK without stage confirmation']);
+});
+
+test('Given a BLOCK and a maintainability item the policy lets block, When evaluated, Then the block keeps the reviewer verdict as its reason', () => {
+  const stages = [...everyStage, done('review-maintainability', { candidates: [{ candidate_id: 'g1', decision: 'confirmed', stated_cost: 'two copies of the same parameter group', priority: 'P2', forwarding_only: false }] })];
+  const result = evaluateReview({
+    reviewer: reviewerPass('REVIEW_RESULT=BLOCK'),
+    stages,
+    ...FULL,
+    maintainability: { policy: 'block', status: 'analyzed', coverage: 'full', planned: true },
+  });
+  assert.equal(result.pass, false);
+  assert.deepEqual(result.reasons, ['reviewer verdict BLOCK']);
+});
+
+test('Given a PASS whose report lists a P1 finding, When evaluated, Then the contradiction blocks', () => {
+  const text = '### Confirmed findings\n- **P1** src/a.mjs:1-2 behaves wrong\n\nREVIEW_RESULT=PASS';
+  const result = evaluateReview({ reviewer: reviewerPass(text), stages: everyStage, ...FULL });
+  assert.equal(result.pass, false);
+  assert.deepEqual(result.reasons, ['report lists 1 finding(s) with a priority but the reviewer passed']);
+});
+
+test('Given an unsupported BLOCK whose finding the re-verification rejected, When evaluated, Then the stages decide and the review passes with a note', () => {
+  const text = '### Confirmed findings\n- **R1 (blocking)**: a conflict no stage found\n\nREVIEW_RESULT=BLOCK';
+  const result = evaluateReview({
+    reviewer: reviewerPass(text),
+    stages: everyStage,
+    ...FULL,
+    recheck: { verdict: 'rejected', findings: 1 },
+  });
+  assert.equal(result.pass, true);
+  assert.equal(result.verdict, 'PASS');
+  assert.deepEqual(result.reasons, []);
+  assert.deepEqual(result.notes, ['re-verification rejected 1 finding(s) the report raised; the stages confirmed none']);
+  assert.equal(result.recheckNeeded, false);
+});
+
+test('Given a re-verification that confirmed the report finding, When evaluated, Then the block is supported and names the recheck', () => {
+  const verifier = done('review-finding-verifier', {
+    lane: 'correctness',
+    confirmed_findings: [{ candidate_id: 'report-1', lane: 'correctness', priority: 'P2', title: 'real', file_path: 'src/a.mjs' }],
+    confirmed_coverage_gaps: [],
+  });
+  const result = evaluateReview({
+    reviewer: reviewerPass('### Confirmed findings\n- **R1**: real\n\nREVIEW_RESULT=BLOCK'),
+    stages: [everyStage[0], everyStage[1], verifier],
+    ...FULL,
+    recheck: { verdict: 'confirmed', findings: 1, confirmed: 1 },
+  });
+  assert.equal(result.pass, false);
+  assert.deepEqual(result.reasons, ['reviewer verdict BLOCK', 're-verification confirmed 1 finding(s) the report raised']);
+  assert.deepEqual(result.notes, []);
+});
+
+test('Given a re-verification that did not complete, When evaluated, Then the commit stays blocked with the reason', () => {
+  const text = '### Confirmed findings\n- **R1**: a conflict\n\nREVIEW_RESULT=BLOCK';
+  const result = evaluateReview({ reviewer: reviewerPass(text), stages: everyStage, ...FULL, recheck: { verdict: 'failed', findings: 1 } });
+  assert.equal(result.pass, false);
+  assert.deepEqual(result.reasons, [
+    'reviewer verdict BLOCK without stage confirmation',
+    're-verification did not settle the finding(s) the report raised',
+  ]);
+});
+
+test('Given an unsupported BLOCK, When evaluated without a recheck, Then it asks for one', () => {
+  const text = '### Confirmed findings\n- **R1**: a conflict\n\nREVIEW_RESULT=BLOCK';
+  const result = evaluateReview({ reviewer: reviewerPass(text), stages: everyStage, ...FULL });
+  assert.equal(result.recheckNeeded, true);
+  assert.equal(result.pass, false);
+});
+
+test('Given a supported BLOCK, When evaluated, Then no recheck is requested', () => {
+  const stages = [everyStage[0], everyStage[1], done('review-finding-verifier', { lane: 'correctness', confirmed_findings: [{ finding_id: 'R1' }], confirmed_coverage_gaps: [] })];
+  const result = evaluateReview({ reviewer: reviewerPass('REVIEW_RESULT=BLOCK'), stages, ...FULL });
+  assert.equal(result.recheckNeeded, false);
+});
+
+test('Given a rejected re-verification but no completed mandatory verifier, When evaluated, Then the review still blocks', () => {
+  // The state the host produces: the original verifier never completed, so the only completed
+  // verifier-shaped stage is the recheck, and it is marked as one.
+  const recheckStage = { ...done('review-finding-verifier', { lane: 'correctness', confirmed_findings: [], confirmed_coverage_gaps: [] }), recheck: true };
+  const stages = [everyStage[0], everyStage[1], recheckStage];
+  const result = evaluateReview({
+    reviewer: reviewerPass('### Confirmed findings\n- **R1**\n\nREVIEW_RESULT=BLOCK'),
+    stages,
+    ...FULL,
+    recheck: { verdict: 'rejected', findings: 1 },
+  });
+  assert.equal(result.pass, false);
+  assert.match(result.reasons.join(' '), /no completed stage evidence for review-finding-verifier/);
+});
+
+test('Given a report whose findings section records their absence, When evaluated, Then no finding is counted and the PASS stands', () => {
+  const text = '### Confirmed findings\n- No P1/P2 findings; the change is additive.\n\nREVIEW_RESULT=PASS';
+  assert.deepEqual(reportFindings(text), { bullets: 0, structured: 0, items: [] });
+  const result = evaluateReview({ reviewer: reviewerPass(text), stages: everyStage, ...FULL });
+  assert.equal(result.pass, true);
+  assert.deepEqual(result.reasons, []);
 });
 
 test('Given PASS and BLOCK markers together, When evaluated, Then it blocks', () => {
@@ -249,4 +370,107 @@ test('Given a confirmed gap while the scout reports no test harness, When evalua
     return stage;
   });
   assert.equal(evaluateReview({ reviewer: reviewerPass('REVIEW_RESULT=PASS'), stages, ...FULL }).pass, true);
+});
+
+test('Given a re-verification that rejected the reported finding and confirmed only an advisory gap, When evaluated, Then the evidence passes', () => {
+  const recheckStage = done('review-finding-verifier', {
+    lane: 'correctness',
+    confirmed_findings: [],
+    confirmed_coverage_gaps: [{ coverage_id: 'c1', file_path: 'src/a.mjs', severity: 'advisory', impact: 'a cost, not a defect' }],
+  });
+  const result = evaluateReview({
+    reviewer: reviewerPass('### Confirmed findings\n- **R1**: a conflict\n\nREVIEW_RESULT=BLOCK'),
+    stages: [...everyStage, recheckStage],
+    ...FULL,
+    recheck: { verdict: 'rejected', findings: 1 },
+  });
+  assert.equal(result.pass, true);
+  assert.deepEqual(result.reasons, []);
+  assert.deepEqual(result.notes, ['re-verification rejected 1 finding(s) the report raised; the stages confirmed none']);
+});
+
+test('Given a re-verification that confirmed a blocking coverage gap, When evaluated, Then the gap supports the block and no finding is invented', () => {
+  const recheckStage = done('review-finding-verifier', {
+    lane: 'correctness',
+    confirmed_findings: [],
+    confirmed_coverage_gaps: [{ coverage_id: 'c1', file_path: 'src/a.mjs', severity: 'blocking', impact: 'the uncovered branch ships wrong output', file_class: 'executable', test_harness: 'present' }],
+  });
+  const result = evaluateReview({
+    reviewer: reviewerPass('### Confirmed findings\n- **R1**: a conflict\n\nREVIEW_RESULT=BLOCK'),
+    stages: [...everyStage, recheckStage],
+    ...FULL,
+    recheck: { verdict: 'rejected', findings: 1 },
+  });
+  assert.equal(result.pass, false);
+  assert.deepEqual(result.reasons, ['reviewer verdict BLOCK']);
+});
+
+test('Given a re-verification that left the claim unproven, When evaluated, Then the commit stays blocked', () => {
+  const result = evaluateReview({
+    reviewer: reviewerPass('### Confirmed findings\n- **R1**: a conflict\n\nREVIEW_RESULT=BLOCK'),
+    stages: everyStage,
+    ...FULL,
+    recheck: { verdict: 'unsettled', findings: 1 },
+  });
+  assert.equal(result.pass, false);
+  assert.deepEqual(result.reasons, [
+    'reviewer verdict BLOCK without stage confirmation',
+    're-verification left the finding(s) the report raised unproven',
+  ]);
+});
+
+test('Given an absence-shaped bullet that names a file and a defect, When the report is read, Then it is still a finding', () => {
+  const text = '### Confirmed findings\n- No error handling in src/a.mjs — a defect\n\nREVIEW_RESULT=PASS';
+  assert.equal(reportFindings(text).bullets, 1, 'a cited file means the bullet reports a defect, not an absence');
+});
+
+test('Given findings written as numbered entries, When the report is read, Then each entry is a claim', () => {
+  const text = '### Confirmed findings\n1. **P1** src/a.mjs:1-2 behaves wrong\n2. **P2** src/b.mjs:3 another\n\nREVIEW_RESULT=BLOCK';
+  const findings = reportFindings(text);
+  assert.equal(findings.bullets, 2);
+  assert.equal(findings.structured, 2);
+});
+
+test('Given one finding with indented field bullets, When the report is read, Then only the entry is a claim', () => {
+  const text = '### Confirmed findings\n- **P1** src/a.mjs:1-2 behaves wrong\n  - **Observed behavior:** x\n  - **Expected behavior:** y\n  - **Impact:** z\n';
+  assert.deepEqual(reportFindings(text).items, ['P1 src/a.mjs:1-2 behaves wrong']);
+  const wholeIndented = '### Confirmed findings\n  - **P2** src/b.mjs:3 wrong\n    - **Observed:** x\n';
+  assert.deepEqual(reportFindings(wholeIndented).items, ['P2 src/b.mjs:3 wrong']);
+});
+
+test('Given an unsupported BLOCK that already has another reason, When evaluated, Then no recheck is requested', () => {
+  const stages = [everyStage[0], everyStage[1]];
+  const result = evaluateReview({
+    reviewer: reviewerPass('### Confirmed findings\n- **R1**\n\nREVIEW_RESULT=BLOCK'),
+    stages,
+    ...FULL,
+  });
+  assert.equal(result.pass, false);
+  assert.match(result.reasons.join(' '), /no completed stage evidence for review-finding-verifier/);
+  assert.equal(result.recheckNeeded, false, 'a second verifier pass cannot remove another blocker');
+});
+
+test('Given a verifier that records the defect as still present, When evaluated, Then it counts as confirmed evidence in both directions', () => {
+  const verifier = done('review-finding-verifier', {
+    lane: 'correctness',
+    decisions: [{ candidate_id: 'correctness-1', disposition: 'still_present', triage: 'lie', reason: 'the snapshot shows it', evidence: 'src/a.mjs:1' }],
+    confirmed_findings: [],
+    confirmed_coverage_gaps: [],
+  });
+  const blocked = evaluateReview({
+    reviewer: reviewerPass('### Confirmed findings\n- **R1**: a conflict\n\nREVIEW_RESULT=BLOCK'),
+    stages: [everyStage[0], everyStage[1], verifier],
+    ...FULL,
+    recheck: { verdict: 'confirmed', findings: 1, confirmed: 1 },
+  });
+  assert.equal(blocked.pass, false);
+  assert.deepEqual(blocked.reasons, ['reviewer verdict BLOCK', 're-verification confirmed 1 finding(s) the report raised']);
+
+  const passed = evaluateReview({
+    reviewer: reviewerPass('## Review\n\nREVIEW_RESULT=PASS'),
+    stages: [everyStage[0], everyStage[1], verifier],
+    ...FULL,
+  });
+  assert.equal(passed.pass, false, 'a finished verifier that says still present cannot be passed over');
+  assert.match(passed.reasons.join(' '), /verifier confirmed 1 finding\(s\) but the reviewer passed/);
 });

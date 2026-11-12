@@ -105,6 +105,47 @@ export function verifierTask({ input, scout, hunters, coverageGaps, profile }) {
 }
 
 /**
+ * The scout fields that are prose about the change rather than facts about the diff. `change_goal`
+ * and `claims` are exactly where a documented history of an earlier BLOCK re-enters the review as
+ * if it described the staged change, so the synthesis stage never receives them: a finding must
+ * come from a stage that read the snapshot and confirmed it.
+ */
+const SCOUT_NARRATIVE_FIELDS = ['change_goal', 'claims'];
+
+function scoutFacts(scout) {
+  if (!scout || typeof scout !== 'object' || Array.isArray(scout)) return null;
+  const facts = { ...scout };
+  for (const field of SCOUT_NARRATIVE_FIELDS) delete facts[field];
+  return facts;
+}
+
+/**
+ * Stage 5: the re-verification of a report whose findings no stage confirmed. The synthesis can only
+ * propose: a claim it makes is settled by calling it against the staged snapshot, exactly as a
+ * hunter candidate is. The claims are supplied verbatim; nothing else about the report travels.
+ *
+ * @param {{ snapshotDir: string, findings: string[] }} args
+ * @returns {string}
+ */
+export function recheckTask({ snapshotDir, findings }) {
+  const claims = (Array.isArray(findings) ? findings : [])
+    .map((finding, index) => `${index + 1}. ${typeof finding === 'string' ? finding.replace(/\s+/g, ' ').trim() : String(finding)}`);
+  return [
+    `Staged snapshot directory: ${snapshotDir}`,
+    `Diff file (complete staged diff, byte-exact): ${snapshotDir}/.review/diff.patch`,
+    `Changed-file manifest: ${snapshotDir}/.review/changed-files.txt`,
+    `File-class manifest (deterministic, do not re-classify): ${snapshotDir}/.review/file-classes.json`,
+    '',
+    'You are the adversarial verifier stage of this review, asked a second time. The final synthesis reported a BLOCK whose findings no stage confirmed. Decide every claim below against the staged snapshot: confirm it only when the snapshot shows the defect exactly as stated, and reject every claim the snapshot does not support.',
+    '',
+    'Claims the report made, verbatim:',
+    ...claims,
+    '',
+    'Every source file read must come from the snapshot directory; the repository is for read-only Git metadata only. Emit the structured result your agent contract defines.',
+  ].join('\n');
+}
+
+/**
  * Stage 4: synthesis. The stage results are supplied as data; the agent writes the report and its
  * single verdict marker.
  *
@@ -126,9 +167,9 @@ export function synthesisTask({ input, scout, hunters, maintainability, verifier
       `Profile: ${profile}; lanes: ${JSON.stringify(lanes)}`,
       'You are the final synthesis stage of this review. Every earlier stage already ran; their structured results are supplied below. Do not spawn a subagent and do not re-run a stage.',
       '',
-      'Context scout result:',
+      'Context scout facts (its free-text change goal and claims are not supplied: prose may restate a past blocker recorded in the diff, and it is never evidence):',
       '```json',
-      JSON.stringify(scout ?? null, null, 2),
+      JSON.stringify(scoutFacts(scout), null, 2),
       '```',
       '',
       'Hunter results:',
@@ -146,7 +187,7 @@ export function synthesisTask({ input, scout, hunters, maintainability, verifier
       JSON.stringify(verifier ?? null, null, 2),
       '```',
       '',
-      'Write the report exactly as your agent contract defines, and end it with the single verdict marker.',
+      'A confirmed finding must come from the verifier result. Write the report exactly as your agent contract defines, and end it with the single verdict marker.',
     ].join('\n'),
   );
 }

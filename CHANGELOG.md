@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.32.0] - 2026-11-12
+
+### Added
+- A report can no longer stop a commit on its own. When the synthesis blocks with findings no stage confirmed — and that contradiction is the one thing keeping the commit refused — the host runs one more verifier task (`FindingRecheck`) over exactly those claims against the staged snapshot. A completed pass that confirms nothing and decides every claim (a `rejected` or `fixed` disposition per claim) lets the evidence decide, and the rejection is recorded as `re-verification rejected N finding(s) the report raised`; a claim left `not_proven` or unanswered keeps the block (`re-verification left the finding(s) the report raised unproven`), so silence never becomes a pass; a pass that confirms a claim keeps the block and names the re-verification; a pass that does not complete keeps the commit blocked. The run record carries the verdict notes (`notes`), `scripts/review-runs.mjs` prints them, and the hook log prints each as its own `review: note …` line so the verdict line every consumer parses (`review: PASS`, `review: BLOCK (…)`) stays byte-identical.
+
+### Changed
+- The synthesis task no longer receives the scout's free-text `change_goal` and `claims`. A document inside the diff that narrates an earlier BLOCK — "the previous reviewer returned BLOCK on head <sha>; finding R1" — was reaching synthesis as prose about the staged change, and one free-model review restated it as a blocking finding that contradicted the same report's `Verified-OK` and the verifier's empty `confirmed_findings`. The scout's factual fields (changed paths, consumers, invariants, test evidence, harness answer, coverage map, waived items) are still supplied.
+
+### Fixed
+- A verifier decision of `still_present` counts as a confirmation on both sides of the rule, and the re-verification answers numbered claims: a duplicate decision no longer settles an unexamined claim.
+- A findings section written as a numbered list is read like a bulleted one, and the indented field lines under a finding are no longer sent to the re-verification as claims of their own; before, a numbered list was invisible to the guard and one finding could arrive as four fragments.
+- A BLOCK that no stage supported no longer reads as a finding. The verdict says `reviewer verdict BLOCK without stage confirmation`, and a report whose `### Confirmed findings` lists bullets the verifier never confirmed adds `report lists N confirmed finding(s) that no stage confirmed`. With the re-verification above, that block no longer refuses a commit whose evidence is complete.
+- A PASS whose own report lists a finding with a `P1`/`P2` priority is rejected with its own reason, so a report cannot carry a finding and a passing marker at once.
+
 ## [0.31.1] - 2026-11-10
 
 ### Fixed

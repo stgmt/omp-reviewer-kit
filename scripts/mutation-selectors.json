@@ -2390,7 +2390,7 @@
       ],
       "ancestors": [],
       "mutantHash": "84a6e752ad59e70217704ce6eb2912ff2cdb618e7ee8dad50347577a724753ad",
-      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
+      "testHash": "68e507b6829fd9582109ecc4998ddf94d7ad272f3cf18e583c6a04d1273c5bc4"
     },
     "native-verdict-marker-not-last-accepted": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2399,7 +2399,7 @@
       ],
       "ancestors": [],
       "mutantHash": "fbba8a5f8368b301aca5a4fd17782054e2f3a96f11cee5e3f26e5ee85303b4c6",
-      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
+      "testHash": "68e507b6829fd9582109ecc4998ddf94d7ad272f3cf18e583c6a04d1273c5bc4"
     },
     "native-verdict-aborted-reviewer-ignored": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2408,7 +2408,7 @@
       ],
       "ancestors": [],
       "mutantHash": "286b644bdfc3363faad10c76bffc2ae94a62a8859ee5c580ee97931b3bb420f8",
-      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
+      "testHash": "68e507b6829fd9582109ecc4998ddf94d7ad272f3cf18e583c6a04d1273c5bc4"
     },
     "native-verdict-yield-status-ignored": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2417,7 +2417,7 @@
       ],
       "ancestors": [],
       "mutantHash": "d4022cbeb5b998904dcc760d8ba6d5479007c9b390cc9dd361c65988fc84922f",
-      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
+      "testHash": "68e507b6829fd9582109ecc4998ddf94d7ad272f3cf18e583c6a04d1273c5bc4"
     },
     "native-verdict-scout-optional": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2426,7 +2426,7 @@
       ],
       "ancestors": [],
       "mutantHash": "ab13419a2a1829adaf4ca0016c0a42f16bc765dcfa98534c1943de2fffc5ca05",
-      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
+      "testHash": "68e507b6829fd9582109ecc4998ddf94d7ad272f3cf18e583c6a04d1273c5bc4"
     },
     "native-verdict-hunters-optional": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2435,7 +2435,7 @@
       ],
       "ancestors": [],
       "mutantHash": "5e632be74b97ba69b28e161e72f897517c998dd3dc1174531bad4bc6c27d0536",
-      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
+      "testHash": "68e507b6829fd9582109ecc4998ddf94d7ad272f3cf18e583c6a04d1273c5bc4"
     },
     "native-verdict-verifier-optional-full": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2444,7 +2444,7 @@
       ],
       "ancestors": [],
       "mutantHash": "8bd9d6305e5f9b4081f61320b2c32eadf16344bc093ad0f9c97ad9ae50cf7ee5",
-      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
+      "testHash": "68e507b6829fd9582109ecc4998ddf94d7ad272f3cf18e583c6a04d1273c5bc4"
     },
     "native-verdict-confirmed-finding-tolerated": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2452,8 +2452,8 @@
         "Given a PASS that stands against a confirmed finding, When evaluated, Then it blocks"
       ],
       "ancestors": [],
-      "mutantHash": "03d7be91187255c8b28ab966af8d1448d1d0beacd72f5555b4dae71402f2d699",
-      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
+      "mutantHash": "779b4356455b591027beb6cf89bb166480bd72051e1ee06eba4d7dead42c5460",
+      "testHash": "68e507b6829fd9582109ecc4998ddf94d7ad272f3cf18e583c6a04d1273c5bc4"
     },
     "native-verdict-pass-ignores-reasons": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2461,8 +2461,8 @@
         "Given the reviewer aborted, When evaluated, Then it blocks even with a PASS marker"
       ],
       "ancestors": [],
-      "mutantHash": "f0b05122a9c0e0a589d3baf14094128a408a763200f9734996df0fab8ba7bd37",
-      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
+      "mutantHash": "7e127ac1c50613b31ec28d5989f85bd045d855275d902c406925da6fff64f204",
+      "testHash": "68e507b6829fd9582109ecc4998ddf94d7ad272f3cf18e583c6a04d1273c5bc4"
     },
     "native-verdict-stage-aborted-counts": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2471,7 +2471,7 @@
       ],
       "ancestors": [],
       "mutantHash": "69415f6448cd2b504e24593ff2509d0662690b951ff034a6ab7a56cd7bf4fd0a",
-      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
+      "testHash": "68e507b6829fd9582109ecc4998ddf94d7ad272f3cf18e583c6a04d1273c5bc4"
     },
     "native-verdict-invalid-structure-counts": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2480,7 +2480,7 @@
       ],
       "ancestors": [],
       "mutantHash": "66f9b4ada25c354df0eb329720d77e0d86811e0f8e35da57b719051c920b5b2d",
-      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
+      "testHash": "68e507b6829fd9582109ecc4998ddf94d7ad272f3cf18e583c6a04d1273c5bc4"
     },
     "native-snapshot-reserved-collision-missed": {
       "testFile": "tests/native-snapshot.test.mjs",
@@ -2641,7 +2641,7 @@
       ],
       "ancestors": [],
       "mutantHash": "0c9740270235004aaceb9d10b62ea5b7fd70756791fe4761bbdf721c7c011b1f",
-      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
+      "testHash": "68e507b6829fd9582109ecc4998ddf94d7ad272f3cf18e583c6a04d1273c5bc4"
     },
     "native-snapshot-hash-not-of-diff": {
       "testFile": "tests/native-snapshot.test.mjs",
@@ -2668,7 +2668,7 @@
       ],
       "ancestors": [],
       "mutantHash": "899570b921925794144707ca7f8a513ce3f31a6cc39ce0fc4f29525d5da82373",
-      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
+      "testHash": "68e507b6829fd9582109ecc4998ddf94d7ad272f3cf18e583c6a04d1273c5bc4"
     },
     "commit-command-attached-value-letters-read": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -2687,8 +2687,8 @@
         "Given a blocking gap in an executable file, When evaluated with the manifest, Then the PASS remains blocked"
       ],
       "ancestors": [],
-      "mutantHash": "74dd7ef3ac760e24e988580f0b31a53bd96c723273bedbf2efed280821dbe845",
-      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
+      "mutantHash": "deb49b50d9758278f42d3f036dab71963760d53d0f6a03e905760cbd7d018f72",
+      "testHash": "68e507b6829fd9582109ecc4998ddf94d7ad272f3cf18e583c6a04d1273c5bc4"
     },
     "native-verdict-gap-advisory-blocks": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2697,7 +2697,7 @@
       ],
       "ancestors": [],
       "mutantHash": "dab95724e963379eccd12e684cd1213f8e8e8c7d07c6cd1d44bfb9f54233f048",
-      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
+      "testHash": "68e507b6829fd9582109ecc4998ddf94d7ad272f3cf18e583c6a04d1273c5bc4"
     },
     "native-verdict-gap-impact-floor-ignored": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2706,7 +2706,7 @@
       ],
       "ancestors": [],
       "mutantHash": "92f7a8ffabc5bc9d94f2fc7797dc81a54f644e6c840fb72833b7a08a19e1fdcf",
-      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
+      "testHash": "68e507b6829fd9582109ecc4998ddf94d7ad272f3cf18e583c6a04d1273c5bc4"
     },
     "native-verdict-gap-test-class-ignored": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2715,7 +2715,7 @@
       ],
       "ancestors": [],
       "mutantHash": "fe400140e302f36ddc1ba47cdcbdaef92c6459d0f0bb2150980943bbcc66f7b6",
-      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
+      "testHash": "68e507b6829fd9582109ecc4998ddf94d7ad272f3cf18e583c6a04d1273c5bc4"
     },
     "native-verdict-gap-item-harness-ignored": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2724,7 +2724,7 @@
       ],
       "ancestors": [],
       "mutantHash": "f5c10276c9bdfaa82db7dce98702fbe6ae5213f871792102fee20efe72f5b394",
-      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
+      "testHash": "68e507b6829fd9582109ecc4998ddf94d7ad272f3cf18e583c6a04d1273c5bc4"
     },
     "native-verdict-gap-global-harness-ignored": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2732,8 +2732,8 @@
         "Given a confirmed gap while the scout reports no test harness, When evaluated, Then the PASS stands"
       ],
       "ancestors": [],
-      "mutantHash": "7bcd26ba6b102cbbfffd3e587ea5485cdc1a162f2fbfee1925dd64c8f8366257",
-      "testHash": "48245b137347210564670d81410f4a4aedd796370d3124badef35f561d0f1bf9"
+      "mutantHash": "bbb2d59286e40c443a6b649765fb8411f5adf112878028ebe7fe86e7e230c879",
+      "testHash": "68e507b6829fd9582109ecc4998ddf94d7ad272f3cf18e583c6a04d1273c5bc4"
     },
     "run-record-duration-seconds-dropped": {
       "testFile": "tests/review-run-summary.test.mjs",
@@ -2796,7 +2796,7 @@
       ],
       "ancestors": [],
       "mutantHash": "ac5d7f589327d34127a38e934dffc79978a22553dc170edb7a6bffb31c9992aa",
-      "testHash": "0209dcef49fb216bf1722c92f698a10114639c807f8a2aab59f5b377643d63c5"
+      "testHash": "6e32620b861df5c1fad3999df48211b0177bf885f6fee74f32b05a1770616196"
     },
     "run-record-newest-pruned": {
       "testFile": "tests/mutation-certificate-store.test.mjs",
@@ -3659,7 +3659,7 @@
         "Given the contract stage throws, When the review runs, Then the failure reaches the verdict instead of being swallowed"
       ],
       "ancestors": [],
-      "mutantHash": "3795ceb1a024966ce5b33ea9ac370e916a883797403447dcdc7974c0a6e1f61d",
+      "mutantHash": "0a864e3df86904b1e3b1a073d1b26087f7d3e73247ae7f6a08f465588915ac6b",
       "testHash": "3ca09aef97262c6b04f98f3031a98407998ff970aea10670e9ebf0b2d1f34fac"
     },
     "contract-missing-manifest-empty-scan": {
@@ -4446,6 +4446,123 @@
       "ancestors": [],
       "mutantHash": "b51b3d8fbde0ef229e58117048ed983a67d3160e0c43cb9ecb92aa2ab742dd3f",
       "testHash": "4d9b59f4bbec8978f30041c1ae5171099057757889695a5ff9082b81dd921ece"
+    },
+    "native-verdict-block-confirmation-ignored": {
+      "testFile": "tests/native-verdict.test.mjs",
+      "tests": [
+        "Given a BLOCK with no stage confirmation and an empty findings list, When evaluated, Then no finding is counted"
+      ],
+      "ancestors": [],
+      "mutantHash": "ccad3ddea045bcfb071692a8b901a9394f4d2a30d6c5c75a09202a73f752e4dd",
+      "testHash": "68e507b6829fd9582109ecc4998ddf94d7ad272f3cf18e583c6a04d1273c5bc4"
+    },
+    "native-verdict-block-report-finding-ignored": {
+      "testFile": "tests/native-verdict.test.mjs",
+      "tests": [
+        "Given a BLOCK with no stage confirmation and a report that lists a finding, When evaluated, Then the reason names the unconfirmed finding"
+      ],
+      "ancestors": [],
+      "mutantHash": "633ee8781aa8836c0095eafc666368e69009624c6f088abe6df9f271bcb88870",
+      "testHash": "68e507b6829fd9582109ecc4998ddf94d7ad272f3cf18e583c6a04d1273c5bc4"
+    },
+    "native-verdict-pass-report-finding-ignored": {
+      "testFile": "tests/native-verdict.test.mjs",
+      "tests": [
+        "Given a PASS whose report lists a P1 finding, When evaluated, Then the contradiction blocks"
+      ],
+      "ancestors": [],
+      "mutantHash": "1bc79d2cecd1bf7077c17522c9951cb065336bef04ffbe7e3257a050df3cf607",
+      "testHash": "68e507b6829fd9582109ecc4998ddf94d7ad272f3cf18e583c6a04d1273c5bc4"
+    },
+    "native-verdict-recheck-ignored": {
+      "testFile": "tests/native-verdict.test.mjs",
+      "tests": [
+        "Given an unsupported BLOCK whose finding the re-verification rejected, When evaluated, Then the stages decide and the review passes with a note"
+      ],
+      "ancestors": [],
+      "mutantHash": "5fc1ae4c85d1e3228d7a4fd56ae3270291df300bdc0ab777e404725447264ebb",
+      "testHash": "68e507b6829fd9582109ecc4998ddf94d7ad272f3cf18e583c6a04d1273c5bc4"
+    },
+    "native-verdict-adjudicated-pass-ignored": {
+      "testFile": "tests/native-verdict.test.mjs",
+      "tests": [
+        "Given an unsupported BLOCK whose finding the re-verification rejected, When evaluated, Then the stages decide and the review passes with a note"
+      ],
+      "ancestors": [],
+      "mutantHash": "057ca8f3724c7c14a3831d22fc1e0212bc8db38597a1024c00b2f70a608f7e14",
+      "testHash": "68e507b6829fd9582109ecc4998ddf94d7ad272f3cf18e583c6a04d1273c5bc4"
+    },
+    "native-verdict-recheck-needed-ignored": {
+      "testFile": "tests/native-verdict.test.mjs",
+      "tests": [
+        "Given an unsupported BLOCK, When evaluated without a recheck, Then it asks for one"
+      ],
+      "ancestors": [],
+      "mutantHash": "91ce93b76c82a35794acd842e5603359f52310f5953631b3cb0857d2437ad963",
+      "testHash": "68e507b6829fd9582109ecc4998ddf94d7ad272f3cf18e583c6a04d1273c5bc4"
+    },
+    "native-verdict-recheck-failure-tolerated": {
+      "testFile": "tests/native-verdict.test.mjs",
+      "tests": [
+        "Given a re-verification that did not complete, When evaluated, Then the commit stays blocked with the reason"
+      ],
+      "ancestors": [],
+      "mutantHash": "61acac0b06dfcae087088ca010b871f8010e56167b7dad3b60552c3fe8ab20ed",
+      "testHash": "68e507b6829fd9582109ecc4998ddf94d7ad272f3cf18e583c6a04d1273c5bc4"
+    },
+    "native-verdict-absence-counted-as-finding": {
+      "testFile": "tests/native-verdict.test.mjs",
+      "tests": [
+        "Given a report whose findings section records their absence, When evaluated, Then no finding is counted and the PASS stands"
+      ],
+      "ancestors": [],
+      "mutantHash": "4667c851238db9d2cbcf16c17d0b797a796ac94b74a46695d029ba8e3b662ab8",
+      "testHash": "68e507b6829fd9582109ecc4998ddf94d7ad272f3cf18e583c6a04d1273c5bc4"
+    },
+    "native-verdict-nested-fields-as-claims": {
+      "testFile": "tests/native-verdict.test.mjs",
+      "tests": [
+        "Given one finding with indented field bullets, When the report is read, Then only the entry is a claim"
+      ],
+      "ancestors": [],
+      "mutantHash": "799393bc31b033e1f23da35f2c2754970ed56e52c9ac4575bf63f5b2eddd86a1",
+      "testHash": "68e507b6829fd9582109ecc4998ddf94d7ad272f3cf18e583c6a04d1273c5bc4"
+    },
+    "native-verdict-recheck-when-blocked": {
+      "testFile": "tests/native-verdict.test.mjs",
+      "tests": [
+        "Given an unsupported BLOCK that already has another reason, When evaluated, Then no recheck is requested"
+      ],
+      "ancestors": [],
+      "mutantHash": "d3ebe66b25546a22dbe79f5bceb1c451a01b0fd9aa65e9a70a881e47c94f0d46",
+      "testHash": "68e507b6829fd9582109ecc4998ddf94d7ad272f3cf18e583c6a04d1273c5bc4"
+    },
+    "native-host-notes-dropped": {
+      "testFile": "tests/native-host.test.mjs",
+      "tests": [
+        "Given a pass whose verdict carries a note, When the host runs, Then the verdict line stays exact and the note is its own line"
+      ],
+      "ancestors": [],
+      "mutantHash": "bdc9c5d7b6d3d41d6fe222bbc4e349f3e8ea0c0d4d93f53d46f05f50527b203c",
+      "testHash": "6e32620b861df5c1fad3999df48211b0177bf885f6fee74f32b05a1770616196"
+    },
+    "native-verdict-still-present-ignored": {
+      "testFile": "tests/native-verdict.test.mjs",
+      "tests": [
+        "Given a verifier that records the defect as still present, When evaluated, Then it counts as confirmed evidence in both directions"
+      ],
+      "ancestors": [],
+      "mutantHash": "01e95ad0044e3f6c03c7297137a1c18eaa1014ea4683c76a99796107937eb811",
+      "testHash": "68e507b6829fd9582109ecc4998ddf94d7ad272f3cf18e583c6a04d1273c5bc4"
+    },
+    "native-review-settlement-always": {
+      "testFile": "tests/native-review.test.mjs",
+      "tests": [
+        "Given a re-verification that answers none of the claims, When the review runs, Then silence does not become a rejection"
+      ],
+      "ancestors": [],
+      "mutantHash": "8a326e407ab8b4a5ab74bbd032a5e25daeda545e5afdf1a7cdd56b329d43e178",
+      "testHash": "c81c4c85fc2d7d519daef0116a1cbd040bda7307a8e6f70510e00cf15041780c"
     }
   }
 }
