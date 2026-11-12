@@ -69,15 +69,28 @@ export function maintainabilityTask({ snapshotDir, candidatePath, policy, profil
 }
 
 /**
- * Stage 3: the adversarial verifier over every candidate of every lane and the coverage gaps.
+ * Stage 3: the adversarial verifier over every candidate of every lane, the shapes a changed
+ * function shares with an existing one, and the coverage gaps.
  *
- * @param {{ input: object, scout: object, hunters: Array<{ lane: string|null, data: object|null }>, coverageGaps: object[], profile: string }} args
+ * @param {{ input: object, scout: object, hunters: Array<{ lane: string|null, data: object|null }>, coverageGaps: object[], duplicates?: object[], profile: string }} args
  * @returns {string}
  */
-export function verifierTask({ input, scout, hunters, coverageGaps, profile }) {
+export function verifierTask({ input, scout, hunters, coverageGaps, duplicates = [], profile }) {
   const candidates = hunters.flatMap(hunter =>
     (Array.isArray(hunter.data?.candidates) ? hunter.data.candidates : []).map(candidate => ({ lane: hunter.lane, candidate })),
   );
+  // The deterministic shape scan answers "does this already exist under another name". It is a lead,
+  // not a finding: the pair is decided here, and a confirmed one blocks through confirmed findings.
+  const duplicateCandidates = (Array.isArray(duplicates) ? duplicates : []).map((pair, index) => ({
+    candidate_id: `reuse-${index + 1}`,
+    lane: 'reuse',
+    changed: `${pair.changedPath}:${pair.changedLine}`,
+    changed_name: pair.changedName ?? null,
+    existing: `${pair.existingPath}:${pair.existingLine}`,
+    existing_name: pair.existingName ?? null,
+    similarity: pair.similarity,
+    shared_calls: Array.isArray(pair.sharedCalls) ? pair.sharedCalls : [],
+  }));
   return stagedInputs(
     input,
     [
@@ -97,6 +110,11 @@ export function verifierTask({ input, scout, hunters, coverageGaps, profile }) {
       'Coverage gaps from every hunter lane:',
       '```json',
       JSON.stringify(coverageGaps, null, 2),
+      '```',
+      '',
+      'Shape duplicates (deterministic scan of the snapshot, not findings): each entry pairs a changed function with an existing one whose shape it repeats. Decide each as a candidate `reuse-N`: confirm it only when both ranges implement the same responsibility and the staged side adds no product capability, and then name both `path:line` pairs in the confirmed finding. Reject boilerplate, a thin wrapper over the existing unit, a test fixture, and a pair whose difference is the product change itself.',
+      '```json',
+      JSON.stringify(duplicateCandidates, null, 2),
       '```',
       '',
       'Maintainability candidates are not yours: they never enter confirmed findings or confirmed coverage gaps.',

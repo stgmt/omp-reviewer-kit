@@ -580,3 +580,60 @@ test('Given a recheck that answers with still_present, When the review runs, The
     await rm(parent, { recursive: true, force: true });
   }
 });
+
+test('Given a changed function that repeats an existing one, When the review runs, Then the verifier receives the pair with both ranges', async () => {
+  const repo = await mkdtemp(path.join(tmpdir(), 'native-review-reuse-'));
+  const parent = await mkdtemp(path.join(tmpdir(), 'native-review-parent-'));
+  const body = (names) => `export function ${names.fn}(items) {
+  const ${names.out} = [];
+  for (const ${names.item} of items) {
+    if (!${names.item}) continue;
+    if (${names.item}.hidden) continue;
+    if (!${names.item}.name) continue;
+    if (${names.item}.name.length === 0) continue;
+    ${names.out}.push({ name: ${names.item}.name, size: ${names.item}.size, kind: ${names.item}.kind });
+  }
+  ${names.out}.sort((left, right) => left.name.localeCompare(right.name));
+  const ${names.seen} = new Set();
+  const ${names.unique} = [];
+  for (const ${names.entry} of ${names.out}) {
+    if (${names.seen}.has(${names.entry}.name)) continue;
+    ${names.seen}.add(${names.entry}.name);
+    ${names.unique}.push(${names.entry});
+  }
+  return ${names.unique};
+}
+`;
+  try {
+    git(repo, ['init', '-q']);
+    git(repo, ['config', 'user.email', 'test@example.invalid']);
+    git(repo, ['config', 'user.name', 'native review test']);
+    git(repo, ['config', 'core.hooksPath', path.join(repo, 'no-hooks')]);
+    await writeFile(path.join(repo, 'base.mjs'), body({ fn: 'collectVisible', out: 'out', item: 'item', seen: 'seen', unique: 'unique', entry: 'entry' }));
+    git(repo, ['add', 'base.mjs']);
+    git(repo, ['commit', '-q', '-m', 'base']);
+    await writeFile(path.join(repo, 'feature.mjs'), body({ fn: 'gatherShown', out: 'result', item: 'row', seen: 'met', unique: 'kept', entry: 'candidate' }));
+    git(repo, ['add', 'feature.mjs']);
+    const calls = [];
+    const stageRunner = {
+      async run(agent, name, task) {
+        calls.push({ name, task });
+        if (name === 'ContextScout') return { evidence: completed('review-context-scout', { test_harness: 'present', changed_paths: ['feature.mjs'], relevant_consumers: [] }) };
+        if (name.startsWith('RiskHunter')) return { evidence: completed('review-risk-hunter', { lane: 'correctness', candidates: [], coverage_gaps: [] }) };
+        if (name === 'FindingVerifier') return { evidence: completed('review-finding-verifier', { lane: 'correctness', confirmed_findings: [], confirmed_coverage_gaps: [] }) };
+        if (name === 'Synthesis') return { result: reviewerWithYield(PASS_REPORT), evidence: completed('reviewer-kit', {}) };
+        return { evidence: completed(agent, {}) };
+      },
+    };
+    const result = await runNativeReview({ repo, kitRoot: repo, parentDir: parent, env: {}, stageRunner });
+    const verifier = calls.find(call => call.name === 'FindingVerifier');
+    assert.ok(verifier, 'the verifier stage ran');
+    assert.match(verifier.task, /"candidate_id": "reuse-1"/, 'the deterministic pair reaches the verifier');
+    assert.match(verifier.task, /"changed": "feature\.mjs:1"/);
+    assert.match(verifier.task, /"existing": "base\.mjs:1"/);
+    assert.equal(result.verdict.pass, true, 'a pair the verifier did not confirm changes nothing');
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+    await rm(parent, { recursive: true, force: true });
+  }
+});

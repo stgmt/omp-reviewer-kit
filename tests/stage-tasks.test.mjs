@@ -51,14 +51,28 @@ test('Given a candidate file, When the maintainability task is built, Then it na
   assert.match(text, /You are the maintainability stage/);
 });
 
-test('Given candidates and gaps, When the verifier task is built, Then every candidate is carried with its lane and the gaps are carried too', () => {
+test('Given candidates, gaps and shape duplicates, When the verifier task is built, Then every candidate is carried with its lane and each duplicate pair with both ranges', () => {
   const text = verifierTask({
     input,
     scout,
     hunters: [{ lane: 'correctness', data: { candidates: [{ candidate_id: 'correctness-1', title: 'Boom' }], coverage_gaps: [{ coverage_id: 'coverage-1' }] } }],
     coverageGaps: [{ coverage_id: 'coverage-1' }],
+    duplicates: [{
+      changedPath: 'src/new.mjs',
+      changedLine: 4,
+      changedName: 'secondCopy',
+      existingPath: 'src/old.mjs',
+      existingLine: 9,
+      existingName: 'firstCopy',
+      similarity: 0.93,
+      sharedCalls: ['push', 'sort'],
+    }],
     profile: 'full',
   });
+  assert.match(text, /"candidate_id": "reuse-1"/);
+  assert.match(text, /"changed": "src\/new\.mjs:4"/);
+  assert.match(text, /"existing": "src\/old\.mjs:9"/);
+  assert.match(text, /not findings/);
   assert.match(text, /"lane": "correctness"/);
   assert.match(text, /"candidate_id": "correctness-1"/);
   assert.match(text, /"coverage_id": "coverage-1"/);

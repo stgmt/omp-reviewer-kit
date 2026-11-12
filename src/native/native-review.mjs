@@ -247,7 +247,7 @@ export async function runNativeReview({
       }
       : null;
     const runner = stageRunner ?? (runTask ? wholeRunAdapter(runTask) : await createStageRunner({ cwd: repo, kitRoot, onProgress, onEvent }));
-    const steps = planSteps({ assignmentInput, dir, profile, lanes, maintainability, analysis });
+    const steps = planSteps({ assignmentInput, dir, profile, lanes, maintainability, analysis, duplicates: reuse.skipped ? [] : (reuse.analysis?.candidates ?? []) });
     const { stages, evidence: stageEvidenceById } = await runStagePipeline({ runner, steps, journal: stageJournal, onProgress });
     const hunters = laneResults(lanes, stageEvidenceById);
     const synthesis = await runner.run('reviewer-kit', 'Synthesis', synthesisTask({
@@ -473,7 +473,7 @@ function wholeRunAdapter(runWhole) {
  * }} input
  * @returns {Array<object>}
  */
-function planSteps({ assignmentInput, dir, profile, lanes, maintainability, analysis }) {
+function planSteps({ assignmentInput, dir, profile, lanes, maintainability, analysis, duplicates = [] }) {
   const snapshotPaths = assignmentInput.context.snapshot.changedPaths;
   const steps = [
     { id: SCOUT_STAGE, agent: SCOUT_AGENT, name: 'ContextScout', task: scoutTask(assignmentInput) },
@@ -520,6 +520,7 @@ function planSteps({ assignmentInput, dir, profile, lanes, maintainability, anal
       hunters: laneResults(lanes, evidence),
       coverageGaps: laneResults(lanes, evidence)
         .flatMap(result => (Array.isArray(result.data?.coverage_gaps) ? result.data.coverage_gaps : [])),
+      duplicates,
       profile,
     }),
   });
