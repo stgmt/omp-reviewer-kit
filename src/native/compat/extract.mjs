@@ -133,7 +133,6 @@ export function collectJavaScript(relative, ast) {
   const produced = [];
   const consumed = [];
   const listed = [];
-  const reads = [];
   const pending = [];
   walkAst(ast, node => {
     if (node.type === 'ObjectProperty' && !node.computed) {
@@ -201,9 +200,6 @@ export function collectJavaScript(relative, ast) {
         }
       }
     }
-    if (node.type === 'MemberExpression' && node.computed && node.property?.type === 'StringLiteral') {
-      reads.push({ name: node.property.value, line: node.loc?.start?.line ?? 1 });
-    }
   });
   return {
     path: relative,
@@ -211,7 +207,6 @@ export function collectJavaScript(relative, ast) {
     produced,
     consumed,
     listed,
-    reads,
     pending,
     lists: [...lists.entries()].map(([name, versions]) => ({ name, versions })),
     constants: [...constants.entries()].map(([name, version]) => ({ name, version })),
@@ -301,7 +296,7 @@ for item in request.get('files', []):
                             versions.append(version)
                     if versions:
                         lists[target.id] = versions
-    produced, consumed, listed, reads, pending = [], [], [], [], []
+    produced, consumed, listed, pending = [], [], [], []
     for node in ast.walk(tree):
         if isinstance(node, ast.Dict):
             for key, value in zip(node.keys, node.values):
@@ -349,17 +344,12 @@ for item in request.get('files', []):
                                     pending.append({'kind': 'consumed', 'name': name, 'line': node.lineno, 'guard': guard_text(node)})
                         elif isinstance(comparator, ast.Name):
                             pending.append({'kind': 'consumed', 'name': comparator.id, 'line': node.lineno, 'guard': guard_text(node), 'list': True})
-        if isinstance(node, ast.Subscript):
-            sl = node.slice
-            if isinstance(sl, ast.Constant) and isinstance(sl.value, str):
-                reads.append({'name': sl.value, 'line': node.lineno})
     out.append({
         'path': item['path'],
         'language': 'python',
         'produced': produced,
         'consumed': consumed,
         'listed': listed,
-        'reads': reads,
         'pending': pending,
         'lists': [{'name': name, 'versions': versions} for name, versions in lists.items()],
         'constants': [{'name': name, 'version': version} for name, version in constants.items()],
@@ -519,7 +509,7 @@ async function collectElsewhere({ rootDir, config, changed, now, deadline }) {
     } catch {
       continue;
     }
-    const pattern = /["']([A-Za-z0-9][A-Za-z0-9._-]*\/v\d+)["']/g;
+    const pattern = /["'`]([A-Za-z0-9][A-Za-z0-9._-]*\/v\d+)["'`]/g;
     let match;
     while ((match = pattern.exec(source)) !== null) {
       const version = match[1];

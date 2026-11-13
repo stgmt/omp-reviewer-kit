@@ -2,6 +2,8 @@
 // through the standard-library `ast` in one child interpreter. The shape is the same one the
 // JavaScript adapter produces, so the pair finder and the argument grounding are shared, not copied.
 
+import path from 'node:path';
+
 import { runPythonChild } from '../scan/python-child.mjs';
 
 /** Module-level functions a probe can call; an underscore prefix is the Python convention for private. */
@@ -61,7 +63,7 @@ export async function extractPythonFunctions({ rootDir, paths, pythonBin = 'pyth
   if (paths.length === 0) return { modules: [], unparsed: [] };
   const child = await runPythonChild({
     script: PYTHON_SCRIPT,
-    files: paths.map(relative => ({ path: relative, abs: `${rootDir}/${relative}` })),
+    files: paths.map(relative => ({ path: relative, abs: path.join(rootDir, relative) })),
     timeoutMs,
     pythonBin,
     spawnSync,

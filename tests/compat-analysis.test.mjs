@@ -112,6 +112,22 @@ test('Given a supported list tested with includes, When the analysis runs, Then 
   });
 });
 
+test('Given the extractor throws, When the analysis runs, Then it returns and stores a failed envelope', async () => {
+  await withTree({ 'src/a.js': 'export const x = 1;\n' }, async root => {
+    const result = await runCompatAnalysis({
+      context: context(root, ['src/a.js']),
+      env: {},
+      now: () => { throw new Error('clock failed'); },
+    });
+    assert.equal(result.reason, 'analysis-failed');
+    assert.equal(result.analysis.status, 'failed');
+    assert.equal(result.analysis.coverage, 'failed');
+    const artifact = JSON.parse(await readFile(path.join(root, '.review', 'compat.json'), 'utf8'));
+    assert.equal(artifact.status, 'failed');
+    assert.match(artifact.failures[0].message, /clock failed/);
+  });
+});
+
 test('Given more sites than the cap where a producer sorts after its consumer, When the analysis runs, Then no version is certified dead', async () => {
   await withTree({
     'a.js': "export function use(m) { return m.schema === 'p/v8' || m.schema === 'p/v9' || m.schema === 'p/v10'; }\n",

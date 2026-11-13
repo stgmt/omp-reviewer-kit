@@ -61,7 +61,6 @@ test('Given a module that writes, reads and lists versions, When collected, Then
   const consumed = record.consumed.map(site => `${site.version}@${site.line}`).sort();
   assert.deepEqual(consumed, ['product-manifest/v8@9']);
   assert.equal(record.consumed[0].constant, 'SCHEMA_V8');
-  assert.ok(record.reads.some(read => read.name === 'strategy' && read.line === 9));
 });
 
 test('Given a supported list tested with includes, When collected, Then every accepted version is consumed', async () => {
@@ -193,6 +192,16 @@ test('Given an unchanged module that still writes a version, When the snapshot i
   }, async root => {
     const result = await extractCompat({ rootDir: root, paths: ['src/repair.py'], config: resolveCompatConfig(), pythonBin: 'python' });
     assert.deepEqual(result.elsewhere, [{ version: 'product-manifest/v8', path: 'src/legacy.py', line: 1 }]);
+  });
+});
+
+test('Given an unchanged module that writes a version in a template literal, When the snapshot is scanned, Then the literal is still found', async () => {
+  await withTree({
+    'src/repair.js': "export function repair(manifest) { return manifest.schema === 'product-manifest/v8'; }\n",
+    'src/legacy.js': 'export const SCHEMA = `product-manifest/v8`;\n',
+  }, async root => {
+    const result = await extractCompat({ rootDir: root, paths: ['src/repair.js'], config: resolveCompatConfig() });
+    assert.deepEqual(result.elsewhere, [{ version: 'product-manifest/v8', path: 'src/legacy.js', line: 1 }]);
   });
 });
 

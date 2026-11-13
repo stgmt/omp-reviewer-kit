@@ -3093,7 +3093,7 @@
       ],
       "ancestors": [],
       "mutantHash": "4590875a49cdd6e36a536b788392f1cfbc4d72a433264a9966ab84e42b05959d",
-      "testHash": "5529d8924ebf3fb40a93b2eadce778a8c0a7f773a4f1367722eed19a558a51e1"
+      "testHash": "217863a095b9c7f245707ed0f76ec59b10f3dc873d8f0ca29ea190516b2646ce"
     },
     "layout-required-diff-budget-missing": {
       "testFile": "tests/layout-required.test.mjs",
@@ -3102,7 +3102,7 @@
       ],
       "ancestors": [],
       "mutantHash": "5e5e868d9845a794b57762550c1e862638c5334c178ba1196f780c2a6fe92501",
-      "testHash": "5529d8924ebf3fb40a93b2eadce778a8c0a7f773a4f1367722eed19a558a51e1"
+      "testHash": "217863a095b9c7f245707ed0f76ec59b10f3dc873d8f0ca29ea190516b2646ce"
     },
     "maintainability-signal-kill-treated-as-timeout": {
       "testFile": "tests/maintainability-extract.test.mjs",
@@ -3246,7 +3246,7 @@
       ],
       "ancestors": [],
       "mutantHash": "58fae5caef773915f05c2458e526a9dcb6666277e207d1f264dc34f0320987d0",
-      "testHash": "5529d8924ebf3fb40a93b2eadce778a8c0a7f773a4f1367722eed19a558a51e1"
+      "testHash": "217863a095b9c7f245707ed0f76ec59b10f3dc873d8f0ca29ea190516b2646ce"
     },
     "layout-required-registration-record-missing": {
       "testFile": "tests/layout-required.test.mjs",
@@ -3255,7 +3255,7 @@
       ],
       "ancestors": [],
       "mutantHash": "71704520fb9262eaf4f21d8b57dbee31120954f07b9c46a71130f17646d72a9e",
-      "testHash": "5529d8924ebf3fb40a93b2eadce778a8c0a7f773a4f1367722eed19a558a51e1"
+      "testHash": "217863a095b9c7f245707ed0f76ec59b10f3dc873d8f0ca29ea190516b2646ce"
     },
     "catalog-anchor-not-in-source": {
       "testFile": "tests/mutation-catalog.test.mjs",
@@ -3813,7 +3813,7 @@
       ],
       "ancestors": [],
       "mutantHash": "d8ac2c0f6a47767eeea36b63b92299d874ecb164e3e246c3ac59e1eaf8c37a13",
-      "testHash": "5529d8924ebf3fb40a93b2eadce778a8c0a7f773a4f1367722eed19a558a51e1"
+      "testHash": "217863a095b9c7f245707ed0f76ec59b10f3dc873d8f0ca29ea190516b2646ce"
     },
     "contract-oversized-module-skipped-silently": {
       "testFile": "tests/contract-stage.test.mjs",
@@ -3975,7 +3975,7 @@
       ],
       "ancestors": [],
       "mutantHash": "2e51b4fdb7e434170599bfed9dc915cb1ee9491f584c9850b86e4768fa8d4d4a",
-      "testHash": "5529d8924ebf3fb40a93b2eadce778a8c0a7f773a4f1367722eed19a558a51e1"
+      "testHash": "217863a095b9c7f245707ed0f76ec59b10f3dc873d8f0ca29ea190516b2646ce"
     },
     "stamp-hook-strips-body-markers": {
       "testFile": "tests/hook-ownership.test.mjs",
@@ -4454,7 +4454,7 @@
       ],
       "ancestors": [],
       "mutantHash": "dfc4220e52e44b0d39d1fe1ac43c81e2c648111d1e10a6495e7bcc590e661e6f",
-      "testHash": "3cecc5efc1b03e721e314108e1095ee91cd4bcabd386de5a692c1a9a17fe14b3"
+      "testHash": "52561ebb1f2001049b03ca1518149ecd7a7436fca0cb6c9c4f63ab1380da6040"
     },
     "compat-unparsed-reported-as-full": {
       "testFile": "tests/compat-analysis.test.mjs",
@@ -4463,7 +4463,7 @@
       ],
       "ancestors": [],
       "mutantHash": "9d24e3edfd671949f742351449520fc4da026681284d63781dc078a8dc17499f",
-      "testHash": "d76ab4927b5d32b099c7022b44b03a705b74b48e83dedde27f325e27a8569ed8"
+      "testHash": "356537dbd2dd6aed2716cd25dea024ab69dd357bed77ec18f1b5531a54d8042d"
     },
     "compat-report-budget-ignored": {
       "testFile": "tests/compat-report.test.mjs",
@@ -4490,7 +4490,7 @@
       ],
       "ancestors": [],
       "mutantHash": "8b849c8ef518bd5acd6bf177bfedeaed77b6895f6fdc6896a19ceb58c656c9b7",
-      "testHash": "d76ab4927b5d32b099c7022b44b03a705b74b48e83dedde27f325e27a8569ed8"
+      "testHash": "356537dbd2dd6aed2716cd25dea024ab69dd357bed77ec18f1b5531a54d8042d"
     },
     "contract-python-syntax-swallowed": {
       "testFile": "tests/contract-python.test.mjs",
@@ -4517,7 +4517,7 @@
       ],
       "ancestors": [],
       "mutantHash": "94c41a6788cbe41aa72903e8896fe9db354bb05205b728633dde85ba36f36eb4",
-      "testHash": "d76ab4927b5d32b099c7022b44b03a705b74b48e83dedde27f325e27a8569ed8"
+      "testHash": "356537dbd2dd6aed2716cd25dea024ab69dd357bed77ec18f1b5531a54d8042d"
     },
     "compat-failed-scan-claims-empty": {
       "testFile": "tests/compat-report.test.mjs",
@@ -4535,7 +4535,7 @@
       ],
       "ancestors": [],
       "mutantHash": "745785510c38b53e9e4302cd3f40c8d70f12057c4c75a96098b043dd4f979ca7",
-      "testHash": "d76ab4927b5d32b099c7022b44b03a705b74b48e83dedde27f325e27a8569ed8"
+      "testHash": "356537dbd2dd6aed2716cd25dea024ab69dd357bed77ec18f1b5531a54d8042d"
     },
     "contract-cross-note-file-blind": {
       "testFile": "tests/contract-python.test.mjs",
@@ -4553,7 +4553,7 @@
       ],
       "ancestors": [],
       "mutantHash": "188d756919d7d958e16f197791eccf10ea2629095e37039224ab478d7342d7a0",
-      "testHash": "3cecc5efc1b03e721e314108e1095ee91cd4bcabd386de5a692c1a9a17fe14b3"
+      "testHash": "52561ebb1f2001049b03ca1518149ecd7a7436fca0cb6c9c4f63ab1380da6040"
     },
     "compat-js-membership-ignored": {
       "testFile": "tests/compat-analysis.test.mjs",
@@ -4562,7 +4562,7 @@
       ],
       "ancestors": [],
       "mutantHash": "6d5f1f1f72cc671ccba3978167c10cdf72f62fe47585974f46b0b8a194688af0",
-      "testHash": "d76ab4927b5d32b099c7022b44b03a705b74b48e83dedde27f325e27a8569ed8"
+      "testHash": "356537dbd2dd6aed2716cd25dea024ab69dd357bed77ec18f1b5531a54d8042d"
     },
     "compat-truncation-ignored-entirely": {
       "testFile": "tests/compat-analysis.test.mjs",
@@ -4571,7 +4571,7 @@
       ],
       "ancestors": [],
       "mutantHash": "c72049bb15ef1d68cc45d2f5054159f1544e907937eb17b686585c5346318e87",
-      "testHash": "d76ab4927b5d32b099c7022b44b03a705b74b48e83dedde27f325e27a8569ed8"
+      "testHash": "356537dbd2dd6aed2716cd25dea024ab69dd357bed77ec18f1b5531a54d8042d"
     },
     "contract-python-binding-unverified": {
       "testFile": "tests/contract-python.test.mjs",
