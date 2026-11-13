@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { hunterTask, maintainabilityTask, scoutTask, synthesisTask, verifierTask } from '../src/native/stage-tasks.mjs';
+import { hunterTask, maintainabilityTask, recheckTask, scoutTask, synthesisTask, verifierTask } from '../src/native/stage-tasks.mjs';
 
 const input = {
   context: {
@@ -51,21 +51,35 @@ test('Given a candidate file, When the maintainability task is built, Then it na
   assert.match(text, /You are the maintainability stage/);
 });
 
-test('Given candidates and gaps, When the verifier task is built, Then every candidate is carried with its lane and the gaps are carried too', () => {
+test('Given candidates, gaps and shape duplicates, When the verifier task is built, Then every candidate is carried with its lane and each duplicate pair with both ranges', () => {
   const text = verifierTask({
     input,
     scout,
     hunters: [{ lane: 'correctness', data: { candidates: [{ candidate_id: 'correctness-1', title: 'Boom' }], coverage_gaps: [{ coverage_id: 'coverage-1' }] } }],
     coverageGaps: [{ coverage_id: 'coverage-1' }],
+    duplicates: [{
+      changedPath: 'src/new.mjs',
+      changedLine: 4,
+      changedName: 'secondCopy',
+      existingPath: 'src/old.mjs',
+      existingLine: 9,
+      existingName: 'firstCopy',
+      similarity: 0.93,
+      sharedCalls: ['push', 'sort'],
+    }],
     profile: 'full',
   });
+  assert.match(text, /"candidate_id": "reuse-1"/);
+  assert.match(text, /"changed": "src\/new\.mjs:4"/);
+  assert.match(text, /"existing": "src\/old\.mjs:9"/);
+  assert.match(text, /not findings/);
   assert.match(text, /"lane": "correctness"/);
   assert.match(text, /"candidate_id": "correctness-1"/);
   assert.match(text, /"coverage_id": "coverage-1"/);
   assert.match(text, /Maintainability candidates are not yours/);
 });
 
-test('Given every stage result, When the synthesis task is built, Then the results are supplied and spawning is forbidden', () => {
+test('Given every stage result, When the synthesis task is built, Then the facts are supplied, the scout prose is withheld and spawning is forbidden', () => {
   const text = synthesisTask({
     input,
     scout,
@@ -77,10 +91,26 @@ test('Given every stage result, When the synthesis task is built, Then the resul
   });
   assert.match(text, /You are the final synthesis stage/);
   assert.match(text, /Do not spawn a subagent and do not re-run a stage/);
-  assert.match(text, /Context scout result:/);
+  assert.match(text, /Context scout facts/);
   assert.match(text, /Hunter results:/);
   assert.match(text, /Maintainability stage result:/);
   assert.match(text, /Verifier result:/);
+  assert.match(text, /A confirmed finding must come from the verifier result/);
+  assert.match(text, /"changed_paths": \[/, 'the scout facts are still carried');
+  assert.match(text, /"test_harness": "present"/);
+  assert.doesNotMatch(text, /"change_goal"/, 'a documented history of a past block must not reach synthesis as prose');
+  assert.doesNotMatch(text, /"claims"/);
   assert.match(text, /end it with the single verdict marker/);
   assert.doesNotMatch(text, /\bmodel\b/i);
+});
+
+test('Given the claims a report made, When the recheck task is built, Then every claim is carried verbatim against the snapshot', () => {
+  const text = recheckTask({ snapshotDir: '/tmp/staged-abc', findings: ['R1 (blocking): a conflict', 'R2: a second claim'] });
+  assert.match(text, /Staged snapshot directory: \/tmp\/staged-abc/);
+  assert.match(text, /asked a second time/);
+  assert.match(text, /1\. R1 \(blocking\): a conflict/);
+  assert.match(text, /2\. R2: a second claim/);
+  assert.match(text, /Every source file read must come from the snapshot directory/);
+  assert.doesNotMatch(text, /\bmodel\b/i);
+  assert.doesNotMatch(text, /@task|fallback|provider/i);
 });

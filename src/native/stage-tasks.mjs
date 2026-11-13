@@ -69,15 +69,28 @@ export function maintainabilityTask({ snapshotDir, candidatePath, policy, profil
 }
 
 /**
- * Stage 3: the adversarial verifier over every candidate of every lane and the coverage gaps.
+ * Stage 3: the adversarial verifier over every candidate of every lane, the shapes a changed
+ * function shares with an existing one, and the coverage gaps.
  *
- * @param {{ input: object, scout: object, hunters: Array<{ lane: string|null, data: object|null }>, coverageGaps: object[], profile: string }} args
+ * @param {{ input: object, scout: object, hunters: Array<{ lane: string|null, data: object|null }>, coverageGaps: object[], duplicates?: object[], profile: string }} args
  * @returns {string}
  */
-export function verifierTask({ input, scout, hunters, coverageGaps, profile }) {
+export function verifierTask({ input, scout, hunters, coverageGaps, duplicates = [], profile }) {
   const candidates = hunters.flatMap(hunter =>
     (Array.isArray(hunter.data?.candidates) ? hunter.data.candidates : []).map(candidate => ({ lane: hunter.lane, candidate })),
   );
+  // The deterministic shape scan answers "does this already exist under another name". It is a lead,
+  // not a finding: the pair is decided here, and a confirmed one blocks through confirmed findings.
+  const duplicateCandidates = (Array.isArray(duplicates) ? duplicates : []).map((pair, index) => ({
+    candidate_id: `reuse-${index + 1}`,
+    lane: 'reuse',
+    changed: `${pair.changedPath}:${pair.changedLine}`,
+    changed_name: pair.changedName ?? null,
+    existing: `${pair.existingPath}:${pair.existingLine}`,
+    existing_name: pair.existingName ?? null,
+    similarity: pair.similarity,
+    shared_calls: Array.isArray(pair.sharedCalls) ? pair.sharedCalls : [],
+  }));
   return stagedInputs(
     input,
     [
@@ -99,9 +112,55 @@ export function verifierTask({ input, scout, hunters, coverageGaps, profile }) {
       JSON.stringify(coverageGaps, null, 2),
       '```',
       '',
+      'Shape duplicates (deterministic scan of the snapshot, not findings): each entry pairs a changed function with an existing one whose shape it repeats. Decide each as a candidate `reuse-N`: confirm it only when both ranges implement the same responsibility and the staged side adds no product capability, and then name both `path:line` pairs in the confirmed finding. Reject boilerplate, a thin wrapper over the existing unit, a test fixture, and a pair whose difference is the product change itself.',
+      '```json',
+      JSON.stringify(duplicateCandidates, null, 2),
+      '```',
+      '',
       'Maintainability candidates are not yours: they never enter confirmed findings or confirmed coverage gaps.',
     ].join('\n'),
   );
+}
+
+/**
+ * The scout fields that are prose about the change rather than facts about the diff. `change_goal`
+ * and `claims` are exactly where a documented history of an earlier BLOCK re-enters the review as
+ * if it described the staged change, so the synthesis stage never receives them: a finding must
+ * come from a stage that read the snapshot and confirmed it.
+ */
+const SCOUT_NARRATIVE_FIELDS = ['change_goal', 'claims'];
+
+function scoutFacts(scout) {
+  if (!scout || typeof scout !== 'object' || Array.isArray(scout)) return null;
+  const facts = { ...scout };
+  for (const field of SCOUT_NARRATIVE_FIELDS) delete facts[field];
+  return facts;
+}
+
+/**
+ * Stage 5: the re-verification of a report whose findings no stage confirmed. The synthesis can only
+ * propose: a claim it makes is settled by calling it against the staged snapshot, exactly as a
+ * hunter candidate is. The claims are supplied verbatim; nothing else about the report travels.
+ *
+ * @param {{ snapshotDir: string, findings: string[] }} args
+ * @returns {string}
+ */
+export function recheckTask({ snapshotDir, findings }) {
+  const claims = (Array.isArray(findings) ? findings : [])
+    .map((finding, index) => `${index + 1}. ${typeof finding === 'string' ? finding.replace(/\s+/g, ' ').trim() : String(finding)}`);
+  return [
+    `Staged snapshot directory: ${snapshotDir}`,
+    `Diff file (complete staged diff, byte-exact): ${snapshotDir}/.review/diff.patch`,
+    `Changed-file manifest: ${snapshotDir}/.review/changed-files.txt`,
+    `File-class manifest (deterministic, do not re-classify): ${snapshotDir}/.review/file-classes.json`,
+    '',
+    'You are the adversarial verifier stage of this review, asked a second time. The final synthesis reported a BLOCK whose findings no stage confirmed. Decide every claim below against the staged snapshot: confirm it only when the snapshot shows the defect exactly as stated, and reject every claim the snapshot does not support.',
+    '',
+    'Claims the report made, verbatim:',
+    ...claims,
+    '',
+    'Every source file read must come from the snapshot directory; the repository is for read-only Git metadata only. Emit the structured result your agent contract defines.',
+  ].join('\n');
 }
 
 /**
@@ -126,9 +185,9 @@ export function synthesisTask({ input, scout, hunters, maintainability, verifier
       `Profile: ${profile}; lanes: ${JSON.stringify(lanes)}`,
       'You are the final synthesis stage of this review. Every earlier stage already ran; their structured results are supplied below. Do not spawn a subagent and do not re-run a stage.',
       '',
-      'Context scout result:',
+      'Context scout facts (its free-text change goal and claims are not supplied: prose may restate a past blocker recorded in the diff, and it is never evidence):',
       '```json',
-      JSON.stringify(scout ?? null, null, 2),
+      JSON.stringify(scoutFacts(scout), null, 2),
       '```',
       '',
       'Hunter results:',
@@ -146,7 +205,7 @@ export function synthesisTask({ input, scout, hunters, maintainability, verifier
       JSON.stringify(verifier ?? null, null, 2),
       '```',
       '',
-      'Write the report exactly as your agent contract defines, and end it with the single verdict marker.',
+      'A confirmed finding must come from the verifier result. Write the report exactly as your agent contract defines, and end it with the single verdict marker.',
     ].join('\n'),
   );
 }

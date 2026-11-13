@@ -1,4 +1,4 @@
-// omp-reviewer-kit runner v0.31.1
+// omp-reviewer-kit runner v0.33.0
 // omp-reviewer-kit runner: the Node launcher of the native review. The review runs under Bun in
 // src/native/native-host.mjs because OMP's library is a Bun package. The launcher checks Bun and
 // prepares the pinned library outside the repository when a host install does not include it.

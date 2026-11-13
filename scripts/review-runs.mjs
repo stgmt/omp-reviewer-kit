@@ -205,6 +205,10 @@ export function formatRunDetail(record) {
   if (reasons.length > 0) {
     lines.push('', 'Reasons:', ...reasons.map(reason => `- ${reason}`));
   }
+  const notes = Array.isArray(record.notes) ? record.notes : [];
+  if (notes.length > 0) {
+    lines.push('', 'Notes:', ...notes.map(note => `- ${note}`));
+  }
   return lines.join('\n');
 }
 
