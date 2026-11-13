@@ -474,3 +474,18 @@ test('Given a verifier that records the defect as still present, When evaluated,
   assert.equal(passed.pass, false, 'a finished verifier that says still present cannot be passed over');
   assert.match(passed.reasons.join(' '), /verifier confirmed 1 finding\(s\) but the reviewer passed/);
 });
+
+test('Given a verifier that confirms a duplicate implementation, When evaluated, Then the pair blocks the commit', () => {
+  const verifier = done('review-finding-verifier', {
+    lane: 'correctness',
+    confirmed_findings: [{ candidate_id: 'reuse-1', lane: 'reuse', priority: 'P2', title: 'second copy of collectVisible', file_path: 'src/new.mjs' }],
+    confirmed_coverage_gaps: [],
+  });
+  const result = evaluateReview({
+    reviewer: reviewerPass('### Confirmed findings\n- **P2** src/new.mjs:4 repeats src/old.mjs:9\n\nREVIEW_RESULT=BLOCK'),
+    stages: [everyStage[0], everyStage[1], verifier],
+    ...FULL,
+  });
+  assert.equal(result.pass, false);
+  assert.deepEqual(result.reasons, ['reviewer verdict BLOCK']);
+});

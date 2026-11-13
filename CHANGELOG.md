@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.33.0] - 2026-11-13
+
+### Added
+- A changed function whose shape repeats an existing one is now a review candidate, not a hint: the deterministic reuse scan hands every pair (`reuse-N`, both `path:line` ranges, similarity, shared calls) to the adversarial verifier, and a pair it confirms becomes a confirmed finding that blocks the commit. A pair it rejects goes to `### Notes`. This is the gate for a second implementation of the same thing under another name (a v2 of an existing module); the scan's own thresholds stay advisory, so boilerplate alone never blocks.
+
+### Fixed
+- The reuse stage's candidates were previously rendered only as bounded hint lines in the assignment, so a duplicated implementation could pass a review without any stage deciding it.
+
 ## [0.32.0] - 2026-11-12
 
 ### Added
