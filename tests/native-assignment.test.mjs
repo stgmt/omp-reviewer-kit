@@ -59,3 +59,26 @@ test('Given a staged name with a bidi override, When the assignment is built, Th
   assert.ok(text.includes('- src/\\u202eevil.mjs'));
   assert.equal(text.includes('\u202e'), false);
 });
+
+test('Given a version census, When the assignment is built, Then its lines are carried verbatim and marked as evidence', () => {
+  const text = buildAssignment({
+    ...input,
+    compat: {
+      policy: 'advisory',
+      reason: null,
+      files: 5,
+      coverage: 'full',
+      lines: [
+        'Version census (deterministic scan of 5 file(s), 1 family(ies), coverage full; evidence, never a finding):',
+        '- product-manifest: produced v5 (reel/manifest.py:17); consumed v8 (reel/repair.py:9).',
+      ],
+    },
+  });
+  assert.match(text, /^Version census \(deterministic scan of 5 file\(s\), 1 family\(ies\), coverage full; evidence, never a finding\):$/m);
+  assert.match(text, /^- product-manifest: produced v5 \(reel\/manifest\.py:17\); consumed v8 \(reel\/repair\.py:9\)\.$/m);
+});
+
+test('Given a skipped version census, When the assignment is built, Then it names the reason instead of vanishing', () => {
+  const text = buildAssignment({ ...input, compat: { policy: 'off', reason: 'policy-off', files: 0, coverage: null, lines: [] } });
+  assert.match(text, /^Version census: not run \(policy-off\)\.$/m);
+});

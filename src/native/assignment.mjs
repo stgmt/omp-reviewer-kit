@@ -22,7 +22,7 @@ import { sanitizePromptToken } from '../domain/prompt-token.mjs';
  * }} input
  * @returns {string}
  */
-export function buildAssignment({ context, maintainability = null, reuse = null, contract = null }) {
+export function buildAssignment({ context, maintainability = null, reuse = null, contract = null, compat = null }) {
   const { snapshot, repo: repoRoot, profile, lanes } = context;
   const { dir: snapshotDir, diffHash, changedPaths } = snapshot;
   const review = `${snapshotDir}/.review`;
@@ -40,6 +40,7 @@ export function buildAssignment({ context, maintainability = null, reuse = null,
     maintainabilityLine(maintainability),
     reuseLine(reuse),
     contractLine(contract),
+    compatLine(compat),
     'No suspicion map, previous-round block, execution evidence block or hunter shards are supplied for this assignment.',
     '',
     'Changed paths:',
@@ -98,6 +99,19 @@ function contractLine(contract) {
     ...rejected,
     ...(skipped.length > 0 ? ['Work the stage did not settle:', ...skipped] : []),
   ].filter(Boolean);
+  return lines.join('\n');
+}
+
+/**
+ * The version census: which versions this snapshot produces, consumes and lists, and which of them
+ * no producer in the snapshot writes. The block is evidence for the hunter, never a finding, and a
+ * skipped census is stated with its reason instead of disappearing.
+ */
+function compatLine(compat) {
+  if (!compat) return 'Version census: not run for this diff.';
+  if (compat.reason) return `Version census: not run (${compat.reason}).`;
+  const lines = Array.isArray(compat.lines) ? compat.lines : [];
+  if (lines.length === 0) return `Version census: no versioned schema literal in ${compat.files ?? 0} changed code file(s).`;
   return lines.join('\n');
 }
 

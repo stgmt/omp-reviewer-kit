@@ -15,8 +15,10 @@ import { centralizationGroupIds } from '../domain/maintainability-centralization
 import { isTestPath } from '../domain/suspicion-map.mjs';
 import { runMaintainabilityAnalysis } from './maintainability/analyze.mjs';
 import { runReuseAnalysis } from './reuse/analyze.mjs';
+import { runCompatAnalysis } from './compat/analyze.mjs';
 import { runContractAnalysis } from './contract/analyze.mjs';
 import { renderReuseLines } from './reuse/report.mjs';
+import { renderCompatLines } from './compat/report.mjs';
 import { HUNTER_AGENT, MAINTAINABILITY_AGENT, SCOUT_AGENT, VERIFIER_AGENT, evaluateReview } from './verdict.mjs';
 import {
   HUNTER_STAGE,
@@ -37,6 +39,7 @@ import { readAgentsDigest, readKitVersion } from '../infra/kit-fingerprint.mjs';
 import { repoIdentity } from '../infra/repo-identity.mjs';
 import { resolveConfig as resolveMaintainabilityConfig, resolvePolicy as resolveMaintainabilityPolicy } from './maintainability/config.mjs';
 import { resolveReusePolicy } from './reuse/config.mjs';
+import { resolveCompatPolicy } from './compat/config.mjs';
 import { contractPolicy } from './contract/analyze.mjs';
 
 const clock = () => Date.now();
@@ -85,6 +88,8 @@ export async function runNativeReview({
   analysisConfig = undefined,
   reuseConfig = undefined,
   reuseMaxLines = 12,
+  compatConfig = undefined,
+  compatMaxLines = 12,
 }) {
   const startedMs = now();
   const snapshotStarted = now();
@@ -132,8 +137,10 @@ export async function runNativeReview({
         lanes,
         maintainabilityPolicy: resolveMaintainabilityPolicy(env),
         reusePolicy: resolveReusePolicy(env),
+        compatPolicy: resolveCompatPolicy(env),
         contractPolicy: contractPolicy(env),
         reuseMaxLines,
+        compatMaxLines,
         maintainabilityConfig: analysisConfig ?? resolveMaintainabilityConfig(),
       }),
     };
@@ -173,6 +180,19 @@ export async function runNativeReview({
     const reuseLines = reuse.skipped ? [] : renderReuseLines(reuse.analysis, { maxLines: reuseMaxLines });
     if (!reuse.skipped && reuse.artifactWritten === false) onProgress(`review: reuse artifact not written (${reuse.artifactError}); hints still supplied`);
     if (!reuse.skipped) onProgress(`review: reuse hints ${reuseLines.length > 0 ? `${reuse.analysis.candidates.length} candidate(s)` : 'none'} (${reuse.analysis.scan.units} unit(s), coverage ${reuse.analysis.coverage}, ${reuseMs} ms)`);
+    // The census answers a question the diff alone hides: which versions this snapshot writes, reads
+    // and merely accepts. It is evidence for the hunter and never a verdict of its own.
+    const compatStarted = now();
+    const compat = await runCompatAnalysis({
+      context,
+      env,
+      now,
+      config: compatConfig ?? undefined,
+    });
+    const compatMs = now() - compatStarted;
+    const compatLines = compat.skipped ? [] : renderCompatLines(compat.analysis, { maxLines: compatMaxLines });
+    if (!compat.skipped && compat.artifactError) onProgress(`review: version census artifact not written (${compat.artifactError}); lines still supplied`);
+    if (!compat.skipped) onProgress(`review: version census ${compat.analysis.families.length} family(ies), ${compat.analysis.deadVersions.length} dead version(s) (${compat.analysis.scan.files} file(s), coverage ${compat.analysis.coverage}, ${compatMs} ms)`);
     if (!analysis.skipped) onProgress(`review: maintainability ${maintainability.status} (${maintainability.groups} group(s), coverage ${maintainability.coverage}, policy ${maintainability.policy})`);
     // Deterministic and cheap: a producer/consumer pair is settled by calling it, not by asking a model.
     const contractStarted = now();
@@ -223,6 +243,15 @@ export async function runNativeReview({
           coverage: maintainability.coverage,
           candidates: maintainability.groups,
           truncated: maintainability.truncated,
+        },
+      compat: compat.skipped
+        ? { policy: compat.policy, reason: compat.reason, files: 0, coverage: null, lines: [] }
+        : {
+          policy: compat.policy,
+          reason: null,
+          files: compat.analysis.scan.files,
+          coverage: compat.analysis.coverage,
+          lines: compatLines,
         },
     };
     const taskStarted = now();

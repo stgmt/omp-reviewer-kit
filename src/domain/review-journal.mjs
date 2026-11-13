@@ -51,8 +51,10 @@ function digest(parts) {
  *   lanes?: string[],
  *   maintainabilityPolicy?: string|null,
  *   reusePolicy?: string|null,
+ *   compatPolicy?: string|null,
  *   contractPolicy?: string|null,
  *   reuseMaxLines?: number|null,
+ *   compatMaxLines?: number|null,
  *   maintainabilityConfig?: object|null,
  * }} [input]
  * @returns {string}
@@ -62,8 +64,10 @@ export function configFingerprint({
   lanes = [],
   maintainabilityPolicy = null,
   reusePolicy = null,
+  compatPolicy = null,
   contractPolicy = null,
   reuseMaxLines = null,
+  compatMaxLines = null,
   maintainabilityConfig = null,
 } = {}) {
   const normalized = {
@@ -71,8 +75,10 @@ export function configFingerprint({
     lanes: [...new Set((Array.isArray(lanes) ? lanes : []).map(lane => String(lane).trim().toLowerCase()).filter(Boolean))].sort(),
     maintainabilityPolicy: maintainabilityPolicy ?? null,
     reusePolicy: reusePolicy ?? null,
+    compatPolicy: compatPolicy ?? null,
     contractPolicy: contractPolicy ?? null,
     reuseMaxLines: typeof reuseMaxLines === 'number' && Number.isFinite(reuseMaxLines) ? reuseMaxLines : null,
+    compatMaxLines: typeof compatMaxLines === 'number' && Number.isFinite(compatMaxLines) ? compatMaxLines : null,
     // The maintainability thresholds decide which groups are delivered, so a verdict decided under
     // one set must not answer a review run under another.
     maintainabilityConfig: normalizeConfig(maintainabilityConfig),

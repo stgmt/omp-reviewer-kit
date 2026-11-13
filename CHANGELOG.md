@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- The correctness lane now owns a sixth anti-parasitic form: a compatibility surface with no live consumer — a version table, a supported-version list, a second reader or writer for an old record shape, or a wait for a legacy event. A writer that labels the new shape with an old version is a `P1` contract defect; a compatibility branch whose old format has no producer in the snapshot and no named external consumer is `P2`. Compatibility that is live in the field stays out of the gate, and the verifier applies the same standard in its own terms.
+- A deterministic version census runs before the native task and reaches the hunter in the assignment: which `family/vN` literals the changed code produces, consumes and lists, which of them no producer in the snapshot writes (`deadVersions`, `deadBranches`), and which the change only reads while an unchanged module still writes them (`unproducedVersions`). A constant imported from another changed module is resolved across the changed set. The census never blocks: only the hunter and the verifier decide what a dead surface means. `OMP_REVIEW_KIT_COMPAT` selects `off`/`advisory` (default `advisory`).
+- The producer/consumer reconciliation now reads Python through the standard-library `ast` with the same pairing and argument-grounding rules as JavaScript, and pairs a writer with a reader in another changed module only when the reader's module imports the writer by name from the writer's module. A Python probe child calls the pair on the staged snapshot; `contract@1` pairs carry `language` and `crossModule`.
+
+### Changed
+- The review journal key includes the census policy, so a stored verdict for one census configuration is not reused for another.
+
 ## [0.31.1] - 2026-11-10
 
 ### Fixed

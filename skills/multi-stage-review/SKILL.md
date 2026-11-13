@@ -118,10 +118,11 @@ Specialist frontmatter owns its native `output` schema. Submit one complete `yie
   - Never speculate on potential breakage without citing a concrete, reachable callsite.
   - Never report advice without a concrete failing trigger scenario.
 - **Anti-Parasitic Correctness Gate**:
-  - Evaluate only five forms: micro-CLIs replacing domain calls; local PKI without a trust boundary; file inbox/exit-code protocols replacing native pause and persistence; process receipts replacing product behavior tests; indiscriminate command capture duplicating existing logging.
-  - Confirm only when both repository or declared-framework evidence proves an existing mechanism for the same responsibility and the staged layer adds no product capability.
+  - Evaluate only six forms: micro-CLIs replacing domain calls; local PKI without a trust boundary; file inbox/exit-code protocols replacing native pause and persistence; process receipts replacing product behavior tests; indiscriminate command capture duplicating existing logging; and a compatibility surface with no live consumer.
+  - For the first five, confirm only when both repository or declared-framework evidence proves an existing mechanism for the same responsibility and the staged layer adds no product capability.
+  - For the compatibility surface, confirm a contract defect (`P1`) only when a writer labels the new shape with an old version and a consumer of the new shape reaches that record; confirm dead compatibility (`P2`) only when no producer of the old format exists in the snapshot and the change names no external consumer.
   - Treat ownership cost as impact, not a third condition. Missing either proof means no candidate, `rejected`, or `not_proven`.
-  - Protect capability-adding Port/Adapter and Template Method designs, public user-facing CLIs, and cryptography for remote untrusted payloads from false positives.
+  - Protect capability-adding Port/Adapter and Template Method designs, public user-facing CLIs, cryptography for remote untrusted payloads, and compatibility that is live in the field from false positives.
 - **Candidate Schema**:
   - `candidate_id`: `<lane>-<ordinal>` (e.g. `correctness-1`, `security-1`).
   - `lane`: the lane name this task was spawned under (`"correctness"` | `"security"` | `"content-risk"`).

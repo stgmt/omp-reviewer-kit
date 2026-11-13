@@ -65,6 +65,8 @@ export const REQUIRED_FILES = [
   'src/native/contract/find.mjs',
   'src/native/contract/analyze.mjs',
   'src/native/contract/probe.mjs',
+  'src/native/contract/python.mjs',
+  'src/native/contract/probe_python.py',
   // Maintainability review: deterministic candidate file, one subagent stage, one measure script.
   'src/native/maintainability/config.mjs',
   'src/native/maintainability/extract.mjs',
@@ -72,6 +74,11 @@ export const REQUIRED_FILES = [
   'src/native/maintainability/analyze.mjs',
   'scripts/measure-maintainability.mjs',
   'agents/review-maintainability.md',
+  // Version census: which versions a snapshot produces, consumes and lists.
+  'src/native/compat/config.mjs',
+  'src/native/compat/extract.mjs',
+  'src/native/compat/analyze.mjs',
+  'src/native/compat/report.mjs',
   // The hook: installer, guard, shim and target registry.
   'src/domain/runner-version.mjs',
   'src/infra/vendored-kit-files.mjs',

@@ -23,6 +23,10 @@ The review now also asks a separate question: are the same values always passed 
 - [Design and decisions](.specs/maintainability-review/DESIGN.md)
 - [Implementation plan](.specs/maintainability-review/TASKS.md)
 
+## Version census and compatibility surfaces
+
+A change can keep an old format alive long after its last consumer is gone: a version table that stamps the new shape with the old label, a supported-version list with no producer, a second reader for a record nobody writes any more. The review now answers that question with evidence instead of taste. The deterministic census (`src/native/compat/`) lists which versions the changed code produces, consumes and lists, names the ones no producer in the snapshot writes, and states where an unchanged module still writes a literal the change only reads. The hunter owns a sixth anti-parasitic form with two provable outcomes — a writer labelling the new shape with an old version (`P1` contract defect) and a dead compatibility branch (`P2`) — and the verifier confirms either only against the snapshot. The census is evidence and never a verdict: it has no blocking policy, and compatibility that is live in the field is never a defect. The producer/consumer reconciliation also reads Python and follows an import edge across changed modules, so a reader that consumes a writer's record is settled by calling both.
+
 ---
 
 ## Phase 1: Fail-Closed Staged Review Gate (Completed - v0.1.0)

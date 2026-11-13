@@ -22,17 +22,28 @@ async function main() {
   for await (const chunk of process.stdin) chunks.push(chunk);
   const request = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
   const results = [];
+  const loaded = new Map();
+  const load = async file => {
+    if (loaded.has(file)) return loaded.get(file);
+    const modulePath = isAbsolute(file) ? file : resolve(request.root, file);
+    const module = await import(pathToFileURL(modulePath).href);
+    loaded.set(file, module);
+    return module;
+  };
   for (const pair of request.pairs ?? []) {
-    const modulePath = isAbsolute(pair.file) ? pair.file : resolve(request.root, pair.file);
-    let module;
+    const writerFile = pair.writerFile ?? pair.file;
+    const readerFile = pair.readerFile ?? pair.file;
+    let writerModule;
+    let readerModule;
     try {
-      module = await import(pathToFileURL(modulePath).href);
+      writerModule = await load(writerFile);
+      readerModule = await load(readerFile);
     } catch (error) {
       results.push({ ...pair, outcome: 'module-failed', error: describeError(error) });
       continue;
     }
-    const writer = module[pair.writerExport ?? pair.writer];
-    const reader = module[pair.readerExport ?? pair.reader];
+    const writer = writerModule[pair.writerExport ?? pair.writer];
+    const reader = readerModule[pair.readerExport ?? pair.reader];
     if (typeof writer !== 'function' || typeof reader !== 'function') {
       results.push({ ...pair, outcome: 'not-exported', error: `${pair.writer}/${pair.reader} are not both exported functions` });
       continue;

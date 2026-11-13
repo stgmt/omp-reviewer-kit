@@ -55,7 +55,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "3b8b9f13183f712947d9958a05016511c9185fc239e9f7c3af718470e0abef6b",
-      "testHash": "aaaa6a9758684238b0f233bdceba0f8cb5716b1c2e81e83dc34873798b4da611"
+      "testHash": "00e9ca8bee354b08faa355753bddb51ecff92928703530948566907e42b3fac6"
     },
     "anti-parasitic-both-to-either": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -66,7 +66,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "b8607c1dd6f7ba93c3e0b7431e95eb44980c25c7b9974dd0fc887acbf309bb74",
-      "testHash": "aaaa6a9758684238b0f233bdceba0f8cb5716b1c2e81e83dc34873798b4da611"
+      "testHash": "00e9ca8bee354b08faa355753bddb51ecff92928703530948566907e42b3fac6"
     },
     "anti-parasitic-port-protection-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -77,7 +77,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "7cb2ae5cc876247bae2a345f17644a022a04d18c3ed82d839556f279b8e7e2e7",
-      "testHash": "aaaa6a9758684238b0f233bdceba0f8cb5716b1c2e81e83dc34873798b4da611"
+      "testHash": "00e9ca8bee354b08faa355753bddb51ecff92928703530948566907e42b3fac6"
     },
     "multi-stage-snapshot-boundary-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -88,7 +88,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "db7a8493b32121111624ef1add91a1b21b8c908d6e5da232df1a148e0af79373",
-      "testHash": "aaaa6a9758684238b0f233bdceba0f8cb5716b1c2e81e83dc34873798b4da611"
+      "testHash": "00e9ca8bee354b08faa355753bddb51ecff92928703530948566907e42b3fac6"
     },
     "multi-stage-yagni-boundary-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -99,7 +99,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "465a5de25c5a83dda3e244302a6b7eab09c0169bb39c82b5688b001fb8d5560c",
-      "testHash": "aaaa6a9758684238b0f233bdceba0f8cb5716b1c2e81e83dc34873798b4da611"
+      "testHash": "00e9ca8bee354b08faa355753bddb51ecff92928703530948566907e42b3fac6"
     },
     "sync-hook-newer-overwritten": {
       "testFile": "tests/sync-targets.test.mjs",
@@ -166,7 +166,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "ec31109e99d1fdb90e4b481cab9c38734f3857a530dd4a68f4327ef171a166d5",
-      "testHash": "aaaa6a9758684238b0f233bdceba0f8cb5716b1c2e81e83dc34873798b4da611"
+      "testHash": "00e9ca8bee354b08faa355753bddb51ecff92928703530948566907e42b3fac6"
     },
     "hunter-red-proof-field-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -177,7 +177,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "61f3ac262a7e6643d183a03c1ffd0e7ebebf3d58d8cbaacaf70427b43ac14e8e",
-      "testHash": "aaaa6a9758684238b0f233bdceba0f8cb5716b1c2e81e83dc34873798b4da611"
+      "testHash": "00e9ca8bee354b08faa355753bddb51ecff92928703530948566907e42b3fac6"
     },
     "verifier-triage-field-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -188,7 +188,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "e6356f58a6e2d47ec64b32c1f6f7664d120a06d1b1d697a3dac8517b2c7b5ea5",
-      "testHash": "aaaa6a9758684238b0f233bdceba0f8cb5716b1c2e81e83dc34873798b4da611"
+      "testHash": "00e9ca8bee354b08faa355753bddb51ecff92928703530948566907e42b3fac6"
     },
     "modular-suspicion-assert-delta": {
       "testFile": "tests/suspicion-map.test.mjs",
@@ -2543,7 +2543,7 @@
       ],
       "ancestors": [],
       "mutantHash": "0f733e388ed49bc73beb71b57e7db114f5676247697f8c632616860bbabd4aa4",
-      "testHash": "eafc5c6fed56ab5ae9b60a9e3833084a78800da9fad3216b19ab767ee594bd3e"
+      "testHash": "003e786fee078f4ee8277d7af37d645db061ca23d42affc83753e04682039e3d"
     },
     "native-host-skip-not-detected": {
       "testFile": "tests/e2e-native-hook.test.mjs",
@@ -2659,7 +2659,7 @@
       ],
       "ancestors": [],
       "mutantHash": "1ecc9ac531020706752ceb88337902c10a91d4cf79980dfb8915db2509a5931b",
-      "testHash": "eafc5c6fed56ab5ae9b60a9e3833084a78800da9fad3216b19ab767ee594bd3e"
+      "testHash": "003e786fee078f4ee8277d7af37d645db061ca23d42affc83753e04682039e3d"
     },
     "native-verdict-lane-identity-ignored": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -3677,7 +3677,7 @@
         "Given a reader that needs context beyond the record, When the stage runs, Then the pair is left unsettled"
       ],
       "ancestors": [],
-      "mutantHash": "2b0adda3ccea110e754532714eb8b831227070e9fdc32cf995bba05cb685ee52",
+      "mutantHash": "c85a6d788dfceaad9068dc2809d04b6051b030405f2ac37bf42fcb6693641941",
       "testHash": "daa8f32c89957faa4177d03fe7d4804d7df6f03d5243127864562dcd015e89a7"
     },
     "contract-unknown-policy-blocks": {
@@ -3794,7 +3794,7 @@
         "Given a staged module that blocks during import, When the probe times out, Then the analysis failed instead of hanging"
       ],
       "ancestors": [],
-      "mutantHash": "ecf4f1462deaaa8e01dbfab7804f3cd6d7f1f7d6f55197bdeebd337c8da1f6e9",
+      "mutantHash": "13b4b5c447271a2176bfb708e13111c43f0be0994ff5fc6348399d42dd2e1e02",
       "testHash": "daa8f32c89957faa4177d03fe7d4804d7df6f03d5243127864562dcd015e89a7"
     },
     "native-launcher-import-runs-a-review": {
@@ -3821,7 +3821,7 @@
         "Given a changed module over the size limit and a missing path, When the stage runs, Then both are reported as skipped work"
       ],
       "ancestors": [],
-      "mutantHash": "35af232be6cb8cf30f551911ea6baef845ef6ee80e01eb30002a1cb1266ef0a8",
+      "mutantHash": "fc4db56bd99bcaad934cc13e5b42ff0b58d7ee50013843234569e95562a43676",
       "testHash": "daa8f32c89957faa4177d03fe7d4804d7df6f03d5243127864562dcd015e89a7"
     },
     "contract-writer-verb-serialize-dropped": {
@@ -4446,6 +4446,141 @@
       "ancestors": [],
       "mutantHash": "b51b3d8fbde0ef229e58117048ed983a67d3160e0c43cb9ecb92aa2ab742dd3f",
       "testHash": "4d9b59f4bbec8978f30041c1ae5171099057757889695a5ff9082b81dd921ece"
+    },
+    "compat-imported-constant-unresolved": {
+      "testFile": "tests/compat-extract.test.mjs",
+      "tests": [
+        "Given a version imported from another changed module, When the analysis runs, Then the name resolves to that version"
+      ],
+      "ancestors": [],
+      "mutantHash": "dfc4220e52e44b0d39d1fe1ac43c81e2c648111d1e10a6495e7bcc590e661e6f",
+      "testHash": "3cecc5efc1b03e721e314108e1095ee91cd4bcabd386de5a692c1a9a17fe14b3"
+    },
+    "compat-unparsed-reported-as-full": {
+      "testFile": "tests/compat-analysis.test.mjs",
+      "tests": [
+        "Given an unparsed file, When the analysis runs, Then coverage is partial and the file is named"
+      ],
+      "ancestors": [],
+      "mutantHash": "9d24e3edfd671949f742351449520fc4da026681284d63781dc078a8dc17499f",
+      "testHash": "d76ab4927b5d32b099c7022b44b03a705b74b48e83dedde27f325e27a8569ed8"
+    },
+    "compat-report-budget-ignored": {
+      "testFile": "tests/compat-report.test.mjs",
+      "tests": [
+        "Given more rows than the line budget, When rendered, Then the section is bounded and points at the artifact"
+      ],
+      "ancestors": [],
+      "mutantHash": "2249b53ba9a0724ccc76156fba5856051b061f4e70695fefce1c3ec8c76bbffe",
+      "testHash": "d00ea48283991781f68d05618226191e1846fa80db708ebcd5d4a70d573b9e61"
+    },
+    "contract-python-import-edge-ignored": {
+      "testFile": "tests/contract-python.test.mjs",
+      "tests": [
+        "Given two modules that share a record family but no import edge, When the stage runs, Then no pair is invented"
+      ],
+      "ancestors": [],
+      "mutantHash": "246b15cdc88cc4095cad844e073e3c28fcc3db21cdd10aad3d23fe4b65aed412",
+      "testHash": "c677a493e083f490bc6c39dde306ab58ec10dccfbc6ade3409fe1cb9836c4642"
+    },
+    "compat-dead-version-hidden": {
+      "testFile": "tests/compat-analysis.test.mjs",
+      "tests": [
+        "Given a reader of a version no changed module produces, When the analysis runs, Then the version is dead and its branch is named"
+      ],
+      "ancestors": [],
+      "mutantHash": "8b849c8ef518bd5acd6bf177bfedeaed77b6895f6fdc6896a19ceb58c656c9b7",
+      "testHash": "d76ab4927b5d32b099c7022b44b03a705b74b48e83dedde27f325e27a8569ed8"
+    },
+    "contract-python-syntax-swallowed": {
+      "testFile": "tests/contract-python.test.mjs",
+      "tests": [
+        "Given a Python file that does not parse, When the stage runs, Then it is unparsed and the scan continues"
+      ],
+      "ancestors": [],
+      "mutantHash": "d54c3fd48a147d526cbba29f92513fb48912bf5c55d2eb1642f4b10b5e3565c1",
+      "testHash": "c677a493e083f490bc6c39dde306ab58ec10dccfbc6ade3409fe1cb9836c4642"
+    },
+    "journal-compat-policy-dropped": {
+      "testFile": "tests/review-journal.test.mjs",
+      "tests": [
+        "Given another census policy, When the configuration is fingerprinted, Then it changes"
+      ],
+      "ancestors": [],
+      "mutantHash": "174bd4d4bd5364ea87566fa838c81e5c09d1682654b9be8c868aa52d7a6a50e2",
+      "testHash": "60aa5e3d93e44757863282d8bc97cf2b4bd21b10076d8b0c5bf1858ff3e744b2"
+    },
+    "compat-snapshot-truncation-ignored": {
+      "testFile": "tests/compat-analysis.test.mjs",
+      "tests": [
+        "Given more snapshot files than the walk ceiling, When the analysis runs, Then the elsewhere pass reports truncation instead of walking the tree"
+      ],
+      "ancestors": [],
+      "mutantHash": "94c41a6788cbe41aa72903e8896fe9db354bb05205b728633dde85ba36f36eb4",
+      "testHash": "d76ab4927b5d32b099c7022b44b03a705b74b48e83dedde27f325e27a8569ed8"
+    },
+    "compat-failed-scan-claims-empty": {
+      "testFile": "tests/compat-report.test.mjs",
+      "tests": [
+        "Given a failed scan, When rendered, Then the limits line carries the failure message"
+      ],
+      "ancestors": [],
+      "mutantHash": "c63fe16c5b13820dafb7a1a0042fc6f5f9ed741fc80028a8ffa614857c8c52fc",
+      "testHash": "d00ea48283991781f68d05618226191e1846fa80db708ebcd5d4a70d573b9e61"
+    },
+    "compat-truncated-walk-still-dead": {
+      "testFile": "tests/compat-analysis.test.mjs",
+      "tests": [
+        "Given more sites than the cap where a producer sorts after its consumer, When the analysis runs, Then no version is certified dead"
+      ],
+      "ancestors": [],
+      "mutantHash": "745785510c38b53e9e4302cd3f40c8d70f12057c4c75a96098b043dd4f979ca7",
+      "testHash": "d76ab4927b5d32b099c7022b44b03a705b74b48e83dedde27f325e27a8569ed8"
+    },
+    "contract-cross-note-file-blind": {
+      "testFile": "tests/contract-python.test.mjs",
+      "tests": [
+        "Given two modules exporting the same writer name, When only one is settled across modules, Then the other keeps its unsettled note"
+      ],
+      "ancestors": [],
+      "mutantHash": "709aa747fafc026fe8b4de87c7c53600944845c5f99a4d820be1d9537c4252be",
+      "testHash": "c677a493e083f490bc6c39dde306ab58ec10dccfbc6ade3409fe1cb9836c4642"
+    },
+    "compat-python-oversize-parsed": {
+      "testFile": "tests/compat-extract.test.mjs",
+      "tests": [
+        "Given a file above the size cap, When extracted, Then it is unparsed as oversized"
+      ],
+      "ancestors": [],
+      "mutantHash": "188d756919d7d958e16f197791eccf10ea2629095e37039224ab478d7342d7a0",
+      "testHash": "3cecc5efc1b03e721e314108e1095ee91cd4bcabd386de5a692c1a9a17fe14b3"
+    },
+    "compat-js-membership-ignored": {
+      "testFile": "tests/compat-analysis.test.mjs",
+      "tests": [
+        "Given a supported list tested with includes, When the analysis runs, Then every member of the list is consumed"
+      ],
+      "ancestors": [],
+      "mutantHash": "6d5f1f1f72cc671ccba3978167c10cdf72f62fe47585974f46b0b8a194688af0",
+      "testHash": "d76ab4927b5d32b099c7022b44b03a705b74b48e83dedde27f325e27a8569ed8"
+    },
+    "compat-truncation-ignored-entirely": {
+      "testFile": "tests/compat-analysis.test.mjs",
+      "tests": [
+        "Given more sites than the cap where a producer sorts after its consumer, When the analysis runs, Then no version is certified dead"
+      ],
+      "ancestors": [],
+      "mutantHash": "c72049bb15ef1d68cc45d2f5054159f1544e907937eb17b686585c5346318e87",
+      "testHash": "d76ab4927b5d32b099c7022b44b03a705b74b48e83dedde27f325e27a8569ed8"
+    },
+    "contract-python-binding-unverified": {
+      "testFile": "tests/contract-python.test.mjs",
+      "tests": [
+        "Given a bare import that resolves to a different module than the paired writer, When the stage runs, Then no pair is settled"
+      ],
+      "ancestors": [],
+      "mutantHash": "b8cae02f353146c84b996cb87ddd552b2b0eedbc91b77d88805027b1d372432b",
+      "testHash": "c677a493e083f490bc6c39dde306ab58ec10dccfbc6ade3409fe1cb9836c4642"
     }
   }
 }

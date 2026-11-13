@@ -301,6 +301,9 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(hunterAgent, /Anti-Noise Prohibitions/);
     assert.match(hunterAgent, /Do not emit verdict markers/i);
     assert.match(hunterAgent, /Anti-Parasitic Correctness Gate/);
+    assert.match(hunterAgent, /compatibility surface with no live consumer/);
+    assert.match(hunterAgent, /Compatibility Surface: the sixth form/);
+    assert.match(hunterAgent, /labels the new shape with an old version/);
     assert.match(hunterAgent, /evidence proves both conditions/);
     assert.match(hunterAgent, /adds no product capability/);
     assert.match(hunterAgent, /correctness lane.*test|test.*correctness lane/i);
@@ -333,6 +336,7 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(verifierAgent, /"confirmed_coverage_gaps"/);
     assert.match(verifierAgent, /Coverage gaps/);
     assert.match(verifierAgent, /proves both an existing mechanism/);
+    assert.match(verifierAgent, /dead-compatibility candidate/);
     assert.match(verifierAgent, /zero new product capability/);
     assert.match(verifierAgent, /public user-facing CLIs/);
     assert.match(verifierAgent, /remote untrusted payloads/);
@@ -348,6 +352,7 @@ describe('Feature: Multi-Stage Plugin Layout & Protocol Contracts', () => {
     assert.match(multiStageSkill, /REVIEW_RESULT=PASS/);
     assert.match(multiStageSkill, /REVIEW_RESULT=BLOCK/);
     assert.match(multiStageSkill, /Anti-Parasitic Correctness Gate/);
+    assert.match(multiStageSkill, /compatibility surface with no live consumer/);
     assert.match(multiStageSkill, /both repository or declared-framework evidence/);
     assert.doesNotMatch(multiStageSkill, /review-rejection-envelope@1|coverage_required/);
     assert.match(multiStageSkill, /staged snapshot.*working tree/i);

@@ -324,3 +324,30 @@ test('Given a diff within the budget, When the review runs, Then the budget is r
     await rm(parent, { recursive: true, force: true });
   }
 });
+
+test('Given a diff that reads a version no changed module produces, When the review runs, Then the assignment carries the dead version', async () => {
+  const repo = await stagedRepo('manifest.mjs');
+  const parent = await mkdtemp(path.join(tmpdir(), 'native-review-parent-'));
+  try {
+    await writeFile(path.join(repo, 'manifest.mjs'), "export function build() { return { schema: 'product-manifest/v5' }; }\n");
+    await writeFile(path.join(repo, 'repair.mjs'), "export function repair(manifest) { return manifest.schema === 'product-manifest/v8'; }\n");
+    git(repo, ['add', 'manifest.mjs', 'repair.mjs']);
+    let assignment = '';
+    const result = await runNativeReview({
+      repo,
+      kitRoot: repo,
+      parentDir: parent,
+      env: {},
+      runTask: async ({ assignment: task }) => {
+        assignment = task;
+        return { reviewer: reviewerWithYield(PASS_REPORT), stages: completeStages };
+      },
+    });
+    assert.equal(result.staged, true);
+    assert.match(assignment, /^Version census \(deterministic scan of 2 file\(s\), 1 family\(ies\), coverage full; evidence, never a finding\):$/m);
+    assert.match(assignment, /^- DEAD product-manifest v8: consumed at repair\.mjs:1; no producer of this version exists in the snapshot\.$/m);
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+    await rm(parent, { recursive: true, force: true });
+  }
+});

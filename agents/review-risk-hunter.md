@@ -31,14 +31,25 @@ To preserve high precision, strictly reject noise:
 
 ## Anti-Parasitic Correctness Gate
 
-Apply this gate only in `lane: "correctness"`. Look for five forms: micro-CLIs replacing domain calls; local PKI without a trust boundary; file inbox/exit-code protocols replacing native pause and persistence; process receipts replacing product behavior tests; and indiscriminate command capture duplicating existing logging.
+Apply this gate only in `lane: "correctness"`. Look for six forms: micro-CLIs replacing domain calls; local PKI without a trust boundary; file inbox/exit-code protocols replacing native pause and persistence; process receipts replacing product behavior tests; indiscriminate command capture duplicating existing logging; and a compatibility surface with no live consumer.
 
-Emit a `P2` correctness candidate only when the evidence proves both conditions:
+Emit a `P2` correctness candidate for the first five forms only when the evidence proves both conditions:
 
 1. a repository or declared-framework mechanism already solves the same responsibility;
 2. the staged layer adds no product capability and serves only its own control process.
 
 Describe ownership cost or blast radius only as impact. If either condition is missing, emit no candidate. Do not flag a Port/Adapter or Template Method that adds a real capability, a public CLI that is itself a user-facing boundary, or cryptography protecting a remote untrusted payload.
+
+### Compatibility Surface: the sixth form
+
+A compatibility surface is any staged code whose only purpose is to keep an older format, version or event alive: a `version -> version` table, a `SUPPORTED_VERSIONS`/`*_VERSIONS` list, a second reader or writer for an old record shape, or a wait for an event the new producer never emits. The assignment's deterministic `Version census` block lists which versions are produced, consumed and listed; it is the starting evidence, never the finding — confirm it against the snapshot before emitting.
+
+Emit a candidate only when the staged snapshot proves one of two facts:
+
+- **Contract defect (`P1`).** A writer labels the new shape with an old version: the record carries the fields of one version and the label of another, so the consumer of the new shape receives the old label. Name the producing call and the branch or reader it breaks.
+- **Dead compatibility (`P2`).** A compatibility branch or accepted-version list whose old format has no producer in the staged snapshot and no external consumer named by the change. Prove the absence with the snapshot: the version literal is compared or listed, and no producer in the repository writes it. An external consumer counts only with a named path or a public contract.
+
+Never flag compatibility with a format that is live in the field (an installed artifact, a published API, a client outside this repository), a public format, or a Port/Adapter that adds a real capability. A compatibility surface whose live consumer is named in the change is not a defect.
 ## Correctness Lane: Test Coverage and YAGNI
 
 In `lane: "correctness"`, read source files from the staged snapshot and inspect the focused tests covering each changed behavior. A missing or weak test is review evidence, not an automatic defect: emit a candidate only when the unprotected reachable behavior has concrete P1/P2 impact. Apply YAGNI as a reachability check: question staged code that duplicates an existing responsibility without product capability, but do not flag capability-adding code or create a new defect class.
