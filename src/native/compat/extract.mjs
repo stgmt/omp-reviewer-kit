@@ -11,6 +11,7 @@ import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 import { classifyFilePath } from '../../domain/file-class.mjs';
+import { unparsedRecord } from '../../domain/unparsed-record.mjs';
 import { isTestPath } from '../../domain/suspicion-map.mjs';
 import { collectExecutableFiles, walkAst } from '../maintainability/extract.mjs';
 import { JS_EXTENSIONS, parseJavaScript } from '../scan/js-parse.mjs';
@@ -116,7 +117,7 @@ function unresolvedNames(node, constants) {
 /**
  * @param {string} relative
  * @param {object} ast
- * @returns {{ path: string, language: string, produced: object[], consumed: object[], listed: object[], reads: object[], constants: object[] }}
+ * @returns {{ path: string, language: string, produced: object[], consumed: object[], listed: object[], pending: object[], lists: object[], constants: object[] }}
  */
 export function collectJavaScript(relative, ast) {
   const constants = new Map();
@@ -399,12 +400,12 @@ export async function extractCompat({ rootDir, paths, config, now = Date.now, lo
     let source;
     try {
       if ((await stat(absolute)).size > config.maxFileBytes) {
-        unparsed.push({ path: relative, reason: 'oversized' });
+        unparsed.push(unparsedRecord(relative, 'oversized'));
         continue;
       }
       source = await readFile(absolute, 'utf8');
     } catch {
-      unparsed.push({ path: relative, reason: 'unreadable' });
+      unparsed.push(unparsedRecord(relative, 'unreadable'));
       continue;
     }
     if (PYTHON_EXTENSIONS.has(extension)) {
@@ -420,12 +421,12 @@ export async function extractCompat({ rootDir, paths, config, now = Date.now, lo
       }
     }
     if (!parser) {
-      unparsed.push({ path: relative, reason: 'parser-unavailable' });
+      unparsed.push(unparsedRecord(relative, 'parser-unavailable'));
       continue;
     }
     const ast = parseJavaScript({ relative, source, plugins: JS_EXTENSIONS.get(extension) ?? [], parser });
     if (!ast) {
-      unparsed.push({ path: relative, reason: 'syntax' });
+      unparsed.push(unparsedRecord(relative, 'syntax'));
       continue;
     }
     files.push(collectJavaScript(relative, ast));
@@ -444,11 +445,11 @@ export async function extractCompat({ rootDir, paths, config, now = Date.now, lo
       spawnSync,
     });
     if (child.status !== 'ok') {
-      for (const file of pythonFiles) unparsed.push({ path: file.path, reason: child.reason });
+      for (const file of pythonFiles) unparsed.push(unparsedRecord(file.path, child.reason));
     } else {
       files.push(...(Array.isArray(child.payload?.files) ? child.payload.files : []));
       for (const error of Array.isArray(child.payload?.errors) ? child.payload.errors : []) {
-        unparsed.push({ path: String(error?.path ?? '<python>'), reason: String(error?.reason ?? 'unparsed') });
+        unparsed.push(unparsedRecord(error?.path ?? '<python>', error?.reason ?? 'unparsed'));
       }
     }
   }

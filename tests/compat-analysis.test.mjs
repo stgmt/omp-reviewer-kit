@@ -162,7 +162,6 @@ test('Given more sites than the cap, When the analysis runs, Then the scan repor
     produced: [],
     consumed: Array.from({ length: 5 }, (_, index) => ({ version: 'a/v8', line: index + 1, guard: 'compare', constant: null })),
     listed: [],
-    reads: [],
     pending: [],
     constants: [],
   }];
@@ -179,7 +178,6 @@ test('Given more families than the cap, When the analysis runs, Then the dropped
     produced: [{ version: `${name}-format/v1`, line: 1, field: 'schema' }],
     consumed: [],
     listed: [],
-    reads: [],
     pending: [],
     constants: [],
   }));

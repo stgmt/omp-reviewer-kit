@@ -49,6 +49,7 @@ test('Given a module that writes, reads and lists versions, When collected, Then
     '}',
   ].join('\n');
   const record = await collect(source);
+  assert.deepEqual(Object.keys(record).sort(), ['constants', 'consumed', 'language', 'listed', 'lists', 'path', 'pending', 'produced']);
   const produced = record.produced.map(site => `${site.version}@${site.line}`).sort();
   assert.deepEqual(produced, ['product-manifest/v5@6', 'product-manifest/v8@6']);
   const listed = record.listed.map(site => `${site.version}@${site.table}`).sort();
@@ -135,6 +136,7 @@ test('Given a Python producer, reader and table, When extracted through the inte
   await withTree({ 'reel/manifest.py': source }, async root => {
     const result = await extractCompat({ rootDir: root, paths: ['reel/manifest.py'], config: resolveCompatConfig() });
     const record = result.files[0];
+    assert.deepEqual(Object.keys(record).sort(), ['constants', 'consumed', 'language', 'listed', 'lists', 'path', 'pending', 'produced']);
     assert.equal(record.language, 'python');
     assert.deepEqual(record.produced.map(site => site.version).sort(), ['product-manifest/v5', 'product-manifest/v8']);
     assert.deepEqual(record.consumed.map(site => site.version), ['product-manifest/v8']);

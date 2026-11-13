@@ -4454,7 +4454,7 @@
       ],
       "ancestors": [],
       "mutantHash": "dfc4220e52e44b0d39d1fe1ac43c81e2c648111d1e10a6495e7bcc590e661e6f",
-      "testHash": "52561ebb1f2001049b03ca1518149ecd7a7436fca0cb6c9c4f63ab1380da6040"
+      "testHash": "f033b25a855a0f87c245283b366208a49f9ca105b716c854516734dff0d79739"
     },
     "compat-unparsed-reported-as-full": {
       "testFile": "tests/compat-analysis.test.mjs",
@@ -4463,7 +4463,7 @@
       ],
       "ancestors": [],
       "mutantHash": "9d24e3edfd671949f742351449520fc4da026681284d63781dc078a8dc17499f",
-      "testHash": "356537dbd2dd6aed2716cd25dea024ab69dd357bed77ec18f1b5531a54d8042d"
+      "testHash": "6be2b230385463cc2c3c5fb1965405487ae7f95f793520d5f1b95f2d13541b53"
     },
     "compat-report-budget-ignored": {
       "testFile": "tests/compat-report.test.mjs",
@@ -4490,7 +4490,7 @@
       ],
       "ancestors": [],
       "mutantHash": "8b849c8ef518bd5acd6bf177bfedeaed77b6895f6fdc6896a19ceb58c656c9b7",
-      "testHash": "356537dbd2dd6aed2716cd25dea024ab69dd357bed77ec18f1b5531a54d8042d"
+      "testHash": "6be2b230385463cc2c3c5fb1965405487ae7f95f793520d5f1b95f2d13541b53"
     },
     "contract-python-syntax-swallowed": {
       "testFile": "tests/contract-python.test.mjs",
@@ -4517,7 +4517,7 @@
       ],
       "ancestors": [],
       "mutantHash": "94c41a6788cbe41aa72903e8896fe9db354bb05205b728633dde85ba36f36eb4",
-      "testHash": "356537dbd2dd6aed2716cd25dea024ab69dd357bed77ec18f1b5531a54d8042d"
+      "testHash": "6be2b230385463cc2c3c5fb1965405487ae7f95f793520d5f1b95f2d13541b53"
     },
     "compat-failed-scan-claims-empty": {
       "testFile": "tests/compat-report.test.mjs",
@@ -4535,7 +4535,7 @@
       ],
       "ancestors": [],
       "mutantHash": "745785510c38b53e9e4302cd3f40c8d70f12057c4c75a96098b043dd4f979ca7",
-      "testHash": "356537dbd2dd6aed2716cd25dea024ab69dd357bed77ec18f1b5531a54d8042d"
+      "testHash": "6be2b230385463cc2c3c5fb1965405487ae7f95f793520d5f1b95f2d13541b53"
     },
     "contract-cross-note-file-blind": {
       "testFile": "tests/contract-python.test.mjs",
@@ -4553,7 +4553,7 @@
       ],
       "ancestors": [],
       "mutantHash": "188d756919d7d958e16f197791eccf10ea2629095e37039224ab478d7342d7a0",
-      "testHash": "52561ebb1f2001049b03ca1518149ecd7a7436fca0cb6c9c4f63ab1380da6040"
+      "testHash": "f033b25a855a0f87c245283b366208a49f9ca105b716c854516734dff0d79739"
     },
     "compat-js-membership-ignored": {
       "testFile": "tests/compat-analysis.test.mjs",
@@ -4562,7 +4562,7 @@
       ],
       "ancestors": [],
       "mutantHash": "6d5f1f1f72cc671ccba3978167c10cdf72f62fe47585974f46b0b8a194688af0",
-      "testHash": "356537dbd2dd6aed2716cd25dea024ab69dd357bed77ec18f1b5531a54d8042d"
+      "testHash": "6be2b230385463cc2c3c5fb1965405487ae7f95f793520d5f1b95f2d13541b53"
     },
     "compat-truncation-ignored-entirely": {
       "testFile": "tests/compat-analysis.test.mjs",
@@ -4571,7 +4571,7 @@
       ],
       "ancestors": [],
       "mutantHash": "c72049bb15ef1d68cc45d2f5054159f1544e907937eb17b686585c5346318e87",
-      "testHash": "356537dbd2dd6aed2716cd25dea024ab69dd357bed77ec18f1b5531a54d8042d"
+      "testHash": "6be2b230385463cc2c3c5fb1965405487ae7f95f793520d5f1b95f2d13541b53"
     },
     "contract-python-binding-unverified": {
       "testFile": "tests/contract-python.test.mjs",
@@ -4581,6 +4581,15 @@
       "ancestors": [],
       "mutantHash": "b8cae02f353146c84b996cb87ddd552b2b0eedbc91b77d88805027b1d372432b",
       "testHash": "c677a493e083f490bc6c39dde306ab58ec10dccfbc6ade3409fe1cb9836c4642"
+    },
+    "compat-template-literal-elsewhere-ignored": {
+      "testFile": "tests/compat-extract.test.mjs",
+      "tests": [
+        "Given an unchanged module that writes a version in a template literal, When the snapshot is scanned, Then the literal is still found"
+      ],
+      "ancestors": [],
+      "mutantHash": "fdfb06b75b5231ae78712a22ddabe533d3eb4a570a4f66c0b37272e2ba6e4315",
+      "testHash": "f033b25a855a0f87c245283b366208a49f9ca105b716c854516734dff0d79739"
     }
   }
 }
