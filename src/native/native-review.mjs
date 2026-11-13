@@ -261,7 +261,11 @@ export async function runNativeReview({
       ? {
         key: journal.key,
         read: id => readStageEntry(journalRoot, journal.key, id),
-        write: (id, evidence) => writeStageEntry(journalRoot, journal.key, id, {
+        write: (id, evidence) => {
+          // The verifier's decisions name the reuse leads it was given. Store that id space with the
+          // stage, so a journal replay binds them to the list the verifier actually saw.
+          if (id === VERIFIER_STAGE) evidence.candidateIds = reuseCandidateIds;
+          return writeStageEntry(journalRoot, journal.key, id, {
           schema: STAGE_SCHEMA,
           key: journal.key,
           stageId: id,
@@ -272,11 +276,14 @@ export async function runNativeReview({
           structuredStatus: evidence.structuredStatus ?? null,
           createdAt: new Date().toISOString(),
           evidence,
-        }),
+        });
+        },
       }
       : null;
     const runner = stageRunner ?? (runTask ? wholeRunAdapter(runTask) : await createStageRunner({ cwd: repo, kitRoot, onProgress, onEvent }));
-    const steps = planSteps({ assignmentInput, dir, profile, lanes, maintainability, analysis, duplicates: reuse.skipped ? [] : (reuse.analysis?.candidates ?? []) });
+    const duplicates = reuse.skipped ? [] : (reuse.analysis?.candidates ?? []);
+    const reuseCandidateIds = duplicates.map((_, index) => `reuse-${index + 1}`);
+    const steps = planSteps({ assignmentInput, dir, profile, lanes, maintainability, analysis, duplicates });
     const { stages, evidence: stageEvidenceById } = await runStagePipeline({ runner, steps, journal: stageJournal, onProgress });
     const hunters = laneResults(lanes, stageEvidenceById);
     const synthesis = await runner.run('reviewer-kit', 'Synthesis', synthesisTask({
@@ -309,6 +316,7 @@ export async function runNativeReview({
       lanes,
       fileClasses,
       maintainabilityCentralization,
+      reuseCandidateIds,
       maintainability: {
         policy: maintainability.policy,
         status: maintainability.status,
