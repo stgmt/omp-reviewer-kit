@@ -637,3 +637,96 @@ test('Given a changed function that repeats an existing one, When the review run
     await rm(parent, { recursive: true, force: true });
   }
 });
+
+test('Given a diff that reads a version no changed module produces, When the review runs, Then the assignment carries the dead version', async () => {
+  const repo = await stagedRepo('manifest.mjs');
+  const parent = await mkdtemp(path.join(tmpdir(), 'native-review-parent-'));
+  try {
+    await writeFile(path.join(repo, 'manifest.mjs'), "export function build() { return { schema: 'product-manifest/v5' }; }\n");
+    await writeFile(path.join(repo, 'repair.mjs'), "export function repair(manifest) { return manifest.schema === 'product-manifest/v8'; }\n");
+    git(repo, ['add', 'manifest.mjs', 'repair.mjs']);
+    let assignment = '';
+    const result = await runNativeReview({
+      repo,
+      kitRoot: repo,
+      parentDir: parent,
+      env: {},
+      runTask: async ({ assignment: task }) => {
+        assignment = task;
+        return { reviewer: reviewerWithYield(PASS_REPORT), stages: completeStages };
+      },
+    });
+    assert.equal(result.staged, true);
+    assert.match(assignment, /^Version census \(deterministic scan of 2 file\(s\), 1 family\(ies\), coverage full; evidence, never a finding\):$/m);
+    assert.match(assignment, /^- DEAD product-manifest v8: consumed at repair\.mjs:1; no producer of this version exists in the snapshot\.$/m);
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test('Given journaling off and a verifier that confirms a reuse lead, When the review runs, Then the PASS is refused', async () => {
+  const repo = await mkdtemp(path.join(tmpdir(), 'native-review-reuse-off-'));
+  const parent = await mkdtemp(path.join(tmpdir(), 'native-review-parent-'));
+  const body = names => `export function ${names.fn}(items) {
+  const ${names.out} = [];
+  for (const ${names.item} of items) {
+    if (!${names.item}) continue;
+    if (${names.item}.hidden) continue;
+    if (!${names.item}.name) continue;
+    if (${names.item}.name.length === 0) continue;
+    ${names.out}.push({ name: ${names.item}.name, size: ${names.item}.size, kind: ${names.item}.kind });
+  }
+  ${names.out}.sort((left, right) => left.name.localeCompare(right.name));
+  const ${names.seen} = new Set();
+  const ${names.unique} = [];
+  for (const ${names.entry} of ${names.out}) {
+    if (${names.seen}.has(${names.entry}.name)) continue;
+    ${names.seen}.add(${names.entry}.name);
+    ${names.unique}.push(${names.entry});
+  }
+  return ${names.unique};
+}
+`;
+  try {
+    git(repo, ['init', '-q', '-b', 'main']);
+    git(repo, ['config', 'user.email', 'test@example.invalid']);
+    git(repo, ['config', 'user.name', 'native review test']);
+    git(repo, ['config', 'core.hooksPath', path.join(repo, 'no-hooks')]);
+    await writeFile(path.join(repo, 'base.mjs'), body({ fn: 'collectVisible', out: 'out', item: 'item', seen: 'seen', unique: 'unique', entry: 'entry' }));
+    git(repo, ['add', 'base.mjs']);
+    git(repo, ['commit', '-q', '-m', 'base']);
+    await writeFile(path.join(repo, 'feature.mjs'), body({ fn: 'gatherShown', out: 'result', item: 'row', seen: 'met', unique: 'kept', entry: 'candidate' }));
+    git(repo, ['add', 'feature.mjs']);
+    const stageRunner = {
+      async run(agent, name) {
+        if (name === 'ContextScout') return { evidence: completed('review-context-scout', { test_harness: 'present', changed_paths: ['feature.mjs'], relevant_consumers: [] }) };
+        if (name.startsWith('RiskHunter')) return { evidence: completed('review-risk-hunter', { lane: 'correctness', candidates: [], coverage_gaps: [] }) };
+        if (name === 'FindingVerifier') {
+          return {
+            evidence: completed('review-finding-verifier', {
+              lane: 'correctness',
+              decisions: [{ candidate_id: 'reuse-1', disposition: 'confirmed', triage: 'lie', reason: 'the same responsibility twice', evidence: 'feature.mjs:1' }],
+              confirmed_findings: [],
+              confirmed_coverage_gaps: [],
+            }),
+          };
+        }
+        if (name === 'Synthesis') return { result: reviewerWithYield(PASS_REPORT), evidence: completed('reviewer-kit', {}) };
+        return { evidence: completed(agent, {}) };
+      },
+    };
+    const result = await runNativeReview({
+      repo,
+      kitRoot: repo,
+      parentDir: parent,
+      env: { OMP_REVIEW_KIT_JOURNAL: 'off' },
+      stageRunner,
+    });
+    assert.equal(result.verdict.pass, false, 'a confirmed duplicate is refused even without the journal');
+    assert.match(result.verdict.reasons.join(' '), /verifier confirmed 1 finding\(s\) but the reviewer passed/);
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+    await rm(parent, { recursive: true, force: true });
+  }
+});

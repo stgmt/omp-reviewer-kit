@@ -20,6 +20,14 @@ const PINNED_PATHS = [
   'src/infra/review-run-store.mjs',
   'src/native/review-telemetry.mjs',
   'scripts/review-runs.mjs',
+  // The census and the Python side of the contract stage are imported by the review; a row dropped
+  // from the list would surface as a runtime failure instead of a layout failure.
+  'src/native/compat/config.mjs',
+  'src/native/compat/extract.mjs',
+  'src/native/compat/analyze.mjs',
+  'src/native/compat/report.mjs',
+  'src/native/contract/python.mjs',
+  'src/native/contract/probe_python.py',
 ];
 
 test('Given the repository, When every required file is checked, Then the list names every run-record path and nothing is missing', async () => {

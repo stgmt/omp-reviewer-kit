@@ -60,6 +60,14 @@ test('Given another stage policy, When the configuration is fingerprinted, Then 
   assert.notEqual(base, other);
 });
 
+test('Given another census policy, When the configuration is fingerprinted, Then it changes', () => {
+  const base = configFingerprint({ profile: 'full', lanes: ['correctness'], compatPolicy: 'advisory', compatMaxLines: 12 });
+  const off = configFingerprint({ profile: 'full', lanes: ['correctness'], compatPolicy: 'off', compatMaxLines: 12 });
+  const shorter = configFingerprint({ profile: 'full', lanes: ['correctness'], compatPolicy: 'advisory', compatMaxLines: 4 });
+  assert.notEqual(base, off, 'a verdict decided without the census must not answer a review that hands it to the hunter');
+  assert.notEqual(base, shorter, 'the census block size decides what the hunter reads');
+});
+
 test('Given another maintainability analysis configuration, When the configuration is fingerprinted, Then it changes', () => {
   const base = configFingerprint({ profile: 'full', lanes: ['correctness'], maintainabilityConfig: { minSupport: 4, maxGroups: 200 } });
   const tighter = configFingerprint({ profile: 'full', lanes: ['correctness'], maintainabilityConfig: { minSupport: 8, maxGroups: 200 } });

@@ -55,7 +55,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "3b8b9f13183f712947d9958a05016511c9185fc239e9f7c3af718470e0abef6b",
-      "testHash": "aaaa6a9758684238b0f233bdceba0f8cb5716b1c2e81e83dc34873798b4da611"
+      "testHash": "00e9ca8bee354b08faa355753bddb51ecff92928703530948566907e42b3fac6"
     },
     "anti-parasitic-both-to-either": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -66,7 +66,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "b8607c1dd6f7ba93c3e0b7431e95eb44980c25c7b9974dd0fc887acbf309bb74",
-      "testHash": "aaaa6a9758684238b0f233bdceba0f8cb5716b1c2e81e83dc34873798b4da611"
+      "testHash": "00e9ca8bee354b08faa355753bddb51ecff92928703530948566907e42b3fac6"
     },
     "anti-parasitic-port-protection-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -77,7 +77,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "7cb2ae5cc876247bae2a345f17644a022a04d18c3ed82d839556f279b8e7e2e7",
-      "testHash": "aaaa6a9758684238b0f233bdceba0f8cb5716b1c2e81e83dc34873798b4da611"
+      "testHash": "00e9ca8bee354b08faa355753bddb51ecff92928703530948566907e42b3fac6"
     },
     "multi-stage-snapshot-boundary-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -88,7 +88,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "db7a8493b32121111624ef1add91a1b21b8c908d6e5da232df1a148e0af79373",
-      "testHash": "aaaa6a9758684238b0f233bdceba0f8cb5716b1c2e81e83dc34873798b4da611"
+      "testHash": "00e9ca8bee354b08faa355753bddb51ecff92928703530948566907e42b3fac6"
     },
     "multi-stage-yagni-boundary-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -99,7 +99,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "465a5de25c5a83dda3e244302a6b7eab09c0169bb39c82b5688b001fb8d5560c",
-      "testHash": "aaaa6a9758684238b0f233bdceba0f8cb5716b1c2e81e83dc34873798b4da611"
+      "testHash": "00e9ca8bee354b08faa355753bddb51ecff92928703530948566907e42b3fac6"
     },
     "sync-hook-newer-overwritten": {
       "testFile": "tests/sync-targets.test.mjs",
@@ -166,7 +166,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "ec31109e99d1fdb90e4b481cab9c38734f3857a530dd4a68f4327ef171a166d5",
-      "testHash": "aaaa6a9758684238b0f233bdceba0f8cb5716b1c2e81e83dc34873798b4da611"
+      "testHash": "00e9ca8bee354b08faa355753bddb51ecff92928703530948566907e42b3fac6"
     },
     "hunter-red-proof-field-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -177,7 +177,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "61f3ac262a7e6643d183a03c1ffd0e7ebebf3d58d8cbaacaf70427b43ac14e8e",
-      "testHash": "aaaa6a9758684238b0f233bdceba0f8cb5716b1c2e81e83dc34873798b4da611"
+      "testHash": "00e9ca8bee354b08faa355753bddb51ecff92928703530948566907e42b3fac6"
     },
     "verifier-triage-field-removed": {
       "testFile": "tests/plugin-layout.test.mjs",
@@ -188,7 +188,7 @@
         "Feature: Multi-Stage Plugin Layout & Protocol Contracts"
       ],
       "mutantHash": "e6356f58a6e2d47ec64b32c1f6f7664d120a06d1b1d697a3dac8517b2c7b5ea5",
-      "testHash": "aaaa6a9758684238b0f233bdceba0f8cb5716b1c2e81e83dc34873798b4da611"
+      "testHash": "00e9ca8bee354b08faa355753bddb51ecff92928703530948566907e42b3fac6"
     },
     "modular-suspicion-assert-delta": {
       "testFile": "tests/suspicion-map.test.mjs",
@@ -2390,7 +2390,7 @@
       ],
       "ancestors": [],
       "mutantHash": "84a6e752ad59e70217704ce6eb2912ff2cdb618e7ee8dad50347577a724753ad",
-      "testHash": "eba677d6521d2ef2f82d2cd69cc73b32e83303960232e4755c77942f86da41d5"
+      "testHash": "df529bd0f09ff08e258e36bfc1c081913da649292e41cbf26e3f48dd8338207a"
     },
     "native-verdict-marker-not-last-accepted": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2399,7 +2399,7 @@
       ],
       "ancestors": [],
       "mutantHash": "fbba8a5f8368b301aca5a4fd17782054e2f3a96f11cee5e3f26e5ee85303b4c6",
-      "testHash": "eba677d6521d2ef2f82d2cd69cc73b32e83303960232e4755c77942f86da41d5"
+      "testHash": "df529bd0f09ff08e258e36bfc1c081913da649292e41cbf26e3f48dd8338207a"
     },
     "native-verdict-aborted-reviewer-ignored": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2408,7 +2408,7 @@
       ],
       "ancestors": [],
       "mutantHash": "286b644bdfc3363faad10c76bffc2ae94a62a8859ee5c580ee97931b3bb420f8",
-      "testHash": "eba677d6521d2ef2f82d2cd69cc73b32e83303960232e4755c77942f86da41d5"
+      "testHash": "df529bd0f09ff08e258e36bfc1c081913da649292e41cbf26e3f48dd8338207a"
     },
     "native-verdict-yield-status-ignored": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2417,7 +2417,7 @@
       ],
       "ancestors": [],
       "mutantHash": "d4022cbeb5b998904dcc760d8ba6d5479007c9b390cc9dd361c65988fc84922f",
-      "testHash": "eba677d6521d2ef2f82d2cd69cc73b32e83303960232e4755c77942f86da41d5"
+      "testHash": "df529bd0f09ff08e258e36bfc1c081913da649292e41cbf26e3f48dd8338207a"
     },
     "native-verdict-scout-optional": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2426,7 +2426,7 @@
       ],
       "ancestors": [],
       "mutantHash": "ab13419a2a1829adaf4ca0016c0a42f16bc765dcfa98534c1943de2fffc5ca05",
-      "testHash": "eba677d6521d2ef2f82d2cd69cc73b32e83303960232e4755c77942f86da41d5"
+      "testHash": "df529bd0f09ff08e258e36bfc1c081913da649292e41cbf26e3f48dd8338207a"
     },
     "native-verdict-hunters-optional": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2435,7 +2435,7 @@
       ],
       "ancestors": [],
       "mutantHash": "5e632be74b97ba69b28e161e72f897517c998dd3dc1174531bad4bc6c27d0536",
-      "testHash": "eba677d6521d2ef2f82d2cd69cc73b32e83303960232e4755c77942f86da41d5"
+      "testHash": "df529bd0f09ff08e258e36bfc1c081913da649292e41cbf26e3f48dd8338207a"
     },
     "native-verdict-verifier-optional-full": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2444,7 +2444,7 @@
       ],
       "ancestors": [],
       "mutantHash": "8bd9d6305e5f9b4081f61320b2c32eadf16344bc093ad0f9c97ad9ae50cf7ee5",
-      "testHash": "eba677d6521d2ef2f82d2cd69cc73b32e83303960232e4755c77942f86da41d5"
+      "testHash": "df529bd0f09ff08e258e36bfc1c081913da649292e41cbf26e3f48dd8338207a"
     },
     "native-verdict-confirmed-finding-tolerated": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2453,7 +2453,7 @@
       ],
       "ancestors": [],
       "mutantHash": "779b4356455b591027beb6cf89bb166480bd72051e1ee06eba4d7dead42c5460",
-      "testHash": "eba677d6521d2ef2f82d2cd69cc73b32e83303960232e4755c77942f86da41d5"
+      "testHash": "df529bd0f09ff08e258e36bfc1c081913da649292e41cbf26e3f48dd8338207a"
     },
     "native-verdict-pass-ignores-reasons": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2462,7 +2462,7 @@
       ],
       "ancestors": [],
       "mutantHash": "7e127ac1c50613b31ec28d5989f85bd045d855275d902c406925da6fff64f204",
-      "testHash": "eba677d6521d2ef2f82d2cd69cc73b32e83303960232e4755c77942f86da41d5"
+      "testHash": "df529bd0f09ff08e258e36bfc1c081913da649292e41cbf26e3f48dd8338207a"
     },
     "native-verdict-stage-aborted-counts": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2471,7 +2471,7 @@
       ],
       "ancestors": [],
       "mutantHash": "69415f6448cd2b504e24593ff2509d0662690b951ff034a6ab7a56cd7bf4fd0a",
-      "testHash": "eba677d6521d2ef2f82d2cd69cc73b32e83303960232e4755c77942f86da41d5"
+      "testHash": "df529bd0f09ff08e258e36bfc1c081913da649292e41cbf26e3f48dd8338207a"
     },
     "native-verdict-invalid-structure-counts": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2480,7 +2480,7 @@
       ],
       "ancestors": [],
       "mutantHash": "66f9b4ada25c354df0eb329720d77e0d86811e0f8e35da57b719051c920b5b2d",
-      "testHash": "eba677d6521d2ef2f82d2cd69cc73b32e83303960232e4755c77942f86da41d5"
+      "testHash": "df529bd0f09ff08e258e36bfc1c081913da649292e41cbf26e3f48dd8338207a"
     },
     "native-snapshot-reserved-collision-missed": {
       "testFile": "tests/native-snapshot.test.mjs",
@@ -2543,7 +2543,7 @@
       ],
       "ancestors": [],
       "mutantHash": "0f733e388ed49bc73beb71b57e7db114f5676247697f8c632616860bbabd4aa4",
-      "testHash": "eafc5c6fed56ab5ae9b60a9e3833084a78800da9fad3216b19ab767ee594bd3e"
+      "testHash": "003e786fee078f4ee8277d7af37d645db061ca23d42affc83753e04682039e3d"
     },
     "native-host-skip-not-detected": {
       "testFile": "tests/e2e-native-hook.test.mjs",
@@ -2641,7 +2641,7 @@
       ],
       "ancestors": [],
       "mutantHash": "0c9740270235004aaceb9d10b62ea5b7fd70756791fe4761bbdf721c7c011b1f",
-      "testHash": "eba677d6521d2ef2f82d2cd69cc73b32e83303960232e4755c77942f86da41d5"
+      "testHash": "df529bd0f09ff08e258e36bfc1c081913da649292e41cbf26e3f48dd8338207a"
     },
     "native-snapshot-hash-not-of-diff": {
       "testFile": "tests/native-snapshot.test.mjs",
@@ -2659,7 +2659,7 @@
       ],
       "ancestors": [],
       "mutantHash": "1ecc9ac531020706752ceb88337902c10a91d4cf79980dfb8915db2509a5931b",
-      "testHash": "eafc5c6fed56ab5ae9b60a9e3833084a78800da9fad3216b19ab767ee594bd3e"
+      "testHash": "003e786fee078f4ee8277d7af37d645db061ca23d42affc83753e04682039e3d"
     },
     "native-verdict-lane-identity-ignored": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2668,7 +2668,7 @@
       ],
       "ancestors": [],
       "mutantHash": "899570b921925794144707ca7f8a513ce3f31a6cc39ce0fc4f29525d5da82373",
-      "testHash": "eba677d6521d2ef2f82d2cd69cc73b32e83303960232e4755c77942f86da41d5"
+      "testHash": "df529bd0f09ff08e258e36bfc1c081913da649292e41cbf26e3f48dd8338207a"
     },
     "commit-command-attached-value-letters-read": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -2688,7 +2688,7 @@
       ],
       "ancestors": [],
       "mutantHash": "deb49b50d9758278f42d3f036dab71963760d53d0f6a03e905760cbd7d018f72",
-      "testHash": "eba677d6521d2ef2f82d2cd69cc73b32e83303960232e4755c77942f86da41d5"
+      "testHash": "df529bd0f09ff08e258e36bfc1c081913da649292e41cbf26e3f48dd8338207a"
     },
     "native-verdict-gap-advisory-blocks": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2697,7 +2697,7 @@
       ],
       "ancestors": [],
       "mutantHash": "dab95724e963379eccd12e684cd1213f8e8e8c7d07c6cd1d44bfb9f54233f048",
-      "testHash": "eba677d6521d2ef2f82d2cd69cc73b32e83303960232e4755c77942f86da41d5"
+      "testHash": "df529bd0f09ff08e258e36bfc1c081913da649292e41cbf26e3f48dd8338207a"
     },
     "native-verdict-gap-impact-floor-ignored": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2706,7 +2706,7 @@
       ],
       "ancestors": [],
       "mutantHash": "92f7a8ffabc5bc9d94f2fc7797dc81a54f644e6c840fb72833b7a08a19e1fdcf",
-      "testHash": "eba677d6521d2ef2f82d2cd69cc73b32e83303960232e4755c77942f86da41d5"
+      "testHash": "df529bd0f09ff08e258e36bfc1c081913da649292e41cbf26e3f48dd8338207a"
     },
     "native-verdict-gap-test-class-ignored": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2715,7 +2715,7 @@
       ],
       "ancestors": [],
       "mutantHash": "fe400140e302f36ddc1ba47cdcbdaef92c6459d0f0bb2150980943bbcc66f7b6",
-      "testHash": "eba677d6521d2ef2f82d2cd69cc73b32e83303960232e4755c77942f86da41d5"
+      "testHash": "df529bd0f09ff08e258e36bfc1c081913da649292e41cbf26e3f48dd8338207a"
     },
     "native-verdict-gap-item-harness-ignored": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2724,7 +2724,7 @@
       ],
       "ancestors": [],
       "mutantHash": "f5c10276c9bdfaa82db7dce98702fbe6ae5213f871792102fee20efe72f5b394",
-      "testHash": "eba677d6521d2ef2f82d2cd69cc73b32e83303960232e4755c77942f86da41d5"
+      "testHash": "df529bd0f09ff08e258e36bfc1c081913da649292e41cbf26e3f48dd8338207a"
     },
     "native-verdict-gap-global-harness-ignored": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2733,7 +2733,7 @@
       ],
       "ancestors": [],
       "mutantHash": "bbb2d59286e40c443a6b649765fb8411f5adf112878028ebe7fe86e7e230c879",
-      "testHash": "eba677d6521d2ef2f82d2cd69cc73b32e83303960232e4755c77942f86da41d5"
+      "testHash": "df529bd0f09ff08e258e36bfc1c081913da649292e41cbf26e3f48dd8338207a"
     },
     "run-record-duration-seconds-dropped": {
       "testFile": "tests/review-run-summary.test.mjs",
@@ -3093,7 +3093,7 @@
       ],
       "ancestors": [],
       "mutantHash": "4590875a49cdd6e36a536b788392f1cfbc4d72a433264a9966ab84e42b05959d",
-      "testHash": "5529d8924ebf3fb40a93b2eadce778a8c0a7f773a4f1367722eed19a558a51e1"
+      "testHash": "217863a095b9c7f245707ed0f76ec59b10f3dc873d8f0ca29ea190516b2646ce"
     },
     "layout-required-diff-budget-missing": {
       "testFile": "tests/layout-required.test.mjs",
@@ -3102,7 +3102,7 @@
       ],
       "ancestors": [],
       "mutantHash": "5e5e868d9845a794b57762550c1e862638c5334c178ba1196f780c2a6fe92501",
-      "testHash": "5529d8924ebf3fb40a93b2eadce778a8c0a7f773a4f1367722eed19a558a51e1"
+      "testHash": "217863a095b9c7f245707ed0f76ec59b10f3dc873d8f0ca29ea190516b2646ce"
     },
     "maintainability-signal-kill-treated-as-timeout": {
       "testFile": "tests/maintainability-extract.test.mjs",
@@ -3246,7 +3246,7 @@
       ],
       "ancestors": [],
       "mutantHash": "58fae5caef773915f05c2458e526a9dcb6666277e207d1f264dc34f0320987d0",
-      "testHash": "5529d8924ebf3fb40a93b2eadce778a8c0a7f773a4f1367722eed19a558a51e1"
+      "testHash": "217863a095b9c7f245707ed0f76ec59b10f3dc873d8f0ca29ea190516b2646ce"
     },
     "layout-required-registration-record-missing": {
       "testFile": "tests/layout-required.test.mjs",
@@ -3255,7 +3255,7 @@
       ],
       "ancestors": [],
       "mutantHash": "71704520fb9262eaf4f21d8b57dbee31120954f07b9c46a71130f17646d72a9e",
-      "testHash": "5529d8924ebf3fb40a93b2eadce778a8c0a7f773a4f1367722eed19a558a51e1"
+      "testHash": "217863a095b9c7f245707ed0f76ec59b10f3dc873d8f0ca29ea190516b2646ce"
     },
     "catalog-anchor-not-in-source": {
       "testFile": "tests/mutation-catalog.test.mjs",
@@ -3677,7 +3677,7 @@
         "Given a reader that needs context beyond the record, When the stage runs, Then the pair is left unsettled"
       ],
       "ancestors": [],
-      "mutantHash": "2b0adda3ccea110e754532714eb8b831227070e9fdc32cf995bba05cb685ee52",
+      "mutantHash": "c85a6d788dfceaad9068dc2809d04b6051b030405f2ac37bf42fcb6693641941",
       "testHash": "daa8f32c89957faa4177d03fe7d4804d7df6f03d5243127864562dcd015e89a7"
     },
     "contract-unknown-policy-blocks": {
@@ -3794,7 +3794,7 @@
         "Given a staged module that blocks during import, When the probe times out, Then the analysis failed instead of hanging"
       ],
       "ancestors": [],
-      "mutantHash": "ecf4f1462deaaa8e01dbfab7804f3cd6d7f1f7d6f55197bdeebd337c8da1f6e9",
+      "mutantHash": "13b4b5c447271a2176bfb708e13111c43f0be0994ff5fc6348399d42dd2e1e02",
       "testHash": "daa8f32c89957faa4177d03fe7d4804d7df6f03d5243127864562dcd015e89a7"
     },
     "native-launcher-import-runs-a-review": {
@@ -3813,7 +3813,7 @@
       ],
       "ancestors": [],
       "mutantHash": "d8ac2c0f6a47767eeea36b63b92299d874ecb164e3e246c3ac59e1eaf8c37a13",
-      "testHash": "5529d8924ebf3fb40a93b2eadce778a8c0a7f773a4f1367722eed19a558a51e1"
+      "testHash": "217863a095b9c7f245707ed0f76ec59b10f3dc873d8f0ca29ea190516b2646ce"
     },
     "contract-oversized-module-skipped-silently": {
       "testFile": "tests/contract-stage.test.mjs",
@@ -3821,7 +3821,7 @@
         "Given a changed module over the size limit and a missing path, When the stage runs, Then both are reported as skipped work"
       ],
       "ancestors": [],
-      "mutantHash": "35af232be6cb8cf30f551911ea6baef845ef6ee80e01eb30002a1cb1266ef0a8",
+      "mutantHash": "fc4db56bd99bcaad934cc13e5b42ff0b58d7ee50013843234569e95562a43676",
       "testHash": "daa8f32c89957faa4177d03fe7d4804d7df6f03d5243127864562dcd015e89a7"
     },
     "contract-writer-verb-serialize-dropped": {
@@ -3975,7 +3975,7 @@
       ],
       "ancestors": [],
       "mutantHash": "2e51b4fdb7e434170599bfed9dc915cb1ee9491f584c9850b86e4768fa8d4d4a",
-      "testHash": "5529d8924ebf3fb40a93b2eadce778a8c0a7f773a4f1367722eed19a558a51e1"
+      "testHash": "217863a095b9c7f245707ed0f76ec59b10f3dc873d8f0ca29ea190516b2646ce"
     },
     "stamp-hook-strips-body-markers": {
       "testFile": "tests/hook-ownership.test.mjs",
@@ -4454,7 +4454,7 @@
       ],
       "ancestors": [],
       "mutantHash": "ccad3ddea045bcfb071692a8b901a9394f4d2a30d6c5c75a09202a73f752e4dd",
-      "testHash": "eba677d6521d2ef2f82d2cd69cc73b32e83303960232e4755c77942f86da41d5"
+      "testHash": "df529bd0f09ff08e258e36bfc1c081913da649292e41cbf26e3f48dd8338207a"
     },
     "native-verdict-block-report-finding-ignored": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -4463,7 +4463,7 @@
       ],
       "ancestors": [],
       "mutantHash": "633ee8781aa8836c0095eafc666368e69009624c6f088abe6df9f271bcb88870",
-      "testHash": "eba677d6521d2ef2f82d2cd69cc73b32e83303960232e4755c77942f86da41d5"
+      "testHash": "df529bd0f09ff08e258e36bfc1c081913da649292e41cbf26e3f48dd8338207a"
     },
     "native-verdict-pass-report-finding-ignored": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -4472,7 +4472,7 @@
       ],
       "ancestors": [],
       "mutantHash": "1bc79d2cecd1bf7077c17522c9951cb065336bef04ffbe7e3257a050df3cf607",
-      "testHash": "eba677d6521d2ef2f82d2cd69cc73b32e83303960232e4755c77942f86da41d5"
+      "testHash": "df529bd0f09ff08e258e36bfc1c081913da649292e41cbf26e3f48dd8338207a"
     },
     "native-verdict-recheck-ignored": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -4481,7 +4481,7 @@
       ],
       "ancestors": [],
       "mutantHash": "5fc1ae4c85d1e3228d7a4fd56ae3270291df300bdc0ab777e404725447264ebb",
-      "testHash": "eba677d6521d2ef2f82d2cd69cc73b32e83303960232e4755c77942f86da41d5"
+      "testHash": "df529bd0f09ff08e258e36bfc1c081913da649292e41cbf26e3f48dd8338207a"
     },
     "native-verdict-adjudicated-pass-ignored": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -4490,7 +4490,7 @@
       ],
       "ancestors": [],
       "mutantHash": "057ca8f3724c7c14a3831d22fc1e0212bc8db38597a1024c00b2f70a608f7e14",
-      "testHash": "eba677d6521d2ef2f82d2cd69cc73b32e83303960232e4755c77942f86da41d5"
+      "testHash": "df529bd0f09ff08e258e36bfc1c081913da649292e41cbf26e3f48dd8338207a"
     },
     "native-verdict-recheck-needed-ignored": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -4499,7 +4499,7 @@
       ],
       "ancestors": [],
       "mutantHash": "91ce93b76c82a35794acd842e5603359f52310f5953631b3cb0857d2437ad963",
-      "testHash": "eba677d6521d2ef2f82d2cd69cc73b32e83303960232e4755c77942f86da41d5"
+      "testHash": "df529bd0f09ff08e258e36bfc1c081913da649292e41cbf26e3f48dd8338207a"
     },
     "native-verdict-recheck-failure-tolerated": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -4508,7 +4508,7 @@
       ],
       "ancestors": [],
       "mutantHash": "61acac0b06dfcae087088ca010b871f8010e56167b7dad3b60552c3fe8ab20ed",
-      "testHash": "eba677d6521d2ef2f82d2cd69cc73b32e83303960232e4755c77942f86da41d5"
+      "testHash": "df529bd0f09ff08e258e36bfc1c081913da649292e41cbf26e3f48dd8338207a"
     },
     "native-verdict-absence-counted-as-finding": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -4517,7 +4517,7 @@
       ],
       "ancestors": [],
       "mutantHash": "4667c851238db9d2cbcf16c17d0b797a796ac94b74a46695d029ba8e3b662ab8",
-      "testHash": "eba677d6521d2ef2f82d2cd69cc73b32e83303960232e4755c77942f86da41d5"
+      "testHash": "df529bd0f09ff08e258e36bfc1c081913da649292e41cbf26e3f48dd8338207a"
     },
     "native-verdict-nested-fields-as-claims": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -4526,7 +4526,7 @@
       ],
       "ancestors": [],
       "mutantHash": "799393bc31b033e1f23da35f2c2754970ed56e52c9ac4575bf63f5b2eddd86a1",
-      "testHash": "eba677d6521d2ef2f82d2cd69cc73b32e83303960232e4755c77942f86da41d5"
+      "testHash": "df529bd0f09ff08e258e36bfc1c081913da649292e41cbf26e3f48dd8338207a"
     },
     "native-verdict-recheck-when-blocked": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -4535,7 +4535,7 @@
       ],
       "ancestors": [],
       "mutantHash": "d3ebe66b25546a22dbe79f5bceb1c451a01b0fd9aa65e9a70a881e47c94f0d46",
-      "testHash": "eba677d6521d2ef2f82d2cd69cc73b32e83303960232e4755c77942f86da41d5"
+      "testHash": "df529bd0f09ff08e258e36bfc1c081913da649292e41cbf26e3f48dd8338207a"
     },
     "native-host-notes-dropped": {
       "testFile": "tests/native-host.test.mjs",
@@ -4553,7 +4553,7 @@
       ],
       "ancestors": [],
       "mutantHash": "01e95ad0044e3f6c03c7297137a1c18eaa1014ea4683c76a99796107937eb811",
-      "testHash": "eba677d6521d2ef2f82d2cd69cc73b32e83303960232e4755c77942f86da41d5"
+      "testHash": "df529bd0f09ff08e258e36bfc1c081913da649292e41cbf26e3f48dd8338207a"
     },
     "native-review-settlement-always": {
       "testFile": "tests/native-review.test.mjs",
@@ -4562,7 +4562,7 @@
       ],
       "ancestors": [],
       "mutantHash": "8a326e407ab8b4a5ab74bbd032a5e25daeda545e5afdf1a7cdd56b329d43e178",
-      "testHash": "94a308642da921f1eb412c87e77774ad04b4ed1ca43dffe108aabfc26df942e3"
+      "testHash": "28b2791263713f606bc3e2d0d3f2d139d9805094db39dd92fdd5215a66e8686e"
     },
     "verifier-duplicates-dropped": {
       "testFile": "tests/stage-tasks.test.mjs",
@@ -4572,6 +4572,195 @@
       "ancestors": [],
       "mutantHash": "8695789ea3eb9eeb2f60c6389a9b2d601e9caa012a825df547e4f309c198f60f",
       "testHash": "e614395c977fb8e89f06c9dca65ed7b3a6738d4b0e193918b8cc90c02f83db55"
+    },
+    "compat-imported-constant-unresolved": {
+      "testFile": "tests/compat-extract.test.mjs",
+      "tests": [
+        "Given a version imported from another changed module, When the analysis runs, Then the name resolves to that version"
+      ],
+      "ancestors": [],
+      "mutantHash": "dfc4220e52e44b0d39d1fe1ac43c81e2c648111d1e10a6495e7bcc590e661e6f",
+      "testHash": "f033b25a855a0f87c245283b366208a49f9ca105b716c854516734dff0d79739"
+    },
+    "compat-dead-version-hidden": {
+      "testFile": "tests/compat-analysis.test.mjs",
+      "tests": [
+        "Given a reader of a version no changed module produces, When the analysis runs, Then the version is dead and its branch is named"
+      ],
+      "ancestors": [],
+      "mutantHash": "8b849c8ef518bd5acd6bf177bfedeaed77b6895f6fdc6896a19ceb58c656c9b7",
+      "testHash": "6be2b230385463cc2c3c5fb1965405487ae7f95f793520d5f1b95f2d13541b53"
+    },
+    "compat-unparsed-reported-as-full": {
+      "testFile": "tests/compat-analysis.test.mjs",
+      "tests": [
+        "Given an unparsed file, When the analysis runs, Then coverage is partial and the file is named"
+      ],
+      "ancestors": [],
+      "mutantHash": "9d24e3edfd671949f742351449520fc4da026681284d63781dc078a8dc17499f",
+      "testHash": "6be2b230385463cc2c3c5fb1965405487ae7f95f793520d5f1b95f2d13541b53"
+    },
+    "compat-report-budget-ignored": {
+      "testFile": "tests/compat-report.test.mjs",
+      "tests": [
+        "Given more rows than the line budget, When rendered, Then the section is bounded and points at the artifact"
+      ],
+      "ancestors": [],
+      "mutantHash": "2249b53ba9a0724ccc76156fba5856051b061f4e70695fefce1c3ec8c76bbffe",
+      "testHash": "d00ea48283991781f68d05618226191e1846fa80db708ebcd5d4a70d573b9e61"
+    },
+    "contract-python-import-edge-ignored": {
+      "testFile": "tests/contract-python.test.mjs",
+      "tests": [
+        "Given two modules exporting the same writer name, When only one is settled across modules, Then the other keeps its unsettled note"
+      ],
+      "ancestors": [],
+      "mutantHash": "246b15cdc88cc4095cad844e073e3c28fcc3db21cdd10aad3d23fe4b65aed412",
+      "testHash": "c677a493e083f490bc6c39dde306ab58ec10dccfbc6ade3409fe1cb9836c4642"
+    },
+    "contract-python-syntax-swallowed": {
+      "testFile": "tests/contract-python.test.mjs",
+      "tests": [
+        "Given a Python file that does not parse, When the stage runs, Then it is unparsed and the scan continues"
+      ],
+      "ancestors": [],
+      "mutantHash": "d54c3fd48a147d526cbba29f92513fb48912bf5c55d2eb1642f4b10b5e3565c1",
+      "testHash": "c677a493e083f490bc6c39dde306ab58ec10dccfbc6ade3409fe1cb9836c4642"
+    },
+    "journal-compat-policy-dropped": {
+      "testFile": "tests/review-journal.test.mjs",
+      "tests": [
+        "Given another census policy, When the configuration is fingerprinted, Then it changes"
+      ],
+      "ancestors": [],
+      "mutantHash": "174bd4d4bd5364ea87566fa838c81e5c09d1682654b9be8c868aa52d7a6a50e2",
+      "testHash": "60aa5e3d93e44757863282d8bc97cf2b4bd21b10076d8b0c5bf1858ff3e744b2"
+    },
+    "compat-snapshot-truncation-ignored": {
+      "testFile": "tests/compat-analysis.test.mjs",
+      "tests": [
+        "Given more snapshot files than the walk ceiling, When the analysis runs, Then the elsewhere pass reports truncation instead of walking the tree"
+      ],
+      "ancestors": [],
+      "mutantHash": "94c41a6788cbe41aa72903e8896fe9db354bb05205b728633dde85ba36f36eb4",
+      "testHash": "6be2b230385463cc2c3c5fb1965405487ae7f95f793520d5f1b95f2d13541b53"
+    },
+    "compat-failed-scan-claims-empty": {
+      "testFile": "tests/compat-report.test.mjs",
+      "tests": [
+        "Given a failed scan, When rendered, Then the limits line carries the failure message"
+      ],
+      "ancestors": [],
+      "mutantHash": "c63fe16c5b13820dafb7a1a0042fc6f5f9ed741fc80028a8ffa614857c8c52fc",
+      "testHash": "d00ea48283991781f68d05618226191e1846fa80db708ebcd5d4a70d573b9e61"
+    },
+    "compat-js-membership-ignored": {
+      "testFile": "tests/compat-analysis.test.mjs",
+      "tests": [
+        "Given a supported list tested with includes, When the analysis runs, Then every member of the list is consumed"
+      ],
+      "ancestors": [],
+      "mutantHash": "6d5f1f1f72cc671ccba3978167c10cdf72f62fe47585974f46b0b8a194688af0",
+      "testHash": "6be2b230385463cc2c3c5fb1965405487ae7f95f793520d5f1b95f2d13541b53"
+    },
+    "compat-truncated-walk-still-dead": {
+      "testFile": "tests/compat-analysis.test.mjs",
+      "tests": [
+        "Given more sites than the cap where a producer sorts after its consumer, When the analysis runs, Then no version is certified dead"
+      ],
+      "ancestors": [],
+      "mutantHash": "745785510c38b53e9e4302cd3f40c8d70f12057c4c75a96098b043dd4f979ca7",
+      "testHash": "6be2b230385463cc2c3c5fb1965405487ae7f95f793520d5f1b95f2d13541b53"
+    },
+    "contract-cross-note-file-blind": {
+      "testFile": "tests/contract-python.test.mjs",
+      "tests": [
+        "Given two modules exporting the same writer name, When only one is settled across modules, Then the other keeps its unsettled note"
+      ],
+      "ancestors": [],
+      "mutantHash": "709aa747fafc026fe8b4de87c7c53600944845c5f99a4d820be1d9537c4252be",
+      "testHash": "c677a493e083f490bc6c39dde306ab58ec10dccfbc6ade3409fe1cb9836c4642"
+    },
+    "compat-python-oversize-parsed": {
+      "testFile": "tests/compat-extract.test.mjs",
+      "tests": [
+        "Given a parser that cannot load, When extracted, Then the failure is reported and the file is unparsed"
+      ],
+      "ancestors": [],
+      "mutantHash": "188d756919d7d958e16f197791eccf10ea2629095e37039224ab478d7342d7a0",
+      "testHash": "f033b25a855a0f87c245283b366208a49f9ca105b716c854516734dff0d79739"
+    },
+    "compat-truncation-ignored-entirely": {
+      "testFile": "tests/compat-analysis.test.mjs",
+      "tests": [
+        "Given more sites than the cap where a producer sorts after its consumer, When the analysis runs, Then no version is certified dead"
+      ],
+      "ancestors": [],
+      "mutantHash": "c72049bb15ef1d68cc45d2f5054159f1544e907937eb17b686585c5346318e87",
+      "testHash": "6be2b230385463cc2c3c5fb1965405487ae7f95f793520d5f1b95f2d13541b53"
+    },
+    "contract-python-binding-unverified": {
+      "testFile": "tests/contract-python.test.mjs",
+      "tests": [
+        "Given a bare import that resolves to a different module than the paired writer, When the stage runs, Then no pair is settled"
+      ],
+      "ancestors": [],
+      "mutantHash": "b8cae02f353146c84b996cb87ddd552b2b0eedbc91b77d88805027b1d372432b",
+      "testHash": "c677a493e083f490bc6c39dde306ab58ec10dccfbc6ade3409fe1cb9836c4642"
+    },
+    "compat-template-literal-elsewhere-ignored": {
+      "testFile": "tests/compat-extract.test.mjs",
+      "tests": [
+        "Given an unchanged module that writes a version in a template literal, When the snapshot is scanned, Then the literal is still found"
+      ],
+      "ancestors": [],
+      "mutantHash": "fdfb06b75b5231ae78712a22ddabe533d3eb4a570a4f66c0b37272e2ba6e4315",
+      "testHash": "f033b25a855a0f87c245283b366208a49f9ca105b716c854516734dff0d79739"
+    },
+    "verdict-recheck-dispositions-ignored": {
+      "testFile": "tests/native-review.test.mjs",
+      "tests": [
+        "Given a recheck that answers with still_present, When the review runs, Then the block is stage-confirmed"
+      ],
+      "ancestors": [],
+      "mutantHash": "bea800f9b459b3439a36f1bfc16940e385d4d40f4c63a294e945238f9e0d3c03",
+      "testHash": "28b2791263713f606bc3e2d0d3f2d139d9805094db39dd92fdd5215a66e8686e"
+    },
+    "verdict-coverage-decision-counted": {
+      "testFile": "tests/native-verdict.test.mjs",
+      "tests": [
+        "Given a PASS and a verifier that confirmed only a coverage gap, When evaluated, Then the confirmed gap is not a finding against the PASS"
+      ],
+      "ancestors": [],
+      "mutantHash": "80fde864c78cf507dabc9c741904af4184e421f755af57531743bf45f62e1591",
+      "testHash": "df529bd0f09ff08e258e36bfc1c081913da649292e41cbf26e3f48dd8338207a"
+    },
+    "verdict-reuse-candidate-ids-dropped": {
+      "testFile": "tests/native-verdict.test.mjs",
+      "tests": [
+        "Given a PASS and a verifier that confirms a reuse lead only as a decision, When evaluated, Then the PASS is refused"
+      ],
+      "ancestors": [],
+      "mutantHash": "ea862da0993f8d32b6469b39f10ff7961d94d9e0934693fd77c044578c536179",
+      "testHash": "df529bd0f09ff08e258e36bfc1c081913da649292e41cbf26e3f48dd8338207a"
+    },
+    "journal-verifier-id-space-not-stamped": {
+      "testFile": "tests/native-review-journal.test.mjs",
+      "tests": [
+        "Given a journaled verifier that names a reuse lead, When a resumed review recomputes an empty list, Then the stored decision still blocks"
+      ],
+      "ancestors": [],
+      "mutantHash": "9477071ba2543d81551836100b19dfec6d66425482dac83bb5fd21f4ddb46379",
+      "testHash": "f002dc1e834b60752d4bfce4fc1de0b6ea14df5d45b1a3becb094317a0e6b1de"
+    },
+    "verdict-reuse-ids-not-forwarded": {
+      "testFile": "tests/native-review.test.mjs",
+      "tests": [
+        "Given journaling off and a verifier that confirms a reuse lead, When the review runs, Then the PASS is refused"
+      ],
+      "ancestors": [],
+      "mutantHash": "b9b49e52666136c2783c169bd69a237a4a4c3e4bd5a9ed7e70ea484bd62e971f",
+      "testHash": "28b2791263713f606bc3e2d0d3f2d139d9805094db39dd92fdd5215a66e8686e"
     }
   }
 }

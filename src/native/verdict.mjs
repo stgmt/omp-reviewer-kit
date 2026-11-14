@@ -111,20 +111,50 @@ export function maintainabilityBlocks(candidate, { centralization = new Set() } 
  * and a maintainability item the policy lets block, count. Nothing here decides the verdict; it
  * decides which reason a BLOCK carries, so a block no stage supported cannot read as a finding.
  */
-function confirmedFindingCount(stage) {
+function confirmedFindingCount(stage, candidateIds) {
   // One claim has one record: a confirmed claim may arrive as a confirmed finding or as a confirmed
   // disposition, so the larger count is the answer and the two never add up.
   const findings = listLength(stage.data?.confirmed_findings);
   // The verifier's published vocabulary has two confirming dispositions; the gate must read the
-  // same two the host reads, or a confirmed defect is reported as unsupported narration.
+  // same two the host reads, or a confirmed defect is reported as unsupported narration. A
+  // disposition settles a *candidate*: the verifier also dispositions coverage gaps, and a
+  // confirmed gap is not a finding that a PASS contradicts.
+  // A re-verification answers the claims the host sent it (`report-N`), so every confirming
+  // disposition there is evidence about a claim. A normal verifier also dispositions coverage gaps,
+  // and a confirmed gap is not a finding that a PASS contradicts.
   const confirmedDecisions = Array.isArray(stage.data?.decisions)
-    ? stage.data.decisions.filter(decision => ['confirmed', 'still_present'].includes(String(decision?.disposition ?? ''))).length
+    ? stage.data.decisions.filter(decision => (stage.recheck === true || candidateIds.has(String(decision?.candidate_id ?? '')))
+      && ['confirmed', 'still_present'].includes(String(decision?.disposition ?? ''))).length
     : 0;
   return Math.max(findings, confirmedDecisions);
 }
 
-function confirmedStageEvidence({ verifiers, scouts, fileClasses, maintainabilitySummary, maintainabilityStages, maintainabilityCentralization }) {
-  const confirmedFindings = verifiers.reduce((count, stage) => count + confirmedFindingCount(stage), 0);
+/**
+ * The candidate ids the hunters emitted. A verifier decision settles the candidate it names; a
+ * decision about a coverage gap is not a finding.
+ *
+ * @param {Array<object>} stages
+ * @returns {Set<string>}
+ */
+function hunterCandidateIds(stages, reuseCandidateIds) {
+  // The reuse leads are candidates too, and the host, not the verifier, owns their ids. A journaled
+  // verifier stage carries the ids it actually saw (`candidateIds`), so a resumed review interprets
+  // its decisions against that list even when the recomputed scan truncated or changed order.
+  const ids = new Set(Array.isArray(reuseCandidateIds) ? reuseCandidateIds : []);
+  for (const stage of Array.isArray(stages) ? stages : []) {
+    for (const id of Array.isArray(stage?.candidateIds) ? stage.candidateIds : []) {
+      if (typeof id === 'string' && id.length > 0) ids.add(id);
+    }
+    if (stage?.agent !== HUNTER_AGENT) continue;
+    for (const candidate of Array.isArray(stage.data?.candidates) ? stage.data.candidates : []) {
+      if (typeof candidate?.candidate_id === 'string' && candidate.candidate_id.length > 0) ids.add(candidate.candidate_id);
+    }
+  }
+  return ids;
+}
+
+function confirmedStageEvidence({ verifiers, scouts, fileClasses, maintainabilitySummary, maintainabilityStages, maintainabilityCentralization, candidateIds }) {
+  const confirmedFindings = verifiers.reduce((count, stage) => count + confirmedFindingCount(stage, candidateIds), 0);
   const harnessAbsent = !scouts.map(stage => stage.data?.test_harness).includes('present');
   const classes = classIndex(fileClasses);
   const confirmedGaps = verifiers.flatMap(stage => (Array.isArray(stage.data?.confirmed_coverage_gaps)
@@ -202,7 +232,7 @@ export function reportFindings(text) {
  * invents one. A `rejected` recheck may pass the review only when every claim was decided, and the
  * recheck stage itself is excluded from the mandatory-stage checks by its `recheck` marker.
  */
-export function evaluateReview({ reviewer, stages, profile, lanes, fileClasses = [], planned = [], maintainability = null, contract = null, maintainabilityCentralization = new Set(), recheck = null }) {
+export function evaluateReview({ reviewer, stages, profile, lanes, fileClasses = [], planned = [], maintainability = null, contract = null, maintainabilityCentralization = new Set(), reuseCandidateIds = [], recheck = null }) {
   const reasons = [];
   const notes = [];
   if (!reviewer) {
@@ -260,6 +290,7 @@ export function evaluateReview({ reviewer, stages, profile, lanes, fileClasses =
 
   const evidence = confirmedStageEvidence({
     verifiers: verifierEvidence,
+    candidateIds: hunterCandidateIds(stages, reuseCandidateIds),
     scouts,
     fileClasses,
     maintainabilitySummary,

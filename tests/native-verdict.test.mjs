@@ -33,6 +33,73 @@ test('Given a BLOCK marker and no stage confirmation, When evaluated, Then the r
   assert.deepEqual(result.reasons, ['reviewer verdict BLOCK without stage confirmation']);
 });
 
+test('Given a PASS and a verifier that confirmed only a coverage gap, When evaluated, Then the confirmed gap is not a finding against the PASS', () => {
+  const stages = [
+    everyStage[0],
+    done('review-risk-hunter', { lane: 'correctness', candidates: [] }),
+    done('review-finding-verifier', {
+      confirmed_findings: [],
+      confirmed_coverage_gaps: [{ coverage_id: 'coverage-1', severity: 'advisory', file_path: 'a.mjs', impact: 'no reachable failure proven' }],
+      decisions: [{ candidate_id: 'coverage-1', disposition: 'confirmed', triage: 'disclosed_gap', reason: 'advisory', evidence: 'a.mjs:1' }],
+    }),
+  ];
+  const result = evaluateReview({ reviewer: reviewerPass('## Review\n\nREVIEW_RESULT=PASS'), stages, ...FULL });
+  assert.equal(result.pass, true);
+  assert.deepEqual(result.reasons, []);
+});
+
+test('Given a replayed verifier stage that carries the ids it saw, When the recomputed list is empty, Then its reuse decision still counts', () => {
+  const verifier = done('review-finding-verifier', {
+    confirmed_findings: [],
+    confirmed_coverage_gaps: [],
+    decisions: [{ candidate_id: 'reuse-1', disposition: 'confirmed', triage: 'lie', reason: 'the same responsibility twice', evidence: 'src/a.mjs:1' }],
+  });
+  verifier.candidateIds = ['reuse-1'];
+  const result = evaluateReview({
+    reviewer: reviewerPass('## Review\n\nREVIEW_RESULT=PASS'),
+    stages: [everyStage[0], done('review-risk-hunter', { lane: 'correctness', candidates: [] }), verifier],
+    ...FULL,
+    reuseCandidateIds: [],
+  });
+  assert.equal(result.pass, false, 'a stored verifier decision is bound to the list it saw');
+  assert.ok(result.reasons.includes('verifier confirmed 1 finding(s) but the reviewer passed'));
+});
+
+test('Given a PASS and a verifier that confirms a reuse lead only as a decision, When evaluated, Then the PASS is refused', () => {
+  const stages = [
+    everyStage[0],
+    done('review-risk-hunter', { lane: 'correctness', candidates: [] }),
+    done('review-finding-verifier', {
+      confirmed_findings: [],
+      confirmed_coverage_gaps: [],
+      decisions: [{ candidate_id: 'reuse-1', disposition: 'confirmed', triage: 'lie', reason: 'the same responsibility twice', evidence: 'src/a.mjs:1' }],
+    }),
+  ];
+  const result = evaluateReview({
+    reviewer: reviewerPass('## Review\n\nREVIEW_RESULT=PASS'),
+    stages,
+    ...FULL,
+    reuseCandidateIds: ['reuse-1'],
+  });
+  assert.equal(result.pass, false);
+  assert.ok(result.reasons.includes('verifier confirmed 1 finding(s) but the reviewer passed'));
+});
+
+test('Given a PASS and a verifier decision that confirms a hunter candidate, When evaluated, Then the PASS is refused', () => {
+  const stages = [
+    everyStage[0],
+    done('review-risk-hunter', { lane: 'correctness', candidates: [{ candidate_id: 'correctness-1' }] }),
+    done('review-finding-verifier', {
+      confirmed_findings: [],
+      confirmed_coverage_gaps: [],
+      decisions: [{ candidate_id: 'correctness-1', disposition: 'confirmed', triage: 'lie', reason: 'reachable', evidence: 'a.mjs:1' }],
+    }),
+  ];
+  const result = evaluateReview({ reviewer: reviewerPass('## Review\n\nREVIEW_RESULT=PASS'), stages, ...FULL });
+  assert.equal(result.pass, false);
+  assert.ok(result.reasons.includes('verifier confirmed 1 finding(s) but the reviewer passed'));
+});
+
 test('Given a BLOCK marker and a verifier-confirmed finding, When evaluated, Then the block keeps the reviewer verdict as its reason', () => {
   const stages = [everyStage[0], everyStage[1], done('review-finding-verifier', { lane: 'correctness', confirmed_findings: [{ finding_id: 'R1' }], confirmed_coverage_gaps: [] })];
   const result = evaluateReview({ reviewer: reviewerPass('## Review\n\nREVIEW_RESULT=BLOCK'), stages, ...FULL });
@@ -457,9 +524,10 @@ test('Given a verifier that records the defect as still present, When evaluated,
     confirmed_findings: [],
     confirmed_coverage_gaps: [],
   });
+  const hunter = done('review-risk-hunter', { lane: 'correctness', candidates: [{ candidate_id: 'correctness-1' }] });
   const blocked = evaluateReview({
     reviewer: reviewerPass('### Confirmed findings\n- **R1**: a conflict\n\nREVIEW_RESULT=BLOCK'),
-    stages: [everyStage[0], everyStage[1], verifier],
+    stages: [everyStage[0], hunter, verifier],
     ...FULL,
     recheck: { verdict: 'confirmed', findings: 1, confirmed: 1 },
   });
@@ -468,7 +536,7 @@ test('Given a verifier that records the defect as still present, When evaluated,
 
   const passed = evaluateReview({
     reviewer: reviewerPass('## Review\n\nREVIEW_RESULT=PASS'),
-    stages: [everyStage[0], everyStage[1], verifier],
+    stages: [everyStage[0], hunter, verifier],
     ...FULL,
   });
   assert.equal(passed.pass, false, 'a finished verifier that says still present cannot be passed over');

@@ -91,18 +91,21 @@ Non-blocking (report under `### Notes`): a stale record with intact code; a chec
 
 ## Anti-parasitic architecture contract
 
-Treat self-referential control infrastructure as a correctness defect, not as a style preference. The five owned defect forms are:
+Treat self-referential control infrastructure as a correctness defect, not as a style preference. The six owned defect forms are:
 
 - micro-CLIs that replace direct calls to an existing domain service;
 - local PKI or trust stores where no separate trust boundary exists;
 - file inboxes or process exit codes that replace a framework's native pause and persistence mechanism;
 - process receipts that replace tests of observable product behavior;
-- indiscriminate command capture that duplicates existing logging without a domain requirement.
+- indiscriminate command capture that duplicates existing logging without a domain requirement;
+- a compatibility surface with no live consumer: a version table, a supported-version list, a second reader or writer for an old record shape, or a wait for a legacy event.
 
-Confirm such a candidate as `P2` correctness only when both facts are proven from repository or declared-framework evidence:
+Confirm the first five as `P2` correctness only when both facts are proven from repository or declared-framework evidence:
 
 1. an existing repository or framework mechanism directly solves the same responsibility;
 2. the staged layer adds no product capability and serves only its own control process.
+
+The sixth form has its own standard. Confirm a contract defect as `P1` only when the snapshot shows a writer emitting one version's fields under another version's label and a consumer of the new shape reaching that record. Confirm dead compatibility as `P2` only when the snapshot contains no producer of the old format and the change names no external consumer; an external consumer counts only with a named path or a public contract. Compatibility with a format that is live in the field (an installed artifact, a published API, a client outside this repository), a public format, and a Port/Adapter that adds a real capability are never defects.
 
 Ownership cost, process boundaries, storage growth, and token usage describe impact; they are not a third confirmation condition. If either fact is absent, record the candidate as `rejected` or `not_proven`. Do not apply this rule to a Port/Adapter or Template Method that adds a real capability, a public CLI that is a product boundary, or cryptography that protects a genuinely remote untrusted payload.
 
