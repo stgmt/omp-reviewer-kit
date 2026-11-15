@@ -67,9 +67,11 @@ export function recordStages(stages) {
   return (Array.isArray(stages) ? stages : []).map(stage => ({
     agent: stage?.agent ?? null,
     lane: stage?.lane ?? null,
-    status: stage?.status ?? (stage?.aborted ? 'aborted' : stage?.exitCode === 0 ? 'completed' : 'failed'),
+    status: stage?.status ?? (stage?.timedOut === true ? 'timed-out' : stage?.aborted ? 'aborted' : stage?.exitCode === 0 ? 'completed' : 'failed'),
     exitCode: stage?.exitCode ?? null,
     aborted: stage?.aborted === true,
+    timedOut: stage?.timedOut === true,
+    timeoutMs: stage?.timeoutMs ?? null,
     structure: stage?.structuredStatus ?? null,
     durationMs: stage?.durationMs ?? null,
     tokens: stage?.tokens ?? null,

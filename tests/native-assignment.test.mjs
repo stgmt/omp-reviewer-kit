@@ -82,3 +82,8 @@ test('Given a skipped version census, When the assignment is built, Then it name
   const text = buildAssignment({ ...input, compat: { policy: 'off', reason: 'policy-off', files: 0, coverage: null, lines: [] } });
   assert.match(text, /^Version census: not run \(policy-off\)\.$/m);
 });
+test('Given the staged snapshot, When the assignment is built, Then it names the snapshot as the working directory and keeps the repository root to Git metadata', () => {
+  const text = buildAssignment(input);
+  assert.match(text, /^Read and search inside the staged snapshot: .*working directory of every command you run\. Never scan the repository root.*$/m);
+  assert.match(text, /^Repository root \(Git metadata only, address it as `git -C <root> …`; never grep, find or du it\): \/repo$/m);
+});

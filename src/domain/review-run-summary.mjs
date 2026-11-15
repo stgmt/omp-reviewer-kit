@@ -98,6 +98,8 @@ export function normalizeStage(stage) {
     lane: textOrNull(entry.lane),
     exitCode: finiteOrNull(entry.exitCode),
     aborted: entry.aborted === true,
+    timedOut: entry.timedOut === true,
+    timeoutMs: finiteOrNull(entry.timeoutMs),
     structure: textOrNull(entry.structure),
     durationMs: finiteOrNull(entry.durationMs),
     tokens: finiteOrNull(entry.tokens),

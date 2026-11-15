@@ -56,6 +56,7 @@ function digest(parts) {
  *   reuseMaxLines?: number|null,
  *   compatMaxLines?: number|null,
  *   maintainabilityConfig?: object|null,
+ *   stageTimeoutMs?: number|null,
  * }} [input]
  * @returns {string}
  */
@@ -69,6 +70,7 @@ export function configFingerprint({
   reuseMaxLines = null,
   compatMaxLines = null,
   maintainabilityConfig = null,
+  stageTimeoutMs = null,
 } = {}) {
   const normalized = {
     profile: typeof profile === 'string' ? profile : null,
@@ -82,6 +84,9 @@ export function configFingerprint({
     // The maintainability thresholds decide which groups are delivered, so a verdict decided under
     // one set must not answer a review run under another.
     maintainabilityConfig: normalizeConfig(maintainabilityConfig),
+    // The stage deadline decides whether a stage produces evidence at all, so a verdict refused
+    // because a stage was stopped must not answer a review the owner re-runs under another deadline.
+    stageTimeoutMs: typeof stageTimeoutMs === 'number' && Number.isFinite(stageTimeoutMs) && stageTimeoutMs >= 0 ? Math.floor(stageTimeoutMs) : null,
   };
   return digest([JSON.stringify(normalized)]);
 }
