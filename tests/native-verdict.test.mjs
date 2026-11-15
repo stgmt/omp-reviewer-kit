@@ -557,3 +557,23 @@ test('Given a verifier that confirms a duplicate implementation, When evaluated,
   assert.equal(result.pass, false);
   assert.deepEqual(result.reasons, ['reviewer verdict BLOCK']);
 });
+test('Given a stage the host stopped at its deadline, When the review is evaluated, Then it blocks and names the deadline instead of only the absent stage', () => {
+  const stopped = {
+    agent: 'review-context-scout',
+    lane: null,
+    exitCode: null,
+    aborted: true,
+    structuredStatus: null,
+    data: null,
+    timedOut: true,
+    timeoutMs: 1_200_000,
+  };
+  const result = evaluateReview({
+    reviewer: reviewerPass('## Review\n\nREVIEW_RESULT=PASS'),
+    stages: [stopped, done('review-risk-hunter', { lane: 'correctness' }), done('review-finding-verifier', { confirmed_findings: [], confirmed_coverage_gaps: [] })],
+    ...FULL,
+  });
+  assert.equal(result.pass, false);
+  assert.ok(result.reasons.includes('review-context-scout stage did not finish within 20m00s and was stopped'));
+  assert.ok(result.reasons.includes('no completed stage evidence for review-context-scout'));
+});

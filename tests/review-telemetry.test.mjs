@@ -210,3 +210,30 @@ test('Given finished events and the terminal write fired without awaiting, When 
     assert.ok(states.length >= 2);
   });
 });
+
+test('Given a stage the host stopped at its deadline, When the record stage is built, Then it is reported as timed-out with its deadline, not as an ordinary abort', () => {
+  const [stage] = recordStages([{ agent: 'review-context-scout', exitCode: null, aborted: true, timedOut: true, timeoutMs: 1_200_000, structuredStatus: null, data: null }]);
+  assert.equal(stage.status, 'timed-out');
+  assert.equal(stage.timedOut, true);
+  assert.equal(stage.timeoutMs, 1_200_000);
+});
+
+test('Given a run record whose stage was stopped at its deadline, When it is normalized, Then the deadline survives the write and read', () => {
+  const record = buildRunRecord({
+    runId: 'run-deadline',
+    record: { startedAt: '2026-11-15T09:00:00.000Z', repoRoot: 'E:/repos/x' },
+    result: {
+      staged: true,
+      profile: 'full',
+      lanes: ['correctness'],
+      changedPaths: ['a.mjs'],
+      stages: [{ agent: 'review-context-scout', exitCode: null, aborted: true, timedOut: true, timeoutMs: 1_200_000 }],
+      verdict: { pass: false, verdict: 'BLOCK', reasons: ['review-context-scout stage did not finish within 20m00s and was stopped'] },
+    },
+    finishedAt: '2026-11-15T09:20:00.000Z',
+    durationMs: 1_200_000,
+  });
+  assert.equal(record.stages[0].timedOut, true);
+  assert.equal(record.stages[0].timeoutMs, 1_200_000);
+  assert.equal(record.stages[0].status, 'timed-out');
+});
