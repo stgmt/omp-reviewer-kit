@@ -4,7 +4,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { STRUCTURAL_OVERLAY, describeUpdate, fallbackOf, loadOmpEngine, progressEvents, provenanceOf, reviewerFromRun, reviewerTranscript, reviewerYield, runReviewerTask, stageEvidence } from '../src/native/task-engine.mjs';
+import { DEFAULT_STAGE_TIMEOUT_MS, STAGE_TIMEOUT_ENV, STRUCTURAL_OVERLAY, createStageRunner, describeUpdate, fallbackOf, loadOmpEngine, progressEvents, provenanceOf, raceStageDeadline, resolveStageTimeout, reviewerFromRun, reviewerTranscript, reviewerYield, runReviewerTask, stageEvidence, timedOutEvidence } from '../src/native/task-engine.mjs';
+import { stageCompleted } from '../src/native/verdict.mjs';
+import { createStubEngine } from './support/stage-fixtures.mjs';
+
 
 test('Given the library cannot load one of its modules, When the engine is loaded, Then loading rejects and no partial engine is returned', async () => {
   const importer = specifier => (specifier.endsWith('/config/settings')
@@ -293,4 +296,78 @@ test('Given an ambiguous payload, When the reviewer yield is read, Then both str
   assert.equal(yielded.text, null);
   assert.equal(yielded.reason, 'ambiguous-payload');
   assert.deepEqual(yielded.observed, ['report', 'summary']);
+});
+
+test('Given the stage deadline, When it is resolved, Then the default holds unless the environment names another one or disables it', () => {
+  assert.equal(resolveStageTimeout({}), DEFAULT_STAGE_TIMEOUT_MS);
+  assert.equal(resolveStageTimeout({ [STAGE_TIMEOUT_ENV]: '  ' }), DEFAULT_STAGE_TIMEOUT_MS);
+  assert.equal(resolveStageTimeout({ [STAGE_TIMEOUT_ENV]: '90000' }), 90_000);
+  assert.equal(resolveStageTimeout({ [STAGE_TIMEOUT_ENV]: '0' }), 0);
+  assert.equal(resolveStageTimeout({ [STAGE_TIMEOUT_ENV]: 'soon' }), DEFAULT_STAGE_TIMEOUT_MS);
+  assert.equal(resolveStageTimeout({ [STAGE_TIMEOUT_ENV]: '-5' }), DEFAULT_STAGE_TIMEOUT_MS);
+});
+
+test('Given a native call that answers before its deadline, When the deadline is raced, Then the result is returned and nothing is stopped', async () => {
+  let stopped = 0;
+  const settled = await raceStageDeadline({ pending: Promise.resolve('answered'), timeoutMs: 50, onTimeout: () => { stopped += 1; } });
+  assert.deepEqual(settled, { kind: 'result', value: 'answered' });
+  assert.equal(stopped, 0);
+});
+
+test('Given a native call that never answers, When the deadline is reached, Then the race reports a timeout and asks for the stop once', async () => {
+  let stopped = 0;
+  const settled = await raceStageDeadline({ pending: new Promise(() => {}), timeoutMs: 20, onTimeout: () => { stopped += 1; } });
+  assert.deepEqual(settled, { kind: 'timeout' });
+  assert.equal(stopped, 1);
+});
+
+test('Given a native call that fails on its own, When the deadline is raced, Then the failure is returned as a failure, never as a timeout', async () => {
+  const failure = new Error('provider exploded');
+  const settled = await raceStageDeadline({ pending: Promise.reject(failure), timeoutMs: 50 });
+  assert.equal(settled.kind, 'error');
+  assert.equal(settled.error, failure);
+});
+
+test('Given a stage the host stopped at its deadline, When its evidence is read, Then it never counts as a completed stage', () => {
+  const evidence = timedOutEvidence('review-context-scout', 120_000);
+  assert.equal(stageCompleted(evidence), false);
+  assert.equal(evidence.timedOut, true);
+  assert.equal(evidence.timeoutMs, 120_000);
+  assert.equal(evidence.data, null);
+});
+
+test('Given a stalled native task, When a stage runs with a deadline, Then the stage is stopped, reported as timed out and the review is not left waiting', async () => {
+  const stalled = createStubEngine({ execute: () => new Promise(() => {}) });
+  const progress = [];
+  const runner = await createStageRunner({
+    cwd: path.resolve('C:/snapshot/staged-abc'),
+    kitRoot: path.resolve('kit-root-fixture'),
+    loadEngine: async () => stalled.engine,
+    stageTimeoutMs: 25,
+    onProgress: line => progress.push(line),
+  });
+  const outcome = await runner.run('review-context-scout', 'ContextScout', 'ASSIGNMENT');
+  assert.equal(outcome.result, undefined);
+  assert.equal(outcome.evidence.timedOut, true);
+  assert.equal(outcome.evidence.agent, 'review-context-scout');
+  assert.equal(stalled.abortSignals[0].aborted, true);
+  assert.match(progress.join(' '), /review-context-scout reached the 25ms deadline; stopped it/);
+});
+
+test('Given the staged snapshot as the working directory, When a stage runs, Then OMP session discovery starts in that snapshot, never in the live repository', async () => {
+  const snapshot = path.resolve('C:/Users/example/AppData/Local/Temp/staged-abc');
+  const stub = createStubEngine({ execute: async () => ({ details: { results: [{ agent: 'review-context-scout', exitCode: 0, aborted: false, structuredOutput: { status: 'valid', data: { test_harness: 'present' } } }] } }) });
+  const runner = await createStageRunner({ cwd: snapshot, kitRoot: path.resolve('kit-root-fixture'), loadEngine: async () => stub.engine });
+  const outcome = await runner.run('review-context-scout', 'ContextScout', 'ASSIGNMENT');
+  assert.equal(stub.initCwds.length, 1);
+  assert.equal(stub.initCwds[0], snapshot);
+  assert.equal(outcome.evidence.structuredStatus, 'valid');
+  assert.equal(stageCompleted(outcome.evidence), true);
+});
+
+test('Given a native task that fails, When a stage runs, Then the failure reaches the caller instead of reading as a deadline', async () => {
+  const failure = new Error('cannot reach the provider');
+  const stub = createStubEngine({ execute: async () => { throw failure; } });
+  const runner = await createStageRunner({ cwd: path.resolve('C:/snapshot/staged-abc'), kitRoot: path.resolve('kit-root-fixture'), loadEngine: async () => stub.engine, stageTimeoutMs: 500 });
+  await assert.rejects(runner.run('review-context-scout', 'ContextScout', 'ASSIGNMENT'), /cannot reach the provider/);
 });

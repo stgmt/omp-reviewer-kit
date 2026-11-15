@@ -2,6 +2,8 @@
 // nested stage results OMP attaches to that yield. It never reads, sets or compares a model,
 // role, effort or fallback: those belong to OMP and the owner's configuration.
 
+import { formatDuration } from '../domain/review-run-summary.mjs';
+
 export const PASS_MARKER = 'REVIEW_RESULT=PASS';
 export const BLOCK_MARKER = 'REVIEW_RESULT=BLOCK';
 export const SCOUT_AGENT = 'review-context-scout';
@@ -243,6 +245,12 @@ export function evaluateReview({ reviewer, stages, profile, lanes, fileClasses =
   const verifiers = completed(VERIFIER_AGENT);
   const verifierEvidence = stages.filter(stage => stage.agent === VERIFIER_AGENT && stageCompleted(stage));
   if (profile === 'full' && verifiers.length < 1) reasons.push(`no completed stage evidence for ${VERIFIER_AGENT}`);
+
+  // A stage the host stopped at its deadline did not answer: the reason says so, because a stall
+  // of the review is not a finding about the change and must never read as one.
+  for (const stage of stages.filter(entry => entry?.timedOut === true)) {
+    reasons.push(`${stage.agent ?? 'review'} stage did not finish within ${formatDuration(Number(stage.timeoutMs) || 0)} and was stopped`);
+  }
 
   if (Array.isArray(planned) && planned.length > 0) {
     const missing = planned.filter(name => completed(name).length === 0);

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.33.1] - 2026-11-15
+
+### Fixed
+- A review can no longer hang on a child that stops answering. Every stage now has a 20-minute wall-clock deadline (`OMP_REVIEW_KIT_STAGE_TIMEOUT_MS`, `0` disables): at the deadline the host aborts the native call, stops waiting for it, marks the stage `timedOut` in the run record, and the verdict blocks with `<agent> stage did not finish within <duration> and was stopped` instead of holding the commit and `.git/index.lock` until the caller kills it. Two commits in one repository waited more than 25 minutes on a `review-context-scout` stage that never answered and produced no report at all.
+- The stage deadline is part of the review key (`configFingerprint`), so a verdict refused because a stage was stopped does not answer a review re-run under another deadline; the run record keeps the stopped stage as `status: timed-out` with its `timeoutMs`, not as an ordinary abort; and a verdict decided while a stage was stopped is never stored for reuse, so the next attempt re-runs the stage that never answered instead of replaying the refusal.
+- The review's native stages now run with the staged snapshot as their working directory, not the repository. A scout command that grepped the live working tree — which held an ignored folder of 183 nested checkouts, 46 GB and 3.7M files — never returned; the assignment now also gives the repository root as `git -C <root> …` metadata only, and the scout contract forbids recursive searches rooted there.
+
 ## [0.33.0] - 2026-11-13
 
 ### Added

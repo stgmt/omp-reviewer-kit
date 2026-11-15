@@ -5,7 +5,7 @@ import path from 'node:path';
 
 import { stageCounts } from '../domain/review-run-summary.mjs';
 import { removeSnapshot, materializeStagedSnapshot } from './snapshot.mjs';
-import { createStageRunner, evidenceFromResult, fallbackOf, provenanceOf, reviewerTranscript, reviewerYield } from './task-engine.mjs';
+import { createStageRunner, evidenceFromResult, fallbackOf, provenanceOf, resolveStageTimeout, reviewerTranscript, reviewerYield } from './task-engine.mjs';
 import { hunterTask, maintainabilityTask, recheckTask, scoutTask, synthesisTask, verifierTask } from './stage-tasks.mjs';
 import { hunterBudget, runStagePipeline } from './stage-pipeline.mjs';
 import { readFallbackEvidence } from './fallback-evidence.mjs';
@@ -85,6 +85,8 @@ export async function runNativeReview({
   analysisConfig = undefined,
   reuseConfig = undefined,
   reuseMaxLines = 12,
+  stageTimeoutMs = undefined,
+  loadEngine = undefined,
 }) {
   const startedMs = now();
   const snapshotStarted = now();
@@ -121,6 +123,9 @@ export async function runNativeReview({
     if (ignoredStagedPaths.length > 0) {
       onProgress(`review: staged paths ignored by .gitignore: ${ignoredStagedPaths.join(', ')}`);
     }
+    // The same deadline decides the review's identity and the runner: a verdict refused because a
+    // stage was stopped must not answer a review re-run under another deadline.
+    const stageDeadlineMs = stageTimeoutMs ?? resolveStageTimeout(env);
     const identity = {
       repoIdentity: repoIdentity(repo),
       treeOid: await readIndexTreeOid(repo),
@@ -135,6 +140,7 @@ export async function runNativeReview({
         contractPolicy: contractPolicy(env),
         reuseMaxLines,
         maintainabilityConfig: analysisConfig ?? resolveMaintainabilityConfig(),
+        stageTimeoutMs: stageDeadlineMs,
       }),
     };
     const key = reviewKey(identity);
@@ -246,7 +252,11 @@ export async function runNativeReview({
         }),
       }
       : null;
-    const runner = stageRunner ?? (runTask ? wholeRunAdapter(runTask) : await createStageRunner({ cwd: repo, kitRoot, onProgress, onEvent }));
+    // The stages run with the staged snapshot as their working directory, so a child's relative
+    // path, a default search root or a bare `cd` stays inside the bytes under review. The live
+    // working tree is never the tool surface: one scout command rooted there scanned a repository
+    // whose ignored worktree folder held 46 GB, and the review stopped answering for 25 minutes.
+    const runner = stageRunner ?? (runTask ? wholeRunAdapter(runTask) : await createStageRunner({ cwd: dir, kitRoot, onProgress, onEvent, stageTimeoutMs: stageDeadlineMs, loadEngine }));
     const steps = planSteps({ assignmentInput, dir, profile, lanes, maintainability, analysis, duplicates: reuse.skipped ? [] : (reuse.analysis?.candidates ?? []) });
     const { stages, evidence: stageEvidenceById } = await runStagePipeline({ runner, steps, journal: stageJournal, onProgress });
     const hunters = laneResults(lanes, stageEvidenceById);
@@ -260,6 +270,11 @@ export async function runNativeReview({
       lanes,
     }));
     const reviewer = synthesis.result;
+    // The synthesis carries the same deadline as every pipeline stage, and a stopped synthesis is a
+    // stalled stage like any other: its evidence joins the stage list, so the verdict names the
+    // deadline and the verdict is kept out of the journal instead of replaying a refusal on the
+    // same bytes forever. It adds no mandatory stage of its own.
+    if (synthesis.evidence?.timedOut === true) stages.push({ ...synthesis.evidence });
     const nativeTaskMs = now() - taskStarted;
     const evidence = await readFallbackEvidence(reviewerTranscript(reviewer));
     const fallback = { ...fallbackOf(reviewer), chainLength: evidence?.chainLength ?? null, error: evidence?.errors[0] ?? null };
@@ -342,6 +357,10 @@ export async function runNativeReview({
       lane: stage.lane ?? null,
       exitCode: stage.exitCode,
       aborted: stage.aborted,
+      // A stage the host stopped at its deadline is not an ordinary abort: the record keeps the
+      // flag and the deadline it hit, which is what the run record and `review-runs` report.
+      timedOut: stage.timedOut === true,
+      timeoutMs: typeof stage.timeoutMs === 'number' ? stage.timeoutMs : null,
       structuredStatus: stage.structuredStatus,
       role: stage.role,
       model: stage.model,
@@ -354,7 +373,14 @@ export async function runNativeReview({
     // The journal is written after the verdict and before the caller sees it: a killed run keeps the
     // stages it finished, and a finished review answers the next identical tree in milliseconds.
     // Every write here is fail-open — a journal that cannot be stored costs reuse, never a verdict.
-    if (journal.key !== null && journalPolicy !== 'off') {
+    // A verdict decided while a stage was stopped at its deadline is not stored: the stall is about
+    // the review's own infrastructure, so the next attempt on the same bytes must re-run the stage
+    // that never answered — the finished stages are already journaled one by one and are reused.
+    const stalledStage = stages.find(stage => stage.timedOut === true);
+    if (stalledStage && journalPolicy !== 'off') {
+      onProgress(`review: verdict not stored for reuse (${stalledStage.agent ?? 'a stage'} was stopped at its deadline); the next attempt resumes from it`);
+    }
+    if (journal.key !== null && journalPolicy !== 'off' && !stalledStage) {
       await writeJournal(journalRoot, journal.key, {
         schema: JOURNAL_SCHEMA,
         key: journal.key,

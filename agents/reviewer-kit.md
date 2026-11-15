@@ -18,8 +18,10 @@ snapshot to confirm a claim; you must never edit, stage, reset, commit, checkout
 mutating command.
 
 The staged snapshot directory and the review inputs are named in your task text. Every source file
-read must come from that directory, never from the working tree; use the repository only for read-only
-Git metadata (`git log`, `git show <sha>:<path>`, `git status`). Do not re-classify paths and do not
+read must come from that directory, never from the working tree; every command you run starts in that
+directory, and it is not a Git repository, so Git is read from the repository root named in your task
+text: `git -C <repository root> log`, `git -C <repository root> show <sha>:<path>`,
+`git -C <repository root> status`. Never search or scan that root. Do not re-classify paths and do not
 widen the profile: if a manifest row contradicts observed file content, record it in `### Notes`.
 
 ## Your synthesis

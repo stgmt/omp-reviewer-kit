@@ -7,7 +7,8 @@ import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { runNativeReview } from '../src/native/native-review.mjs';
-import { completed } from './support/stage-fixtures.mjs';
+import { readJournal } from '../src/infra/review-journal-store.mjs';
+import { completed, createStubEngine } from './support/stage-fixtures.mjs';
 
 function git(cwd, args) {
   return execFileSync('git', ['-c', 'core.autocrlf=false', '-c', 'core.eol=lf', ...args], { cwd, encoding: 'utf8' });
@@ -97,6 +98,7 @@ test('Given the native task throws, When the review runs, Then the error reaches
   }
 });
 
+const KIT_ROOT = path.resolve(import.meta.dirname, '..');
 const PASS_REPORT = '## Review\n\nREVIEW_RESULT=PASS';
 // The native task reports its role and resolved model on every stage; the shared fixture stays minimal.
 const stage = (agent, data) => completed(agent, data, { role: 'task', model: 'm' });
@@ -129,7 +131,7 @@ test('Given the reviewer passes with every stage completed, When the review runs
     assert.deepEqual(result.verdict.reasons, []);
     assert.deepEqual(result.provenance, { role: 'task', model: 'm' });
     assert.deepEqual(result.fallback, { applied: false, requested: null, chainLength: null, error: null });
-    const timing = { durationMs: null, tokens: null, requests: null, contextTokens: null };
+    const timing = { durationMs: null, tokens: null, requests: null, contextTokens: null, timedOut: false, timeoutMs: null };
     assert.deepEqual(result.stages, [
       { agent: 'review-context-scout', lane: null, exitCode: 0, aborted: false, structuredStatus: 'valid', role: 'task', model: 'm', ...timing, counts: {} },
       { agent: 'review-risk-hunter', lane: null, exitCode: 0, aborted: false, structuredStatus: 'valid', role: 'task', model: 'm', ...timing, counts: {} },
@@ -635,5 +637,134 @@ test('Given a changed function that repeats an existing one, When the review run
   } finally {
     await rm(repo, { recursive: true, force: true });
     await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test('Given a staged review without an injected task seam, When the stages run, Then they run in the staged snapshot and never in the live repository', async () => {
+  const repo = await stagedRepo();
+  const parent = await mkdtemp(path.join(tmpdir(), 'native-review-parent-'));
+  try {
+    const stub = createStubEngine({ execute: async () => ({ details: { results: [{ exitCode: 0, aborted: false, structuredOutput: { status: 'invalid', data: null } }] } }) });
+    const result = await runNativeReview({
+      repo,
+      kitRoot: repo,
+      parentDir: parent,
+      env: { OMP_REVIEW_KIT_JOURNAL: 'off' },
+      loadEngine: async () => stub.engine,
+    });
+    assert.equal(result.staged, true);
+    assert.ok(stub.initCwds.length > 0);
+    for (const cwd of stub.initCwds) {
+      assert.equal(path.dirname(cwd), parent);
+      assert.match(path.basename(cwd), /^staged-/);
+      assert.notEqual(path.resolve(cwd), path.resolve(repo));
+    }
+    assert.deepEqual(await snapshotsLeft(parent), []);
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test('Given a native task that stops answering, When the review runs with a deadline, Then the stage is stopped and the block names the deadline instead of waiting forever', async () => {
+  const repo = await stagedRepo();
+  const parent = await mkdtemp(path.join(tmpdir(), 'native-review-parent-'));
+  const progress = [];
+  try {
+    const stub = createStubEngine({ execute: () => new Promise(() => {}) });
+    const result = await runNativeReview({
+      repo,
+      kitRoot: repo,
+      parentDir: parent,
+      env: { OMP_REVIEW_KIT_JOURNAL: 'off' },
+      loadEngine: async () => stub.engine,
+      stageTimeoutMs: 20,
+      onProgress: line => progress.push(line),
+    });
+    assert.equal(result.verdict.pass, false);
+    assert.ok(result.verdict.reasons.includes('review-context-scout stage did not finish within 20ms and was stopped'));
+    assert.equal(result.stages[0].timedOut, true, 'the review result must carry the stopped stage into the run record');
+    assert.equal(result.stages[0].timeoutMs, 20);
+    assert.match(progress.join(' '), /review-context-scout reached the 20ms deadline; stopped it/);
+    assert.deepEqual(await snapshotsLeft(parent), []);
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test('Given a stage stopped at its deadline, When the review finishes, Then the verdict is not stored for reuse and the next attempt runs the stage again', async () => {
+  const repo = await stagedRepo();
+  const parent = await mkdtemp(path.join(tmpdir(), 'native-review-parent-'));
+  const journalRoot = await mkdtemp(path.join(tmpdir(), 'native-review-journal-'));
+  const progress = [];
+  try {
+    const stalled = createStubEngine({ execute: () => new Promise(() => {}) });
+    const first = await runNativeReview({
+      repo,
+      kitRoot: KIT_ROOT,
+      parentDir: parent,
+      env: { OMP_REVIEW_KIT_JOURNAL_DIR: journalRoot },
+      loadEngine: async () => stalled.engine,
+      stageTimeoutMs: 20,
+      onProgress: line => progress.push(line),
+    });
+    assert.equal(first.journal.hit, false);
+    assert.ok(first.journal.key, 'the staged state must have a key');
+    const stored = await readJournal(journalRoot, first.journal.key);
+    assert.equal(stored, null, 'a verdict decided by a stopped stage must never answer a later attempt');
+    assert.match(progress.join(' '), /verdict not stored for reuse \(review-context-scout was stopped at its deadline\)/);
+
+    const answered = createStubEngine({ execute: async () => ({ details: { results: [{ exitCode: 0, aborted: false, structuredOutput: { status: 'invalid', data: null } }] } }) });
+    const second = await runNativeReview({
+      repo,
+      kitRoot: KIT_ROOT,
+      parentDir: parent,
+      env: { OMP_REVIEW_KIT_JOURNAL_DIR: journalRoot },
+      loadEngine: async () => answered.engine,
+      stageTimeoutMs: 20,
+    });
+    assert.equal(second.journal.hit, false, 'the retry must not be answered by a journal entry');
+    assert.ok(answered.abortSignals.length > 0, 'the retry must run the stages again, starting with the one that was stopped');
+    assert.deepEqual(await snapshotsLeft(parent), []);
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+    await rm(parent, { recursive: true, force: true });
+    await rm(journalRoot, { recursive: true, force: true });
+  }
+});
+
+test('Given every pipeline stage answers but the synthesis never does, When the review finishes, Then the stopped synthesis is named in the verdict and never stored for reuse', async () => {
+  const repo = await stagedRepo();
+  const parent = await mkdtemp(path.join(tmpdir(), 'native-review-parent-'));
+  const journalRoot = await mkdtemp(path.join(tmpdir(), 'native-review-journal-'));
+  const progress = [];
+  try {
+    const stub = createStubEngine({
+      execute: async (id, params) => {
+        if (params.agent === 'reviewer-kit') return new Promise(() => {});
+        return { details: { results: [{ agent: params.agent, exitCode: 0, aborted: false, structuredOutput: { status: 'invalid', data: null } }] } };
+      },
+    });
+    const result = await runNativeReview({
+      repo,
+      kitRoot: KIT_ROOT,
+      parentDir: parent,
+      env: { OMP_REVIEW_KIT_JOURNAL_DIR: journalRoot },
+      loadEngine: async () => stub.engine,
+      stageTimeoutMs: 20,
+      onProgress: line => progress.push(line),
+    });
+    assert.equal(result.verdict.pass, false);
+    assert.ok(result.verdict.reasons.includes('reviewer-kit stage did not finish within 20ms and was stopped'));
+    assert.equal(result.stages.at(-1).agent, 'reviewer-kit');
+    assert.equal(result.stages.at(-1).timedOut, true);
+    assert.equal(result.stages.at(-1).timeoutMs, 20);
+    assert.equal(await readJournal(journalRoot, result.journal.key), null, 'a stopped synthesis must never answer a later attempt');
+    assert.match(progress.join(' '), /verdict not stored for reuse \(reviewer-kit was stopped at its deadline\)/);
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+    await rm(parent, { recursive: true, force: true });
+    await rm(journalRoot, { recursive: true, force: true });
   }
 });

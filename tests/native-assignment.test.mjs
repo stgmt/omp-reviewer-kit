@@ -59,3 +59,9 @@ test('Given a staged name with a bidi override, When the assignment is built, Th
   assert.ok(text.includes('- src/\\u202eevil.mjs'));
   assert.equal(text.includes('\u202e'), false);
 });
+
+test('Given the staged snapshot, When the assignment is built, Then it names the snapshot as the working directory and keeps the repository root to Git metadata', () => {
+  const text = buildAssignment(input);
+  assert.match(text, /^Read and search inside the staged snapshot: .*working directory of every command you run\. Never scan the repository root.*$/m);
+  assert.match(text, /^Repository root \(Git metadata only, address it as `git -C <root> …`; never grep, find or du it\): \/repo$/m);
+});

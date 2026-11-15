@@ -7,12 +7,93 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { readReportEnvelope } from '../domain/report-envelope.mjs';
+import { formatDuration } from '../domain/review-run-summary.mjs';
 
 /**
  * Structural overlay only: children must complete with a `yield`, otherwise OMP has no
  * completion evidence to read. It names no model, role or fallback.
  */
 export const STRUCTURAL_OVERLAY = { 'task.structured': true };
+
+/**
+ * The longest one native stage may occupy the hook. A stage that stops answering — a child command
+ * scanning an unbounded tree, a provider request that never completes — otherwise holds the commit
+ * and `.git/index.lock` until the caller kills it, with no report and no verdict. Twenty minutes
+ * covers the slowest measured stage on a large diff and leaves the caller's own cap room.
+ */
+export const DEFAULT_STAGE_TIMEOUT_MS = 20 * 60 * 1000;
+
+export const STAGE_TIMEOUT_ENV = 'OMP_REVIEW_KIT_STAGE_TIMEOUT_MS';
+
+/**
+ * The stage deadline in milliseconds. `OMP_REVIEW_KIT_STAGE_TIMEOUT_MS` overrides it and `0`
+ * disables it; an unreadable value keeps the default instead of guessing a shorter wait.
+ *
+ * @param {Record<string, string|undefined>} [env]
+ * @returns {number}
+ */
+export function resolveStageTimeout(env = process.env) {
+  const raw = env?.[STAGE_TIMEOUT_ENV];
+  if (raw === undefined || String(raw).trim() === '') return DEFAULT_STAGE_TIMEOUT_MS;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0) return DEFAULT_STAGE_TIMEOUT_MS;
+  return Math.floor(value);
+}
+
+/**
+ * The evidence of a stage the host stopped at its deadline. It carries no result, so the verdict
+ * can never read it as a completed stage; it exists so the reason names the deadline instead of
+ * only the absent stage.
+ *
+ * @param {string} agent
+ * @param {number} timeoutMs
+ * @returns {object}
+ */
+export function timedOutEvidence(agent, timeoutMs) {
+  return {
+    agent,
+    lane: null,
+    exitCode: null,
+    aborted: true,
+    structuredStatus: null,
+    data: null,
+    role: null,
+    model: null,
+    durationMs: timeoutMs,
+    tokens: null,
+    requests: null,
+    contextTokens: null,
+    timedOut: true,
+    timeoutMs,
+  };
+}
+
+/**
+ * Races one native call against its deadline. `onTimeout` runs exactly once when the deadline wins,
+ * which is where the caller asks OMP to stop the child. A rejection of the native call is reported,
+ * never swallowed, so a real failure is not turned into a deadline.
+ *
+ * @param {{ pending: Promise<unknown>, timeoutMs: number, onTimeout?: () => void }} input
+ * @returns {Promise<{ kind: 'result', value: unknown } | { kind: 'error', error: unknown } | { kind: 'timeout' }>}
+ */
+export async function raceStageDeadline({ pending, timeoutMs, onTimeout = () => {} }) {
+  const settled = pending.then(value => ({ kind: 'result', value }), error => ({ kind: 'error', error }));
+  if (!(typeof timeoutMs === 'number' && timeoutMs > 0)) return settled;
+  let timer;
+  const deadline = new Promise(resolve => {
+    // The timer is deliberately not unref'd: the deadline must fire even when the stalled call holds
+    // no other handle, and `finally` clears it the moment the race is decided.
+    timer = setTimeout(() => {
+      onTimeout();
+      resolve({ kind: 'timeout' });
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([settled, deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 /**
  * Loads OMP's library lazily so a missing or mismatched install is reported as a diagnostic
@@ -114,7 +195,7 @@ export async function createReviewSession({ cwd, kitRoot, loadEngine = loadOmpEn
  * }} input
  * @returns {Promise<{ sessionFile: string, run: (agent: string, name: string, task: string) => Promise<{ result: object|undefined, evidence: object }> }>}
  */
-export async function createStageRunner({ cwd, kitRoot, onProgress = () => {}, onEvent = () => {}, loadEngine = loadOmpEngine }) {
+export async function createStageRunner({ cwd, kitRoot, onProgress = () => {}, onEvent = () => {}, loadEngine = loadOmpEngine, stageTimeoutMs = resolveStageTimeout() }) {
   const { tool, sessionFile } = await createReviewSession({ cwd, kitRoot, loadEngine });
   const emit = event => {
     try {
@@ -123,15 +204,34 @@ export async function createStageRunner({ cwd, kitRoot, onProgress = () => {}, o
       // The observer is fail-open: a broken sink never interrupts the review.
     }
   };
+  const deadline = typeof stageTimeoutMs === 'number' && stageTimeoutMs > 0 ? stageTimeoutMs : 0;
   return {
     sessionFile,
+    stageTimeoutMs: deadline,
     async run(agent, name, task) {
-      const run = await tool.execute(`review-${agent}-${name}`, { agent, name, task }, undefined, update => {
+      const controller = new AbortController();
+      let stopped = false;
+      const pending = tool.execute(`review-${agent}-${name}`, { agent, name, task }, controller.signal, update => {
         onProgress(describeUpdate(update));
         for (const event of progressEvents(update)) emit(event);
       });
-      const result = run?.details?.results?.[0];
-      return { result, evidence: evidenceFromResult(result) };
+      const settled = await raceStageDeadline({
+        pending,
+        timeoutMs: deadline,
+        onTimeout: () => {
+          stopped = true;
+          controller.abort();
+          onProgress(`review: stage ${agent} reached the ${formatDuration(deadline)} deadline; stopped it`);
+        },
+      });
+      if (settled.kind === 'result') {
+        const result = settled.value?.details?.results?.[0];
+        return { result, evidence: evidenceFromResult(result) };
+      }
+      // A stage stopped at the deadline is evidence of a stall, never a stage result: the verdict
+      // blocks on it and names the deadline. A call that failed on its own still throws.
+      if (settled.kind === 'error' && !stopped) throw settled.error;
+      return { result: undefined, evidence: timedOutEvidence(agent, deadline) };
     },
   };
 }

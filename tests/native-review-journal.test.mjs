@@ -142,3 +142,40 @@ test('Given a changed index tree, When the review runs, Then the stored verdict 
     await rm(journalRoot, { recursive: true, force: true });
   }
 });
+
+test('Given a stored verdict and a different stage deadline, When the review runs again, Then the key misses and the stage runs instead of replaying the stored verdict', async () => {
+  const repo = await tempRepo();
+  const journalRoot = await mkdtemp(path.join(tmpdir(), 'review-journal-deadline-'));
+  try {
+    await writeFile(path.join(repo, 'b.txt'), 'two\n', 'utf8');
+    git(repo, ['add', 'b.txt']);
+    const first = await runNativeReview({
+      repo,
+      kitRoot: KIT_ROOT,
+      parentDir: tmpdir(),
+      env: { OMP_REVIEW_KIT_JOURNAL_DIR: journalRoot },
+      runTask: fakeTask().runTask,
+      runContract: contractStub,
+      stageTimeoutMs: 1_200_000,
+    });
+    const stored = await readJournal(journalRoot, first.journal.key);
+    assert.ok(stored, 'a finished review must be journaled');
+
+    const task = fakeTask();
+    const second = await runNativeReview({
+      repo,
+      kitRoot: KIT_ROOT,
+      parentDir: tmpdir(),
+      env: { OMP_REVIEW_KIT_JOURNAL_DIR: journalRoot },
+      runTask: task.runTask,
+      runContract: contractStub,
+      stageTimeoutMs: 0,
+    });
+    assert.notEqual(second.journal.key, first.journal.key, 'the deadline decides whether a stage produces evidence, so it must key the review');
+    assert.equal(second.journal.hit, false);
+    assert.equal(task.calls.length, 1, 'a changed deadline must run the review again');
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+    await rm(journalRoot, { recursive: true, force: true });
+  }
+});
