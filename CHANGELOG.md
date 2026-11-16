@@ -15,6 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - The review journal key includes the census policy, so a stored verdict for one census configuration is not reused for another.
 
+## [0.36.0] - 2026-11-16
+
+### Added
+- Every delivered maintainability group carries a deterministic `preVerdict`, and the artifact counts them under `preVerdicts`: `pass-through` (every occurrence forwards the set — MR-08's `forwarding_only`, decided by code with no model turn), `staged-declarations` (this change itself declares the same set twice), `in-file-repetition`, and `cross-file-clump`. The assignment quotes the split.
+
+### Changed
+- The maintainability stage answers every group in **one batched pass** instead of one reasoning round per group, and reads only the sites the table does not settle (at most two per group). Nothing is skipped: every candidate still gets a decision, its evidence and its ground. The stage's request count no longer grows one-per-group, which is where most of its wall time went. The pass-through groups are rejected by code, so the model no longer re-litigates chains that MR-08 says cannot carry a cost.
+
 ## [0.35.0] - 2026-11-16
 
 ### Changed

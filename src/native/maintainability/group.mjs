@@ -124,7 +124,18 @@ export function groupClumps({ signatures, classOf, changedPaths, config, support
     });
   }
 
+  // A pre-verdict the code can defend, so the stage spends its reads where the evidence is thin:
+  // `pass-through` is decided by MR-08 (a pure forwarding chain creates no cost) and needs no model
+  // turn at all; `staged-declarations` means two declarations sit in files this change touches, which the
+  // table already shows; the rest need a look at their declaration sites.
+  for (const candidate of survivors) {
+    Object.assign(candidate, triageOf(candidate));
+  }
+
+  const order = { 'staged-declarations': 0, 'in-file-repetition': 1, 'cross-file-clump': 2, 'pass-through': 3 };
   survivors.sort((a, b) => {
+    const byTriage = (order[a.preVerdict] ?? 9) - (order[b.preVerdict] ?? 9);
+    if (byTriage !== 0) return byTriage;
     if (b.support !== a.support) return b.support - a.support;
     if (b.params.length !== a.params.length) return b.params.length - a.params.length;
     const left = a.params.join(',');
@@ -133,15 +144,39 @@ export function groupClumps({ signatures, classOf, changedPaths, config, support
   });
 
   const delivered = survivors.slice(0, config.maxGroups);
+  const preVerdicts = { 'staged-declarations': 0, 'in-file-repetition': 0, 'cross-file-clump': 0, 'pass-through': 0 };
+  for (const entry of delivered) preVerdicts[entry.preVerdict] += 1;
 
   return {
     groups: delivered.map((entry, position) => ({ groupId: `g${position + 1}`, ...entry })),
+    preVerdicts,
     excluded,
     // Groups beyond the ceiling are reported, never dropped silently: the analysis is partial then.
     dropped: survivors.length - delivered.length,
     belowSignal,
     belowSignalByReason: signalKinds,
   };
+}
+
+/**
+ * What the artifact can already say about a delivered group. `forwardingOnly` is MR-08's fourth
+ * blocking condition answered by role alone: a chain where every occurrence is a forwarder passes the
+ * set on and decides nothing about it. `preVerdict` orders the stage's work: the change's own
+ * duplicated declaration first, then a repetition inside one file, then one across files, then the
+ * pass-through chains the code has already settled.
+ *
+ * @param {{ occurrences: Array<{ role: string, path: string, inStagedDiff: boolean }> }} candidate
+ * @returns {{ forwardingOnly: boolean, preVerdict: 'pass-through'|'staged-declarations'|'in-file-repetition'|'cross-file-clump' }}
+ */
+export function triageOf(candidate) {
+  const occurrences = candidate.occurrences;
+  const declarations = occurrences.filter(occurrence => occurrence.role === 'definition' || occurrence.role === 'forwarder');
+  const forwardingOnly = occurrences.length > 0 && occurrences.every(occurrence => occurrence.role === 'forwarder');
+  if (forwardingOnly) return { forwardingOnly: true, preVerdict: 'pass-through' };
+  const inDiffDeclarations = declarations.filter(occurrence => occurrence.inStagedDiff).length;
+  if (inDiffDeclarations >= 2) return { forwardingOnly: false, preVerdict: 'staged-declarations' };
+  const files = new Set(declarations.map(occurrence => occurrence.path));
+  return { forwardingOnly: false, preVerdict: files.size >= 2 ? 'cross-file-clump' : 'in-file-repetition' };
 }
 
 /**

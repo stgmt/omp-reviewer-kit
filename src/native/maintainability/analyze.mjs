@@ -54,7 +54,7 @@ export async function analyzeTree({
 
   const supportComplete = extracted.truncated !== true;
   const grouped = extracted.status === 'failed'
-    ? { groups: [], excluded: [], dropped: 0, belowSignal: [], belowSignalByReason: { 'foreign-signature': 0, 'single-definition': 0, 'parameter-pair': 0 } }
+    ? { groups: [], excluded: [], dropped: 0, belowSignal: [], belowSignalByReason: { 'foreign-signature': 0, 'single-definition': 0, 'parameter-pair': 0 }, preVerdicts: { 'staged-declarations': 0, 'in-file-repetition': 0, 'cross-file-clump': 0, 'pass-through': 0 } }
     : groupClumps({
       signatures: extracted.signatures,
       classOf: classifyFilePath,
@@ -102,6 +102,9 @@ export async function analyzeTree({
     droppedGroups: grouped.dropped,
     // Candidates the deterministic cost signal removed before the stage: counted per ground with a
     // bounded sample, so the file states what was not delivered instead of reading as "nothing there".
+    // The split the stage's task text quotes: how many delivered groups the change itself
+    // duplicates, how many repeat inside or across files, and how many are settled pass-throughs.
+    preVerdicts: grouped.preVerdicts,
     belowSignal: {
       count: grouped.belowSignal.length,
       byReason: grouped.belowSignalByReason,
@@ -196,6 +199,9 @@ function failureAnalysis({ diffHash, config, policy, error }) {
     excluded: [],
     droppedGroups: 0,
     belowSignal: { count: 0, byReason: { 'foreign-signature': 0, 'single-definition': 0, 'parameter-pair': 0 }, examples: [] },
+    // The failed artifact carries every field a successful one does, so no reader has to special-case
+    // the shape; the stage is not planned on this path and the verdict blocks on the failure first.
+    preVerdicts: { 'staged-declarations': 0, 'in-file-repetition': 0, 'cross-file-clump': 0, 'pass-through': 0 },
     groups: [],
   };
 }

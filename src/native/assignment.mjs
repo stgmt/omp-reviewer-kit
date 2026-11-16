@@ -126,5 +126,8 @@ function maintainabilityLine(maintainability) {
   const below = typeof maintainability.belowSignal === 'number' && maintainability.belowSignal > 0
     ? `, ${maintainability.belowSignal} candidate(s) kept out by the deterministic cost signal (foreign option bags, a single declaration, parameter pairs)`
     : '';
-  return `Maintainability candidates (deterministic, written before this task): ${maintainability.path} — status ${maintainability.status}, ${maintainability.candidates} group(s), coverage ${coverage}, policy ${maintainability.policy}${truncated}${below}.`;
+  const split = maintainability.preVerdicts && typeof maintainability.preVerdicts === 'object'
+    ? Object.entries(maintainability.preVerdicts).filter(([, count]) => count > 0).map(([kind, count]) => `${kind} ${count}`).join(', ')
+    : '';
+  return `Maintainability candidates (deterministic, written before this task): ${maintainability.path} — status ${maintainability.status}, ${maintainability.candidates} group(s), coverage ${coverage}, policy ${maintainability.policy}${truncated}${below}${split ? `; pre-verdicts: ${split}` : ''}.`;
 }

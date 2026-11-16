@@ -2850,7 +2850,7 @@
       ],
       "ancestors": [],
       "mutantHash": "fc12d1d35ac54fc9447f002bcf8893fe2c949269410ed86cdf526de06531c731",
-      "testHash": "77ed851ae54184ea320c21bcd1e0cbbf8f6983c838406bf04538d70bc6a11c3b"
+      "testHash": "88deccc40f67650b5c881170c396b591d6d47a021bc8bc6ad235d104228e2299"
     },
     "maintainability-test-class-support-counted": {
       "testFile": "tests/maintainability-grouping.test.mjs",
@@ -2859,7 +2859,7 @@
       ],
       "ancestors": [],
       "mutantHash": "875cb8fdc9bd286500ffcb4608df89d106b398ce8dbf5865248caeb6f490470c",
-      "testHash": "77ed851ae54184ea320c21bcd1e0cbbf8f6983c838406bf04538d70bc6a11c3b"
+      "testHash": "88deccc40f67650b5c881170c396b591d6d47a021bc8bc6ad235d104228e2299"
     },
     "maintainability-unsupported-language-makes-partial": {
       "testFile": "tests/maintainability-status.test.mjs",
@@ -2877,7 +2877,7 @@
       ],
       "ancestors": [],
       "mutantHash": "49df5bd9cad0fe777bacc97ecbb68c8baf5407ad3d6149cc656836466e20a070",
-      "testHash": "90bb1d1240fdbced8ec2e0e0c5709006b7649248af5cc4ba10c90e199d1c45b3"
+      "testHash": "b12cf9650791c2790d6a576fa043e4e4a961003841758943526f7c3278d2ec68"
     },
     "maintainability-file-size-cap-removed": {
       "testFile": "tests/maintainability-extract.test.mjs",
@@ -4769,7 +4769,7 @@
       ],
       "ancestors": [],
       "mutantHash": "60a56794871164040e3b71c4ba831b52f24326200d11298a039dab5e18c027aa",
-      "testHash": "77ed851ae54184ea320c21bcd1e0cbbf8f6983c838406bf04538d70bc6a11c3b"
+      "testHash": "88deccc40f67650b5c881170c396b591d6d47a021bc8bc6ad235d104228e2299"
     },
     "maintainability-precision-single-ignored": {
       "testFile": "tests/maintainability-grouping.test.mjs",
@@ -4778,7 +4778,7 @@
       ],
       "ancestors": [],
       "mutantHash": "378d648ebc407a975cba893cbab156ba24a70bf0180a7a73dce2144d3abab1e3",
-      "testHash": "77ed851ae54184ea320c21bcd1e0cbbf8f6983c838406bf04538d70bc6a11c3b"
+      "testHash": "88deccc40f67650b5c881170c396b591d6d47a021bc8bc6ad235d104228e2299"
     },
     "maintainability-precision-pair-ignored": {
       "testFile": "tests/maintainability-grouping.test.mjs",
@@ -4787,7 +4787,7 @@
       ],
       "ancestors": [],
       "mutantHash": "402b0edda7619542274124de27aec90919595faffb31dafe8f48d22141cf1c7c",
-      "testHash": "77ed851ae54184ea320c21bcd1e0cbbf8f6983c838406bf04538d70bc6a11c3b"
+      "testHash": "88deccc40f67650b5c881170c396b591d6d47a021bc8bc6ad235d104228e2299"
     },
     "maintainability-below-signal-uncounted": {
       "testFile": "tests/maintainability-grouping.test.mjs",
@@ -4796,7 +4796,34 @@
       ],
       "ancestors": [],
       "mutantHash": "3da006c2871d6ed0e696ce9d9c66d8a3ce722242577e013494441bfc0a942f6f",
-      "testHash": "77ed851ae54184ea320c21bcd1e0cbbf8f6983c838406bf04538d70bc6a11c3b"
+      "testHash": "88deccc40f67650b5c881170c396b591d6d47a021bc8bc6ad235d104228e2299"
+    },
+    "maintainability-triage-pass-through-ignored": {
+      "testFile": "tests/maintainability-grouping.test.mjs",
+      "tests": [
+        "Given survivors with different triage grounds, When grouped, Then the delivered order puts the staged declarations first and the pass-through chains last"
+      ],
+      "ancestors": [],
+      "mutantHash": "add77b65ef24192bebb86bd7cda9f5a7463df055a7a4f23055c189dc1adf883f",
+      "testHash": "88deccc40f67650b5c881170c396b591d6d47a021bc8bc6ad235d104228e2299"
+    },
+    "maintainability-triage-staged-declarations-ignored": {
+      "testFile": "tests/maintainability-grouping.test.mjs",
+      "tests": [
+        "Given survivors with different triage grounds, When grouped, Then the delivered order puts the staged declarations first and the pass-through chains last"
+      ],
+      "ancestors": [],
+      "mutantHash": "b83b349c20a0a32f900d560f6f6c97710e886532865de0bd2c5c95a42361807b",
+      "testHash": "88deccc40f67650b5c881170c396b591d6d47a021bc8bc6ad235d104228e2299"
+    },
+    "maintainability-preverdicts-uncounted": {
+      "testFile": "tests/maintainability-grouping.test.mjs",
+      "tests": [
+        "Given survivors with different triage grounds, When grouped, Then the delivered order puts the staged declarations first and the pass-through chains last"
+      ],
+      "ancestors": [],
+      "mutantHash": "be0baeaf81d281a3384b678b39cff2406208d97bdaa72a99529570ba06818faf",
+      "testHash": "88deccc40f67650b5c881170c396b591d6d47a021bc8bc6ad235d104228e2299"
     }
   }
 }
