@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - The review journal key includes the census policy, so a stored verdict for one census configuration is not reused for another.
 
+## [0.35.0] - 2026-11-16
+
+### Changed
+- The maintainability stage no longer hands the model every maximal parameter group. A group reaches the stage only when the deterministic cost signal finds a repetition in this repository: at least two of its occurrences are declarations and it carries at least three parameters. On the two recorded runs that motivated this, 200 delivered groups became 39 and 119 became 13, while the model had rejected every one of those groups; the stage was 41% of a review's wall time (8m25s median) and is now proportional to the surviving set. Every kept-out group stays in `maintainability.json` under `belowSignal` with its ground (`foreign-signature`, `single-definition`, `parameter-pair`), a per-ground count and up to ten examples, and the assignment states the count, so a narrowed set never reads as "nothing there".
+
 ## [0.34.0] - 2026-11-16
 
 ### Added

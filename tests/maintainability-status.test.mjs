@@ -174,3 +174,49 @@ test('Given candidates inside the ceiling, When analysed, Then nothing is report
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('Given a maximal group the cost signal keeps out, When analysed, Then the artifact states the ground and the count instead of reading as nothing there', async () => {
+  // Two functions declaring the same pair, plus two call sites: a maximal group that reaches the
+  // delivery filter and fails it as an ambient pair.
+  const root = await tree({
+    'src/a.mjs': 'export function one(cwd, env) {\n  return cwd + env;\n}\n\nexport function two(cwd, env) {\n  return cwd + env;\n}\n',
+    'src/b.mjs': 'export const three = (x) => x;\nthree({ cwd: 1, env: 2 });\nthree({ cwd: 3, env: 4 });\n',
+  });
+  try {
+    const { analysis } = await analysisOf(root, ['src/a.mjs']);
+    assert.equal(analysis.groups.length, 0);
+    assert.equal(analysis.status, 'no-candidates');
+    assert.equal(analysis.belowSignal.count, 1);
+    assert.equal(analysis.belowSignal.byReason['parameter-pair'], 1);
+    assert.equal(analysis.belowSignal.examples.length, 1);
+    assert.deepEqual(analysis.belowSignal.examples[0].params, ['cwd', 'env']);
+    // The kept-out population is analysed, not unanalysed: coverage stays full.
+    assert.equal(analysis.coverage, 'full');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('Given more kept-out groups than the sample bound, When analysed, Then the count is exact and only the examples are capped', async () => {
+  // Twelve single-declaration groups: each one is kept out as `single-definition`.
+  const declarations = [];
+  const callers = [];
+  for (let index = 0; index < 12; index += 1) {
+    const params = `p${index}a, p${index}b, p${index}c`;
+    declarations.push(`export function f${index}(${params}) {\n  return ${params.replace(/, /g, ' + ')};\n}`);
+    // Three object-literal call sites per declaration: the group reaches the support threshold with a
+    // single declaration, so only the cost signal can keep it out.
+    for (let call = 0; call < 3; call += 1) {
+      callers.push(`f${index}({ p${index}a: 1, p${index}b: 2, p${index}c: 3 });`);
+    }
+  }
+  const root = await tree({ 'src/a.mjs': `${declarations.join('\n\n')}\n`, 'src/calls.mjs': `${callers.join('\n')}\n` });
+  try {
+    const { analysis } = await analysisOf(root, ['src/a.mjs']);
+    assert.equal(analysis.belowSignal.count, 12);
+    assert.equal(analysis.belowSignal.byReason['single-definition'], 12);
+    assert.equal(analysis.belowSignal.examples.length, 10, 'the list is a sample, the count is exact');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

@@ -2850,7 +2850,7 @@
       ],
       "ancestors": [],
       "mutantHash": "fc12d1d35ac54fc9447f002bcf8893fe2c949269410ed86cdf526de06531c731",
-      "testHash": "44f668963a327bbb921576a68ea61e808d769dc453720cca3e0d35d9fef3f0c3"
+      "testHash": "77ed851ae54184ea320c21bcd1e0cbbf8f6983c838406bf04538d70bc6a11c3b"
     },
     "maintainability-test-class-support-counted": {
       "testFile": "tests/maintainability-grouping.test.mjs",
@@ -2859,7 +2859,7 @@
       ],
       "ancestors": [],
       "mutantHash": "875cb8fdc9bd286500ffcb4608df89d106b398ce8dbf5865248caeb6f490470c",
-      "testHash": "44f668963a327bbb921576a68ea61e808d769dc453720cca3e0d35d9fef3f0c3"
+      "testHash": "77ed851ae54184ea320c21bcd1e0cbbf8f6983c838406bf04538d70bc6a11c3b"
     },
     "maintainability-unsupported-language-makes-partial": {
       "testFile": "tests/maintainability-status.test.mjs",
@@ -2868,7 +2868,7 @@
       ],
       "ancestors": [],
       "mutantHash": "0996b695fe684e9dc6a26c61b1ca357e3382d48387ebc999e2a41b88c4996a64",
-      "testHash": "dbe8c3a82e7a2d48de3538997d54aee46a77d6116fc20b284e6839701b8b67fa"
+      "testHash": "a62aa5c5fe2d55a963eeb6967836155b9c273c83ceef94f4521291dab19ac18f"
     },
     "maintainability-skip-never": {
       "testFile": "tests/maintainability-stage.test.mjs",
@@ -2976,7 +2976,7 @@
       ],
       "ancestors": [],
       "mutantHash": "cb85d6b577a92a185e88d3fc181eb56c1acaa510e028b0bce3357fd930e74246",
-      "testHash": "dbe8c3a82e7a2d48de3538997d54aee46a77d6116fc20b284e6839701b8b67fa"
+      "testHash": "a62aa5c5fe2d55a963eeb6967836155b9c273c83ceef94f4521291dab19ac18f"
     },
     "maintainability-dropped-groups-not-counted": {
       "testFile": "tests/maintainability-status.test.mjs",
@@ -2984,8 +2984,8 @@
         "Given more groups than the ceiling, When analysed, Then the dropped groups are counted and the coverage is partial"
       ],
       "ancestors": [],
-      "mutantHash": "0dc5317a1af7821cbec2ed7752842ca5d82d73607fd770c1872cf657a6cd048c",
-      "testHash": "dbe8c3a82e7a2d48de3538997d54aee46a77d6116fc20b284e6839701b8b67fa"
+      "mutantHash": "a82cfd9bfdaa498e2d6ff98be621abe8855c799b304b108b37596651e1453209",
+      "testHash": "a62aa5c5fe2d55a963eeb6967836155b9c273c83ceef94f4521291dab19ac18f"
     },
     "maintainability-assignment-default-not-unwrapped": {
       "testFile": "tests/maintainability-extract.test.mjs",
@@ -4761,6 +4761,42 @@
       "ancestors": [],
       "mutantHash": "b9b49e52666136c2783c169bd69a237a4a4c3e4bd5a9ed7e70ea484bd62e971f",
       "testHash": "445dc2a464d2f94ba857c909cd0765f6edc7abd731d9c3dcee18cbd55dc8f39d"
+    },
+    "maintainability-precision-foreign-ignored": {
+      "testFile": "tests/maintainability-grouping.test.mjs",
+      "tests": [
+        "Given candidates filtered by all three grounds, When grouped, Then every ground is counted so nothing vanishes silently"
+      ],
+      "ancestors": [],
+      "mutantHash": "60a56794871164040e3b71c4ba831b52f24326200d11298a039dab5e18c027aa",
+      "testHash": "77ed851ae54184ea320c21bcd1e0cbbf8f6983c838406bf04538d70bc6a11c3b"
+    },
+    "maintainability-precision-single-ignored": {
+      "testFile": "tests/maintainability-grouping.test.mjs",
+      "tests": [
+        "Given candidates filtered by all three grounds, When grouped, Then every ground is counted so nothing vanishes silently"
+      ],
+      "ancestors": [],
+      "mutantHash": "378d648ebc407a975cba893cbab156ba24a70bf0180a7a73dce2144d3abab1e3",
+      "testHash": "77ed851ae54184ea320c21bcd1e0cbbf8f6983c838406bf04538d70bc6a11c3b"
+    },
+    "maintainability-precision-pair-ignored": {
+      "testFile": "tests/maintainability-grouping.test.mjs",
+      "tests": [
+        "Given candidates filtered by all three grounds, When grouped, Then every ground is counted so nothing vanishes silently"
+      ],
+      "ancestors": [],
+      "mutantHash": "402b0edda7619542274124de27aec90919595faffb31dafe8f48d22141cf1c7c",
+      "testHash": "77ed851ae54184ea320c21bcd1e0cbbf8f6983c838406bf04538d70bc6a11c3b"
+    },
+    "maintainability-below-signal-uncounted": {
+      "testFile": "tests/maintainability-grouping.test.mjs",
+      "tests": [
+        "Given a group declared by exactly one function and called from many places, When grouped, Then it is a signature, not a repetition"
+      ],
+      "ancestors": [],
+      "mutantHash": "3da006c2871d6ed0e696ce9d9c66d8a3ce722242577e013494441bfc0a942f6f",
+      "testHash": "77ed851ae54184ea320c21bcd1e0cbbf8f6983c838406bf04538d70bc6a11c3b"
     }
   }
 }

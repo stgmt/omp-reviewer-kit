@@ -123,5 +123,8 @@ function maintainabilityLine(maintainability) {
   }
   const coverage = maintainability.coverage ?? 'unknown';
   const truncated = maintainability.truncated === true ? ', scan truncated: support is a lower bound' : '';
-  return `Maintainability candidates (deterministic, written before this task): ${maintainability.path} — status ${maintainability.status}, ${maintainability.candidates} group(s), coverage ${coverage}, policy ${maintainability.policy}${truncated}.`;
+  const below = typeof maintainability.belowSignal === 'number' && maintainability.belowSignal > 0
+    ? `, ${maintainability.belowSignal} candidate(s) kept out by the deterministic cost signal (foreign option bags, a single declaration, parameter pairs)`
+    : '';
+  return `Maintainability candidates (deterministic, written before this task): ${maintainability.path} — status ${maintainability.status}, ${maintainability.candidates} group(s), coverage ${coverage}, policy ${maintainability.policy}${truncated}${below}.`;
 }
