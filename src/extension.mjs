@@ -1,8 +1,10 @@
 import { PluginInstallerService } from './application/installer-service.mjs';
 import { isGitCommitCommand } from './domain/git-commit-command.mjs';
-import { formatDuration, stageSummaryLine } from './domain/review-run-summary.mjs';
+import { TERMINAL_RUN_STATES, formatDuration, stageSummaryLine } from './domain/review-run-summary.mjs';
 import { SlopPrompt } from './domain/slop-prompt.mjs';
-import { readRunRecords } from './infra/review-run-store.mjs';
+import { probeRun } from './infra/review-liveness-probe.mjs';
+import { readRunRecords, runsRootDir } from './infra/review-run-store.mjs';
+import { resolveStageTimeout } from './native/task-engine.mjs';
 
 const REVIEW_STATUS_KEY = 'reviewer-kit';
 
@@ -203,7 +205,22 @@ export default function initExtension(pi) {
           lines.push(`Report: ${info.latestReview.path}`);
         }
 
-        const lastRun = (await readRunRecords({ repoRoot: info.repoRoot, limit: 1 }))[0];
+        const recent = await readRunRecords({ repoRoot: info.repoRoot, limit: 5 });
+        // A running review is reported as working, quiet or stalled: the hook's silence in a terminal
+        // is not evidence of a hang, and this line is what an agent should quote. A killed review
+        // leaves its record at `running` forever, so a record the probe calls `exited` or `unknown`
+        // is not announced as a running review — the same rule the CLI applies.
+        const dir = runsRootDir({});
+        let running = null;
+        for (const record of recent) {
+          if (TERMINAL_RUN_STATES.includes(record.state)) continue;
+          const liveness = await probeRun(record, { dir, deadlineMs: resolveStageTimeout() });
+          if (liveness.kind === 'exited' || liveness.kind === 'unknown') continue;
+          running = liveness;
+          break;
+        }
+        if (running) lines.push(`Running review: ${running.kind} · ${running.text}`);
+        const lastRun = recent.find(record => TERMINAL_RUN_STATES.includes(record.state));
         if (lastRun) {
           const stages = stageSummaryLine(lastRun.stages);
           lines.push(`Last run: ${lastRun.verdict ?? String(lastRun.state).toUpperCase()} ${formatDuration(lastRun.durationMs)}${stages ? ` · ${stages}` : ''}`);

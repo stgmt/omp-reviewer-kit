@@ -10,7 +10,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { followRun, formatRunDetail, formatRunLine, main, parseArgs } from '../scripts/review-runs.mjs';
+import { followRun, formatRunDetail, formatRunLine, main, parseArgs, statusReport } from '../scripts/review-runs.mjs';
+import { probeRun } from '../src/infra/review-liveness-probe.mjs';
 import { writeRunRecord } from '../src/infra/review-run-store.mjs';
 
 async function withDir(run) {
@@ -226,6 +227,150 @@ test('Given an empty store, When the script is run directly, Then it says so and
     const result = runScript([], dir);
     assert.equal(result.status, 1);
     assert.match(result.stderr, /^no run records in /m);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('Given the status flag, When arguments are parsed, Then the mode is status', () => {
+  assert.equal(parseArgs(['--status']).mode, 'status');
+});
+
+test('Given a running review whose runner is alive and whose commit waits, When status is asked, Then it reports working, not hung', async () => {
+  await withDir(async (dir) => {
+    await writeRunRecord({
+      schema: 'review-run-record@2',
+      runId: 'run-live',
+      state: 'running',
+      startedAt: new Date(Date.now() - 6 * 60_000).toISOString(),
+      runnerPid: 4242,
+      repoRoot: path.resolve('E:/repos/omp-reviewer-kit'),
+      repoName: 'omp-reviewer-kit',
+      stages: [{ agent: 'review-context-scout', status: 'running', durationMs: 120_000, tokens: 40_000, requests: 12 }],
+    } , path.join(dir, 'run-live.json'));
+    const lines = [];
+    const code = await statusReport({
+      dir,
+      records: [{ schema: 'review-run-record@2', runId: 'run-live', state: 'running', startedAt: new Date(Date.now() - 6 * 60_000).toISOString(), runnerPid: 4242, repoRoot: 'E:/repos/omp-reviewer-kit', repoName: 'omp-reviewer-kit', stages: [{ agent: 'review-context-scout', status: 'running', durationMs: 120_000, tokens: 40_000, requests: 12 }] }],
+      out: line => lines.push(line),
+      env: {},
+      probe: async (record, { now }) => probeRun(record, { dir, now, deadlineMs: 1_200_000, stat: async () => ({ mtimeMs: now - 5_000 }), alive: () => true, waiter: () => true }),
+    });
+    assert.equal(code, 0);
+    assert.match(lines.join('\n'), /run-live \| working \| working at review-context-scout running/);
+    assert.equal(lines.join('\n').includes('hung'), false);
+  });
+});
+
+test('Given a pid that was recycled and a record nobody has touched for a day, When status is asked, Then the record is dead, not a live orphan', async () => {
+  await withDir(async (dir) => {
+    const record = { schema: 'review-run-record@2', runId: 'run-old', state: 'running', startedAt: '2026-11-15T00:00:00.000Z', runnerPid: 4242, repoRoot: 'E:/repos/omp-reviewer-kit', stages: [{ agent: 'reviewkkit', status: 'running' }] };
+    const lines = [];
+    await statusReport({
+      dir,
+      records: [record],
+      out: line => lines.push(line),
+      env: {},
+      now: () => Date.parse('2026-11-16T02:00:00.000Z'),
+      probe: async (entry, { now }) => probeRun(entry, { dir, now, deadlineMs: 1_200_000, stat: async () => ({ mtimeMs: now - 26 * 60 * 60_000 }), alive: () => true, waiter: () => false }),
+    });
+    // A day-old dead record is history: the report says so instead of presenting it as a live run.
+    assert.match(lines.join('\n'), /no review is running; 1 unfinished record\(s\) from earlier/);
+  });
+});
+
+test('Given no running review but a finished one, When status is asked, Then the finished run is the context and the exit code is 0', async () => {
+  await withDir(async (dir) => {
+    const lines = [];
+    const code = await statusReport({
+      dir,
+      records: [{ schema: 'review-run-record@2', runId: 'run-done', state: 'passed', verdict: 'PASS', startedAt: '2026-11-16T00:00:00.000Z', durationMs: 240_000 }],
+      out: line => lines.push(line),
+      env: {},
+      now: () => Date.parse('2026-11-16T02:00:00.000Z'),
+      probe: async (record, { now }) => probeRun(record, { dir, now, deadlineMs: 1_200_000, stat: async () => ({ mtimeMs: now }), alive: () => true, waiter: () => true }),
+    });
+    assert.equal(code, 0);
+    assert.match(lines.join('\n'), /^run-done \| finished \| review passed \(PASS\) in 4m00s/m);
+    assert.equal(lines.join('\n').includes('no review runs'), false);
+  });
+});
+
+test('Given hidden abandoned records and a JSON request, When status is asked, Then the output is one parseable document with no prose after it', async () => {
+  await withDir(async (dir) => {
+    const startedAt = '2026-11-16T01:00:00.000Z';
+    const records = ['a', 'b', 'c'].map((id, index) => ({ schema: 'review-run-record@2', runId: `old-${id}`, state: 'running', startedAt, runnerPid: 100 + index, repoRoot: 'E:/repos/x' }));
+    const lines = [];
+    await statusReport({
+      dir,
+      records,
+      out: line => lines.push(line),
+      env: {},
+      json: true,
+      now: () => Date.parse('2026-11-16T02:00:00.000Z'),
+      probe: async (record, { now }) => probeRun(record, { dir, now, deadlineMs: 1_200_000, stat: async () => ({ mtimeMs: now - 10 * 60_000 }), alive: () => false, waiter: () => false }),
+    });
+    const rows = JSON.parse(lines.join('\n'));
+    assert.equal(Array.isArray(rows), true);
+    assert.equal(rows.length, 2);
+    assert.equal(lines.join('\n').includes('plus'), false);
+  });
+});
+
+test('Given an empty runs folder asked in JSON, When status is asked, Then it prints an empty array and reports nothing found', async () => {
+  await withDir(async (dir) => {
+    const lines = [];
+    const code = await statusReport({ dir, records: [], out: line => lines.push(line), env: {}, json: true });
+    assert.equal(code, 1);
+    assert.deepEqual(JSON.parse(lines.join('\n')), []);
+  });
+});
+
+test('Given a finished record and the script run directly with --status, When it starts, Then it prints the liveness line and exits 0', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'review-runs-status-'));
+  try {
+    await writeRunRecord({
+      schema: 'review-run-record@2',
+      runId: 'run-status-1',
+      state: 'passed',
+      verdict: 'PASS',
+      startedAt: '2026-11-16T00:00:00.000Z',
+      durationMs: 240_000,
+      repoRoot: path.resolve('E:/repos/omp-reviewer-kit'),
+      repoName: 'omp-reviewer-kit',
+      stages: [{ agent: 'review-context-scout', status: 'completed', durationMs: 120_000 }],
+    }, { dir });
+    const result = runScript(['--status'], dir);
+    assert.equal(result.status, 0, result.stderr);
+    // The liveness line, not the `<runId>  STATE duration  repo` list line: a --status that fell
+    // through to the list path would print the repo name and the stage summary instead.
+    assert.match(result.stdout, /^run-status-1 \| finished \| review passed \(PASS\) in 4m00s/m);
+    assert.equal(result.stdout.includes('omp-reviewer-kit  scout'), false);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('Given the same record and --status --json, When the script runs, Then stdout is one parseable document and nothing else', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'review-runs-status-json-'));
+  try {
+    await writeRunRecord({
+      schema: 'review-run-record@2',
+      runId: 'run-status-2',
+      state: 'blocked',
+      verdict: 'BLOCK',
+      startedAt: '2026-11-16T00:00:00.000Z',
+      durationMs: 60_000,
+      repoRoot: path.resolve('E:/repos/omp-reviewer-kit'),
+      repoName: 'omp-reviewer-kit',
+      stages: [],
+    }, { dir });
+    const result = runScript(['--status', '--json'], dir);
+    assert.equal(result.status, 0, result.stderr);
+    const rows = JSON.parse(result.stdout);
+    assert.equal(Array.isArray(rows), true);
+    assert.equal(rows[0].runId, 'run-status-2');
+    assert.equal(rows[0].kind, 'finished');
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

@@ -990,6 +990,77 @@ describe('Feature: Native OMP Extension & Installer Service', () => {
     }
   });
 
+  it('/reviewer-kit:status reports a running review as liveness, never as an assumed hang', async () => {
+    const { baseDir, repoDir } = await createTempRepo();
+    const runsDir = path.join(baseDir, 'runs');
+    const savedRunsDir = process.env.OMP_REVIEW_KIT_RUNS_DIR;
+    const savedReportsDir = process.env.OMP_REVIEW_KIT_REPORTS_DIR;
+    try {
+      const { repoRoot } = await new PluginInstallerService().status(repoDir);
+      process.env.OMP_REVIEW_KIT_RUNS_DIR = runsDir;
+      process.env.OMP_REVIEW_KIT_REPORTS_DIR = path.join(baseDir, 'reports');
+      await writeRunRecord({
+        schema: 'review-run-record@2',
+        runId: 'run-live',
+        state: 'running',
+        startedAt: new Date(Date.now() - 60_000).toISOString(),
+        // The test process is the runner, so the pid answers for real and the record is fresh.
+        runnerPid: process.pid,
+        repoRoot,
+        stages: [{ agent: 'review-context-scout', status: 'running', durationMs: 40_000 }],
+      }, { dir: runsDir });
+
+      const harness = createExtensionHarness();
+      const ctx = harness.makeCtx(repoDir);
+      await harness.commands.get('reviewer-kit:status').handler('', ctx);
+      const text = ctx.notifications.map((n) => n.msg).join('\n');
+      assert.match(text, /^Running review: (working|quiet|stalled|unknown) · /m);
+      assert.doesNotMatch(text, /hung/i);
+    } finally {
+      if (savedRunsDir === undefined) delete process.env.OMP_REVIEW_KIT_RUNS_DIR;
+      else process.env.OMP_REVIEW_KIT_RUNS_DIR = savedRunsDir;
+      if (savedReportsDir === undefined) delete process.env.OMP_REVIEW_KIT_REPORTS_DIR;
+      else process.env.OMP_REVIEW_KIT_REPORTS_DIR = savedReportsDir;
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  it('/reviewer-kit:status never announces a killed review as a running one', async () => {
+    const { baseDir, repoDir } = await createTempRepo();
+    const runsDir = path.join(baseDir, 'runs');
+    const savedRunsDir = process.env.OMP_REVIEW_KIT_RUNS_DIR;
+    const savedReportsDir = process.env.OMP_REVIEW_KIT_REPORTS_DIR;
+    try {
+      const { repoRoot } = await new PluginInstallerService().status(repoDir);
+      process.env.OMP_REVIEW_KIT_RUNS_DIR = runsDir;
+      process.env.OMP_REVIEW_KIT_REPORTS_DIR = path.join(baseDir, 'reports');
+      // A killed review: state `running`, a pid that cannot belong to it, and a record far older
+      // than the stage deadline. The probe calls this `unknown`, so no running line may be printed.
+      await writeRunRecord({
+        schema: 'review-run-record@2',
+        runId: 'run-killed',
+        state: 'running',
+        startedAt: new Date(Date.now() - 30 * 24 * 60 * 60_000).toISOString(),
+        runnerPid: 2147483000,
+        repoRoot,
+        stages: [{ agent: 'review-context-scout', status: 'running', durationMs: 40_000 }],
+      }, { dir: runsDir });
+
+      const harness = createExtensionHarness();
+      const ctx = harness.makeCtx(repoDir);
+      await harness.commands.get('reviewer-kit:status').handler('', ctx);
+      const text = ctx.notifications.map((n) => n.msg).join('\n');
+      assert.doesNotMatch(text, /Running review:/);
+      assert.match(text, /^Status: /m);
+    } finally {
+      if (savedRunsDir === undefined) delete process.env.OMP_REVIEW_KIT_RUNS_DIR;
+      else process.env.OMP_REVIEW_KIT_RUNS_DIR = savedRunsDir;
+      if (savedReportsDir === undefined) delete process.env.OMP_REVIEW_KIT_REPORTS_DIR;
+      else process.env.OMP_REVIEW_KIT_REPORTS_DIR = savedReportsDir;
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
   it('/reviewer-kit:runs lists the runs of this repository and says so when there are none', async () => {
     const { baseDir, repoDir } = await createTempRepo();
     const runsDir = path.join(baseDir, 'runs');

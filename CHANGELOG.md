@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - The review journal key includes the census policy, so a stored verdict for one census configuration is not reused for another.
 
+## [0.34.0] - 2026-11-16
+
+### Added
+- `node scripts/review-runs.mjs --status` answers the one question a silent terminal cannot: is the review working, quiet, stalled, unknown or dead? Silence decides the word, and whether a commit still waits is reported as context after it. It reports the stage in flight, its tokens and requests, the age of the last progress write, whether the runner process is still the one that started the run, and whether a `git commit` is still waiting for the verdict. The vocabulary exists because "it hangs" was wrong every time it was said from a bare terminal: a stage that emits an event every few seconds for twenty minutes and a stage that died look identical when silence is the only evidence.
+- `/reviewer-kit:status` shows the same line for the active repository, so an agent quotes liveness instead of guessing.
+- The record's age is cross-checked against the stage deadline before a pid is believed, and a pid that answers while the age cannot be trusted is reported as `unknown`: Windows recycles pids, and neither a month-old record nor an unreadable one is proof of a live review — or of a dead process.
+
 ## [0.33.1] - 2026-11-15
 
 ### Fixed

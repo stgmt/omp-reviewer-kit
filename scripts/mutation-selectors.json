@@ -985,7 +985,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "b47344754a1a0a7c74ac2b46bda84a0b9771e016d1166b29ffa4afedb2a0a194",
-      "testHash": "a26101ae9b06330086d0bd2a7030f2e0bede9658bdaf5c4bff68c268ea9acd1f"
+      "testHash": "e3b2f4e2a8cb63877dd3a01f5f3985e96cf38ecbf7d5c73bee8435e217b54776"
     },
     "setup-refusal-silent": {
       "testFile": "tests/extension.test.mjs",
@@ -996,7 +996,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "a03c75fc2613e2c6aa1b13a81c9c1f4ea878624b7bd84c7e77668dc9b1dbe6d0",
-      "testHash": "a26101ae9b06330086d0bd2a7030f2e0bede9658bdaf5c4bff68c268ea9acd1f"
+      "testHash": "e3b2f4e2a8cb63877dd3a01f5f3985e96cf38ecbf7d5c73bee8435e217b54776"
     },
     "doctor-counts-worker-checkouts": {
       "testFile": "tests/target-heal.test.mjs",
@@ -1016,7 +1016,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "f85b0436d69f418fcc546aadf8b0841023deba4cabca660a20f42908d058b621",
-      "testHash": "a26101ae9b06330086d0bd2a7030f2e0bede9658bdaf5c4bff68c268ea9acd1f"
+      "testHash": "e3b2f4e2a8cb63877dd3a01f5f3985e96cf38ecbf7d5c73bee8435e217b54776"
     },
     "heal-prunes-skipped-before-policy": {
       "testFile": "tests/target-heal.test.mjs",
@@ -1279,7 +1279,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "43261f08e7d953188eff77f51ecfa8e5a8a4a9a4683aead4d9e92de9fbfd2741",
-      "testHash": "a26101ae9b06330086d0bd2a7030f2e0bede9658bdaf5c4bff68c268ea9acd1f"
+      "testHash": "e3b2f4e2a8cb63877dd3a01f5f3985e96cf38ecbf7d5c73bee8435e217b54776"
     },
     "status-report-line-unconditional": {
       "testFile": "tests/extension.test.mjs",
@@ -1290,7 +1290,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "f2dfc705cacb4b1bc75e598ea19a5db94d5ff07031ebb461668e849fc60b36ff",
-      "testHash": "a26101ae9b06330086d0bd2a7030f2e0bede9658bdaf5c4bff68c268ea9acd1f"
+      "testHash": "e3b2f4e2a8cb63877dd3a01f5f3985e96cf38ecbf7d5c73bee8435e217b54776"
     },
     "status-report-line-before-verdict": {
       "testFile": "tests/extension.test.mjs",
@@ -1301,7 +1301,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "f1ca5f8f24b75bf4fa7ffc5cef3c5f6a1ac3cd1c849ad99e7920849a13ce5e35",
-      "testHash": "a26101ae9b06330086d0bd2a7030f2e0bede9658bdaf5c4bff68c268ea9acd1f"
+      "testHash": "e3b2f4e2a8cb63877dd3a01f5f3985e96cf38ecbf7d5c73bee8435e217b54776"
     },
     "run-tests-reports-dir-left-to-user": {
       "testFile": "tests/run-tests-wrapper.test.mjs",
@@ -2563,7 +2563,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "48c31b322c048746218b51448476511b406d7991e37cb69eb0cd8d6b9e03a7a0",
-      "testHash": "a26101ae9b06330086d0bd2a7030f2e0bede9658bdaf5c4bff68c268ea9acd1f"
+      "testHash": "e3b2f4e2a8cb63877dd3a01f5f3985e96cf38ecbf7d5c73bee8435e217b54776"
     },
     "native-extension-skipped-status-ignored": {
       "testFile": "tests/extension.test.mjs",
@@ -2574,7 +2574,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "ac9e8e077eaf80c0acdfd31f29b9a8fd3784c42b20130333c4714ce2d5f2edf4",
-      "testHash": "a26101ae9b06330086d0bd2a7030f2e0bede9658bdaf5c4bff68c268ea9acd1f"
+      "testHash": "e3b2f4e2a8cb63877dd3a01f5f3985e96cf38ecbf7d5c73bee8435e217b54776"
     },
     "native-extension-guard-ignores-commit": {
       "testFile": "tests/extension.test.mjs",
@@ -2585,7 +2585,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "e646ce7d938fef05440f6ce58087177db73dc34b91fd87d69c1cdc4826af5ad1",
-      "testHash": "a26101ae9b06330086d0bd2a7030f2e0bede9658bdaf5c4bff68c268ea9acd1f"
+      "testHash": "e3b2f4e2a8cb63877dd3a01f5f3985e96cf38ecbf7d5c73bee8435e217b54776"
     },
     "native-launcher-bun-probe-ignored": {
       "testFile": "tests/native-launcher.test.mjs",
