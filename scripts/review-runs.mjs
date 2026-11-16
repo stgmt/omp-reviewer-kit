@@ -4,6 +4,7 @@
 //   node scripts/review-runs.mjs --all           every kept run
 //   node scripts/review-runs.mjs --repo <path>   runs of one repository
 //   node scripts/review-runs.mjs --run <runId>   one record, in full
+//   node scripts/review-runs.mjs --status        is the review working, quiet, stalled or orphaned?
 //   node scripts/review-runs.mjs --json          the same data as machine-readable JSON
 //   node scripts/review-runs.mjs --follow <id>   watch a running review until it settles
 // Exit 0 when something was found, 1 when nothing matched, 2 on a usage error. This command never
@@ -11,6 +12,10 @@
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { formatLivenessLine } from '../src/domain/review-liveness.mjs';
+import { gitCommitWaiting, probeRun } from '../src/infra/review-liveness-probe.mjs';
+import { resolveStageTimeout } from '../src/native/task-engine.mjs';
 
 import { TERMINAL_RUN_STATES, formatDuration, stageSummaryLine } from '../src/domain/review-run-summary.mjs';
 import { isRunAlive, latestRunRecord, readRunRecord, readRunRecords, runRecordFile, runsRootDir } from '../src/infra/review-run-store.mjs';
@@ -41,6 +46,9 @@ export function parseArgs(argv) {
         break;
       case '--last':
         options.mode = 'last';
+        break;
+      case '--status':
+        options.mode = 'status';
         break;
       case '--json':
         options.json = true;
@@ -82,7 +90,7 @@ export function formatRunLine(record) {
   return `${record.runId}  ${state} ${duration}  ${repo}${stages.length > 0 ? `  ${stages}` : ''}`;
 }
 
-export const HELP = `Usage: node scripts/review-runs.mjs [--last] [--all] [--repo <path>] [--run <runId>] [--json] [--follow <runId>] [--timeout <seconds>]
+export const HELP = `Usage: node scripts/review-runs.mjs [--last] [--all] [--status] [--repo <path>] [--run <runId>] [--json] [--follow <runId>] [--timeout <seconds>]
 
 Records live in <home>/.omp/review-kit-runs, or OMP_REVIEW_KIT_RUNS_DIR when set.`;
 
@@ -131,6 +139,92 @@ export async function followRun({ dir, runId, out, timeoutMs = null, intervalMs 
 }
 
 /**
+ * Liveness of every unfinished review, and of the newest finished one when nothing is running. The
+ * facts come from three places and none of them is a guess: the record's own age is the age of the
+ * last progress write, the operating system answers whether the runner process is still ours, and
+ * the git process table says whether a commit is still waiting for the verdict.
+ *
+ * @param {{
+ *   dir: string,
+ *   records: object[],
+ *   out: (line: string) => void,
+ *   json?: boolean,
+ *   env?: NodeJS.ProcessEnv,
+ *   now?: () => number,
+ *   probe?: typeof probeRun,
+ *   deadlineMs?: number,
+ * }} input
+ * @returns {Promise<number>} exit code: 0 when something was reported
+ */
+export async function statusReport({
+  dir,
+  records,
+  out,
+  json = false,
+  env = process.env,
+  now = () => Date.now(),
+  probe = probeRun,
+  deadlineMs = resolveStageTimeout(env),
+}) {
+  const at = now();
+  // Status answers one question: is something running, and is it alive? Finished runs are history,
+  // so only the newest one is shown for context; abandoned records are shown only while they are
+  // fresh, and the rest are counted so a month of dead records cannot bury the live one.
+  const running = records.filter(record => !TERMINAL_RUN_STATES.includes(record.state));
+  const finished = records.filter(record => TERMINAL_RUN_STATES.includes(record.state));
+  const rows = [];
+  // One process-table read per repository for the whole report, not one per record.
+  const waiters = new Map();
+  const waiter = repoRoot => {
+    if (!waiters.has(repoRoot)) waiters.set(repoRoot, gitCommitWaiting(repoRoot));
+    return waiters.get(repoRoot);
+  };
+  for (const record of running) rows.push(await probe(record, { dir, now: at, deadlineMs, waiter }));
+  // `unknown` is not a live review either: a record that cannot be judged counts as abandoned for
+  // display, and is shown only while it is fresh.
+  const aliveNow = rows.filter(row => row.kind !== 'exited' && row.kind !== 'unknown');
+  const fresh = aliveNow.length === 0 && rows.length > 0 ? rows.filter(row => withinWindow(recordOf(records, row.runId), at)).slice(0, STATUS_ABANDONED_LIMIT) : aliveNow;
+  const shown = fresh.length > 0 ? fresh : (await Promise.all(finished.slice(0, 1).map(record => probe(record, { dir, now: at, deadlineMs }))));
+  if (shown.length === 0) {
+    if (rows.length > 0) {
+      if (json) out('[]');
+      else out(`no review is running; ${rows.length} unfinished record(s) from earlier (--all lists them)`);
+      return 0;
+    }
+    if (json) out('[]');
+    else out(`no review runs in ${dir}`);
+    return 1;
+  }
+  for (const row of shown) {
+    if (json) continue;
+    out(formatLivenessLine(row.runId, row));
+  }
+  // The machine-readable form is one document and nothing else: prose after the closing bracket
+  // makes it unparseable exactly when there is history to explain.
+  if (json) out(JSON.stringify(shown, null, 2));
+  // The finished-fallback row is not one of the unfinished rows, so it must not be subtracted:
+  // only rows that are really shown among the unfinished ones reduce the hidden count.
+  const hidden = shown.every(row => rows.includes(row)) ? rows.length - shown.length : rows.length;
+  if (hidden > 0 && !json) out(`plus ${hidden} older unfinished record(s); --all lists them`);
+  return 0;
+}
+
+/** How many abandoned records a status report shows before it only counts them. */
+const STATUS_ABANDONED_LIMIT = 2;
+
+/** Abandoned records older than this are history, not status. */
+const STATUS_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+function recordOf(records, runId) {
+  return records.find(record => record.runId === runId) ?? null;
+}
+
+function withinWindow(record, at) {
+  const started = Date.parse(record?.startedAt ?? '');
+  return Number.isFinite(started) && at - started <= STATUS_WINDOW_MS;
+}
+
+/**
  * @param {string[]} argv
  * @param {{ out?: (line: string) => void, err?: (line: string) => void, env?: NodeJS.ProcessEnv }} [io]
  * @returns {Promise<number>} exit code
@@ -153,6 +247,10 @@ export async function main(argv, { out = line => process.stdout.write(`${line}\n
   if (options.mode === 'follow') {
     const settled = await followRun({ dir, runId: options.runId, out, timeoutMs: options.timeoutMs });
     return settled ? 0 : 1;
+  }
+  if (options.mode === 'status') {
+    const all = await readRunRecords({ dir, repoRoot: options.repo ?? undefined });
+    return statusReport({ dir, records: all, out, json: options.json, env });
   }
 
   if (options.runId) {
