@@ -248,6 +248,7 @@ export async function runNativeReview({
           status: maintainability.status,
           coverage: maintainability.coverage,
           candidates: maintainability.groups,
+          belowSignal: maintainability.belowSignal ?? 0,
           truncated: maintainability.truncated,
         },
       compat: compat.skipped
@@ -671,6 +672,7 @@ function summarizeMaintainability({ policy, skipped, reason, analysis }) {
       groups: 0,
       unparsed: 0,
       excluded: 0,
+      belowSignal: 0,
       truncated: false,
       planned: false,
     };
@@ -683,6 +685,7 @@ function summarizeMaintainability({ policy, skipped, reason, analysis }) {
     groups: Array.isArray(analysis.groups) ? analysis.groups.length : 0,
     unparsed: Array.isArray(analysis.unparsedFiles) ? analysis.unparsedFiles.length : 0,
     excluded: Array.isArray(analysis.excluded) ? analysis.excluded.length : 0,
+    belowSignal: typeof analysis.belowSignal?.count === 'number' ? analysis.belowSignal.count : 0,
     truncated: analysis.scan?.truncated === true,
     planned: analysis.status === 'analyzed',
   };

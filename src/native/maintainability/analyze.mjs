@@ -54,7 +54,7 @@ export async function analyzeTree({
 
   const supportComplete = extracted.truncated !== true;
   const grouped = extracted.status === 'failed'
-    ? { groups: [], excluded: [], dropped: 0 }
+    ? { groups: [], excluded: [], dropped: 0, belowSignal: [], belowSignalByReason: { 'foreign-signature': 0, 'single-definition': 0, 'parameter-pair': 0 } }
     : groupClumps({
       signatures: extracted.signatures,
       classOf: classifyFilePath,
@@ -100,6 +100,13 @@ export async function analyzeTree({
     failures: extracted.failures,
     excluded: dedupeExcluded(grouped.excluded),
     droppedGroups: grouped.dropped,
+    // Candidates the deterministic cost signal removed before the stage: counted per ground with a
+    // bounded sample, so the file states what was not delivered instead of reading as "nothing there".
+    belowSignal: {
+      count: grouped.belowSignal.length,
+      byReason: grouped.belowSignalByReason,
+      examples: grouped.belowSignal.slice(0, 10),
+    },
     groups: grouped.groups,
   };
 
@@ -188,6 +195,7 @@ function failureAnalysis({ diffHash, config, policy, error }) {
     failures: [{ path: null, reason: 'analysis-failed', message: String(error?.message ?? error) }],
     excluded: [],
     droppedGroups: 0,
+    belowSignal: { count: 0, byReason: { 'foreign-signature': 0, 'single-definition': 0, 'parameter-pair': 0 }, examples: [] },
     groups: [],
   };
 }

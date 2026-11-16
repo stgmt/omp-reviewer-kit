@@ -41,7 +41,21 @@ export async function measure({ tree = process.cwd(), runs = 3, classify = class
     config,
     supportComplete: true,
   });
-  return { tree, config, files: collected.paths.length, samples, naive, maximal: grouped.groups.length, excluded: grouped.excluded.length };
+  return {
+    tree,
+    config,
+    files: collected.paths.length,
+    samples,
+    naive,
+    // `maximal` is the population a maximality-only analysis would hand the stage; `delivered` is what
+    // the cost signal lets through. Reporting only the survivors would hide the 73 candidates this
+    // repository's own analysis kept out and make every threshold decision on a narrowed set.
+    maximal: grouped.groups.length + grouped.belowSignal.length,
+    delivered: grouped.groups.length,
+    keptOut: { total: grouped.belowSignal.length, byReason: grouped.belowSignalByReason },
+    ceilingDropped: grouped.dropped,
+    excluded: grouped.excluded.length,
+  };
 }
 
 /**

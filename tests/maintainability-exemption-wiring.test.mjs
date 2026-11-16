@@ -17,9 +17,9 @@ function git(cwd, args) {
 
 const PASS_REPORT = '## Review\n\nREVIEW_RESULT=PASS';
 
-const SPAN = 'export function sourceSpan(lineStart, lineEnd) {\n  const start = Number.isFinite(lineStart) ? lineStart : 1;\n  return { lineStart: start, lineEnd: Number.isFinite(lineEnd) ? lineEnd : start };\n}\n';
-const CONSUMER = "import { sourceSpan } from '../domain/source-span.mjs';\n\nexport function a(lineStart, lineEnd) {\n  return sourceSpan(lineStart, lineEnd);\n}\n\nexport function b(lineStart, lineEnd) {\n  return sourceSpan(lineStart, lineEnd);\n}\n";
-const OTHER = "import { sourceSpan } from '../domain/source-span.mjs';\n\nexport function c(lineStart, lineEnd) {\n  return sourceSpan(lineStart, lineEnd);\n}\n\nexport function d(lineStart, lineEnd) {\n  return sourceSpan(lineStart, lineEnd);\n}\n";
+const SPAN = 'export function sourceSpan(lineStart, lineEnd, sourcePath) {\n  const start = Number.isFinite(lineStart) ? lineStart : 1;\n  return { lineStart: start, lineEnd: Number.isFinite(lineEnd) ? lineEnd : start, sourcePath };\n}\n';
+const CONSUMER = "import { sourceSpan } from '../domain/source-span.mjs';\n\nexport function a(lineStart, lineEnd, sourcePath) {\n  return sourceSpan(lineStart, lineEnd, sourcePath);\n}\n\nexport function b(lineStart, lineEnd, sourcePath) {\n  return sourceSpan(lineStart, lineEnd, sourcePath);\n}\n";
+const OTHER = "import { sourceSpan } from '../domain/source-span.mjs';\n\nexport function c(lineStart, lineEnd, sourcePath) {\n  return sourceSpan(lineStart, lineEnd, sourcePath);\n}\n\nexport function d(lineStart, lineEnd, sourcePath) {\n  return sourceSpan(lineStart, lineEnd, sourcePath);\n}\n";
 
 const completed = (agent, data) => ({ agent, exitCode: 0, aborted: false, structuredStatus: 'valid', data });
 const reviewerWithYield = text => ({ exitCode: 0, aborted: false, modelRole: 'task', resolvedModel: 'm', extractedToolData: { yield: [{ status: 'success', data: text }] } });
@@ -40,7 +40,7 @@ async function stagedRepo({ other = OTHER } = {}) {
   await writeFile(path.join(repo, 'src', 'native', 'consumer.mjs'), CONSUMER);
   await mkdir(path.join(repo, 'tests'), { recursive: true });
   await writeFile(path.join(repo, 'src', 'infra', 'other.mjs'), other);
-  await writeFile(path.join(repo, 'tests', 'source-span.test.mjs'), "import { sourceSpan } from '../src/domain/source-span.mjs';\n\nexport const check = (lineStart, lineEnd) => sourceSpan(lineStart, lineEnd);\n");
+  await writeFile(path.join(repo, 'tests', 'source-span.test.mjs'), "import { sourceSpan } from '../src/domain/source-span.mjs';\n\nexport const check = (lineStart, lineEnd, sourcePath) => sourceSpan(lineStart, lineEnd, sourcePath);\n");
   git(repo, ['add', '.']);
   return repo;
 }
@@ -110,7 +110,7 @@ function groupIdFor(artifact) {
 }
 
 /** The same parameter pair implemented again in a module that never imports the owner. */
-const OTHER_COPY = "export function c(lineStart, lineEnd) {\n  const start = Number.isFinite(lineStart) ? lineStart : 1;\n  return { lineStart: start, lineEnd: lineEnd ?? start };\n}\n\nexport function d(lineStart, lineEnd) {\n  return { lineStart: lineStart, lineEnd: lineEnd };\n}\n";
+const OTHER_COPY = "export function c(lineStart, lineEnd, sourcePath) {\n  const start = Number.isFinite(lineStart) ? lineStart : 1;\n  return { lineStart: start, lineEnd: lineEnd ?? start, sourcePath };\n}\n\nexport function d(lineStart, lineEnd, sourcePath) {\n  return { lineStart: lineStart, lineEnd: lineEnd, sourcePath };\n}\n";
 
 test('Given a consumer that disappears from the snapshot after the analysis, When the review runs, Then the group blocks instead of being exempted on trust', async () => {
   const repo = await stagedRepo();

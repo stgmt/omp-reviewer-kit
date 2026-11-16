@@ -29,6 +29,9 @@ export function isGeneratedPath(filePath) {
  *     supportComplete: boolean, stagedTouchCount: number, occurrences: Array<object>,
  *   }>,
  *   excluded: Array<{ path: string, ground: string }>,
+ *   dropped: number,
+ *   belowSignal: Array<{ params: string[], support: number, stagedTouchCount: number, ground: string, at: string }>,
+ *   belowSignalByReason: { 'foreign-signature': number, 'single-definition': number, 'parameter-pair': number },
  * }}
  */
 export function groupClumps({ signatures, classOf, changedPaths, config, supportComplete }) {
@@ -97,7 +100,31 @@ export function groupClumps({ signatures, classOf, changedPaths, config, support
     }
   }
 
-  candidates.sort((a, b) => {
+  // Delivered candidates must carry a maintenance cost the model can confirm, and the signal is
+  // structural, not a threshold: a repetition lives in this repository only when the same group is
+  // declared by two or more of its own functions; one declaration plus its callers is a signature,
+  // and a pair of parameters is an ambient convention (`{cwd, env}`, `{dir, force}`). Candidates
+  // that fail this stay in the file with their ground, counted, so nothing vanishes silently.
+  const belowSignal = [];
+  const signalKinds = { 'foreign-signature': 0, 'single-definition': 0, 'parameter-pair': 0 };
+  const survivors = [];
+  for (const candidate of candidates) {
+    const ground = precisionGround(candidate);
+    if (ground === null) {
+      survivors.push(candidate);
+      continue;
+    }
+    signalKinds[ground] += 1;
+    belowSignal.push({
+      params: candidate.params,
+      support: candidate.support,
+      stagedTouchCount: candidate.stagedTouchCount,
+      ground,
+      at: `${candidate.occurrences[0]?.path ?? '?'}:${candidate.occurrences[0]?.lineStart ?? 0}`,
+    });
+  }
+
+  survivors.sort((a, b) => {
     if (b.support !== a.support) return b.support - a.support;
     if (b.params.length !== a.params.length) return b.params.length - a.params.length;
     const left = a.params.join(',');
@@ -105,14 +132,33 @@ export function groupClumps({ signatures, classOf, changedPaths, config, support
     return left < right ? -1 : left > right ? 1 : 0;
   });
 
-  const delivered = candidates.slice(0, config.maxGroups);
+  const delivered = survivors.slice(0, config.maxGroups);
 
   return {
     groups: delivered.map((entry, position) => ({ groupId: `g${position + 1}`, ...entry })),
     excluded,
     // Groups beyond the ceiling are reported, never dropped silently: the analysis is partial then.
-    dropped: candidates.length - delivered.length,
+    dropped: survivors.length - delivered.length,
+    belowSignal,
+    belowSignalByReason: signalKinds,
   };
+}
+
+/**
+ * Why a maximal group is not worth a model's judgment, or `null` when it is. The three grounds are
+ * the ones every recorded review re-derived by hand for whole runs: a group whose every occurrence is
+ * a call names a dependency's option bag, a group declared by exactly one function is that function's
+ * signature plus its callers, and a two-parameter group is an ambient pair, not a clump.
+ *
+ * @param {{ params: string[], occurrences: Array<{ role: string }> }} candidate
+ * @returns {'foreign-signature'|'single-definition'|'parameter-pair'|null}
+ */
+export function precisionGround(candidate) {
+  const definitions = candidate.occurrences.filter(occurrence => occurrence.role === 'definition' || occurrence.role === 'forwarder').length;
+  if (definitions === 0) return 'foreign-signature';
+  if (definitions === 1) return 'single-definition';
+  if (candidate.params.length < 3) return 'parameter-pair';
+  return null;
 }
 
 /**
