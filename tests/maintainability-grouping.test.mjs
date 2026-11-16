@@ -2,7 +2,7 @@
 // exclusions, snapshot-wide support, and the truncation flag. Pure: signatures are constructed.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { groupClumps, isGeneratedPath } from '../src/native/maintainability/group.mjs';
+import { groupClumps, isGeneratedPath, triageOf } from '../src/native/maintainability/group.mjs';
 import { resolveConfig } from '../src/native/maintainability/config.mjs';
 
 const config = resolveConfig();
@@ -184,4 +184,51 @@ test('Given candidates filtered by all three grounds, When grouped, Then every g
   assert.deepEqual(result.groups, []);
   assert.deepEqual(result.belowSignalByReason, { 'foreign-signature': 1, 'single-definition': 1, 'parameter-pair': 1 });
   assert.equal(result.belowSignal.length, 3);
+});
+
+test('Given a delivered group, When its triage is computed, Then the code names what the stage can decide without reading', () => {
+  const clump = [
+    definition('src/a.mjs', ['sessionId', 'runRoot', 'attemptId'], 10),
+    definition('src/b.mjs', ['sessionId', 'runRoot', 'attemptId'], 20),
+    callSite('src/c.mjs', ['sessionId', 'runRoot', 'attemptId'], 30),
+  ];
+  assert.deepEqual(triageOf({ occurrences: clump.map(entry => ({ role: entry.role, path: entry.path, inStagedDiff: entry.path === 'src/a.mjs' })) }), {
+    forwardingOnly: false,
+    preVerdict: 'cross-file-clump',
+  });
+  // Both declarations inside the change: the change itself duplicates the set.
+  assert.equal(triageOf({ occurrences: clump.map(entry => ({ role: entry.role, path: entry.path, inStagedDiff: true })) }).preVerdict, 'staged-declarations');
+  // Every occurrence forwards: MR-08's forwarding_only, decided by code.
+  const passThrough = triageOf({ occurrences: [{ role: 'forwarder', path: 'src/a.mjs', inStagedDiff: true }, { role: 'forwarder', path: 'src/b.mjs', inStagedDiff: false }] });
+  assert.deepEqual(passThrough, { forwardingOnly: true, preVerdict: 'pass-through' });
+  // Repeated inside one file only.
+  assert.equal(triageOf({ occurrences: [
+    { role: 'definition', path: 'src/a.mjs', inStagedDiff: true },
+    { role: 'definition', path: 'src/a.mjs', inStagedDiff: false },
+  ] }).preVerdict, 'in-file-repetition');
+});
+
+test('Given survivors with different triage grounds, When grouped, Then the delivered order puts the staged declarations first and the pass-through chains last', () => {
+  const forwarder = (path, params, line) => ({ path, language: 'javascript', name: path, params: [...params].sort(), lineStart: line, lineEnd: line + 2, role: 'forwarder' });
+  const signatures = [
+    // cross-file clump: declarations in two files, only one of them staged, support 4 with callers
+    definition('src/one.mjs', ['alpha', 'beta', 'gamma'], 10),
+    definition('src/two.mjs', ['alpha', 'beta', 'gamma'], 11),
+    callSite('src/call-a.mjs', ['alpha', 'beta', 'gamma'], 12),
+    callSite('src/call-b.mjs', ['alpha', 'beta', 'gamma'], 13),
+    // staged declarations: both declarations inside the change
+    definition('src/three.mjs', ['delta', 'epsilon', 'zeta'], 14),
+    definition('src/four.mjs', ['delta', 'epsilon', 'zeta'], 15),
+    callSite('src/call-c.mjs', ['delta', 'epsilon', 'zeta'], 16),
+    callSite('src/call-d.mjs', ['delta', 'epsilon', 'zeta'], 17),
+    // pass-through chain: every occurrence is a forwarder
+    forwarder('src/five.mjs', ['eta', 'theta', 'iota'], 18),
+    forwarder('src/six.mjs', ['eta', 'theta', 'iota'], 19),
+    forwarder('src/seven.mjs', ['eta', 'theta', 'iota'], 20),
+    forwarder('src/eight.mjs', ['eta', 'theta', 'iota'], 21),
+  ];
+  const result = group({ signatures, changedPaths: ['src/one.mjs', 'src/three.mjs', 'src/four.mjs', 'src/five.mjs'] });
+  assert.deepEqual(result.groups.map(entry => entry.preVerdict), ['staged-declarations', 'cross-file-clump', 'pass-through']);
+  assert.deepEqual(result.groups.map(entry => entry.groupId), ['g1', 'g2', 'g3']);
+  assert.deepEqual(result.preVerdicts, { 'staged-declarations': 1, 'in-file-repetition': 0, 'cross-file-clump': 1, 'pass-through': 1 });
 });

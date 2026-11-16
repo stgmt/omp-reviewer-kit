@@ -31,6 +31,12 @@ test('Given the maintainability agent, When its answer schema is read, Then it c
   ]);
   assert.deepEqual(candidate.properties.priority.enum, ['P1', 'P2']);
   assert.deepEqual(candidate.properties.decision.enum, ['confirmed', 'rejected', 'not_proven']);
+  // Every ground the instructions order the agent to emit must exist in the enforced enum, or the
+  // answer fails schema validation and the mandatory stage ends invalid for no finding.
+  assert.ok(candidate.properties.triage_ground.enum.includes('forwarding-only'), 'the pass-through ground must be accepted by the schema');
+  for (const ground of ['framework-signature', 'generated-code', 'unrelated-names', 'varying-subset', 'stated-cost', 'no-stated-cost']) {
+    assert.ok(candidate.properties.triage_ground.enum.includes(ground), ground);
+  }
   assert.equal(candidate.properties.stated_cost.type, 'string');
   assert.equal(candidate.properties.reflection.type, 'string');
   assert.equal(candidate.properties.forwarding_only.type, 'boolean');
@@ -43,9 +49,13 @@ test('Given the maintainability agent, When its instructions are read, Then it i
   assert.match(agentText, /You must never edit files, stage, reset, commit, delete, or run mutating commands/);
   // The stage must cover every delivered group: a candidate ceiling of its own would leave the
   // mandatory stage incomplete and block a commit with no finding.
-  assert.match(agentText, /Analyze \*\*every\*\* group in the candidate file/);
+  assert.match(agentText, /Answer \*\*every\*\* group in the candidate file in one pass/);
   assert.match(agentText, /never leave a group unassessed/);
   assert.match(agentText, /never recount them/);
+  // The pass is batched: the pre-verdicts come from code and the pass-through chains need no read.
+  assert.match(agentText, /`pass-through` group is decided by code/);
+  assert.match(agentText, /`staged-declarations` group reaches two declarations inside touched files/);
+  assert.match(agentText, /at most two reads per group that the table does not settle/);
 });
 
 test('Given the synthesizer, When its definition is read, Then it reports the maintainability stage and never spawns one', async () => {

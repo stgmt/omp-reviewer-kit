@@ -68,7 +68,9 @@ test('Given a staged group of repeated parameters, When the review runs, Then th
     assert.equal(result.maintainability.status, 'analyzed');
     assert.equal(result.maintainability.groups, 1);
     assert.equal(result.maintainability.policy, 'block');
-    assert.match(seen, /^Maintainability candidates \(deterministic, written before this task\): .*maintainability\.json — status analyzed, 1 group\(s\), coverage full, policy block\.$/m);
+    assert.match(seen, /^Maintainability candidates \(deterministic, written before this task\): .*maintainability\.json — status analyzed, 1 group\(s\), coverage full, policy block/m);
+    // The stage's task text quotes the deterministic split, so the model knows where its reads pay.
+    assert.match(seen, /; pre-verdicts: [a-z-]+ \d+\.$/m);
     assert.equal(result.verdict.pass, false);
     assert.match(result.verdict.reasons.join(' '), /no completed stage evidence for review-maintainability/);
   } finally {
@@ -170,7 +172,7 @@ test('Given a change with no repeated group, When the review runs, Then the assi
         return { reviewer: reviewerWithYield(PASS_REPORT), stages: baseStages() };
       },
     });
-    assert.match(seen, /^Maintainability candidates .*: .*maintainability\.json — status no-candidates, 0 group\(s\), coverage full, policy block\.$/m);
+    assert.match(seen, /^Maintainability candidates .*: .*maintainability\.json — status no-candidates, 0 group\(s\), coverage full, policy block/m);
     assert.equal(result.maintainability.status, 'no-candidates');
     assert.equal(result.maintainability.planned, false);
     assert.deepEqual(result.verdict.reasons, []);
@@ -236,6 +238,32 @@ test('Given a change with no executable file, When the review runs, Then the ass
     assert.equal(result.maintainability.status, 'not-run');
     assert.equal(result.maintainability.reason, 'no-executable-change');
     assert.deepEqual(result.verdict.reasons, []);
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test('Given a review whose maintainability analysis is skipped, When the summary is built, Then no pre-verdict split is claimed', async () => {
+  const repo = await stagedRepoWithGroup();
+  const parent = await mkdtemp(path.join(tmpdir(), 'maintainability-stage-parent-'));
+  let seen = null;
+  try {
+    const result = await runNativeReview({
+      repo,
+      kitRoot: repo,
+      parentDir: parent,
+      env: { OMP_REVIEW_KIT_MAINTAINABILITY: 'off' },
+      runTask: async ({ assignment }) => {
+        seen = assignment;
+        return { reviewer: reviewerWithYield(PASS_REPORT), stages: baseStages() };
+      },
+    });
+    assert.equal(result.maintainability.status, 'not-run');
+    assert.equal(result.maintainability.preVerdicts, null);
+    // The claim is about the rendered line, not about the object: a skipped analysis must not
+    // invent a split for the model to read.
+    assert.doesNotMatch(seen, /; pre-verdicts:/);
   } finally {
     await rm(repo, { recursive: true, force: true });
     await rm(parent, { recursive: true, force: true });
