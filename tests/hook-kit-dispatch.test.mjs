@@ -3,12 +3,27 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const template = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'templates', 'githooks', 'pre-commit');
+
+// Windows has no sh on PATH in a plain PowerShell, and prepending Git's whole usr/bin would shadow
+// Windows tar with GNU tar for other suites. Ask Git itself where its shell lives.
+const shell = (() => {
+  if (process.platform !== 'win32') return 'sh';
+  const execPath = spawnSync('git', ['--exec-path'], { encoding: 'utf8', windowsHide: true }).stdout?.trim() ?? '';
+  const candidate = path.join(execPath, '..', '..', '..', 'usr', 'bin', 'sh.exe');
+  return existsSync(candidate) ? candidate : 'sh';
+})();
+// msys sh finds dirname/cd only with Git's usr/bin on PATH; give that to this child alone, so the
+// rest of the suite keeps Windows tar.
+const shellEnv = process.platform === 'win32' && path.isAbsolute(shell)
+  ? { ...process.env, PATH: `${path.dirname(shell)}${path.delimiter}${process.env.PATH ?? ''}` }
+  : process.env;
 
 const fixture = async ({ name, canonical = true, vendored = true }) => {
   const root = await mkdtemp(path.join(tmpdir(), 'hook-dispatch-'));
@@ -23,7 +38,7 @@ const fixture = async ({ name, canonical = true, vendored = true }) => {
   return root;
 };
 
-const runHook = (root) => spawnSync('sh', [path.join(root, '.githooks', 'pre-commit')], { cwd: root, encoding: 'utf8' });
+const runHook = (root) => spawnSync(shell, [path.join(root, '.githooks', 'pre-commit')], { cwd: root, encoding: 'utf8', env: shellEnv });
 
 test('Given the kit repository itself, When the hook runs, Then the canonical runner executes and a stale vendored copy does not', async () => {
   const root = await fixture({ name: 'omp-reviewer-kit' });

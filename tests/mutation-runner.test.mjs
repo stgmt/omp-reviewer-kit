@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { runPool, classifyTestRun, captureTree, restoreTree, runTest, runMutationGate, findStaleMutants, mergeCalibration, mutantIdentity, testFileHash } from '../scripts/mutation-runner.mjs';
+import { runPool, classifyTestRun, captureTree, restoreTree, runTest, runMutationGate, findStaleMutants, mergeCalibration, mutantIdentity, testFileHash, writeFileRetrying } from '../scripts/mutation-runner.mjs';
 
 // A timed-out child can still hold its files for a moment on Windows; a plain recursive removal is a
 // defect there, so every tree this suite deletes retries.
@@ -249,4 +249,41 @@ test('Given a partial calibration, When merged, Then fresh selectors win, remove
   // A partial calibration keeps what was proven and leaves the rest without a selector, so the gate still refuses the incomplete catalog.
   const partial = attempt([...mutants, { id: 'new-mutant' }], previous, { recalibrated: { tests: ['new'] } }, { complete: false });
   assert.deepEqual(partial, { kept: { tests: ['old-kept'] }, recalibrated: { tests: ['new'] } });
+});
+
+test('Given a transient Windows open refusal, When the catalog is written, Then the same bytes are retried and stored once', async () => {
+  let calls = 0;
+  const stored = [];
+  const flaky = async (_file, data) => {
+    calls += 1;
+    if (calls < 3) {
+      const error = new Error('UNKNOWN: unknown error, open');
+      error.code = 'UNKNOWN';
+      throw error;
+    }
+    stored.push(data);
+  };
+  // The transient error is caught by the retry, not rethrown: an unhandled UNKNOWN is an infrastructure
+  // failure of the gate, and a mutation test must die on an assertion.
+  let error = null;
+  try {
+    await writeFileRetrying('catalog.json', 'mappings', flaky);
+  } catch (caught) {
+    error = caught;
+  }
+  assert.equal(error, null, 'the transient refusal is retried, not thrown');
+  assert.equal(calls, 3);
+  assert.deepEqual(stored, ['mappings']);
+});
+
+test('Given a permanent write refusal, When the catalog is written, Then it fails at once and is never treated as a proof', async () => {
+  let calls = 0;
+  const missing = async () => {
+    calls += 1;
+    const error = new Error('ENOENT: no such file or directory');
+    error.code = 'ENOENT';
+    throw error;
+  };
+  await assert.rejects(writeFileRetrying('catalog.json', 'mappings', missing), /ENOENT/);
+  assert.equal(calls, 1);
 });

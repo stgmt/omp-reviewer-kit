@@ -6,7 +6,8 @@ import { spawnSync } from 'node:child_process';
 import { isRunnerNewer } from '../domain/runner-version.mjs';
 import { isSkippedTarget } from '../domain/target-policy.mjs';
 import { hookBodyDigest, isHookNewer, isOwnedHook } from '../domain/hook-template.mjs';
-import { HOOK_SHIM, isOwnedShim, isShimNewer } from '../domain/hook-shim.mjs';
+import { HOOK_SHIM, isOwnedShim, isShimNewer, parseShimMarker } from '../domain/hook-shim.mjs';
+import { CHAIN_FORMAT, hostShellName, isShellHost, unsafeHostControl, readChainBlock, withChainBlock, isOwnedChain } from '../domain/hook-chain.mjs';
 import { FileTargetRegistry } from '../infra/target-registry.mjs';
 import { sameRepository } from '../infra/repo-identity.mjs';
 import { repoReportsDir } from '../infra/filesystem-report-store-adapter.mjs';
@@ -308,6 +309,11 @@ const doctorCheck = (name, status, message) => ({ name, status, message });
  */
 const writeTarget = (repoRoot, targetPath) => ({ repoRoot, targetPath });
 
+// What git uses as its hooks directory, for a message: a configured value or the default.
+const hooksPathLabel = (configuredHooksPath) => configuredHooksPath === null
+  ? "git's default hooks directory"
+  : `core.hooksPath "${configuredHooksPath}"`;
+
 export class PluginInstallerService {
   #pluginRoot;
   #targets;
@@ -465,6 +471,101 @@ export class PluginInstallerService {
   }
 
   /**
+   * The pre-commit hook git actually runs, when the kit can add its review block to it.
+   *
+   * The host must be a regular, untracked file whose shell survives to the end: the kit inserts an
+   * EXIT trap before the host's lines, so the review runs after the host hook and the host's exit
+   * code is preserved. That covers husky v9's generated shim (which sources "h"; "h" exits, so a
+   * block appended after it would be dead code), simple-git-hooks and lefthook (their generated
+   * hooks return), and an untracked hand-written hook. A hook that replaces the shell with "exec"
+   * (pre-commit's generated hook is one) or installs its own shell trap can skip an EXIT trap, so it
+   * stays a conflict instead of letting the review be skipped. A tracked hook is the repository's own
+   * file and is never edited; a symlink or a directory outside the checkout is never written through.
+   *
+   * A hooks directory outside the checkout is never chained: git may share it with other checkouts
+   * (a linked worktree, a submodule, a global hooks dir), while the runner the block starts lives in
+   * the committing checkout. Chaining it there would refuse commits in every other checkout.
+   *
+   * @param {string} repoRoot
+   * @param {string} dir resolved hooks directory git uses
+   * @returns {Promise<null | { conflict: string } | {
+   *   path: string,
+   *   relative: string,
+   *   present: boolean,
+   *   current: boolean,
+   *   newer: boolean,
+   *   executable: boolean
+   * }>}
+   */
+  async #inspectChainHook(repoRoot, dir) {
+    const relativeDir = path.relative(repoRoot, dir);
+    const outside = !relativeDir || relativeDir === '..' || relativeDir.startsWith('..' + path.sep) || path.isAbsolute(relativeDir);
+    if (outside) {
+      return {
+        conflict: `${dir} is outside this checkout (git can share it with other checkouts), so a review block there would start no runner in those checkouts; chain .githooks/pre-commit.d/${CHAINED_HOOK_NAME} from it by hand, or run the review from .githooks`,
+      };
+    }
+    const hookPath = path.join(dir, 'pre-commit');
+    const relativeHook = path.relative(repoRoot, hookPath).split(path.sep).join('/') || hookPath;
+    if (this.runGit(['ls-files', '--error-unmatch', '--', relativeHook], repoRoot).status === 0) {
+      return null;
+    }
+    let info;
+    try {
+      info = await lstat(hookPath);
+    } catch (error) {
+      // A missing file, or a hooks path whose parent is not a directory: no chain host to inspect,
+      // and the caller reports the directory itself (the message the user needs).
+      if (error?.code === 'ENOENT' || error?.code === 'ENOTDIR') return null;
+      return { conflict: `Unable to inspect ${relativeHook}: ${error?.message ?? error}` };
+    }
+    // A symlink is somebody else's file (a nix store, a shared hooks directory): never write through it.
+    if (!info.isFile()) return null;
+    let bytes;
+    try {
+      bytes = await readFile(hookPath);
+    } catch (error) {
+      return { conflict: `Unable to read ${relativeHook}: ${error?.message ?? error}` };
+    }
+    // The kit writes the file back, so bytes it cannot decode would be corrupted. A UTF-8 decoder
+    // without fatal replacement would silently substitute U+FFFD; NUL means a binary file.
+    let text;
+    try {
+      text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    } catch {
+      return { conflict: `${relativeHook} is not UTF-8 text; the review block is shell and the host is never rewritten` };
+    }
+    if (text.includes('\u0000')) {
+      return { conflict: `${relativeHook} is a binary file; the review block is shell and the host is never rewritten` };
+    }
+    // The kit's shim (owned or edited) is not a host to chain into; it starts .githooks/pre-commit
+    // itself, and an edited one stays a foreign hook reported by the caller.
+    if (parseShimMarker(text) !== null) return null;
+    if (!isShellHost(text)) {
+      return {
+        conflict: `${relativeHook} runs ${hostShellName(text)}, not a POSIX shell, so a shell review block would break it; chain .githooks/pre-commit.d/${CHAINED_HOOK_NAME} from it by hand, or run the review from .githooks`,
+      };
+    }
+    const block = readChainBlock(text);
+    if (block !== null && !block.owned) {
+      return { conflict: `${relativeHook} carries an edited omp-reviewer-kit chain block; restore or remove it` };
+    }
+    if (unsafeHostControl(text)) {
+      return {
+        conflict: `${relativeHook} replaces the shell with "exec" or installs its own shell trap, so a review block placed before its lines could be skipped; chain .githooks/pre-commit.d/${CHAINED_HOOK_NAME} from it by hand, or run the review from .githooks`,
+      };
+    }
+    return {
+      path: hookPath,
+      relative: relativeHook,
+      present: block !== null,
+      current: block !== null && block.format <= CHAIN_FORMAT,
+      newer: block !== null && block.format > CHAIN_FORMAT,
+      executable: process.platform === 'win32' || (info.mode & 0o111) !== 0,
+    };
+  }
+
+  /**
    * Names in a hooks directory that would run when git used it: everything except samples and the
    * kit's own shim. A missing directory holds none.
    *
@@ -543,7 +644,7 @@ export class PluginInstallerService {
    * @returns {Promise<{
    *   hooksDir: string,
    *   hookPath: string,
-   *   kind: 'kit'|'shim'|'chained'|'foreign'|'missing'|'not-executable',
+   *   kind: 'kit'|'shim'|'dead'|'chained'|'foreign'|'missing'|'not-executable',
    *   effective: boolean,
    *   hooksPath: string|null
    * }>}
@@ -566,7 +667,14 @@ export class PluginInstallerService {
     const text = await readFile(hookPath, 'utf8').catch(() => null);
     if (text === null) return result('missing');
     if (isOwnedHook(text) || LEGACY_HOOK_DIGESTS.includes(hookBodyDigest(text))) return result('kit');
-    if (isOwnedShim(text)) return result('shim');
+    // The shim is the safety net, not the review: without .githooks/pre-commit it only warns and exits 0.
+    if (isOwnedShim(text)) {
+      const target = await stat(path.join(repoRoot, '.githooks', 'pre-commit'))
+        .then((info) => info.isFile(), () => false);
+      return result(target ? 'shim' : 'dead');
+    }
+    // A block the host's own "exec" or trap makes unreachable is not an effective review entry.
+    if (isOwnedChain(text)) return result(unsafeHostControl(text) ? 'foreign' : 'chained');
     if (CHAINED_HOOK_RE.test(normalizeLineEndings(text))
         && await stat(path.join(hooksDir, CHAINED_HOOK_PATH)).then((s) => s.isFile(), () => false)) return result('chained');
     return result('foreign');
@@ -582,9 +690,18 @@ export class PluginInstallerService {
   async #kitExpected(repoRoot) {
     if (isSkippedTarget(repoRoot)) return false;
     const text = await readFile(path.join(repoRoot, '.githooks', 'pre-commit'), 'utf8').catch(() => null);
-    if (text === null) return false;
-    return isOwnedHook(text) || LEGACY_HOOK_DIGESTS.includes(hookBodyDigest(text))
-      || CHAINED_HOOK_RE.test(normalizeLineEndings(text));
+    if (text !== null && (isOwnedHook(text) || LEGACY_HOOK_DIGESTS.includes(hookBodyDigest(text))
+      || CHAINED_HOOK_RE.test(normalizeLineEndings(text)))) return true;
+    // A foreign hook that carries the kit's block is the kit's entry point too.
+    const effective = await this.#effectiveHook(repoRoot);
+    if (effective.kind === 'chained') return true;
+    // The vendored runner is the record of adoption. A hook manager rewrites or removes its generated
+    // hook on every install (husky, simple-git-hooks, lefthook), and a user can delete `.githooks`;
+    // both erase the entry point while the runner stays. In that state the guard acts: it repairs
+    // what it can and blocks the commit when the hook cannot be reached, instead of letting the
+    // staged change through unreviewed. A repository that never adopted the kit has no runner.
+    return stat(path.join(repoRoot, '.omp', 'review-kit', 'run-review.mjs'))
+      .then((info) => info.isFile(), () => false);
   }
 
   /**
@@ -596,7 +713,7 @@ export class PluginInstallerService {
    *   kitExpected: boolean,
    *   hooksDir: string,
    *   hookPath: string,
-   *   kind: 'kit'|'shim'|'chained'|'foreign'|'missing'|'not-executable',
+   *   kind: 'kit'|'shim'|'dead'|'chained'|'foreign'|'missing'|'not-executable',
    *   effective: boolean,
    *   hooksPath: string|null
    * }>} null outside a Git repository
@@ -632,7 +749,12 @@ export class PluginInstallerService {
         }
         effective = again;
       }
-      const why = { missing: 'it does not exist', 'not-executable': 'it is not executable', foreign: 'it is another tool\'s hook that does not call the review' }[effective.kind];
+      const why = {
+      missing: 'it does not exist',
+      'not-executable': 'it is not executable',
+      dead: 'it starts .githooks/pre-commit, which does not exist',
+      foreign: 'it is another tool\'s hook that does not call the review',
+    }[effective.kind];
       return {
         action: 'block',
         message: `reviewer-kit stopped this commit: git would run "${effective.hookPath}" (core.hooksPath ${effective.hooksPath ?? 'unset'}) and ${why}, so the staged change would not be reviewed. Fix it with: git -C "${repoRoot}" config core.hooksPath .githooks (or run /reviewer-kit:setup), then commit again. OMP_REVIEW_KIT_GUARD=0 turns this check off.`,
@@ -658,6 +780,11 @@ export class PluginInstallerService {
    *   runnerPresent: boolean,
    *   runnerCurrent: boolean,
    *   runnerNewer: boolean,
+   *   chainHookPath: string|null,
+   *   chainHookPresent: boolean,
+   *   chainHookCurrent: boolean,
+   *   chainHookNewer: boolean,
+   *   chainHookExecutable: boolean,
    *   isFullyActive: boolean,
    *   conflictReason: string|null
    * }>}
@@ -684,6 +811,11 @@ export class PluginInstallerService {
         runnerPresent: false,
         runnerCurrent: false,
         runnerNewer: false,
+        chainHookPath: null,
+        chainHookPresent: false,
+        chainHookCurrent: false,
+        chainHookNewer: false,
+        chainHookExecutable: false,
         hookExecutable: false,
         conflictReason: null,
       };
@@ -700,6 +832,9 @@ export class PluginInstallerService {
     const expectedGithooksDir = path.join(repoRoot, '.githooks');
     let hooksPathConfigured = false;
     let conflictReason = null;
+    // A generated hook of another tool (husky writes ".husky/_/pre-commit") that git actually runs:
+    // the kit inserts its marked block into it instead of taking core.hooksPath away from that tool.
+    let chainHook = null;
     // Hooks of other tools next to ours only matter while activating .githooks would start running them.
     let foreignHooksReason = null;
 
@@ -740,25 +875,41 @@ export class PluginInstallerService {
         if (isDefault && Array.isArray(foreign) && foreign.length === 0) {
           hooksPathRepairable = true;
         } else {
-          conflictReason = `core.hooksPath is configured to "${configuredHooksPath}" (expected ".githooks")`;
+          chainHook = await this.#inspectChainHook(repoRoot, resolvedConfigured);
+          if (chainHook?.conflict) {
+            conflictReason = chainHook.conflict;
+            chainHook = null;
+          } else if (chainHook === null) {
+            conflictReason = `core.hooksPath is configured to "${configuredHooksPath}" (expected ".githooks")`;
+          }
         }
       }
     } else {
-      try {
-        const foreign = await this.#foreignHooksIn(standardHooksDir);
-        if (foreign.length > 0) {
-          conflictReason = `Existing hooks found in standard hooks directory (${foreign.join(', ')}); switching core.hooksPath would bypass them`;
-        }
-      } catch (error) {
-        if (!conflictReason) {
-          conflictReason = 'Unable to inspect standard hooks directory: ' + (error?.message ?? error);
+      // With no core.hooksPath, git runs .git/hooks. A hook installed there by another manager
+      // (simple-git-hooks, lefthook) keeps running when the kit chains into it; other hooks in that
+      // directory keep running too, because the kit leaves the directory alone. In a linked worktree
+      // that directory is the shared one outside the checkout, so it is a stated conflict instead.
+      chainHook = await this.#inspectChainHook(repoRoot, standardHooksDir);
+      if (chainHook?.conflict) {
+        conflictReason = chainHook.conflict;
+        chainHook = null;
+      } else if (chainHook === null) {
+        try {
+          const foreign = await this.#foreignHooksIn(standardHooksDir);
+          if (foreign.length > 0) {
+            conflictReason = `Existing hooks found in standard hooks directory (${foreign.join(', ')}); switching core.hooksPath would bypass them`;
+          }
+        } catch (error) {
+          if (!conflictReason) {
+            conflictReason = 'Unable to inspect standard hooks directory: ' + (error?.message ?? error);
+          }
         }
       }
     }
 
     // A stray core.hooksPath (repairable) is judged after the kit's own hook is known: when the repository already
     // carries it, .githooks is the repository's chosen hooks directory and its other hooks were active before the stray value.
-    if (foreignHooksReason && !hooksPathConfigured && !conflictReason && !hooksPathRepairable) conflictReason = foreignHooksReason;
+    if (foreignHooksReason && !hooksPathConfigured && !conflictReason && !hooksPathRepairable && chainHook === null) conflictReason = foreignHooksReason;
 
     const hookPath = path.join(expectedGithooksDir, 'pre-commit');
     let hookFilePresent = false;
@@ -871,11 +1022,12 @@ export class PluginInstallerService {
         }
       }
     }
-    if (foreignHooksReason && hooksPathRepairable && !conflictReason && !hookOwned && !hookChained) conflictReason = foreignHooksReason;
+    if (foreignHooksReason && hooksPathRepairable && !conflictReason && !hookOwned && !hookChained && chainHook === null) conflictReason = foreignHooksReason;
     let state;
     const hookUsable = hookFilePresent && hookOwned && hookCurrent && hookExecutable;
     const chainUsable = hookChained && chainedHookPresent && chainedHookCurrent
         && chainedHookExecutable && hookExecutable;
+    const chainHookActive = chainHook !== null && (chainHook.current || chainHook.newer) && chainHook.executable;
     if (conflictReason) {
       state = 'conflict';
     } else if (hookChained && !hookExecutable) {
@@ -884,8 +1036,12 @@ export class PluginInstallerService {
       state = 'conflict';
       conflictReason = 'Existing .githooks/pre-commit chains into ' + CHAINED_HOOK_PATH
         + ' but is not executable; fix its mode manually (chmod +x)';
-    } else if (hooksPathConfigured && (hookUsable || chainUsable) && runnerPresent && runnerCurrent) {
+    } else if (((hooksPathConfigured && (hookUsable || chainUsable)) || chainHookActive)
+        && runnerPresent && runnerCurrent) {
       state = 'active';
+    } else if (chainHook !== null && (chainHook.present || runnerPresent)) {
+      // The host hook is there, but the review block is missing, stale, or not executable.
+      state = 'stale';
     } else if (hooksPathConfigured && (hookOwned || hookChained) && runnerPresent
         && ((!hookUsable && !chainUsable) || !runnerCurrent)) {
       state = 'stale';
@@ -917,6 +1073,11 @@ export class PluginInstallerService {
       runnerCurrent,
       runnerNewer,
       hookExecutable,
+      chainHookPath: chainHook?.path ?? null,
+      chainHookPresent: chainHook?.present ?? false,
+      chainHookCurrent: chainHook?.current ?? false,
+      chainHookNewer: chainHook?.newer ?? false,
+      chainHookExecutable: chainHook?.executable ?? false,
       isFullyActive: state === 'active',
       conflictReason,
     };
@@ -958,50 +1119,58 @@ export class PluginInstallerService {
     }
 
     if (inspection.state === 'active') {
-      await this.#ensureShim(inspection.commonHooksDir);
+      // In chaining mode there is no .githooks/pre-commit for the shim to start.
+      if (inspection.chainHookPath === null) await this.#ensureShim(inspection.commonHooksDir);
       return {
         success: true,
         state: 'active',
         repoRoot: inspection.repoRoot,
-        message: 'Pre-commit hook already active in ' + inspection.repoRoot,
+        message: inspection.chainHookPath !== null
+          ? `Review already active in ${inspection.repoRoot} via ${inspection.chainHookPath} (${hooksPathLabel(inspection.configuredHooksPath)} kept)`
+          : 'Pre-commit hook already active in ' + inspection.repoRoot,
       };
     }
 
     const repoRoot = inspection.repoRoot;
     const gitHooksDir = path.join(repoRoot, '.githooks');
     const runnerDir = path.join(repoRoot, '.omp', 'review-kit');
-    await this.#assertNoSymlinkComponents(writeTarget(repoRoot, gitHooksDir));
+    // A chained foreign hook owns the entry point: the kit adds no .githooks file there.
+    const chaining = inspection.chainHookPath !== null;
     await this.#assertNoSymlinkComponents(writeTarget(repoRoot, runnerDir));
-    await mkdir(gitHooksDir, { recursive: true });
     await mkdir(runnerDir, { recursive: true });
+    if (!chaining) {
+      await this.#assertNoSymlinkComponents(writeTarget(repoRoot, gitHooksDir));
+      await mkdir(gitHooksDir, { recursive: true });
+    }
 
     let installed = false;
     let updated = false;
 
     // 1. Deploy / ensure pre-commit hook
-    const canonicalHookPath = path.join(this.#pluginRoot, 'templates', 'githooks', 'pre-commit');
-    const canonicalHookTemplate = await readFile(canonicalHookPath, 'utf8');
-    const hookPath = path.join(gitHooksDir, 'pre-commit');
-    let hookWritten = false;
-    if (inspection.hookChained) {
-      // Existing foreign hook already chains into .githooks/pre-commit.d/:
-      // repair the owned chain entry only, never touch the foreign hook file.
-      const chainedPath = path.join(gitHooksDir, CHAINED_HOOK_PATH);
-      const chainedWritten = await this.#writeIfChanged(repoRoot, chainedPath, CHAINED_HOOK_TEMPLATE, 0o755);
-      if (chainedWritten) {
-        if (!inspection.chainedHookPresent) {
-          installed = true;
-        } else {
-          updated = true;
+    if (!chaining) {
+      const canonicalHookPath = path.join(this.#pluginRoot, 'templates', 'githooks', 'pre-commit');
+      const canonicalHookTemplate = await readFile(canonicalHookPath, 'utf8');
+      const hookPath = path.join(gitHooksDir, 'pre-commit');
+      if (inspection.hookChained) {
+        // Existing foreign hook already chains into .githooks/pre-commit.d/:
+        // repair the owned chain entry only, never touch the foreign hook file.
+        const chainedPath = path.join(gitHooksDir, CHAINED_HOOK_PATH);
+        const chainedWritten = await this.#writeIfChanged(repoRoot, chainedPath, CHAINED_HOOK_TEMPLATE, 0o755);
+        if (chainedWritten) {
+          if (!inspection.chainedHookPresent) {
+            installed = true;
+          } else {
+            updated = true;
+          }
         }
-      }
-    } else {
-      hookWritten = inspection.hookNewer ? false : await this.#writeIfChanged(repoRoot, hookPath, canonicalHookTemplate, 0o755);
-      if (hookWritten) {
-        if (!inspection.hookFilePresent) {
-          installed = true;
-        } else {
-          updated = true;
+      } else {
+        const hookWritten = inspection.hookNewer ? false : await this.#writeIfChanged(repoRoot, hookPath, canonicalHookTemplate, 0o755);
+        if (hookWritten) {
+          if (!inspection.hookFilePresent) {
+            installed = true;
+          } else {
+            updated = true;
+          }
         }
       }
     }
@@ -1021,10 +1190,22 @@ export class PluginInstallerService {
       }
     }
 
-    // 3. Configure repository-local core.hooksPath. A stray value in this worktree's own config (config.worktree)
-    // would keep winning over the shared one, so it is replaced where it lives.
+    // 3. Wire the review into the hook git runs. A generated foreign hook (husky's
+    // .husky/_/pre-commit) gets the kit's marked block and keeps core.hooksPath; anything else gets
+    // repository-local .githooks. A stray value in this worktree's own config (config.worktree) would
+    // keep winning over the shared one, so it is replaced where it lives.
     let repairedFrom = null;
-    if (!inspection.hooksPathConfigured) {
+    let chainWritten = false;
+    if (inspection.chainHookPath !== null) {
+      const chainPath = inspection.chainHookPath;
+      const chained = withChainBlock(await readFile(chainPath, 'utf8'));
+      const chainStat = await stat(chainPath);
+      // git runs the host hook only when it is executable; the kit already owns the file's bytes now.
+      if (chained.action === 'inserted' || chained.action === 'replaced'
+          || (process.platform !== 'win32' && (chainStat.mode & 0o111) === 0)) {
+        chainWritten = await this.#writeIfChanged(repoRoot, chainPath, chained.text, chainStat.mode | 0o111);
+      }
+    } else if (!inspection.hooksPathConfigured) {
       const perWorktree = /(^|[\\/])config\.worktree$/.test(inspection.hooksPathOrigin ?? '');
       const configRes = this.runGit(['config', ...(perWorktree ? ['--worktree'] : []), 'core.hooksPath', '.githooks'], repoRoot);
       if (configRes.status !== 0) {
@@ -1034,12 +1215,16 @@ export class PluginInstallerService {
       installed = true;
     }
 
-    // 4. Safety net for a later stray core.hooksPath (see src/domain/hook-shim.mjs)
-    await this.#ensureShim(inspection.commonHooksDir);
+    // 4. Safety net for a later stray core.hooksPath (see src/domain/hook-shim.mjs). In chaining mode
+    // there is no .githooks/pre-commit for the shim to start, so a shim there would be a dead file
+    // that git would run (and exit 0) after a stray hooksPath: no safety net to install.
+    if (!chaining) await this.#ensureShim(inspection.commonHooksDir);
 
-    const finalState = repairedFrom !== null ? 'updated' : installed ? 'installed' : (updated ? 'updated' : 'active');
+    const finalState = repairedFrom !== null ? 'updated' : installed ? 'installed' : (updated || chainWritten ? 'updated' : 'active');
     const message = repairedFrom !== null
       ? `Repaired core.hooksPath in ${repoRoot}: it pointed at "${repairedFrom}", which does not start the review; it is .githooks again`
+      : inspection.chainHookPath !== null
+      ? `Review hook active in ${repoRoot}: git runs ${inspection.chainHookPath} (${hooksPathLabel(inspection.configuredHooksPath)} kept); the kit's block runs the review after it`
       : finalState === 'installed'
       ? `Configured pre-commit hook in ${repoRoot} (core.hooksPath .githooks)`
       : (finalState === 'updated'
@@ -1256,7 +1441,9 @@ export class PluginInstallerService {
     if (repoRoot) {
       const hookStatus = await this.status(repoRoot);
       if (hookStatus.state === 'active') {
-        checks.push(doctorCheck('Pre-commit hook', 'OK', 'Configured and active in .githooks/'));
+        checks.push(doctorCheck('Pre-commit hook', 'OK', hookStatus.chainHookPath
+          ? `Configured and active via ${hookStatus.chainHookPath} (${hooksPathLabel(hookStatus.configuredHooksPath)} kept)`
+          : 'Configured and active in .githooks/'));
       } else if (hookStatus.state === 'conflict') {
         checks.push(doctorCheck('Pre-commit hook conflict', 'WARN', hookStatus.conflictReason ?? 'Pre-commit hook conflict detected'));
       } else if (hookStatus.state === 'stale') {
@@ -1266,9 +1453,13 @@ export class PluginInstallerService {
           ? `This worker checkout is outside the kit's reach: ${notExecutable ? 'the pre-commit hook is not executable' : 'the review runner script is stale'}, and no session repairs it. Refresh it by hand.`
           : hookStatus.hooksPathRepairable
             ? `core.hooksPath points at git's default hooks directory ("${hookStatus.configuredHooksPath}"), so commits skip the review; it is repaired on the next session or commit.`
-            : notExecutable
-              ? 'Pre-commit hook is not executable and will be repaired on next session.'
-              : 'Review runner script is stale and will be updated on next session.';
+            : hookStatus.chainHookPath
+              ? (hookStatus.chainHookCurrent || hookStatus.chainHookNewer) && hookStatus.chainHookExecutable
+                ? 'Review runner script is stale and will be updated on next session.'
+                : `The review block in ${hookStatus.chainHookPath} is missing, stale or not executable; it is restored on the next session or commit.`
+              : notExecutable
+                ? 'Pre-commit hook is not executable and will be repaired on next session.'
+                : 'Review runner script is stale and will be updated on next session.';
         checks.push(doctorCheck('Pre-commit hook', 'WARN', message));
       } else {
         checks.push(doctorCheck('Pre-commit hook', 'WARN', 'Hook not configured in repository.'));
@@ -1280,7 +1471,7 @@ export class PluginInstallerService {
       if (hook?.kitExpected) {
         checks.push(hook.effective
           ? doctorCheck('Effective pre-commit hook', 'OK', `git runs ${hook.hookPath} (${hook.kind})`)
-          : doctorCheck('Effective pre-commit hook', 'FAIL', `commits here are NOT reviewed: git runs "${hook.hookPath}" (core.hooksPath ${hook.hooksPath ?? 'unset'}), ${hook.kind === 'foreign' ? "another tool's hook that does not call the review" : hook.kind === 'not-executable' ? 'which is not executable' : 'which does not exist'}. Run /reviewer-kit:setup, or: git config core.hooksPath .githooks`));
+          : doctorCheck('Effective pre-commit hook', 'FAIL', `commits here are NOT reviewed: git runs "${hook.hookPath}" (core.hooksPath ${hook.hooksPath ?? 'unset'}), ${hook.kind === 'foreign' ? "another tool's hook that does not call the review" : hook.kind === 'not-executable' ? 'which is not executable' : hook.kind === 'dead' ? 'which starts .githooks/pre-commit, and that file does not exist' : 'which does not exist'}. Run /reviewer-kit:setup, or: git config core.hooksPath .githooks`));
       }
     }
 

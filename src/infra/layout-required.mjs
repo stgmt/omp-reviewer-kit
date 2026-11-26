@@ -85,6 +85,7 @@ export const REQUIRED_FILES = [
   'src/domain/target-policy.mjs',
   'src/domain/hook-template.mjs',
   'src/domain/hook-shim.mjs',
+  'src/domain/hook-chain.mjs',
   'src/domain/git-commit-command.mjs',
   'scripts/stamp-hook.mjs',
   'src/infra/target-registry.mjs',

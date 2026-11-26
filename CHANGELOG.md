@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.36.1] - 2026-11-26
 
 ### Added
 - The correctness lane now owns a sixth anti-parasitic form: a compatibility surface with no live consumer — a version table, a supported-version list, a second reader or writer for an old record shape, or a wait for a legacy event. A writer that labels the new shape with an old version is a `P1` contract defect; a compatibility branch whose old format has no producer in the snapshot and no named external consumer is `P2`. Compatibility that is live in the field stays out of the gate, and the verifier applies the same standard in its own terms.
@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - The review journal key includes the census policy, so a stored verdict for one census configuration is not reused for another.
+
+### Fixed
+- A repository that already has a pre-commit hook manager can now be reviewed. The kit used to treat any foreign `core.hooksPath` (or any real hook in git's default hooks directory) as a conflict, so setup refused and every commit there went unreviewed. It now keeps the manager's directory and inserts a marked `EXIT` trap into the `pre-commit` file git runs: the review runs after that hook and the host's exit code is preserved. Incidentally, a block appended after husky's generated shim would never have run at all: the shim sources `h`, and `h` exits. This covers husky v9 (`.husky/_`), simple-git-hooks and lefthook (both generate into `.git/hooks`), and an untracked hand-written hook; the host's bytes are never rewritten. A regenerated hook is reported as stale and restored by the guard on the next commit. A hooks directory outside the checkout (a linked worktree's shared directory, a submodule's, a global one) is a stated conflict: a block there would start no runner in the other checkouts. A chained install writes no dead safety-net shim, and a shim whose `.githooks/pre-commit` is gone is reported as `dead` and repaired, not counted as a review. A hook that replaces the shell with `exec` (pre-commit's generated hook) or installs its own shell trap, a hook for another interpreter or a file that is not UTF-8 text, a tracked hook, a symlink or a hooks directory outside the checkout, and an edited block stay `conflict`.
 
 ## [0.36.0] - 2026-11-16
 
