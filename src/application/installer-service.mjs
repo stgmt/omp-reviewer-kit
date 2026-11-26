@@ -514,7 +514,9 @@ export class PluginInstallerService {
     try {
       info = await lstat(hookPath);
     } catch (error) {
-      if (error?.code === 'ENOENT') return null;
+      // A missing file, or a hooks path whose parent is not a directory: no chain host to inspect,
+      // and the caller reports the directory itself (the message the user needs).
+      if (error?.code === 'ENOENT' || error?.code === 'ENOTDIR') return null;
       return { conflict: `Unable to inspect ${relativeHook}: ${error?.message ?? error}` };
     }
     // A symlink is somebody else's file (a nix store, a shared hooks directory): never write through it.

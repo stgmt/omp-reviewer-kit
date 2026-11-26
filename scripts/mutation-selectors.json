@@ -1330,7 +1330,7 @@
         "Feature: the commit-time guard"
       ],
       "mutantHash": "d1bd8ebd5e5d9bd1420588d63bb79cced315e1e40562240c7d6780b8a992dc14",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "guard-never-repairs": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1341,7 +1341,7 @@
         "Feature: the extension and the Claude shell stop an unreviewed commit"
       ],
       "mutantHash": "1fb2f110529fc768134a71b3c28bf2d6db8ac00b112c28ef82f0f4107e4e74dd",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "guard-ignores-auto-sync-switch": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1352,7 +1352,7 @@
         "Feature: the commit-time guard"
       ],
       "mutantHash": "562ebdc9fffbe43e392af2ceb66690070b40b905307b70df8c25455d9e23b820",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "guard-repair-not-flagged": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1363,7 +1363,7 @@
         "Feature: the commit-time guard"
       ],
       "mutantHash": "7c923d00a6e28b36e7d5626786c250a942b3278d130070b6b0bafa9b40822dc8",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "guard-checks-unadopted-repositories": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1374,7 +1374,7 @@
         "Feature: the commit-time guard"
       ],
       "mutantHash": "fa89a6364fae2d4538ad5ec09060b7ae44e595eebb2d07ea47144da168a718a5",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "guard-switch-ignored": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1385,7 +1385,7 @@
         "Feature: the commit-time guard"
       ],
       "mutantHash": "4f4260b0d43db1511d48dc988afb00f655eb526d5b62ffb16a7f90887275632d",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "guard-failure-blocks-commit": {
       "testFile": "tests/hook-guard-edges.test.mjs",
@@ -1407,7 +1407,7 @@
         "Feature: the commit-time guard"
       ],
       "mutantHash": "1829ef6f1d1795d272e3a3d77aec10d7825f26b02b2a263493a83a4cc278d9a1",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "effective-hook-shim-ignored": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1418,7 +1418,7 @@
         "Feature: the commit-time guard"
       ],
       "mutantHash": "0978f692f0ab3bb9e4110e56eefe4e324039f36eecaecc38af31f9cc01ebb499",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "effective-hook-chain-ignored": {
       "testFile": "tests/hook-guard-edges.test.mjs",
@@ -1440,7 +1440,7 @@
         "Feature: the commit-time guard"
       ],
       "mutantHash": "82ffed81b4e0fa6a8386e32739b1bb0897c042f966e07cbf3b2054ed3e9fcddc",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "effective-hook-chain-entry-unchecked": {
       "testFile": "tests/hook-guard-edges.test.mjs",
@@ -1462,7 +1462,7 @@
         "Feature: the commit-time guard"
       ],
       "mutantHash": "90f22f916a5aaf0ea1b4276b592c276040abafaad6a9b74e135973636baaa54e",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "kit-expected-without-hook": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1473,7 +1473,7 @@
         "Feature: the commit-time guard"
       ],
       "mutantHash": "eaa20b71e3cd1e04f78feabef0b34a7f6d9a7524e5f28adb26e15f6c1d784a64",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "kit-expected-any-hook": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1484,7 +1484,7 @@
         "Feature: the commit-time guard"
       ],
       "mutantHash": "667dfd92d0c9a7babbc271bea237606f8fea9c1463f1ed996aa0b161977d4275",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "shim-not-kept-in-active-repository": {
       "testFile": "tests/hook-guard-edges.test.mjs",
@@ -1506,7 +1506,7 @@
         "Feature: the commit-time guard"
       ],
       "mutantHash": "bab4799576af824bb73a416987d823c01c10715d6ddde8be039cd6fd349be323",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "shim-overwrites-foreign-hook": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1517,7 +1517,7 @@
         "Feature: the hook shim in git's default hooks directory"
       ],
       "mutantHash": "78f0a021e519a05575f0043500e42257409fb1ce6a3f13cd897deb70204de751",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "shim-newer-format-replaced": {
       "testFile": "tests/hook-guard-edges.test.mjs",
@@ -1550,7 +1550,7 @@
         "Feature: a stray core.hooksPath on git's default hooks directory is repaired"
       ],
       "mutantHash": "369d4cd8c1a116e2d8a457542d3f6e2f5dbcd94700f14699c6d48db9d8c85fba",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "foreign-hooks-count-samples": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1561,7 +1561,7 @@
         "Feature: a stray core.hooksPath on git's default hooks directory is repaired"
       ],
       "mutantHash": "64992169edde78dbea464f377cbd0e895fc890ef33b340700a5a836d08250bf3",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "hookspath-repair-disabled": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1572,7 +1572,7 @@
         "Feature: a stray core.hooksPath on git's default hooks directory is repaired"
       ],
       "mutantHash": "c8f6488c53cbf3371887fde3fdef806a59c33951045f742cd75021b23f851d49",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "hookspath-repair-ignores-foreign-hooks": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1583,7 +1583,7 @@
         "Feature: a stray core.hooksPath on git's default hooks directory is repaired"
       ],
       "mutantHash": "1a5a21455c192961aac8bfeb5eece2d53ece44a9371a8863b24e002921dd0517",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "hookspath-repair-unreported": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1594,7 +1594,7 @@
         "Feature: a stray core.hooksPath on git's default hooks directory is repaired"
       ],
       "mutantHash": "cb9c8321d4cfa523c50fd5dc985beb23066dd4f5735e8d44ebfa11c841220ce7",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "hookspath-per-worktree-value-kept": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1605,7 +1605,7 @@
         "Feature: a stray core.hooksPath on git's default hooks directory is repaired"
       ],
       "mutantHash": "3f4961b3259ed80f18455ee1aeb69c3ad82727adebc7e08a8dd952ad84950668",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "hookspath-repairable-state-not-stale": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1616,7 +1616,7 @@
         "Feature: a stray core.hooksPath on git's default hooks directory is repaired"
       ],
       "mutantHash": "0c43c68490a7e35c513a1a9cc13fe14361c5b448913d267c0922755b6e8040fa",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "hookspath-repairable-ignores-foreign-hooks-uninstalled": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1627,7 +1627,7 @@
         "Feature: a stray core.hooksPath on git's default hooks directory is repaired"
       ],
       "mutantHash": "83256a10c3de3baa5753978f14124d759262981d840c7ecbd77ec7d806f30c96",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "hookspath-repairable-blocked-by-own-hook-siblings": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1638,7 +1638,7 @@
         "Feature: a stray core.hooksPath on git's default hooks directory is repaired"
       ],
       "mutantHash": "b85da01e011232d99c608334227bf141186cba6c1ea9a8ca8cb6385dc1d14e8b",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "parse-config-origin-keeps-file-prefix": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1649,7 +1649,7 @@
         "Feature: the hook shim in git's default hooks directory"
       ],
       "mutantHash": "5a35fa427ea97a34601abecc0eefb3f8ead8ad38c7a8d9d66d6d0d7326ab51ba",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "parse-config-origin-keeps-quotes": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1660,7 +1660,7 @@
         "Feature: the hook shim in git's default hooks directory"
       ],
       "mutantHash": "b4700681782b24290894cf031f0e477516c07ccca567575a2e1db3b913a978a4",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "doctor-effective-hook-unreviewed-ok": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1671,7 +1671,7 @@
         "Feature: doctor and sync report the hook git really runs"
       ],
       "mutantHash": "bdd1601665cc05d6eb41596b7428acda723b87ae8f4aac0328feb0d2ebacb672",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "doctor-unreviewed-registered-ignored": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1682,7 +1682,7 @@
         "Feature: doctor and sync report the hook git really runs"
       ],
       "mutantHash": "62ce4c8e2bcb308d5c056c6abc825a8688ecee75acc9aa244156bea7bf766cf1",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "status-effective-hook-dropped": {
       "testFile": "tests/hook-guard-edges.test.mjs",
@@ -1704,7 +1704,7 @@
         "Feature: doctor and sync report the hook git really runs"
       ],
       "mutantHash": "bc1a9840cb8145c3dcaf7209d481045e43b01dae04a3f8464faaaa6bf8e81b3e",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "sync-unreviewed-counted-synced": {
       "testFile": "tests/hook-guard-edges.test.mjs",
@@ -1726,7 +1726,7 @@
         "Feature: the hook shim in git's default hooks directory"
       ],
       "mutantHash": "6b61cb0f9ede061798ec012b3bf873bd0110622ea68f7fd251a167bad325b587",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "shim-same-format-counts-newer": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1737,7 +1737,7 @@
         "Feature: the hook shim in git's default hooks directory"
       ],
       "mutantHash": "be1cab5199463d9bef3f76882e06ff7ace5116f4b56066fc22793005de5c21a0",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "shim-delegate-removed": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1748,7 +1748,7 @@
         "Feature: a worktree whose shared core.hooksPath was overwritten still runs the review"
       ],
       "mutantHash": "b735865db0e5c2a7e976b58dd73adf9c0b87c33a0f4183c3f55bb91d325e72ab",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "shim-without-hook-blocks": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1759,7 +1759,7 @@
         "Feature: the hook shim in git's default hooks directory"
       ],
       "mutantHash": "48863b9b62f0b337404ac123c5b9cae204600954621f39f4fa6f0b4597493e74",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "commit-command-no-verify-reviewed": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1770,7 +1770,7 @@
         "Feature: git commit detection"
       ],
       "mutantHash": "0f6465f13c646c552fe541fa9e9ae2e82295e5370ef3d0d6f21bbcb3cd2107e6",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "commit-command-message-value-parsed": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1781,7 +1781,7 @@
         "Feature: git commit detection"
       ],
       "mutantHash": "7da6a785c6596082cd1b5639937e286176cf5b37249c570016f0a1b09af4df6d",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "extension-guard-block-dropped": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1792,7 +1792,7 @@
         "Feature: the extension and the Claude shell stop an unreviewed commit"
       ],
       "mutantHash": "b58bb3816fac069a7e483f7e95144b7448250fde7c8da4d094287d0c08cab108",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "extension-guard-repair-silent": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1803,7 +1803,7 @@
         "Feature: the extension and the Claude shell stop an unreviewed commit"
       ],
       "mutantHash": "f05b5c9e5facf7a95cd959503f60e12546c6e3fd5f8f4307fe0195fb1df359f5",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "extension-guard-any-tool": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1814,7 +1814,7 @@
         "Feature: the extension and the Claude shell stop an unreviewed commit"
       ],
       "mutantHash": "7de105759cdde85f07a4bd4b26dd77e431a19a8a6cdf96e36abd6fa9bbc62e18",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "extension-guard-any-command": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1825,7 +1825,7 @@
         "Feature: the extension and the Claude shell stop an unreviewed commit"
       ],
       "mutantHash": "715762c362dd69375ded95ef920032b2f3929b422ccf26fa1c23556e54666cb0",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "extension-status-hook-line-always-ok": {
       "testFile": "tests/hook-guard-edges.test.mjs",
@@ -1847,7 +1847,7 @@
         "Feature: the extension and the Claude shell stop an unreviewed commit"
       ],
       "mutantHash": "1cf1a3425ba730530cb25dba916b32625ea94b7cd2acb2b1be2236fc1abbbe57",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "claude-guard-repair-silent": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1858,7 +1858,7 @@
         "Feature: the extension and the Claude shell stop an unreviewed commit"
       ],
       "mutantHash": "d9bb3739f9398dac334c5d227abfc66ed65e0c93815e669aff41242b3c647365",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "claude-guard-any-command": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1869,7 +1869,7 @@
         "Feature: the extension and the Claude shell stop an unreviewed commit"
       ],
       "mutantHash": "435406b91b0de172fe7ddf04eb346e6b6c9d79bfeebaecf25116c8b3ce880815",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "claude-guard-prefilter-dropped": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1880,7 +1880,7 @@
         "Feature: the extension and the Claude shell stop an unreviewed commit"
       ],
       "mutantHash": "f08ff56b1ecec2f56a239de1a93225720e8efa843aaf6ba327cbcbd9e83b9ea4",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "claude-guard-failure-denies": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1891,7 +1891,7 @@
         "Feature: the extension and the Claude shell stop an unreviewed commit"
       ],
       "mutantHash": "42d94e7193ad51a2ce0caed2df3742208891c677ee56111aef9e7bf7cd2cdbf9",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "claude-session-unreviewed-not-reported": {
       "testFile": "tests/hook-guard-edges.test.mjs",
@@ -2679,7 +2679,7 @@
         "Feature: git commit detection"
       ],
       "mutantHash": "c169093335c42c42aefdcd8438e8f0731587312c67ff57b9a870ea45ffdc5305",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "native-verdict-gap-blocking-ignored": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -4938,7 +4938,7 @@
         "Feature: the hook shim in git's default hooks directory"
       ],
       "mutantHash": "5df920d2a445ea9f5f5d9c90040ffb6514cdcfb1b190b0d6a6de55fd5882e02d",
-      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+      "testHash": "02537216f0a8c360941d405f1f52dc94184e08cc658cabee391241b811e30de3"
     },
     "chain-any-interpreter-accepted": {
       "testFile": "tests/hook-chain-install.test.mjs",

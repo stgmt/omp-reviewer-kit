@@ -274,7 +274,7 @@ describe('Feature: the commit-time guard', () => {
     assert.equal(hooksPathOf(repo), '.husky');
   });
 
-  it('Given a hook that is missing or not executable, Then the guard refuses and says why', async () => {
+  it('Given a hook that is missing, Then the guard refuses and says why; a non-executable generated hook is repaired by chaining', async () => {
     const { makeRepo, installer } = await open();
     const repo = await makeRepo('guard-missing');
     await mkdir(path.join(repo, '.husky'), { recursive: true });
@@ -283,9 +283,14 @@ describe('Feature: the commit-time guard', () => {
     assert.equal(result.action, 'block');
     assert.match(result.message, /does not exist/);
     if (process.platform !== 'win32') {
+      // A returning, untracked hook is chainable; the guard inserts the block and makes it executable.
       await writeFile(path.join(repo, '.husky', 'pre-commit'), FOREIGN_HOOK, { mode: 0o644 });
       await chmod(path.join(repo, '.husky', 'pre-commit'), 0o644);
-      assert.match((await installer.guardCommit(repo)).message, /not executable/);
+      const repaired = await installer.guardCommit(repo);
+      assert.equal(repaired.action, 'allow');
+      assert.equal(repaired.repaired, true);
+      assert.match(repaired.message, /reviewed again/);
+      assert.equal((await installer.status(repo)).state, 'active');
     }
   });
 
