@@ -16,6 +16,21 @@ const catalogCheck = (event) => /mutation manifest:|mutant anchors|curated mutan
 // The removal keeps retrying while a handle holds the tree. A tree still held when the retries run out rejects the job as infrastructure_error, never as a killed mutant.
 export const REMOVE_OPTIONS = { recursive: true, force: true, maxRetries: 20, retryDelay: 250 };
 export const removeTree = (target) => rm(target, REMOVE_OPTIONS);
+const TRANSIENT_OPEN = new Set(['EBUSY', 'EPERM', 'EACCES', 'EAGAIN', 'UNKNOWN']);
+// A proof is expensive and a transient Windows open refusal (an editor or a virus scanner holding the
+// catalog) is not a verdict about the catalog: retry the same bytes, then report the failure.
+export async function writeFileRetrying(file, data, write = writeFile, attempts = 20) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await write(file, data);
+      return;
+    } catch (error) {
+      const transient = TRANSIENT_OPEN.has(error?.code) || /UNKNOWN/.test(String(error?.message ?? ''));
+      if (!transient || attempt >= attempts - 1) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
+    }
+  }
+}
 // Full-file runs (the baseline and the mutated reference) run a whole suite; the guard suites take minutes on Windows. Focused mutant runs keep the 120 s limit.
 export const FULL_SUITE_TIMEOUT_MS = 30 * 60_000;
 export const mutantIdentity = (mutant) => createHash('sha256').update(JSON.stringify([mutant.id, mutant.file, mutant.testFile, mutant.original, mutant.replacement])).digest('hex');
@@ -383,10 +398,16 @@ export async function runCli({ mutants, argv = process.argv.slice(2), env = proc
   const workers = Number(env.OMP_MUTATION_WORKERS ?? 4);
   const resultPath = env.OMP_MUTATION_RESULT ?? path.join(cwd, 'audit-reports', 'mutation-result.json');
   // Workers prove selectors concurrently and each proof rewrites the whole catalog. Writes are queued in call order,
-  // so two snapshots never overlap in the file; a failed write does not block the writes after it.
+  // so two snapshots never overlap in the file; a failed write does not block the writes after it. Windows answers a
+  // concurrent reader (an editor, a virus scanner) with EBUSY/EPERM/UNKNOWN for a moment: that is not a verdict about
+  // the catalog, so the same bytes are retried before a proof is lost.
   let catalogWrites = Promise.resolve();
   const writeCatalog = (mappings) => {
-    const write = catalogWrites.then(() => writeFileImpl(selectorPath, JSON.stringify({ schema: 'mutation-selectors@1', mappings }, null, 2) + '\n'));
+    const write = catalogWrites.then(() => writeFileRetrying(
+      selectorPath,
+      JSON.stringify({ schema: 'mutation-selectors@1', mappings }, null, 2) + '\n',
+      writeFileImpl,
+    ));
     catalogWrites = write.catch(() => {});
     return write;
   };

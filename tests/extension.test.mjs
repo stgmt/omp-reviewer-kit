@@ -7,6 +7,7 @@ import test, { after, before, describe, it } from 'node:test';
 import { spawn, spawnSync } from 'node:child_process';
 
 import { PluginInstallerService } from '../src/application/installer-service.mjs';
+import { renderChainBlock } from '../src/domain/hook-chain.mjs';
 import initExtension from '../src/extension.mjs';
 import { repoReportsFolderName } from '../src/infra/filesystem-report-store-adapter.mjs';
 import { writeRunRecord } from '../src/infra/review-run-store.mjs';
@@ -566,6 +567,8 @@ describe('Feature: Native OMP Extension & Installer Service', () => {
       await mkdir(huskyDir, { recursive: true });
       const huskyHook = '#!/bin/sh\nnpm test\n';
       await writeFile(path.join(huskyDir, 'pre-commit'), huskyHook, 'utf8');
+      // The repository's own tracked hook is never edited by the kit.
+      git(['add', '--', '.husky/pre-commit']);
 
       const harness = createExtensionHarness();
       const ctx = harness.makeCtx(repoDir);
@@ -588,7 +591,7 @@ describe('Feature: Native OMP Extension & Installer Service', () => {
       await rm(baseDir, { recursive: true, force: true });
     } });
 
-  it('Scenario 6: user file in standard .git/hooks is not disabled, .githooks not created, reports conflict', async () => {
+  it('Scenario 6: user file in standard .git/hooks keeps running, .githooks not created, review chained after it', async () => {
     const { baseDir, repoDir, git } = await createTempRepo();
     try {
       const standardHooksDir = path.join(repoDir, '.git', 'hooks');
@@ -602,18 +605,19 @@ describe('Feature: Native OMP Extension & Installer Service', () => {
       const sessionStart = harness.events.get('session_start');
       await sessionStart({}, ctx);
 
-      assert.equal(ctx.getStatus(), 'reviewer-kit: conflict');
+      assert.equal(ctx.getStatus(), 'reviewer-kit: active');
 
       const configRes = git(['config', '--get', 'core.hooksPath']);
       assert.equal(configRes.stdout.trim(), '', 'core.hooksPath must remain unset');
 
       const hookAfter = await readFile(hookPath, 'utf8');
-      assert.equal(hookAfter, customHook);
+      assert.equal(hookAfter.replace(renderChainBlock(), ''), customHook, 'the user hook keeps its bytes');
+      assert.equal(existsSync(path.join(repoDir, '.githooks')), false);
 
       const installer = new PluginInstallerService();
       const status = await installer.status(repoDir);
-      assert.equal(status.state, 'conflict');
-      assert.match(status.conflictReason, /Existing hooks found in standard hooks directory/);
+      assert.equal(status.state, 'active');
+      assert.match(status.chainHookPath, /[\\/]\.git[\\/]hooks[\\/]pre-commit$/);
     } finally {
       await rm(baseDir, { recursive: true, force: true });
     }

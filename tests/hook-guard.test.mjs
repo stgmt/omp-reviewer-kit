@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { realpathSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { afterEach, describe, it } from 'node:test';
@@ -59,15 +59,34 @@ describe('Feature: the hook shim in git\'s default hooks directory', () => {
     assert.equal(await readFile(shim, 'utf8'), HOOK_SHIM);
   });
 
-  it('Given a foreign pre-commit in the default hooks directory, Then setup reports a conflict and leaves it alone', async () => {
+  it('Given a foreign pre-commit in the default hooks directory that replaces the shell, Then setup reports a conflict and leaves it alone', async () => {
     const { base } = await open();
     const repo = path.join(base, 'foreign-default');
     await mkdir(repo, { recursive: true });
     git(repo, 'init', '-q');
-    await writeFile(path.join(repo, '.git', 'hooks', 'pre-commit'), FOREIGN_HOOK, { mode: 0o755 });
+    const execHook = '#!/bin/sh\nexec ./node_modules/.bin/lint-staged\n';
+    await writeFile(path.join(repo, '.git', 'hooks', 'pre-commit'), execHook, { mode: 0o755 });
     const result = await current.installer.setup(repo);
     assert.equal(result.state, 'conflict');
-    assert.equal(await readFile(path.join(repo, '.git', 'hooks', 'pre-commit'), 'utf8'), FOREIGN_HOOK);
+    assert.match(result.message, /replaces the shell with "exec"/);
+    assert.equal(await readFile(path.join(repo, '.git', 'hooks', 'pre-commit'), 'utf8'), execHook);
+  });
+
+  it('Given a shim whose .githooks/pre-commit is gone, Then it is not the review and the guard repairs the checkout', async () => {
+    const { makeRepo, installer } = await open();
+    const repo = await makeRepo('dead-shim');
+    await rm(path.join(repo, '.githooks', 'pre-commit'));
+    git(repo, 'config', 'core.hooksPath', '.git/hooks');
+
+    const assessment = await installer.assessHook(repo);
+    assert.equal(assessment.kind, 'dead');
+    assert.equal(assessment.effective, false);
+
+    const guarded = await installer.guardCommit(repo);
+    assert.equal(guarded.action, 'allow');
+    assert.equal(guarded.repaired, true);
+    assert.equal(hooksPathOf(repo), '.githooks');
+    assert.equal(existsSync(path.join(repo, '.githooks', 'pre-commit')), true);
   });
 
   it('Given an edited shim, Then it is treated as a foreign hook and kept', async () => {
@@ -243,6 +262,8 @@ describe('Feature: the commit-time guard', () => {
     const repo = await makeRepo('guard-block');
     await mkdir(path.join(repo, '.husky'), { recursive: true });
     await writeFile(path.join(repo, '.husky', 'pre-commit'), FOREIGN_HOOK, { mode: 0o755 });
+    // A tracked hook is the repository's own file: the kit never appends to it.
+    git(repo, 'add', '--', '.husky/pre-commit');
     git(repo, 'config', 'core.hooksPath', '.husky');
 
     const result = await installer.guardCommit(repo);
@@ -389,6 +410,8 @@ describe('Feature: doctor and sync report the hook git really runs', () => {
     git(stray, 'config', 'core.hooksPath', path.join(stray, '.git', 'hooks'));
     await mkdir(path.join(husky, '.husky'), { recursive: true });
     await writeFile(path.join(husky, '.husky', 'pre-commit'), FOREIGN_HOOK, { mode: 0o755 });
+    // Tracked: the repository's own hook is not a generated file the kit may chain into.
+    git(husky, 'add', '--', '.husky/pre-commit');
     git(husky, 'config', 'core.hooksPath', '.husky');
 
     assert.equal((await syncTarget(stray)).status, 'drift');

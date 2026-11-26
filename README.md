@@ -126,6 +126,26 @@ The line must invoke exactly that entry name, with no arguments, no `&&`/`;` cha
 
 When `session_start` or `/reviewer-kit:setup` sees either shape, it deploys the owned chain entry `.githooks/pre-commit.d/00-omp-reviewer-kit.chain` (which runs the review runner) and repairs it on drift. The foreign hook file stays byte-identical. A foreign hook that calls a different entry name, or has no chain marker at all, still reports `conflict` and is left untouched.
 
+### Coexisting with husky, simple-git-hooks, lefthook and other generated hooks
+
+A hook manager owns the one `pre-commit` file git runs, so the kit does not take `core.hooksPath` away from it. When that file is a regular, untracked hook whose shell survives to the end, the kit inserts a marked block after its shebang: an `EXIT` trap that runs the review once the host hook has finished, with the host's exit code preserved. The host's own lines are never rewritten, and the block is the only part the kit replaces.
+
+That covers the layouts the common managers generate:
+
+- husky v9 (`core.hooksPath=.husky/_`): the generated `pre-commit` only sources its sibling `h`, and `h` runs the user's hook and exits with its status, so a block appended after it would be dead code. The trap still runs.
+- simple-git-hooks and lefthook: their generated hooks in `.git/hooks/pre-commit` return normally, so the review runs after them and `core.hooksPath` stays unset.
+- an untracked hand-written hook in the hooks directory git uses.
+
+A hook manager rewrites its generated hook on the next install, which erases the block; it is reported as stale and restored on the next session or commit (the vendored runner next to the checkout proves the kit was installed there).
+
+These stay `conflict`, with the file left byte-identical and a message naming the fix:
+
+- a hook that replaces the shell with `exec` (pre-commit's generated hook) or installs its own shell trap, because the `EXIT` trap placed before it would never run or would be replaced;
+- a hook for another interpreter (python, node, ruby) or a file that is not UTF-8 text, because the review block is POSIX shell and the kit never rewrites bytes it cannot interpret;
+- a tracked hook (including husky v8's tracked `.husky/pre-commit`) — the repository's own file is never edited;
+- a symlink, or a hooks directory outside the checkout (a global `~/.git/hooks`, a nix store) — never written through;
+- a block someone edited under its marker.
+
 ## Standalone / CI Installation (Fallback)
 
 For CI environments or machines without an interactive OMP shell, standalone scripts remain available:
@@ -182,7 +202,7 @@ When the staged `.omp/review-kit/run-review.mjs` is byte-identical (line endings
 
 **Commits that skip the review.** `.githooks` protects a checkout only while git runs it, and another tool can silently point `core.hooksPath` somewhere else. Claude Code Agent Teams writes `<repo>/.git/hooks` into the shared config when it creates a worktree, after which `git commit` runs no review at all. The kit defends against that in four ways:
 
-- A `core.hooksPath` that names git's own default hooks directory, while that directory holds no real hook, is treated as a stray value rather than another tool's choice. Setup, the session start and `sync-targets --apply` put `.githooks` back (in `config.worktree` when the value lives there). Real hooks in that directory, or another hook system such as `.husky`, stay a conflict and are never rewritten.
+- A `core.hooksPath` that names git's own default hooks directory, while that directory holds no real hook, is treated as a stray value rather than another tool's choice. Setup, the session start and `sync-targets --apply` put `.githooks` back (in `config.worktree` when the value lives there). Real hooks in that directory stay a conflict when the kit cannot chain into them (see above: a hook that `exec`s, a tracked hook, or a directory outside the checkout); a generated, returning hook such as husky v9's, simple-git-hooks' or lefthook's is chained instead, and the directory is left exactly as that tool made it.
 - Setup stores a small shim in `<git common dir>/hooks/pre-commit` that runs the checkout's own `.githooks/pre-commit`, so even a stray value still reaches the review. The shim never replaces another tool's hook, is not written through a symlinked hooks directory, and its marker versions the shim format, not the release.
 - Before an agent runs `git commit` (OMP extension `tool_call`, Claude Code PreToolUse hook on Bash), the guard checks which hook git would run. If it is the kit's, nothing happens. If not, it repairs the checkout and says so, or refuses the commit with the reason and the one-line fix. `OMP_REVIEW_KIT_AUTO_SYNC=0` turns the repair off (the guard then only refuses); `OMP_REVIEW_KIT_GUARD=0` turns the guard off. Only repositories that carry the kit's own `.githooks/pre-commit` are guarded.
 - `/reviewer-kit:status` prints the effective hook, `/reviewer-kit:doctor` fails when commits here are not reviewed and lists registered repositories that would commit unreviewed, `sync-targets` marks them `NOT-REVIEWED`, and a Claude Code session start warns.

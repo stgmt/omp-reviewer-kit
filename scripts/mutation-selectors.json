@@ -713,7 +713,7 @@
       ],
       "ancestors": [],
       "mutantHash": "430e165a43355f97673826a582745330ac75a7b53c4b9c0bb92d24e4ee5f0d62",
-      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
+      "testHash": "3a17ada82952ac3ceefae1204e72ebe38e4f2851d7ef9e69f96dacbb7df45fdb"
     },
     "mutation-exclusive-lane-disabled": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -722,7 +722,7 @@
       ],
       "ancestors": [],
       "mutantHash": "b242bfd0e13e8a9e7842ddb380b2ea0eb0df8d339612fd03c7bb2c313917ac95",
-      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
+      "testHash": "3a17ada82952ac3ceefae1204e72ebe38e4f2851d7ef9e69f96dacbb7df45fdb"
     },
     "mutation-timeout-counted-as-kill": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -731,7 +731,7 @@
       ],
       "ancestors": [],
       "mutantHash": "8e5a1c5148d62c2c1e37373d73a0bc43d26606efa53af684611a83184db4d362",
-      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
+      "testHash": "3a17ada82952ac3ceefae1204e72ebe38e4f2851d7ef9e69f96dacbb7df45fdb"
     },
     "mutation-missing-summary-accepted": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -740,7 +740,7 @@
       ],
       "ancestors": [],
       "mutantHash": "39f020855996175c63d8274b295fccb78c8e0ae7fe7fe00f9f052dc5e87c4c6d",
-      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
+      "testHash": "3a17ada82952ac3ceefae1204e72ebe38e4f2851d7ef9e69f96dacbb7df45fdb"
     },
     "mutation-assertion-proof-omitted": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -749,7 +749,7 @@
       ],
       "ancestors": [],
       "mutantHash": "9461f424804a5718dfb0f3fef66b6e2f2de70ff431449396a29898459905d796",
-      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
+      "testHash": "3a17ada82952ac3ceefae1204e72ebe38e4f2851d7ef9e69f96dacbb7df45fdb"
     },
     "mutation-worker-file-not-restored": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -758,7 +758,7 @@
       ],
       "ancestors": [],
       "mutantHash": "e5b5fcdfe45bcfff98928e441617dd63872e7bc0f93e29183658af3cd6f816a9",
-      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
+      "testHash": "3a17ada82952ac3ceefae1204e72ebe38e4f2851d7ef9e69f96dacbb7df45fdb"
     },
     "mutation-stale-selector-accepted": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -767,7 +767,7 @@
       ],
       "ancestors": [],
       "mutantHash": "bacdb060d41cbc04378f7646db230200fbda69126d6bc00e0bc3d34162c8e6d6",
-      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
+      "testHash": "3a17ada82952ac3ceefae1204e72ebe38e4f2851d7ef9e69f96dacbb7df45fdb"
     },
     "mutation-duplicate-catalog-accepted": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -776,7 +776,7 @@
       ],
       "ancestors": [],
       "mutantHash": "2d8e45133b5b12aa77ab2fb64d7073a4b7f2d962ea547d3f803c73e58a26842b",
-      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
+      "testHash": "3a17ada82952ac3ceefae1204e72ebe38e4f2851d7ef9e69f96dacbb7df45fdb"
     },
     "runner-version-compare-inverted": {
       "testFile": "tests/claude-bridge.test.mjs",
@@ -946,7 +946,7 @@
         "The installer status of a directory outside Git is not a repository and carries no newer runner"
       ],
       "ancestors": [],
-      "mutantHash": "133b785e6553568c34e470e639f44a6aa298024cf66ff9186b49e6b96eb35d48",
+      "mutantHash": "31727f2a286bbe952e7c7f791ba94e5e1c0b6814822fa7cc65629f7a1d449e31",
       "testHash": "522e96ed83f4dc6de7d6d18402dedb95758687de94d67d5ebfe4ccfb5c783de4"
     },
     "hook-budget-inflated": {
@@ -985,7 +985,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "b47344754a1a0a7c74ac2b46bda84a0b9771e016d1166b29ffa4afedb2a0a194",
-      "testHash": "e3b2f4e2a8cb63877dd3a01f5f3985e96cf38ecbf7d5c73bee8435e217b54776"
+      "testHash": "871f8aaf8878a884a4d2a368aa0ecfd3ae6748bf697b4728127c92ea61c9d720"
     },
     "setup-refusal-silent": {
       "testFile": "tests/extension.test.mjs",
@@ -996,7 +996,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "a03c75fc2613e2c6aa1b13a81c9c1f4ea878624b7bd84c7e77668dc9b1dbe6d0",
-      "testHash": "e3b2f4e2a8cb63877dd3a01f5f3985e96cf38ecbf7d5c73bee8435e217b54776"
+      "testHash": "871f8aaf8878a884a4d2a368aa0ecfd3ae6748bf697b4728127c92ea61c9d720"
     },
     "doctor-counts-worker-checkouts": {
       "testFile": "tests/target-heal.test.mjs",
@@ -1016,7 +1016,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "f85b0436d69f418fcc546aadf8b0841023deba4cabca660a20f42908d058b621",
-      "testHash": "e3b2f4e2a8cb63877dd3a01f5f3985e96cf38ecbf7d5c73bee8435e217b54776"
+      "testHash": "871f8aaf8878a884a4d2a368aa0ecfd3ae6748bf697b4728127c92ea61c9d720"
     },
     "heal-prunes-skipped-before-policy": {
       "testFile": "tests/target-heal.test.mjs",
@@ -1177,7 +1177,7 @@
         "Given another tool's hook next to ours, Then a stale runner is refreshed only while .githooks is already the hooks path"
       ],
       "ancestors": [],
-      "mutantHash": "92ccddfa418dfb119d5efc6a7e3ec321429690ba378bbf02c61c3d7b6624ed48",
+      "mutantHash": "76c4ebff5fd232ff7fbcb800e85f6a86acb3cff7cd03b83ac132db4733817caa",
       "testHash": "2689ce8a544d86ffda47ada52c400a9bdfab6c41a5c0cc94c355ca601bdf050a"
     },
     "installer-foreign-hooks-never-conflict": {
@@ -1186,7 +1186,7 @@
         "Given another tool's hook next to ours, Then a stale runner is refreshed only while .githooks is already the hooks path"
       ],
       "ancestors": [],
-      "mutantHash": "4a8e94d4d464534adcd21232dbdcf95474ecad4e1940dace9c45a9599cb9df4b",
+      "mutantHash": "6ef4af5d787c4075019614dfa25bc0adebee2a1174f588c099e3affa0da9bf8e",
       "testHash": "2689ce8a544d86ffda47ada52c400a9bdfab6c41a5c0cc94c355ca601bdf050a"
     },
     "run-tests-exit-forced-zero": {
@@ -1214,7 +1214,7 @@
       ],
       "ancestors": [],
       "mutantHash": "ebc112b31a50f0f358ee62462adeb2063c6d458cd3657b5f637f1767449c81d7",
-      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
+      "testHash": "3a17ada82952ac3ceefae1204e72ebe38e4f2851d7ef9e69f96dacbb7df45fdb"
     },
     "run-tests-test-marker-inherited": {
       "testFile": "tests/run-tests-wrapper.test.mjs",
@@ -1279,7 +1279,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "43261f08e7d953188eff77f51ecfa8e5a8a4a9a4683aead4d9e92de9fbfd2741",
-      "testHash": "e3b2f4e2a8cb63877dd3a01f5f3985e96cf38ecbf7d5c73bee8435e217b54776"
+      "testHash": "871f8aaf8878a884a4d2a368aa0ecfd3ae6748bf697b4728127c92ea61c9d720"
     },
     "status-report-line-unconditional": {
       "testFile": "tests/extension.test.mjs",
@@ -1290,7 +1290,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "f2dfc705cacb4b1bc75e598ea19a5db94d5ff07031ebb461668e849fc60b36ff",
-      "testHash": "e3b2f4e2a8cb63877dd3a01f5f3985e96cf38ecbf7d5c73bee8435e217b54776"
+      "testHash": "871f8aaf8878a884a4d2a368aa0ecfd3ae6748bf697b4728127c92ea61c9d720"
     },
     "status-report-line-before-verdict": {
       "testFile": "tests/extension.test.mjs",
@@ -1301,7 +1301,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "f1ca5f8f24b75bf4fa7ffc5cef3c5f6a1ac3cd1c849ad99e7920849a13ce5e35",
-      "testHash": "e3b2f4e2a8cb63877dd3a01f5f3985e96cf38ecbf7d5c73bee8435e217b54776"
+      "testHash": "871f8aaf8878a884a4d2a368aa0ecfd3ae6748bf697b4728127c92ea61c9d720"
     },
     "run-tests-reports-dir-left-to-user": {
       "testFile": "tests/run-tests-wrapper.test.mjs",
@@ -1330,7 +1330,7 @@
         "Feature: the commit-time guard"
       ],
       "mutantHash": "d1bd8ebd5e5d9bd1420588d63bb79cced315e1e40562240c7d6780b8a992dc14",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "guard-never-repairs": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1341,7 +1341,7 @@
         "Feature: the extension and the Claude shell stop an unreviewed commit"
       ],
       "mutantHash": "1fb2f110529fc768134a71b3c28bf2d6db8ac00b112c28ef82f0f4107e4e74dd",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "guard-ignores-auto-sync-switch": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1352,7 +1352,7 @@
         "Feature: the commit-time guard"
       ],
       "mutantHash": "562ebdc9fffbe43e392af2ceb66690070b40b905307b70df8c25455d9e23b820",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "guard-repair-not-flagged": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1363,7 +1363,7 @@
         "Feature: the commit-time guard"
       ],
       "mutantHash": "7c923d00a6e28b36e7d5626786c250a942b3278d130070b6b0bafa9b40822dc8",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "guard-checks-unadopted-repositories": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1374,7 +1374,7 @@
         "Feature: the commit-time guard"
       ],
       "mutantHash": "fa89a6364fae2d4538ad5ec09060b7ae44e595eebb2d07ea47144da168a718a5",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "guard-switch-ignored": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1385,7 +1385,7 @@
         "Feature: the commit-time guard"
       ],
       "mutantHash": "4f4260b0d43db1511d48dc988afb00f655eb526d5b62ffb16a7f90887275632d",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "guard-failure-blocks-commit": {
       "testFile": "tests/hook-guard-edges.test.mjs",
@@ -1407,7 +1407,7 @@
         "Feature: the commit-time guard"
       ],
       "mutantHash": "1829ef6f1d1795d272e3a3d77aec10d7825f26b02b2a263493a83a4cc278d9a1",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "effective-hook-shim-ignored": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1418,7 +1418,7 @@
         "Feature: the commit-time guard"
       ],
       "mutantHash": "0978f692f0ab3bb9e4110e56eefe4e324039f36eecaecc38af31f9cc01ebb499",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "effective-hook-chain-ignored": {
       "testFile": "tests/hook-guard-edges.test.mjs",
@@ -1440,7 +1440,7 @@
         "Feature: the commit-time guard"
       ],
       "mutantHash": "82ffed81b4e0fa6a8386e32739b1bb0897c042f966e07cbf3b2054ed3e9fcddc",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "effective-hook-chain-entry-unchecked": {
       "testFile": "tests/hook-guard-edges.test.mjs",
@@ -1462,7 +1462,7 @@
         "Feature: the commit-time guard"
       ],
       "mutantHash": "90f22f916a5aaf0ea1b4276b592c276040abafaad6a9b74e135973636baaa54e",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "kit-expected-without-hook": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1472,8 +1472,8 @@
       "ancestors": [
         "Feature: the commit-time guard"
       ],
-      "mutantHash": "26c1ec10dde8cf5536945870022f610a22ce984a84a7826426c8762c487ec5c2",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "mutantHash": "eaa20b71e3cd1e04f78feabef0b34a7f6d9a7524e5f28adb26e15f6c1d784a64",
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "kit-expected-any-hook": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1483,8 +1483,8 @@
       "ancestors": [
         "Feature: the commit-time guard"
       ],
-      "mutantHash": "6c4bf605cd79656e492bbe7f9a4b6c5ff17e508343a0fbb684bd416d1f48d0d7",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "mutantHash": "667dfd92d0c9a7babbc271bea237606f8fea9c1463f1ed996aa0b161977d4275",
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "shim-not-kept-in-active-repository": {
       "testFile": "tests/hook-guard-edges.test.mjs",
@@ -1494,7 +1494,7 @@
       "ancestors": [
         "Feature: edges of the shim, the assessment and the reports"
       ],
-      "mutantHash": "dd0ad062b06e1b9e37d272888c1a881704f48ff6e257520f6cc687cbb2c28d0b",
+      "mutantHash": "5163bbc14fe750476f157bb5ca04233c6019b537b218df6ef653b99f5872ab9f",
       "testHash": "376c2545f89dedfcd8c497bbb5e0ba298bad62dc0b924460635796f528ba9bd8"
     },
     "shim-never-written-on-setup": {
@@ -1505,8 +1505,8 @@
       "ancestors": [
         "Feature: the commit-time guard"
       ],
-      "mutantHash": "6a79ddefb7b16f8dcf7054f5d1c86c980b5ad2c01102ef45a04fbca35b986582",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "mutantHash": "bab4799576af824bb73a416987d823c01c10715d6ddde8be039cd6fd349be323",
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "shim-overwrites-foreign-hook": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1517,7 +1517,7 @@
         "Feature: the hook shim in git's default hooks directory"
       ],
       "mutantHash": "78f0a021e519a05575f0043500e42257409fb1ce6a3f13cd897deb70204de751",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "shim-newer-format-replaced": {
       "testFile": "tests/hook-guard-edges.test.mjs",
@@ -1550,7 +1550,7 @@
         "Feature: a stray core.hooksPath on git's default hooks directory is repaired"
       ],
       "mutantHash": "369d4cd8c1a116e2d8a457542d3f6e2f5dbcd94700f14699c6d48db9d8c85fba",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "foreign-hooks-count-samples": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1561,7 +1561,7 @@
         "Feature: a stray core.hooksPath on git's default hooks directory is repaired"
       ],
       "mutantHash": "64992169edde78dbea464f377cbd0e895fc890ef33b340700a5a836d08250bf3",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "hookspath-repair-disabled": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1572,7 +1572,7 @@
         "Feature: a stray core.hooksPath on git's default hooks directory is repaired"
       ],
       "mutantHash": "c8f6488c53cbf3371887fde3fdef806a59c33951045f742cd75021b23f851d49",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "hookspath-repair-ignores-foreign-hooks": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1583,7 +1583,7 @@
         "Feature: a stray core.hooksPath on git's default hooks directory is repaired"
       ],
       "mutantHash": "1a5a21455c192961aac8bfeb5eece2d53ece44a9371a8863b24e002921dd0517",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "hookspath-repair-unreported": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1594,7 +1594,7 @@
         "Feature: a stray core.hooksPath on git's default hooks directory is repaired"
       ],
       "mutantHash": "cb9c8321d4cfa523c50fd5dc985beb23066dd4f5735e8d44ebfa11c841220ce7",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "hookspath-per-worktree-value-kept": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1605,7 +1605,7 @@
         "Feature: a stray core.hooksPath on git's default hooks directory is repaired"
       ],
       "mutantHash": "3f4961b3259ed80f18455ee1aeb69c3ad82727adebc7e08a8dd952ad84950668",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "hookspath-repairable-state-not-stale": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1616,7 +1616,7 @@
         "Feature: a stray core.hooksPath on git's default hooks directory is repaired"
       ],
       "mutantHash": "0c43c68490a7e35c513a1a9cc13fe14361c5b448913d267c0922755b6e8040fa",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "hookspath-repairable-ignores-foreign-hooks-uninstalled": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1626,8 +1626,8 @@
       "ancestors": [
         "Feature: a stray core.hooksPath on git's default hooks directory is repaired"
       ],
-      "mutantHash": "60210a3f0c22e4f1a0ab45389e9cd368b59f75d748a2ccfd7a21110d8b5096a0",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "mutantHash": "83256a10c3de3baa5753978f14124d759262981d840c7ecbd77ec7d806f30c96",
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "hookspath-repairable-blocked-by-own-hook-siblings": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1637,8 +1637,8 @@
       "ancestors": [
         "Feature: a stray core.hooksPath on git's default hooks directory is repaired"
       ],
-      "mutantHash": "926bf54f8c41ffeaf7db73372524f3cbb1319ab72fcf4eac8211b4ed0dfaf324",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "mutantHash": "b85da01e011232d99c608334227bf141186cba6c1ea9a8ca8cb6385dc1d14e8b",
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "parse-config-origin-keeps-file-prefix": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1649,7 +1649,7 @@
         "Feature: the hook shim in git's default hooks directory"
       ],
       "mutantHash": "5a35fa427ea97a34601abecc0eefb3f8ead8ad38c7a8d9d66d6d0d7326ab51ba",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "parse-config-origin-keeps-quotes": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1660,7 +1660,7 @@
         "Feature: the hook shim in git's default hooks directory"
       ],
       "mutantHash": "b4700681782b24290894cf031f0e477516c07ccca567575a2e1db3b913a978a4",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "doctor-effective-hook-unreviewed-ok": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1671,7 +1671,7 @@
         "Feature: doctor and sync report the hook git really runs"
       ],
       "mutantHash": "bdd1601665cc05d6eb41596b7428acda723b87ae8f4aac0328feb0d2ebacb672",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "doctor-unreviewed-registered-ignored": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1682,7 +1682,7 @@
         "Feature: doctor and sync report the hook git really runs"
       ],
       "mutantHash": "62ce4c8e2bcb308d5c056c6abc825a8688ecee75acc9aa244156bea7bf766cf1",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "status-effective-hook-dropped": {
       "testFile": "tests/hook-guard-edges.test.mjs",
@@ -1704,7 +1704,7 @@
         "Feature: doctor and sync report the hook git really runs"
       ],
       "mutantHash": "bc1a9840cb8145c3dcaf7209d481045e43b01dae04a3f8464faaaa6bf8e81b3e",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "sync-unreviewed-counted-synced": {
       "testFile": "tests/hook-guard-edges.test.mjs",
@@ -1726,7 +1726,7 @@
         "Feature: the hook shim in git's default hooks directory"
       ],
       "mutantHash": "6b61cb0f9ede061798ec012b3bf873bd0110622ea68f7fd251a167bad325b587",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "shim-same-format-counts-newer": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1737,7 +1737,7 @@
         "Feature: the hook shim in git's default hooks directory"
       ],
       "mutantHash": "be1cab5199463d9bef3f76882e06ff7ace5116f4b56066fc22793005de5c21a0",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "shim-delegate-removed": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1748,7 +1748,7 @@
         "Feature: a worktree whose shared core.hooksPath was overwritten still runs the review"
       ],
       "mutantHash": "b735865db0e5c2a7e976b58dd73adf9c0b87c33a0f4183c3f55bb91d325e72ab",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "shim-without-hook-blocks": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1759,7 +1759,7 @@
         "Feature: the hook shim in git's default hooks directory"
       ],
       "mutantHash": "48863b9b62f0b337404ac123c5b9cae204600954621f39f4fa6f0b4597493e74",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "commit-command-no-verify-reviewed": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1770,7 +1770,7 @@
         "Feature: git commit detection"
       ],
       "mutantHash": "0f6465f13c646c552fe541fa9e9ae2e82295e5370ef3d0d6f21bbcb3cd2107e6",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "commit-command-message-value-parsed": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1781,7 +1781,7 @@
         "Feature: git commit detection"
       ],
       "mutantHash": "7da6a785c6596082cd1b5639937e286176cf5b37249c570016f0a1b09af4df6d",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "extension-guard-block-dropped": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1792,7 +1792,7 @@
         "Feature: the extension and the Claude shell stop an unreviewed commit"
       ],
       "mutantHash": "b58bb3816fac069a7e483f7e95144b7448250fde7c8da4d094287d0c08cab108",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "extension-guard-repair-silent": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1803,7 +1803,7 @@
         "Feature: the extension and the Claude shell stop an unreviewed commit"
       ],
       "mutantHash": "f05b5c9e5facf7a95cd959503f60e12546c6e3fd5f8f4307fe0195fb1df359f5",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "extension-guard-any-tool": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1814,7 +1814,7 @@
         "Feature: the extension and the Claude shell stop an unreviewed commit"
       ],
       "mutantHash": "7de105759cdde85f07a4bd4b26dd77e431a19a8a6cdf96e36abd6fa9bbc62e18",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "extension-guard-any-command": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1825,7 +1825,7 @@
         "Feature: the extension and the Claude shell stop an unreviewed commit"
       ],
       "mutantHash": "715762c362dd69375ded95ef920032b2f3929b422ccf26fa1c23556e54666cb0",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "extension-status-hook-line-always-ok": {
       "testFile": "tests/hook-guard-edges.test.mjs",
@@ -1847,7 +1847,7 @@
         "Feature: the extension and the Claude shell stop an unreviewed commit"
       ],
       "mutantHash": "1cf1a3425ba730530cb25dba916b32625ea94b7cd2acb2b1be2236fc1abbbe57",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "claude-guard-repair-silent": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1858,7 +1858,7 @@
         "Feature: the extension and the Claude shell stop an unreviewed commit"
       ],
       "mutantHash": "d9bb3739f9398dac334c5d227abfc66ed65e0c93815e669aff41242b3c647365",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "claude-guard-any-command": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1869,7 +1869,7 @@
         "Feature: the extension and the Claude shell stop an unreviewed commit"
       ],
       "mutantHash": "435406b91b0de172fe7ddf04eb346e6b6c9d79bfeebaecf25116c8b3ce880815",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "claude-guard-prefilter-dropped": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1880,7 +1880,7 @@
         "Feature: the extension and the Claude shell stop an unreviewed commit"
       ],
       "mutantHash": "f08ff56b1ecec2f56a239de1a93225720e8efa843aaf6ba327cbcbd9e83b9ea4",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "claude-guard-failure-denies": {
       "testFile": "tests/hook-guard.test.mjs",
@@ -1891,7 +1891,7 @@
         "Feature: the extension and the Claude shell stop an unreviewed commit"
       ],
       "mutantHash": "42d94e7193ad51a2ce0caed2df3742208891c677ee56111aef9e7bf7cd2cdbf9",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "claude-session-unreviewed-not-reported": {
       "testFile": "tests/hook-guard-edges.test.mjs",
@@ -1922,7 +1922,7 @@
       ],
       "ancestors": [],
       "mutantHash": "0237c4307b1f6eb71fca086c5867412242adceeef928f8949e876e17509d8c95",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-stale-empty-set-runs-gate": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -1931,7 +1931,7 @@
       ],
       "ancestors": [],
       "mutantHash": "ee93c6568187cea9b04276a5a9d802f32baed0a32d33fd84febe7a97a0cb4b92",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-stale-ratio-counts-catalog": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -1940,7 +1940,7 @@
       ],
       "ancestors": [],
       "mutantHash": "33b0f419ca4d51861a1f2780e38287f7df8ae4ebf2c149074df9a2ddda89e0f5",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-stale-subset-claims-gate-pass": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -1949,7 +1949,7 @@
       ],
       "ancestors": [],
       "mutantHash": "ddb377c7e6295eea545a4f1f6adc384886f4e7731445acffc0b3c35138a04408",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-stale-current-claims-gate-pass": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -1958,7 +1958,7 @@
       ],
       "ancestors": [],
       "mutantHash": "adfb183ffcec416dcec74c23fce575db49854028376d48f060df7a8c94382546",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-stale-merge-drops-untouched": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -1967,7 +1967,7 @@
       ],
       "ancestors": [],
       "mutantHash": "8ea5b1b03c84ed9043d24fafef8092137ad98dbac42b3d504097d70562da6ac6",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-stale-result-unmarked": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -1976,7 +1976,7 @@
       ],
       "ancestors": [],
       "mutantHash": "58fb6521fd972e6ca42162f0239fcc17b9526b7ae21c6347db85fba8af2c4a86",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-gate-failure-exits-zero": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -1985,7 +1985,7 @@
       ],
       "ancestors": [],
       "mutantHash": "dfff4a6272b52599e912f19e405613d27ccf3d97316cbc9db99db1591f8477f4",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-gate-failure-claims-pass": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -1994,7 +1994,7 @@
       ],
       "ancestors": [],
       "mutantHash": "514bd0f305c78ed40bdd3d679598f548584d0bc26f7f7f42c828b476212bdb16",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-ordinary-run-rewrites-selectors": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -2003,7 +2003,7 @@
       ],
       "ancestors": [],
       "mutantHash": "e962201c746337dbfc7cee684e02b2aaeef809694295e37b7d2e68627ce5b363",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-failed-calibration-writes-selectors": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -2012,7 +2012,7 @@
       ],
       "ancestors": [],
       "mutantHash": "fc694db847bcff4a720eb20a945f3e0e845739d25af81f2ba1085d6d7f812c05",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-incomplete-catalog-accepted": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -2021,7 +2021,7 @@
       ],
       "ancestors": [],
       "mutantHash": "a7b57332a0cd06757da480e97dbd65ebf4806e2a458b527c2ad5cb6fb3582d14",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-stale-partial-write-requires-complete": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -2030,7 +2030,7 @@
       ],
       "ancestors": [],
       "mutantHash": "8a8c2b20d7fa305d434f2edb66886c5b8d7e5321457ae85c439066004f5d9d74",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-unreadable-catalog-accepted": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -2039,7 +2039,7 @@
       ],
       "ancestors": [],
       "mutantHash": "9bcc7daa04a1a6dbf93fc9dd91a9dabbbf487fca2215d33cf5bd81aaf0bedc41",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-stale-rewrite-keeps-removed": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -2048,7 +2048,7 @@
       ],
       "ancestors": [],
       "mutantHash": "2e9dad991e279016b35054546e7ffbc87ee745b87875591d1adbcc5afa2c2be2",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-workers-env-ignored": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -2057,7 +2057,7 @@
       ],
       "ancestors": [],
       "mutantHash": "beacfcefbf6949f23281da44c717265db5fdf6df6b790a5cc8e99626564c4fd7",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-workers-default-changed": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -2066,7 +2066,7 @@
       ],
       "ancestors": [],
       "mutantHash": "46b8cd815a916f427f6ccfb900612f087b71cbfad30d704de53bbf51e78e9867",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-interrupt-not-forwarded": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -2075,7 +2075,7 @@
       ],
       "ancestors": [],
       "mutantHash": "2db978cc019c72d30d37d89f0bded732c878e8b36ab1b076f9878c627b3dfdfa",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-sigterm-not-handled": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -2084,7 +2084,7 @@
       ],
       "ancestors": [],
       "mutantHash": "f6bb93f1ae29b429555a1c1762c5c4d85655181735e93a285e48c90b89487b8e",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-default-catalog-elsewhere": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -2093,7 +2093,7 @@
       ],
       "ancestors": [],
       "mutantHash": "455211f9977a989f9df535d0f7221b0c53ff31fd11fff97e2e38851f601b06e7",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-entry-old-node-accepted": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -2102,7 +2102,7 @@
       ],
       "ancestors": [],
       "mutantHash": "f1d1a7a856b40578b9be6d1e896ad98ea047eb762f6b565ddb647ebf2485ae28",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-entry-ignores-exit-code": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -2111,7 +2111,7 @@
       ],
       "ancestors": [],
       "mutantHash": "2a2d315afebdab4a78613b44d54541dd232c6c315fd9627ca1e07bd9285c5f42",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-entry-failure-exits-zero": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -2120,7 +2120,7 @@
       ],
       "ancestors": [],
       "mutantHash": "69e37a758f81eced2f9250d73dfc68c58bc3edcc0d402d642647180cbc8eaa37",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-entry-failure-unreported": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -2129,7 +2129,7 @@
       ],
       "ancestors": [],
       "mutantHash": "d0e302d32a6f969a73941d11d21f807bd002db03b0e19cab98674e76d95e7400",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-entry-catalog-dropped": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -2138,7 +2138,7 @@
       ],
       "ancestors": [],
       "mutantHash": "fd61979a7150314bc43c35864a53a7c0be12a873694586d0cfeaad244e85172f",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-sigint-handler-leaks": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -2147,7 +2147,7 @@
       ],
       "ancestors": [],
       "mutantHash": "b82a6ef2dc51f8ea9af7118f621b8061c38e02ef631ff117e9a9b78ca17d9fcd",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-sigterm-handler-leaks": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -2156,7 +2156,7 @@
       ],
       "ancestors": [],
       "mutantHash": "266f36260489ce6d69fec1e3001d4e47f35833e6e188837051eb73aede665949",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-stale-empty-selector-current": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -2165,7 +2165,7 @@
       ],
       "ancestors": [],
       "mutantHash": "5eba7ce6c41e8e962ac784083d5ca6e8372b66cca931e3f12f38d4cbc9efbea0",
-      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
+      "testHash": "3a17ada82952ac3ceefae1204e72ebe38e4f2851d7ef9e69f96dacbb7df45fdb"
     },
     "cli-stale-moved-test-current": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -2174,7 +2174,7 @@
       ],
       "ancestors": [],
       "mutantHash": "7da508a3adc08f2e154dce203d2fb9eeb2036ce54497f53253c4cf56d6f7fea4",
-      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
+      "testHash": "3a17ada82952ac3ceefae1204e72ebe38e4f2851d7ef9e69f96dacbb7df45fdb"
     },
     "cli-stale-edited-mutant-current": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -2183,7 +2183,7 @@
       ],
       "ancestors": [],
       "mutantHash": "847805ebde874edf56c51a57973d2a663216e21018efec7477ebc3c45cfffc48",
-      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
+      "testHash": "3a17ada82952ac3ceefae1204e72ebe38e4f2851d7ef9e69f96dacbb7df45fdb"
     },
     "cli-stale-edited-test-current": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -2192,7 +2192,7 @@
       ],
       "ancestors": [],
       "mutantHash": "0bc66ae7bcc20e6468dbb028c5379cc16b087d6752943c86dbfeedb309548aaa",
-      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
+      "testHash": "3a17ada82952ac3ceefae1204e72ebe38e4f2851d7ef9e69f96dacbb7df45fdb"
     },
     "cli-stale-hash-keeps-crlf": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -2201,7 +2201,7 @@
       ],
       "ancestors": [],
       "mutantHash": "a01fd5aadcddf4e4547b23f3d9f449a0235413762631dec5824d68fbc3f2ac64",
-      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
+      "testHash": "3a17ada82952ac3ceefae1204e72ebe38e4f2851d7ef9e69f96dacbb7df45fdb"
     },
     "cli-merge-keeps-removed": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -2210,7 +2210,7 @@
       ],
       "ancestors": [],
       "mutantHash": "e0fa5248e67c4ec4e6fbf74d311b4fe78156a6006168c5f36f1b57c9f97b045c",
-      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
+      "testHash": "3a17ada82952ac3ceefae1204e72ebe38e4f2851d7ef9e69f96dacbb7df45fdb"
     },
     "cli-merge-ignores-fresh": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -2219,7 +2219,7 @@
       ],
       "ancestors": [],
       "mutantHash": "7bfdc771cac2b23d7c791b1399c51da1b74403e94131d2325dbe46dfc9efcdbc",
-      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
+      "testHash": "3a17ada82952ac3ceefae1204e72ebe38e4f2851d7ef9e69f96dacbb7df45fdb"
     },
     "cli-merge-drops-unfreshened": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -2228,7 +2228,7 @@
       ],
       "ancestors": [],
       "mutantHash": "3b60675eaefe39028e741d2829dd41f9e91612ab06b26053876cebad4b5bdf03",
-      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
+      "testHash": "3a17ada82952ac3ceefae1204e72ebe38e4f2851d7ef9e69f96dacbb7df45fdb"
     },
     "cli-merge-incomplete-not-error": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -2237,7 +2237,7 @@
       ],
       "ancestors": [],
       "mutantHash": "76b4dad86fa0ba0bc60b2517aceb16650fd191f3636fce3794e9a0d3b958d691",
-      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
+      "testHash": "3a17ada82952ac3ceefae1204e72ebe38e4f2851d7ef9e69f96dacbb7df45fdb"
     },
     "cli-merge-default-incomplete": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -2246,7 +2246,7 @@
       ],
       "ancestors": [],
       "mutantHash": "ebcddaa71822dec4cb9ad90695a27d1a92bef1a64058a659d52a3caef9a5dbf7",
-      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
+      "testHash": "3a17ada82952ac3ceefae1204e72ebe38e4f2851d7ef9e69f96dacbb7df45fdb"
     },
     "cli-merge-missing-selector-written": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -2255,7 +2255,7 @@
       ],
       "ancestors": [],
       "mutantHash": "c7063bab53651cc9772049f41b6ab3e8caa63b762ff120fe2ce2cb66b4662a0b",
-      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
+      "testHash": "3a17ada82952ac3ceefae1204e72ebe38e4f2851d7ef9e69f96dacbb7df45fdb"
     },
     "cli-result-lines-dropped": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -2264,7 +2264,7 @@
       ],
       "ancestors": [],
       "mutantHash": "daab844564b8d836fa5ebc28182bf3550b34d34b356c5430fa96d5549492d573",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-result-lines-lose-fingerprint": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -2273,7 +2273,7 @@
       ],
       "ancestors": [],
       "mutantHash": "d445757a885a242e1ae65c198fcfd52729d5db4080aeba4c359effc57fed0c0e",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-merge-existing-recomputed": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -2282,7 +2282,7 @@
       ],
       "ancestors": [],
       "mutantHash": "266704804c25aff8d784e9b68874defbe92028a3d23005fc1dd3b9855bac2230",
-      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
+      "testHash": "3a17ada82952ac3ceefae1204e72ebe38e4f2851d7ef9e69f96dacbb7df45fdb"
     },
     "cli-result-lines-not-truncated": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -2291,7 +2291,7 @@
       ],
       "ancestors": [],
       "mutantHash": "7e65b7ffeec71505289051eb5d48c9aa9456396cbe64c1ec02a5dae8603ab930",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-result-lines-lose-mapping": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -2300,7 +2300,7 @@
       ],
       "ancestors": [],
       "mutantHash": "baa90dc9b0b67df691f773c3ba53e1a0ed18711d7b954cdfdb89022c0698c287",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-stale-banner-counts-catalog-twice": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -2309,7 +2309,7 @@
       ],
       "ancestors": [],
       "mutantHash": "c920bf818e50a0d0e5fdbf079915b883af65a20b0925d21e47f670e0da24f755",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-stale-failed-calibration-runs-full-gate": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -2318,7 +2318,7 @@
       ],
       "ancestors": [],
       "mutantHash": "4cb8114f9b7d2bce1f1309d9fd4f9ac166627293a7bfd6397bec1b99f7b94c84",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-stale-full-gate-ignores-calibration": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -2327,7 +2327,7 @@
       ],
       "ancestors": [],
       "mutantHash": "90b6d9fcf0a1b7a272f72b2b5a5d4538f0c96563b79d2d1f7c297e01f2486537",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-full-gate-marked-subset": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -2336,7 +2336,7 @@
       ],
       "ancestors": [],
       "mutantHash": "4a36174967d6a944a45c2efffc95709c4e547de269cfee960ee3d7f4c302e2e1",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "cli-stale-calibration-result-claims-whole-catalog": {
       "testFile": "tests/run-mutation-tests-cli.test.mjs",
@@ -2345,7 +2345,7 @@
       ],
       "ancestors": [],
       "mutantHash": "ae151693803942a9aec564ab469416eff2b6c3f1d2f90c065c0af502ab0e9772",
-      "testHash": "2b0d28668d6d4c41489852ecbb08a5ba289413a03b8e3a547de15e6b8e0ae581"
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
     },
     "test-wrapper-default-flat-discovery-removed": {
       "testFile": "tests/run-tests-wrapper.test.mjs",
@@ -2372,7 +2372,7 @@
       ],
       "ancestors": [],
       "mutantHash": "8a096122835cd5ba1878db6a426060b81dfc8574ffe4dc978266e1fd1753e6dc",
-      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
+      "testHash": "3a17ada82952ac3ceefae1204e72ebe38e4f2851d7ef9e69f96dacbb7df45fdb"
     },
     "mutation-native-opt-in-env-inherited": {
       "testFile": "tests/mutation-runner.test.mjs",
@@ -2381,7 +2381,7 @@
       ],
       "ancestors": [],
       "mutantHash": "feb789abc9b299b7a2f4eea77dce349d03b074d5bbfe9310a239300d3df740ef",
-      "testHash": "09ad7991c8a57d532a03df14bdf4784de852d88fb7b134bdf98a94ca9ed67ed7"
+      "testHash": "3a17ada82952ac3ceefae1204e72ebe38e4f2851d7ef9e69f96dacbb7df45fdb"
     },
     "native-verdict-two-markers-accepted": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -2563,7 +2563,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "48c31b322c048746218b51448476511b406d7991e37cb69eb0cd8d6b9e03a7a0",
-      "testHash": "e3b2f4e2a8cb63877dd3a01f5f3985e96cf38ecbf7d5c73bee8435e217b54776"
+      "testHash": "871f8aaf8878a884a4d2a368aa0ecfd3ae6748bf697b4728127c92ea61c9d720"
     },
     "native-extension-skipped-status-ignored": {
       "testFile": "tests/extension.test.mjs",
@@ -2574,7 +2574,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "ac9e8e077eaf80c0acdfd31f29b9a8fd3784c42b20130333c4714ce2d5f2edf4",
-      "testHash": "e3b2f4e2a8cb63877dd3a01f5f3985e96cf38ecbf7d5c73bee8435e217b54776"
+      "testHash": "871f8aaf8878a884a4d2a368aa0ecfd3ae6748bf697b4728127c92ea61c9d720"
     },
     "native-extension-guard-ignores-commit": {
       "testFile": "tests/extension.test.mjs",
@@ -2585,7 +2585,7 @@
         "Feature: Native OMP Extension & Installer Service"
       ],
       "mutantHash": "e646ce7d938fef05440f6ce58087177db73dc34b91fd87d69c1cdc4826af5ad1",
-      "testHash": "e3b2f4e2a8cb63877dd3a01f5f3985e96cf38ecbf7d5c73bee8435e217b54776"
+      "testHash": "871f8aaf8878a884a4d2a368aa0ecfd3ae6748bf697b4728127c92ea61c9d720"
     },
     "native-launcher-bun-probe-ignored": {
       "testFile": "tests/native-launcher.test.mjs",
@@ -2679,7 +2679,7 @@
         "Feature: git commit detection"
       ],
       "mutantHash": "c169093335c42c42aefdcd8438e8f0731587312c67ff57b9a870ea45ffdc5305",
-      "testHash": "8ef75cf8a1a1f986dc6abfe785758ccd965d9b9e900dfec73f4b6d7b416f56b6"
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
     },
     "native-verdict-gap-blocking-ignored": {
       "testFile": "tests/native-verdict.test.mjs",
@@ -3696,7 +3696,7 @@
       ],
       "ancestors": [],
       "mutantHash": "4dbb3b3ea7ba9955a446b34c36d93fab0b26accb4822950a98ca684de51a0bfe",
-      "testHash": "93efb9056659b3d9a7576ad9727225f10ac7f62d1a9104573dab8f8bf72a2b64"
+      "testHash": "bb3b6908b9e8d61675de1d8637ee8b9eaf8499ee03a5441895d46a7702fb386a"
     },
     "contract-default-export-not-scanned": {
       "testFile": "tests/contract-stage.test.mjs",
@@ -4824,6 +4824,187 @@
       "ancestors": [],
       "mutantHash": "be0baeaf81d281a3384b678b39cff2406208d97bdaa72a99529570ba06818faf",
       "testHash": "88deccc40f67650b5c881170c396b591d6d47a021bc8bc6ad235d104228e2299"
+    },
+    "chain-ownership-digest-unchecked": {
+      "testFile": "tests/hook-chain.test.mjs",
+      "tests": [
+        "Given an edited block, Then it is not owned and adding refuses instead of overwriting it"
+      ],
+      "ancestors": [
+        "Feature: the review block in a foreign hook"
+      ],
+      "mutantHash": "b3e20f53ffde266752b1df6e053b7ec533d96d9751316aa17c4598342e28d411",
+      "testHash": "bad6f203729cbeb573aa05baea03027ab8539fef4c626d509ee8e35ae9cc7a39"
+    },
+    "chain-block-inserted-not-after-shebang": {
+      "testFile": "tests/hook-chain.test.mjs",
+      "tests": [
+        "Given a CRLF host hook, Then the block keeps CRLF and the host keeps its bytes"
+      ],
+      "ancestors": [
+        "Feature: the review block in a foreign hook"
+      ],
+      "mutantHash": "6162ed8a9bc6de3e4ae773243b7bf8aee884647a4d5c23f85db82230def5972f",
+      "testHash": "bad6f203729cbeb573aa05baea03027ab8539fef4c626d509ee8e35ae9cc7a39"
+    },
+    "chain-trap-not-installed": {
+      "testFile": "tests/hook-chain-install.test.mjs",
+      "tests": [
+        "Given the review refuses the change, Then the commit is blocked"
+      ],
+      "ancestors": [
+        "Feature: the kit runs from another tool's generated hook"
+      ],
+      "mutantHash": "e4b5aae7c30b7a85822145fc0d8638d295f8ed395a9c12b526aed4e695b0c776",
+      "testHash": "cee3bf7b03971c3ff01fcbcc063eda7151da8c029c4ca5766fd420c6f58e1e1b"
+    },
+    "chain-exec-host-accepted": {
+      "testFile": "tests/hook-chain-install.test.mjs",
+      "tests": [
+        "Given a generated hook that replaces the shell with exec, Then it stays a conflict and is never edited"
+      ],
+      "ancestors": [
+        "Feature: the kit runs from another tool's generated hook"
+      ],
+      "mutantHash": "9624be7fe9adf48a6d95ea763f93edfc27cbe20de457c64a916ee739e9b3f5ff",
+      "testHash": "cee3bf7b03971c3ff01fcbcc063eda7151da8c029c4ca5766fd420c6f58e1e1b"
+    },
+    "chain-exec-detection-removed": {
+      "testFile": "tests/hook-chain.test.mjs",
+      "tests": [
+        "Given a host that replaces the shell with exec, Then it is not chainable; a returning host is"
+      ],
+      "ancestors": [
+        "Feature: the review block in a foreign hook"
+      ],
+      "mutantHash": "092fb132da1f3d325d297f5b4697917e448c01313b2702cea729105339deeaa8",
+      "testHash": "bad6f203729cbeb573aa05baea03027ab8539fef4c626d509ee8e35ae9cc7a39"
+    },
+    "catalog-write-permanent-retried": {
+      "testFile": "tests/mutation-runner.test.mjs",
+      "tests": [
+        "Given a permanent write refusal, When the catalog is written, Then it fails at once and is never treated as a proof"
+      ],
+      "ancestors": [],
+      "mutantHash": "dc675c2f0968c0f6c394c1264bab239fb41bca1f913a555b9129be1d111bfa01",
+      "testHash": "3a17ada82952ac3ceefae1204e72ebe38e4f2851d7ef9e69f96dacbb7df45fdb"
+    },
+    "catalog-write-retry-removed": {
+      "testFile": "tests/mutation-runner.test.mjs",
+      "tests": [
+        "Given a transient Windows open refusal, When the catalog is written, Then the same bytes are retried and stored once"
+      ],
+      "ancestors": [],
+      "mutantHash": "ed771fd6f6f4e6dbd8e58c6f139ceaafae05c633bc4f295d50b19c815132526e",
+      "testHash": "3a17ada82952ac3ceefae1204e72ebe38e4f2851d7ef9e69f96dacbb7df45fdb"
+    },
+    "catalog-write-routed-without-retry": {
+      "testFile": "tests/run-mutation-tests-cli.test.mjs",
+      "tests": [
+        "Given the selector catalog is briefly locked, When a proof is persisted, Then the same bytes are retried and the calibration is not lost"
+      ],
+      "ancestors": [],
+      "mutantHash": "90d0547ece86d805aa53ea20e0da8adabb76c9da1c7084ffc8a319213eb92217",
+      "testHash": "541be1dfe06b2f654b13c19326d1c21feebba177a008f2583fbfd449c8fc2773"
+    },
+    "chain-trap-host-accepted": {
+      "testFile": "tests/hook-chain.test.mjs",
+      "tests": [
+        "Given a host that installs its own trap, Then the review block cannot rely on its EXIT trap"
+      ],
+      "ancestors": [
+        "Feature: the review block in a foreign hook"
+      ],
+      "mutantHash": "94dea4a52992a0f0ba12caff4ecb291de9d09e4f9a80b35a4605f7ae5e0232da",
+      "testHash": "bad6f203729cbeb573aa05baea03027ab8539fef4c626d509ee8e35ae9cc7a39"
+    },
+    "chain-dead-shim-written": {
+      "testFile": "tests/hook-chain-install.test.mjs",
+      "tests": [
+        "Given husky owns core.hooksPath, When setup runs, Then the review block is inserted and the host hook stays byte-identical"
+      ],
+      "ancestors": [
+        "Feature: the kit runs from another tool's generated hook"
+      ],
+      "mutantHash": "cad7dd11285468fff970abbeb51f91e92d5413f78d3b362fa166ecfd605d8374",
+      "testHash": "cee3bf7b03971c3ff01fcbcc063eda7151da8c029c4ca5766fd420c6f58e1e1b"
+    },
+    "effective-hook-dead-shim-accepted": {
+      "testFile": "tests/hook-guard.test.mjs",
+      "tests": [
+        "Given a shim whose .githooks/pre-commit is gone, Then it is not the review and the guard repairs the checkout"
+      ],
+      "ancestors": [
+        "Feature: the hook shim in git's default hooks directory"
+      ],
+      "mutantHash": "5df920d2a445ea9f5f5d9c90040ffb6514cdcfb1b190b0d6a6de55fd5882e02d",
+      "testHash": "62847faedbf8fa3efef823a972a25e1c91b4fc5e5f0789c62b923f0419729db5"
+    },
+    "chain-any-interpreter-accepted": {
+      "testFile": "tests/hook-chain-install.test.mjs",
+      "tests": [
+        "Given a hook for a non-shell interpreter, Then the kit never writes a shell block into it"
+      ],
+      "ancestors": [
+        "Feature: the kit runs from another tool's generated hook"
+      ],
+      "mutantHash": "e2866f5c9f6f5061d9e9ccf0db13762b9a75e3b36165a7540174ed7a8a422e5a",
+      "testHash": "cee3bf7b03971c3ff01fcbcc063eda7151da8c029c4ca5766fd420c6f58e1e1b"
+    },
+    "chain-invalid-utf8-replaced": {
+      "testFile": "tests/hook-chain-install.test.mjs",
+      "tests": [
+        "Given a hook that is not UTF-8 or is binary, Then it is a conflict and its bytes are untouched"
+      ],
+      "ancestors": [
+        "Feature: the kit runs from another tool's generated hook"
+      ],
+      "mutantHash": "702ceb48124db4e6172c9ff3eb6343fc4ef634e7a1d7bdc125cbe73fc8c0b1ba",
+      "testHash": "cee3bf7b03971c3ff01fcbcc063eda7151da8c029c4ca5766fd420c6f58e1e1b"
+    },
+    "chain-binary-host-accepted": {
+      "testFile": "tests/hook-chain-install.test.mjs",
+      "tests": [
+        "Given a hook that is not UTF-8 or is binary, Then it is a conflict and its bytes are untouched"
+      ],
+      "ancestors": [
+        "Feature: the kit runs from another tool's generated hook"
+      ],
+      "mutantHash": "38a44ac01e6f53f942bc85c6ce1eb2c9485c1db27eda16ff3c3ad6334adc84fa",
+      "testHash": "cee3bf7b03971c3ff01fcbcc063eda7151da8c029c4ca5766fd420c6f58e1e1b"
+    },
+    "chain-shared-hooks-dir-accepted": {
+      "testFile": "tests/hook-chain-install.test.mjs",
+      "tests": [
+        "Given core.hooksPath names a hooks directory outside the checkout, Then it is a conflict and nothing is written"
+      ],
+      "ancestors": [
+        "Feature: the kit runs from another tool's generated hook"
+      ],
+      "mutantHash": "c865e28718bfc88c2fc83b7cdbb69b33cb676b2f49c522456342c21a7e3f1cf6",
+      "testHash": "cee3bf7b03971c3ff01fcbcc063eda7151da8c029c4ca5766fd420c6f58e1e1b"
+    },
+    "chain-host-exit-status-ignored": {
+      "testFile": "tests/hook-chain-install.test.mjs",
+      "tests": [
+        "Given the host hook refuses the commit, Then the review does not run and the host exit code is kept"
+      ],
+      "ancestors": [
+        "Feature: the kit runs from another tool's generated hook"
+      ],
+      "mutantHash": "11b2bee7d101ed7386de0d6d30b06ed693c63bc3200908a84933190b62e5eb10",
+      "testHash": "cee3bf7b03971c3ff01fcbcc063eda7151da8c029c4ca5766fd420c6f58e1e1b"
+    },
+    "chain-missing-runner-allowed": {
+      "testFile": "tests/hook-chain-install.test.mjs",
+      "tests": [
+        "Given the review runner is gone, Then the commit is blocked and stderr names the missing file"
+      ],
+      "ancestors": [
+        "Feature: the kit runs from another tool's generated hook"
+      ],
+      "mutantHash": "f4098ce7faf5e7f3fd44eb8d15ccc591953dafe63389cf84b76a17b043fad740",
+      "testHash": "cee3bf7b03971c3ff01fcbcc063eda7151da8c029c4ca5766fd420c6f58e1e1b"
     }
   }
 }

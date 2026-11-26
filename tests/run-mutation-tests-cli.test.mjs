@@ -82,6 +82,42 @@ test('Given one outdated selector, When --calibrate-stale runs, Then that mutant
   } finally { await cleanup(setup); }
 });
 
+test('Given the selector catalog is briefly locked, When a proof is persisted, Then the same bytes are retried and the calibration is not lost', async () => {
+  const setup = await fixture(['m2']);
+  try {
+    const gate = fakeGate();
+    let calls = 0;
+    const flaky = async (file, data) => {
+      calls += 1;
+      if (calls === 1) {
+        const error = new Error('EBUSY: resource busy or locked, open selectors.json');
+        error.code = 'EBUSY';
+        throw error;
+      }
+      await writeFile(file, data);
+    };
+    // Failures are returned, not thrown: a rejected promise must fail on an assertion, not on an
+    // infrastructure error, or the mutant that drops the retry would never count as killed.
+    const outcome = await runCli({
+      mutants: setup.mutants,
+      argv: ['--calibrate-stale'],
+      env: setup.env,
+      cwd: setup.root,
+      selectorPath: setup.selectorPath,
+      gate,
+      log: () => {},
+      writeFileImpl: flaky,
+    }).then((exitCode) => ({ exitCode }), (error) => ({ error }));
+    assert.equal(outcome.error, undefined, `the catalog write was not retried: ${outcome.error?.message}`);
+    assert.equal(outcome.exitCode, 0);
+    assert.ok(calls > 1, 'the writer was asked more than once');
+    const mappings = await readMappings(setup);
+    assert.deepEqual(Object.keys(mappings), ['m1', 'm2', 'm3']);
+  } finally {
+    await cleanup(setup);
+  }
+});
+
 test('Given stale mutants with recorded selectors, When --calibrate-stale starts, Then the recorded selectors are passed to the calibration as hints', async () => {
   const setup = await fixture(['m2']);
   try {
